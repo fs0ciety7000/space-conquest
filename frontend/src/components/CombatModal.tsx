@@ -20,15 +20,26 @@ interface CombatModalProps {
 export default function CombatModal({ report, onClose }: CombatModalProps) {
   const [visibleLogs, setVisibleLogs] = useState<string[]>([]);
   
-  // Effet machine à écrire
+  // Effet machine à écrire (CORRIGÉ)
   useEffect(() => {
     if (report) {
-      setVisibleLogs([]);
+      setVisibleLogs([]); // Reset initial
+      
+      // On stocke les IDs des timers pour pouvoir les annuler
+      const timeouts: NodeJS.Timeout[] = [];
+
       report.log.forEach((line, index) => {
-        setTimeout(() => {
+        const id = setTimeout(() => {
           setVisibleLogs(prev => [...prev, line]);
-        }, index * 600);
+        }, index * 600); // 600ms de délai entre chaque ligne
+        timeouts.push(id);
       });
+
+      // FONCTION DE NETTOYAGE : 
+      // Si le composant démonte ou si l'effet se relance, on annule les timers en cours.
+      return () => {
+        timeouts.forEach(clearTimeout);
+      };
     }
   }, [report]);
 

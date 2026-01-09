@@ -1,7 +1,7 @@
 use serde::Serialize;
 use rand::Rng;
 
-pub const SPEED_FACTOR: f64 = 500.0; // Vitesse du jeu
+pub const SPEED_FACTOR: f64 = 500000.0; // Vitesse du jeu
 
 #[derive(Serialize, Clone)]
 pub struct Cost {
@@ -15,6 +15,7 @@ pub struct PvpReport {
     pub winner: String,
     pub log: Vec<String>,
     pub loot: Cost,
+    pub debris: Cost,
     pub attacker_losses: i32,
     pub defender_losses: i32,
 }
@@ -187,39 +188,74 @@ pub fn resolve_pvp(
     let defender_losses;
     let defense_struct_lost; 
 
-    if att_power > def_power {
+    // PERTES
+    let att_lost_hunters;
+    let att_lost_cruisers;
+    let def_lost_hunters;
+    let def_lost_cruisers;
+
+   if att_power > def_power {
         winner = "attacker".to_string();
         log.push("VICTOIRE : Défenses percées.".to_string());
         
         let ratio = if att_power > 0 { def_power as f64 / att_power as f64 } else { 0.0 };
         let loss_percent = 0.1 + (0.4 * ratio);
         
-        attacker_losses = (att_hunters as f64 * loss_percent) as i32;
-        defender_losses = (def_hunters as f64 * 0.8) as i32;
-        defense_struct_lost = (def_missiles as f64 * 0.6) as i32;
+        att_lost_hunters = (att_hunters as f64 * loss_percent) as i32;
+        att_lost_cruisers = (att_cruisers as f64 * loss_percent) as i32;
+        
+        attacker_losses = att_lost_hunters + att_lost_cruisers; // Total unités perdues
+
+        def_lost_hunters = (def_hunters as f64 * 0.8) as i32;
+        def_lost_cruisers = (def_cruisers as f64 * 0.8) as i32;
+        
+        defender_losses = def_lost_hunters + def_lost_cruisers;
+        defense_struct_lost = (def_missiles as f64 * 0.6) as i32; // On ne compte pas les plasmas ici pour simplifier
 
         loot = Cost {
             metal: def_resources.metal * 0.5,
             crystal: def_resources.crystal * 0.5,
             deuterium: def_resources.deuterium * 0.5,
         };
-        log.push(format!("DÉFENSES DÉTRUITES : {} Lanceurs, {} Plasmas", defense_struct_lost, (def_plasmas as f64 * 0.6) as i32));
 
     } else {
         winner = "defender".to_string();
         log.push("DÉFAITE : La forteresse a tenu bon.".to_string());
         
-        attacker_losses = (att_hunters as f64 * 0.8) as i32;
-        defender_losses = (def_hunters as f64 * 0.1) as i32;
+        att_lost_hunters = (att_hunters as f64 * 0.8) as i32;
+        att_lost_cruisers = (att_cruisers as f64 * 0.8) as i32;
+        attacker_losses = att_lost_hunters + att_lost_cruisers;
+
+        def_lost_hunters = (def_hunters as f64 * 0.1) as i32;
+        def_lost_cruisers = (def_cruisers as f64 * 0.1) as i32;
+        defender_losses = def_lost_hunters + def_lost_cruisers;
+        
         defense_struct_lost = (def_missiles as f64 * 0.1) as i32;
         
         loot = Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 };
     }
 
-    PvpReport {
+    // CALCUL DU CDR (CHAMP DE DÉBRIS)
+    // 30% du coût des vaisseaux détruits (Métal et Cristal uniquement)
+    let (hunter_m, hunter_c) = get_light_hunter_stats();
+    let (cruiser_m, cruiser_c) = (20000.0, 7000.0); // Stats croiseur hardcodées ici pour l'instant
+
+    let debris_metal = ((att_lost_hunters + def_lost_hunters) as f64 * hunter_m * 0.3) 
+                     + ((att_lost_cruisers + def_lost_cruisers) as f64 * cruiser_m * 0.3);
+    
+    let debris_crystal = ((att_lost_hunters + def_lost_hunters) as f64 * hunter_c * 0.3) 
+                       + ((att_lost_cruisers + def_lost_cruisers) as f64 * cruiser_c * 0.3);
+
+    if debris_metal > 0.0 || debris_crystal > 0.0 {
+        log.push(format!("DÉBRIS : Un champ de débris s'est formé ({:.0} M, {:.0} C).", debris_metal, debris_crystal));
+    }
+
+
+ PvpReport {
         winner,
         log,
         loot,
+        debris: Cost { metal: debris_metal, crystal: debris_crystal, deuterium: 0.0 }, // <-- On renvoie le CDR
         attacker_losses,
         defender_losses: defender_losses + defense_struct_lost
     }

@@ -3,53 +3,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Zap, Target, Atom, Microscope, Cpu, ArrowUpCircle, Sparkles, Eye, ScanLine, Lock, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// Configuration visuelle par type de technologie
+// Configuration visuelle (Inchangé)
 const getTechConfig = (id: string, level: number) => {
   const tier = Math.floor(level / 5) + 1; 
-  
   const configs: any = {
-    research: {
-      color: "text-purple-400",
-      border: "border-purple-500/40",
-      glow: "shadow-[0_0_20px_-5px_rgba(168,85,247,0.5)]",
-      bg: "bg-purple-950/10",
-      icon: Microscope,
-      tierLabel: "LAB-OS",
-      subIcon: Atom
-    },
-    energy_tech: {
-      color: "text-yellow-400",
-      border: "border-yellow-500/40",
-      glow: "shadow-[0_0_20px_-5px_rgba(250,204,21,0.5)]",
-      bg: "bg-yellow-950/10",
-      icon: Zap,
-      tierLabel: "CORE-REACT",
-      subIcon: Sparkles
-    },
-    laser: {
-      color: "text-red-400",
-      border: "border-red-500/40",
-      glow: "shadow-[0_0_20px_-5px_rgba(248,113,113,0.5)]", 
-      bg: "bg-red-950/10",
-      icon: Target,
-      tierLabel: "WEAPON-SYS",
-      subIcon: Cpu
-    },
-    espionage: {
-      color: "text-emerald-400",
-      border: "border-emerald-500/40",
-      glow: "shadow-[0_0_20px_-5px_rgba(52,211,153,0.5)]",
-      bg: "bg-emerald-950/10",
-      icon: Eye,
-      tierLabel: "INTEL-NET",
-      subIcon: ScanLine
-    }
+    research: { color: "text-purple-400", border: "border-purple-500/40", glow: "shadow-[0_0_20px_-5px_rgba(168,85,247,0.5)]", bg: "bg-purple-950/10", icon: Microscope, tierLabel: "LAB-OS", subIcon: Atom },
+    energy_tech: { color: "text-yellow-400", border: "border-yellow-500/40", glow: "shadow-[0_0_20px_-5px_rgba(250,204,21,0.5)]", bg: "bg-yellow-950/10", icon: Zap, tierLabel: "CORE-REACT", subIcon: Sparkles },
+    laser: { color: "text-red-400", border: "border-red-500/40", glow: "shadow-[0_0_20px_-5px_rgba(248,113,113,0.5)]", bg: "bg-red-950/10", icon: Target, tierLabel: "WEAPON-SYS", subIcon: Cpu },
+    espionage: { color: "text-emerald-400", border: "border-emerald-500/40", glow: "shadow-[0_0_20px_-5px_rgba(52,211,153,0.5)]", bg: "bg-emerald-950/10", icon: Eye, tierLabel: "INTEL-NET", subIcon: ScanLine }
   };
-
   return { tier: `MK ${tier}`, ...configs[id] };
 };
 
-// Fonction utilitaire pour calculer le coût
+// Coûts (Inchangé)
 const getCost = (type: string, level: number) => {
     const factor = Math.pow(2, level - 1);
     switch(type) {
@@ -65,51 +31,59 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
   
-  // Ref pour éviter les boucles infinies dans le useEffect
-  const onUpdateRef = useRef(onUpdate);
-  useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
+  // Flag pour éviter de spammer le serveur si une requête est déjà en cours
+  const isUpdatingRef = useRef(false);
 
-  // --- LOGIQUE TIMER UNIFIÉE ---
+  // LOGIQUE TIMER SÉCURISÉE
   useEffect(() => {
-    // Liste des types qui concernent ce composant
     const isTechResearch = ['research', 'energy_tech', 'laser', 'espionage'].includes(planet.construction_type);
 
-    // Si pas de construction ou si ce n'est pas une tech, on reset tout
     if (!planet?.construction_end || !isTechResearch) {
         setTimeLeft(null);
         setIsFinalizing(false);
+        isUpdatingRef.current = false; // Reset du lock
         return;
     }
 
-    // Intervalle unique qui gère à la fois le décompte ET la finalisation
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
         const end = new Date(planet.construction_end).getTime();
         const now = Date.now();
         const diff = Math.max(0, Math.floor((end - now) / 1000));
 
         if (diff > 0) {
-            // Cas normal : on compte
             setTimeLeft(diff);
             setIsFinalizing(false);
         } else {
-            // Cas fini : on est à 0 (ou passé 0)
+            // C'est fini (0s)
             setTimeLeft(0);
             setIsFinalizing(true);
             
-            // On appelle le refresh parent à chaque tick tant que le backend n'a pas nettoyé "construction_end"
-            // Le backend finira par renvoyer construction_end = null, ce qui déclenchera le if du début et arrêtera l'intervalle.
-            onUpdateRef.current();
+            // ANTI-SPAM : On ne lance l'update que si on n'est pas déjà en train d'attendre une réponse
+            if (!isUpdatingRef.current) {
+                isUpdatingRef.current = true; // On verrouille
+                console.log("Finalisation détectée, demande de mise à jour...");
+                try {
+                    await onUpdate(); // On attend que fetchPlanet finisse
+                } catch (e) {
+                    console.error("Erreur update dans TechTree", e);
+                } finally {
+                    // On laisse un petit délai avant de déverrouiller pour éviter le spam brutal en cas d'erreur
+                    setTimeout(() => {
+                        isUpdatingRef.current = false; 
+                    }, 1000);
+                }
+            }
         }
     }, 1000);
 
-    // Check immédiat au montage pour éviter d'attendre 1s avant l'affichage
+    // Initialisation immédiate pour l'affichage
     const initialEnd = new Date(planet.construction_end).getTime();
     const initialDiff = Math.max(0, Math.floor((initialEnd - Date.now()) / 1000));
     setTimeLeft(initialDiff);
     if (initialDiff <= 0) setIsFinalizing(true);
 
     return () => clearInterval(interval);
-  }, [planet?.construction_end, planet?.construction_type]);
+  }, [planet?.construction_end, planet?.construction_type, onUpdate]);
 
 
   const techs = [
@@ -126,7 +100,7 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (res.ok) {
-          onUpdate(); // Déclenche le refresh immédiat pour afficher le loader
+          onUpdate();
       } else {
           console.error("Erreur serveur lors de la recherche");
       }
@@ -135,10 +109,7 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
     }
   };
 
-  // Variable globale pour savoir si le labo est occupé par une tech
   const isLabBusy = timeLeft !== null || isFinalizing;
-  // Variable pour savoir si une mine est en construction (bloque aussi les techs)
-  // On vérifie si une construction existe MAIS que ce n'est pas une des techs gérées ici
   const isMineBusy = planet.construction_end && !isLabBusy;
 
   return (
@@ -235,7 +206,7 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         <span className="flex flex-col items-start leading-none">
                             <span className="text-[10px] uppercase tracking-widest">
-                                {isFinalizing ? "FINALISATION..." : "EN COURS"}
+                                {isFinalizing ? "VALIDATION..." : "EN COURS"}
                             </span>
                             <span className="text-lg">{timeLeft}s</span>
                         </span>

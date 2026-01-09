@@ -1,7 +1,7 @@
 use axum::{Json, http::StatusCode, extract::State};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sea_orm::{EntityTrait, Set, ActiveModelTrait, QueryFilter, ColumnTrait};
+use sea_orm::{EntityTrait, Set, ActiveModelTrait, QueryFilter, ColumnTrait, QueryOrder};
 use uuid::Uuid;
 use chrono::Utc;
 use bcrypt::{DEFAULT_COST, hash, verify}; // Import bcrypt
@@ -36,6 +36,32 @@ pub async fn register_handler(
         return Err((StatusCode::CONFLICT, Json(json!({"error": "Ce commandant existe déjà"}))));
     }
 
+    // --- CALCUL DE LA PROCHAINE POSITION LIBRE ---
+    // On cherche la dernière planète créée pour savoir où se placer
+    let last_planet = planet::Entity::find()
+        .order_by_desc(planet::Column::Id) // Ou trier par date si tu as un champ created_at
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    let (mut g, mut s, mut p) = (1, 1, 1);
+
+    if let Some(last) = last_planet {
+        g = last.galaxy;
+        s = last.system;
+        p = last.position + 1; // On prend la place suivante
+
+        if p > 15 { // Si le système est plein (15 planètes max)
+            p = 1;
+            s += 1; // On passe au système suivant
+        }
+        if s > 499 { // Limite arbitraire de 499 systèmes par galaxie
+            s = 1;
+            g += 1;
+        }
+    }
+
+
     // 2. Hacher le mot de passe
     let hashed_password = hash(payload.password, DEFAULT_COST)
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur sécurité"}))))?;
@@ -47,6 +73,13 @@ pub async fn register_handler(
         owner_id: Set(Uuid::new_v4()),
         name: Set(payload.username),
         password: Set(hashed_password), // On stocke le hash
+
+        // Attribution des coords
+        galaxy: Set(g),
+        system: Set(s),
+        position: Set(p),
+
+
         metal_mine_level: Set(1),
         crystal_mine_level: Set(1),
         deuterium_mine_level: Set(1),

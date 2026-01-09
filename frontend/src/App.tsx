@@ -11,7 +11,11 @@ import AttackModal from './components/AttackModal';
 import ReportsTerminal from './components/ReportsTerminal';
 import Defenses from './components/Defenses';
 import PlanetOverview from './components/PlanetOverview';
-import { LogOut, BellRing } from "lucide-react";
+import GalaxyView from './components/GalaxyView';
+import { 
+  LogOut, BellRing, LayoutDashboard, Pickaxe, Hammer, 
+  ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe 
+} from "lucide-react";
 
 interface CombatReport {
   winner: string;
@@ -26,8 +30,8 @@ interface CombatReport {
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
-const [activeTab, setActiveTab] = useState<'overview' | 'resources' | 'fleet' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports'>('resources');
-const [speedFactor, setSpeedFactor] = useState<number>(1);
+  const [activeTab, setActiveTab] = useState<'overview' | 'galaxy' | 'resources' | 'fleet' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports'>('overview');
+  const [speedFactor, setSpeedFactor] = useState<number>(1);
   const [planet, setPlanet] = useState<any>(null);
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
   const [showCombatModal, setShowCombatModal] = useState(false);
@@ -105,7 +109,8 @@ const [speedFactor, setSpeedFactor] = useState<number>(1);
         handleLogout();
       }
     } catch (e) {
-      console.error("Liaison perdue avec le centre de commande");
+      console.error("Liaison perdue avec le centre de commande", e);
+      setReport("ERREUR DE LIAISON");
     }
   }, [planetId, token]);
 
@@ -187,7 +192,6 @@ const [speedFactor, setSpeedFactor] = useState<number>(1);
     }
   };
 
-  // NOUVEAU : GESTION ESPIONNAGE
   const handleSpy = async (targetId: string) => {
     if (!planetId || !token) return;
     
@@ -207,7 +211,6 @@ const [speedFactor, setSpeedFactor] = useState<number>(1);
             const r = data.report;
             const logs = ["--- RAPPORT D'ESPIONNAGE ---"];
             
-            // Formatage du rapport pour la modale
             if (r.resources) {
                 logs.push(">>> RESSOURCES DÉTECTÉES <<<");
                 logs.push(`MÉTAL: ${Math.floor(r.resources.metal).toLocaleString()}`);
@@ -232,16 +235,16 @@ const [speedFactor, setSpeedFactor] = useState<number>(1);
             }
 
             const formattedReport: CombatReport = {
-                winner: 'player', // Vert car c'est un rapport "réussi"
+                winner: 'player', 
                 log: logs,
                 loot: 0,
-                losses: { light_hunter: 0, cruiser: 0 } // On ne compte pas la sonde perdue ici
+                losses: { light_hunter: 0, cruiser: 0 } 
             };
             
             setCombatReport(formattedReport);
             setShowCombatModal(true);
             
-            fetchPlanet(); // Mettre à jour le nombre de sondes
+            fetchPlanet(); 
         } else {
             setReport(`ÉCHEC ESPIONNAGE : ${data.error}`);
             setTimeout(() => setReport(null), 4000);
@@ -286,87 +289,121 @@ const [speedFactor, setSpeedFactor] = useState<number>(1);
     </div>
   );
 
+  // Configuration du Menu Sidebar
+  const MENU_ITEMS = [
+    { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
+    { id: 'galaxy', label: 'Galaxie', icon: Globe, category: 'COMMANDEMENT' },
+    { id: 'resources', label: 'Mines', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
+    { id: 'tech', label: 'Laboratoire', icon: FlaskConical, category: 'DÉVELOPPEMENT' },
+    { id: 'fleet', label: 'Chantier Spatial', icon: Hammer, category: 'MILITAIRE' },
+    { id: 'defenses', label: 'Défense', icon: ShieldCheck, category: 'MILITAIRE' },
+    { id: 'expedition', label: 'Expéditions', icon: Telescope, category: 'MILITAIRE' },
+    { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
+    { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
+  ] as const;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white pt-24 p-6 selection:bg-cyan-500/30 relative overflow-hidden font-sans">
+    <div className="h-screen bg-slate-950 text-white font-sans overflow-hidden flex flex-col">
+      {/* 1. FOND D'ÉCRAN */}
       <div 
         className="absolute inset-0 z-0 opacity-20 pointer-events-none mix-blend-overlay bg-cover bg-center fixed"
         style={{ backgroundImage: "url('/assets/background.png')" }}
       ></div>
 
-      <div className="relative z-10">
-        <EmpireBar planet={planet} />
-
+      {/* 2. MODALES (Au-dessus de tout) */}
+      <div className="relative z-50">
         {showCombatModal && combatReport && (
-            <CombatModal 
-                report={combatReport} 
-                onClose={() => setShowCombatModal(false)} 
-            />
+            <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />
         )}
-
         {targetPlanet && planet && (
             <AttackModal 
                 targetName={targetPlanet.name}
-                myFleet={{
-                    hunters: planet.light_hunter_count,
-                    cruisers: planet.cruiser_count
-                }}
+                myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count }}
                 onConfirm={handleConfirmAttack}
                 onCancel={() => setTargetPlanet(null)}
             />
         )}
-
         {report && (
-          <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-10 duration-500">
-            <div className="bg-indigo-600/90 backdrop-blur text-white px-8 py-4 rounded-2xl border-2 border-indigo-400 shadow-[0_0_40px_rgba(99,102,241,0.4)] font-black uppercase text-[10px] tracking-[0.2em] flex items-center gap-4">
-              <BellRing className="animate-bounce" size={18} />
+          <div className="fixed bottom-10 right-10 z-[100] animate-in fade-in slide-in-from-bottom-10 duration-500">
+            <div className="bg-indigo-600/90 backdrop-blur text-white px-6 py-3 rounded-xl border border-indigo-400 shadow-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3">
+              <BellRing className="animate-bounce" size={16} />
               {report}
             </div>
           </div>
         )}
+      </div>
 
-        <div className="max-w-6xl mx-auto space-y-8">
-          <nav className="flex items-center justify-between border-b border-white/5 pb-4 text-white">
-            <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-            {(['overview', 'resources', 'fleet', 'defenses', 'tech', 'expedition', 'ranking', 'reports'] as const).map(tab => (
-                <button 
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                    activeTab === tab 
-                    ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)]' 
-                    : 'text-slate-500 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  {/* LABELS */}
-                  {tab === 'overview' ? 'Vue Générale' 
-                   : tab === 'resources' ? 'Mines' // J'ai renommé 'Économie' en 'Mines' pour distinguer de la vue générale
-                   : tab === 'fleet' ? 'Chantier Spatial' 
-                   : tab === 'defenses' ? 'Défense'
-                   : tab === 'tech' ? 'Laboratoire' 
-                   : tab === 'expedition' ? 'Expéditions' 
-                   : tab === 'ranking' ? 'Classement'
-                   : 'Rapports'}
-                </button>
-              ))}
+      {/* 3. BARRE DU HAUT (EmpireBar) */}
+      <div className="relative z-40 shrink-0">
+        <EmpireBar planet={planet} />
+      </div>
+
+      {/* 4. LAYOUT PRINCIPAL (Sidebar + Contenu) */}
+      <div className="flex flex-1 overflow-hidden relative z-30 pt-20">
+        
+        {/* --- SIDEBAR (Navigation) --- */}
+        <aside className="w-64 bg-slate-950/80 backdrop-blur-xl border-r border-white/5 flex flex-col h-full overflow-y-auto hidden md:flex">
+            <div className="p-4 space-y-6">
+                {['COMMANDEMENT', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES'].map(cat => (
+                    <div key={cat} className="space-y-2">
+                        <h3 className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] pl-3">
+                            {cat}
+                        </h3>
+                        <div className="space-y-1">
+                            {MENU_ITEMS.filter(item => item.category === cat).map(item => {
+                                const Icon = item.icon;
+                                const isActive = activeTab === item.id;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setActiveTab(item.id as any)}
+                                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+                                            isActive 
+                                            ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.4)] border border-indigo-400/50' 
+                                            : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                                        }`}
+                                    >
+                                        <Icon size={16} className={isActive ? "text-white" : "text-slate-500"} />
+                                        {item.label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                ))}
             </div>
-            <button onClick={handleLogout} className="flex items-center gap-2 text-slate-500 hover:text-red-500 text-[10px] font-black uppercase transition-colors ml-4">
-              <LogOut size={14}/> <span className="hidden md:inline">Quitter</span>
-            </button>
-          </nav>
 
-         <main className="animate-in fade-in duration-500">
-            {/* 4. AFFICHAGE */}
-            {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
-            
-            {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} />}
-            {activeTab === 'fleet' && <Shipyard planet={planet} onBuild={fetchPlanet} />}
-            {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
-            {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
-            {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}
-            {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} />}
-            {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
+            {/* Bouton Quitter en bas */}
+            <div className="mt-auto p-4 border-t border-white/5">
+                <button 
+                    onClick={handleLogout} 
+                    className="w-full flex items-center justify-center gap-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 p-3 rounded-lg text-xs font-black uppercase transition-colors"
+                >
+                    <LogOut size={16}/> Déconnexion
+                </button>
+            </div>
+        </aside>
+
+        {/* --- ZONE DE CONTENU PRINCIPAL --- */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-10 scrollbar-thin scrollbar-thumb-indigo-900 scrollbar-track-transparent">
+            <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 md:pb-0">
+                {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
+                {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} />}
+                {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} />}
+                {activeTab === 'fleet' && <Shipyard planet={planet} onBuild={fetchPlanet} />}
+                {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
+                {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
+                {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}
+                {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} />}
+                {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
+            </div>
         </main>
-        </div>
+
+        {/* Navigation Mobile (Optionnelle, si besoin pour petits écrans) */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/90 border-t border-white/10 p-4 flex justify-between overflow-x-auto gap-4 z-50">
+             {/* Tu pourras ajouter une version simplifiée ici pour le mobile */}
+        </nav>
+
       </div>
     </div>
   );

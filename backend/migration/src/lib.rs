@@ -13,6 +13,8 @@ mod m20260109_200503_create_combat_log;
 mod m20260109_202322_add_espionage;
 mod m20260109_210008_add_password;
 mod m20260109_211546_add_defenses;
+mod m20260109_220528_add_debris;
+mod m20260109_222210_add_coordinates;
 
 pub struct Migrator;
 
@@ -33,6 +35,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260109_202322_add_espionage::Migration),
             Box::new(m20260109_210008_add_password::Migration),
             Box::new(m20260109_211546_add_defenses::Migration),
+            Box::new(m20260109_220528_add_debris::Migration),
+            Box::new(m20260109_222210_add_coordinates::Migration),
         ]
     }
 }

@@ -7,11 +7,11 @@ use axum::{
 };
 use sea_orm::{
     ActiveModelTrait, Database, DatabaseConnection,
-    EntityTrait, Set, 
+    EntityTrait, Set, IntoActiveModel, // <--- C'EST L'IMPORT QUI MANQUAIT !
     QueryFilter, QueryOrder, ColumnTrait, QuerySelect, 
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, to_string}; // 'Value' retiré
+use serde_json::{json, to_string};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use tower_http::cors::{Any, CorsLayer};
@@ -26,8 +26,6 @@ mod entities;
 
 use entities::planet;
 use entities::combat_log;
-
-// (PRODUCTION_SPEED retiré car inutilisé ici, c'est SPEED_FACTOR dans game_logic qui compte)
 
 #[derive(Clone)]
 struct AppState {
@@ -77,6 +75,9 @@ async fn main() {
         .route("/attack", post(attack_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
         .route("/spy", post(spy_handler))
+        .route("/recycle", post(recycle_handler))
+        .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
+        .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
         .layer(cors)
         .with_state(state);
 
@@ -88,13 +89,11 @@ async fn main() {
 
 // --- HANDLERS ---
 
-// Handler pour envoyer la config au frontend
 async fn get_game_config_handler() -> impl IntoResponse {
     Json(json!({
         "speed_factor": game_logic::SPEED_FACTOR
     }))
 }
-
 
 async fn get_ranking_handler(
     State(state): State<AppState>,
@@ -371,6 +370,10 @@ async fn attack_handler(
     def_active.missile_launcher_count = Set((def_planet.missile_launcher_count as f64 * (1.0 - percent_loss)) as i32);
     def_active.plasma_turret_count = Set((def_planet.plasma_turret_count as f64 * (1.0 - percent_loss)) as i32);
 
+    // Ajout des débris pour le défenseur
+    def_active.debris_metal = Set(def_planet.debris_metal + result.debris.metal);
+    def_active.debris_crystal = Set(def_planet.debris_crystal + result.debris.crystal);
+
     let defender_report = json!({
         "winner": result.winner, 
         "log": result.log,
@@ -589,4 +592,191 @@ async fn spy_handler(
             "defense": defense
         }
     }))).into_response()
+}
+
+#[derive(Deserialize)]
+struct RecyclePayload {
+    target_planet_id: Uuid,
+    recyclers: i32,
+}
+
+async fn recycle_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<RecyclePayload>,
+) -> impl IntoResponse {
+    
+    let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
+
+    // Utilisation de into_active_model()
+    let mut att_planet = match planet::Entity::find_by_id(current_id).one(&state.db).await.unwrap() {
+        Some(p) => p.into_active_model(),
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète inconnue"}))).into_response(),
+    };
+
+    let target_res = planet::Entity::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap();
+    let mut target_planet = match target_res {
+        Some(p) => p.into_active_model(),
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible inconnue"}))).into_response(),
+    };
+
+    // 1. Vérification Flotte
+    let current_recyclers = att_planet.recycler_count.clone().unwrap();
+    if payload.recyclers > current_recyclers || payload.recyclers <= 0 {
+         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Recycleurs insuffisants"}))).into_response();
+    }
+
+    // 2. Capacité (20k par recycleur)
+    let capacity = (payload.recyclers as f64) * 20000.0;
+    
+    // 3. Récupération
+    let debris_m = target_planet.debris_metal.clone().unwrap();
+    let debris_c = target_planet.debris_crystal.clone().unwrap();
+    let total_debris = debris_m + debris_c;
+
+    if total_debris <= 0.0 {
+         return (StatusCode::OK, Json(json!({
+             "status": "empty",
+             "message": "Aucun débris à recycler."
+         }))).into_response();
+    }
+
+    // Logique simple : on prend tout ce qu'on peut, priorité Métal puis Cristal
+    let mut harvested_m = 0.0;
+    let mut harvested_c = 0.0;
+    let mut remaining_capacity = capacity;
+
+    // Récolte Métal
+    if debris_m > 0.0 {
+        let take = f64::min(debris_m, remaining_capacity);
+        harvested_m = take;
+        remaining_capacity -= take;
+        target_planet.debris_metal = Set(debris_m - take);
+    }
+
+    // Récolte Cristal (s'il reste de la place)
+    if debris_c > 0.0 && remaining_capacity > 0.0 {
+        let take = f64::min(debris_c, remaining_capacity);
+        harvested_c = take;
+        target_planet.debris_crystal = Set(debris_c - take);
+    }
+
+    // 4. Mise à jour DB
+    // On crédite l'attaquant
+    att_planet.metal_amount = Set(att_planet.metal_amount.unwrap() + harvested_m);
+    att_planet.crystal_amount = Set(att_planet.crystal_amount.unwrap() + harvested_c);
+
+    let _ = att_planet.update(&state.db).await;
+    let _ = target_planet.update(&state.db).await;
+
+    (StatusCode::OK, Json(json!({
+        "status": "success",
+        "message": format!("Recyclage terminé. +{:.0} Métal, +{:.0} Cristal", harvested_m, harvested_c),
+        "harvested": { "metal": harvested_m, "crystal": harvested_c }
+    }))).into_response()
+}
+
+// Structure de réponse simplifiée pour la galaxie
+#[derive(Serialize)]
+struct GalaxySlot {
+    position: i32,
+    planet_id: Option<Uuid>,
+    planet_name: Option<String>,
+    owner_name: Option<String>, // On utilise le nom de la planète comme nom de joueur pour l'instant
+    has_debris: bool,
+    is_me: bool,
+}
+
+// Handler GET /galaxy/:galaxy_id/:system_id
+async fn get_galaxy_handler(
+    Path((galaxy_id, system_id)): Path<(i32, i32)>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    
+    let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
+
+    // 1. Récupérer toutes les planètes de ce système
+    let planets = planet::Entity::find()
+        .filter(planet::Column::Galaxy.eq(galaxy_id))
+        .filter(planet::Column::System.eq(system_id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    // 2. Construire la liste des 15 positions (vides ou occupées)
+    let mut slots: Vec<GalaxySlot> = Vec::new();
+
+    for pos in 1..=15 {
+        // Chercher si une planète existe à cette position
+        if let Some(p) = planets.iter().find(|p| p.position == pos) {
+            slots.push(GalaxySlot {
+                position: pos,
+                planet_id: Some(p.id),
+                planet_name: Some(p.name.clone()),
+                owner_name: Some(p.name.clone()), // Simplification
+                has_debris: p.debris_metal > 0.0 || p.debris_crystal > 0.0,
+                is_me: p.id == current_id,
+            });
+        } else {
+            // Emplacement vide (colonisable plus tard)
+            slots.push(GalaxySlot {
+                position: pos,
+                planet_id: None,
+                planet_name: None,
+                owner_name: None,
+                has_debris: false,
+                is_me: false,
+            });
+        }
+    }
+
+    Json(slots)
+}
+
+// Structure légère pour la carte
+#[derive(Serialize)]
+struct SystemSummary {
+    system: i32,
+    planet_count: i64,
+    has_me: bool, // Pour colorer ton système en vert
+}
+
+// Handler: GET /galaxy/:galaxy_id/scan
+async fn get_galaxy_scan_handler(
+    Path(galaxy_id): Path<i32>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    
+    let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
+
+    // On récupère toutes les planètes de la galaxie (optimisable avec raw sql plus tard)
+    let planets = planet::Entity::find()
+        .filter(planet::Column::Galaxy.eq(galaxy_id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    // On aggrège par système
+    let mut systems_map: HashMap<i32, SystemSummary> = HashMap::new();
+
+    for p in planets {
+        let entry = systems_map.entry(p.system).or_insert(SystemSummary {
+            system: p.system,
+            planet_count: 0,
+            has_me: false,
+        });
+        entry.planet_count += 1;
+        if p.id == current_id {
+            entry.has_me = true;
+        }
+    }
+
+    // On transforme la map en vecteur pour le JSON
+    let results: Vec<SystemSummary> = systems_map.into_values().collect();
+    Json(results)
 }
