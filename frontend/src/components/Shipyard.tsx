@@ -1,11 +1,43 @@
 import { useState, useEffect } from 'react';
-import { Rocket, Swords, Timer, Shield, Terminal } from "lucide-react";
+import { Rocket, Swords, Timer, Shield, Terminal, Zap, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
+// Définition des vaisseaux avec leurs thèmes de couleurs
 const SHIP_TYPES = [
-  { id: 'light_hunter', name: 'Chasseur Léger', m: 3000, c: 1000, time: 20, atk: 50, def: 400 },
-  { id: 'cruiser', name: 'Croiseur', m: 20000, c: 7000, time: 60, atk: 400, def: 2700 },
-  { id: 'recycler', name: 'Recycleur', m: 10000, c: 6000, time: 40, atk: 1, def: 1600 }
+  { 
+    id: 'light_hunter', 
+    name: 'Chasseur Léger', 
+    tier: 'MK I',
+    desc: 'Unité d\'interception rapide.',
+    m: 3000, c: 1000, time: 20, atk: 50, def: 400,
+    color: 'text-neon-orange',
+    border: 'border-neon-orange',
+    glow: 'glow-orange',
+    bg: 'bg-orange-950/20'
+  },
+  { 
+    id: 'cruiser', 
+    name: 'Croiseur', 
+    tier: 'MK II',
+    desc: 'Vaisseau de ligne lourdement armé.',
+    m: 20000, c: 7000, time: 60, atk: 400, def: 2700,
+    color: 'text-neon-blue',
+    border: 'border-neon-blue',
+    glow: 'glow-blue',
+    bg: 'bg-cyan-950/20'
+  },
+  { 
+    id: 'recycler', 
+    name: 'Recycleur', 
+    tier: 'Civile',
+    desc: 'Collecteur de débris orbitaux.',
+    m: 10000, c: 6000, time: 40, atk: 1, def: 1600,
+    color: 'text-neon-purple',
+    border: 'border-neon-purple',
+    glow: 'glow-purple',
+    bg: 'bg-purple-950/20'
+  }
 ];
 
 export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: () => void }) {
@@ -22,10 +54,9 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
         const diff = Math.max(0, Math.floor((end - now) / 1000));
         
         setTimeLeft(diff);
-        
         if (diff === 0) {
           clearInterval(interval);
-          onBuild(); // Rafraîchit les données pour faire apparaître les vaisseaux
+          onBuild(); 
         }
       }, 1000);
       return () => clearInterval(interval);
@@ -36,97 +67,210 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
 
   const startBuild = async () => {
     const token = localStorage.getItem('token');
-    const res = await fetch(`http://localhost:8080/planets/${planet.id}/build-fleet/${selected.id}/${qty}`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (res.ok) onBuild();
+    try {
+      const res = await fetch(`http://localhost:8080/planets/${planet.id}/build-fleet/${selected.id}/${qty}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) onBuild();
+    } catch (e) { console.error("Erreur production", e); }
   };
 
-  // --- CORRECTION DES CLÉS POUR ÉVITER LE NaN ---
   const totalM = selected.m * qty;
   const totalC = selected.c * qty;
   const metalAvailable = planet.metal_amount ?? 0;
   const crystalAvailable = planet.crystal_amount ?? 0;
   const canAfford = metalAvailable >= totalM && crystalAvailable >= totalC;
+  const isBusy = planet.shipyard_construction_end !== null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 animate-in fade-in duration-500">
+      
+      {/* ZONE PRINCIPALE (GAUCHE) */}
       <div className="lg:col-span-2 space-y-6">
-        {/* SELECTEUR DE TYPE */}
-        <div className="flex gap-4">
-          {SHIP_TYPES.map(s => (
-            <button key={s.id} onClick={() => setSelected(s)} 
-              className={`p-4 border-2 rounded-xl flex-1 transition-all ${selected.id === s.id ? 'border-indigo-500 bg-indigo-500/10 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'border-white/5 bg-slate-900 hover:bg-slate-800'}`}>
-              <p className="text-[10px] font-black uppercase text-white tracking-widest">{s.name}</p>
-            </button>
-          ))}
+        
+        {/* SÉLECTEUR DE VAISSEAUX (CARTES) */}
+        <div className="grid grid-cols-3 gap-4">
+          {SHIP_TYPES.map(s => {
+            const isSelected = selected.id === s.id;
+            return (
+              <button 
+                key={s.id} 
+                onClick={() => setSelected(s)} 
+                className={`relative group overflow-hidden rounded-xl border transition-all duration-300 p-4 text-left h-32 flex flex-col justify-between
+                  ${isSelected 
+                    ? `${s.bg} ${s.border} shadow-[0_0_15px_-3px_rgba(0,0,0,0.5)] scale-105 z-10` 
+                    : 'bg-black/40 border-white/10 hover:bg-white/5 hover:border-white/20'
+                  }`}
+              >
+                 {isSelected && <div className={`absolute inset-0 ${s.glow} opacity-20 pointer-events-none`}></div>}
+                 
+                 <div>
+                   <span className={`text-[9px] font-black uppercase tracking-widest ${isSelected ? s.color : 'text-slate-500'}`}>{s.tier}</span>
+                   <h3 className={`text-sm font-black uppercase ${isSelected ? 'text-white' : 'text-slate-400'}`}>{s.name}</h3>
+                 </div>
+                 
+                 <div className="flex justify-between items-end">
+                    <span className="text-[10px] font-mono text-slate-500">{s.time}s</span>
+                    {s.id === 'cruiser' ? <Shield size={18} className={isSelected ? s.color : 'text-slate-600'}/> : 
+                     s.id === 'recycler' ? <Box size={18} className={isSelected ? s.color : 'text-slate-600'}/> :
+                     <Rocket size={18} className={isSelected ? s.color : 'text-slate-600'}/>}
+                 </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* PANNEAU DE COMMANDE CENTRAL */}
-        <div className="bg-slate-950 border border-indigo-500/30 p-8 rounded-3xl relative overflow-hidden shadow-2xl">
-          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-            {selected.id === 'cruiser' ? <Shield size={120} /> : <Rocket size={120} />}
-          </div>
+        <div className={`relative overflow-hidden rounded-3xl border ${selected.border} bg-black/60 backdrop-blur-md p-8 shadow-2xl transition-colors duration-500`}>
           
-          <h2 className="text-3xl font-black italic uppercase text-white mb-2 tracking-tighter">{selected.name}</h2>
-          
-          <div className="flex gap-4 mb-8">
-            <span className="text-[10px] font-bold text-red-500 uppercase tracking-tighter bg-red-500/10 px-2 py-1 rounded">Atk: {selected.atk}</span>
-            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-tighter bg-blue-500/10 px-2 py-1 rounded">Def: {selected.def}</span>
-            <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter bg-amber-500/10 px-2 py-1 rounded">Temps: {selected.time}s/u</span>
+          {/* Arrière-plan décoratif (Icone géante) */}
+          <div className={`absolute -right-10 -top-10 opacity-10 rotate-12 transition-transform duration-700 ${isBusy ? 'animate-pulse' : ''}`}>
+             {selected.id === 'cruiser' ? <Shield size={250} className={selected.color} /> : 
+              selected.id === 'recycler' ? <Box size={250} className={selected.color} /> :
+              <Rocket size={250} className={selected.color} />}
           </div>
 
-          <div className="grid grid-cols-2 gap-8 mb-8">
-            <div className="space-y-2">
-               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Quantité d'unités</label>
-               <input type="number" min="1" value={qty} onChange={e => setQty(Math.max(1, Number(e.target.value)))} 
-                 className="w-full bg-black border-b-2 border-indigo-500 text-3xl font-mono text-white p-2 outline-none focus:bg-indigo-500/5 transition-colors" />
+          <div className="relative z-10 space-y-8">
+            {/* Header du panneau */}
+            <div>
+              <div className={`text-[10px] font-black uppercase tracking-[0.4em] mb-2 ${selected.color}`}>Ligne de Production</div>
+              <h2 className="text-4xl font-black italic uppercase text-white tracking-tighter mb-1">{selected.name}</h2>
+              <p className="text-xs text-slate-400 max-w-md">{selected.desc}</p>
             </div>
-            <div className="bg-black/40 p-4 rounded-xl text-xs font-mono self-end border border-white/5">
-               <p className={metalAvailable >= totalM ? "text-slate-300" : "text-red-500"}>Métal: {totalM.toLocaleString()}</p>
-               <p className={crystalAvailable >= totalC ? "text-slate-300" : "text-red-500"}>Cristal: {totalC.toLocaleString()}</p>
+
+            {/* Statistiques */}
+            <div className="flex gap-3">
+              <div className="bg-black/40 border border-white/5 px-3 py-2 rounded flex items-center gap-2">
+                <Swords size={12} className="text-red-500"/>
+                <span className="text-[10px] font-bold text-slate-300">ATK <span className="text-white ml-1">{selected.atk}</span></span>
+              </div>
+              <div className="bg-black/40 border border-white/5 px-3 py-2 rounded flex items-center gap-2">
+                <Shield size={12} className="text-blue-500"/>
+                <span className="text-[10px] font-bold text-slate-300">DEF <span className="text-white ml-1">{selected.def}</span></span>
+              </div>
+              <div className="bg-black/40 border border-white/5 px-3 py-2 rounded flex items-center gap-2">
+                <Zap size={12} className="text-yellow-500"/>
+                <span className="text-[10px] font-bold text-slate-300">NRG <span className="text-white ml-1">-{selected.time}s</span></span>
+              </div>
             </div>
-          </div>
 
-          <Button onClick={startBuild} disabled={planet.shipyard_construction_end !== null || !canAfford} 
-            className={`w-full h-16 font-black tracking-widest uppercase shadow-lg transition-all ${
-              planet.shipyard_construction_end ? 'bg-slate-800' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/20'
-            }`}>
-            {timeLeft !== null ? `Assemblage : ${timeLeft}s` : canAfford ? "Lancer la production" : "Ressources insuffisantes"}
-          </Button>
-        </div>
+            <hr className="border-white/5" />
 
-        {/* TERMINAL DE LOGS */}
-        <div className="bg-slate-950 border border-white/5 p-6 rounded-2xl">
-          <h4 className="text-[10px] font-black uppercase text-slate-500 mb-4 flex items-center gap-2"><Terminal size={14}/> Console de contrôle</h4>
-          <div className="font-mono text-[10px] text-indigo-400/70 space-y-1">
-            <p>&gt; Statut système : {timeLeft !== null ? "OCCUPÉ" : "OPÉRATIONNEL"}</p>
-            <p>&gt; File active : {planet.pending_fleet_count > 0 ? `${planet.pending_fleet_count}x ${planet.pending_fleet_type}` : "AUCUNE"}</p>
-            {timeLeft !== null && <p className="animate-pulse">&gt; Initialisation des protocoles d'assemblage en cours...</p>}
+            {/* Contrôles de production */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
+               <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Ordre de Fabrication (Unités)</label>
+                  <div className="flex items-center gap-4">
+                    <input 
+                      type="number" 
+                      min="1" 
+                      value={qty} 
+                      onChange={e => setQty(Math.max(1, Number(e.target.value)))} 
+                      className={`w-32 bg-transparent border-b-2 ${selected.color.replace('text-', 'border-')} text-4xl font-mono font-black text-white p-2 outline-none focus:bg-white/5 transition-colors`} 
+                    />
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      TEMPS ESTIMÉ<br/>
+                      <span className="text-white text-lg">{(selected.time * qty)}s</span>
+                    </div>
+                  </div>
+               </div>
+
+               {/* Coûts totaux */}
+               <div className="bg-black/40 p-4 rounded-xl border border-white/5 space-y-2">
+                 <div className="flex justify-between text-xs font-mono">
+                    <span className={metalAvailable >= totalM ? "text-slate-400" : "text-red-500"}>MÉTAL REQUIS</span>
+                    <span className={metalAvailable >= totalM ? "text-white" : "text-red-500"}>{totalM.toLocaleString()}</span>
+                 </div>
+                 <div className="flex justify-between text-xs font-mono">
+                    <span className={crystalAvailable >= totalC ? "text-slate-400" : "text-red-500"}>CRISTAL REQUIS</span>
+                    <span className={crystalAvailable >= totalC ? "text-white" : "text-red-500"}>{totalC.toLocaleString()}</span>
+                 </div>
+               </div>
+            </div>
+
+            {/* Bouton d'action */}
+            <Button 
+              onClick={startBuild} 
+              disabled={isBusy || !canAfford} 
+              className={`w-full h-16 font-black tracking-[0.2em] uppercase transition-all rounded-xl relative overflow-hidden group
+                ${isBusy 
+                  ? 'bg-slate-900 border border-white/10 text-slate-500' 
+                  : !canAfford 
+                    ? 'bg-red-950/20 border border-red-900/50 text-red-500'
+                    : `bg-black hover:bg-slate-900 text-white border ${selected.border} ${selected.glow}`
+                }`}
+            >
+              {isBusy ? (
+                 <span className="flex items-center gap-3 animate-pulse">
+                   <Timer size={20} /> SYSTÈME ENGAGÉ : {timeLeft}s
+                 </span>
+              ) : !canAfford ? (
+                 "RESSOURCES INSUFFISANTES"
+              ) : (
+                 <span className="flex items-center gap-3 relative z-10">
+                   <Rocket size={18} /> INITIALISER L'ASSEMBLAGE
+                 </span>
+              )}
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* HANGAR GLOBAL (PANNEAU DROIT) */}
+      {/* PANNEAU DROIT (TERMINAL & FLOTTE) */}
       <div className="space-y-6">
-        <div className="bg-slate-900 p-8 rounded-3xl border border-white/5 shadow-xl">
-           <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-6 flex items-center gap-2"><Swords size={14}/> Hangar Orbital</h4>
-           <div className="space-y-6">
-              <div className="flex justify-between items-end border-b border-white/5 pb-2">
-                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-tighter">Chasseurs MK-I</span>
-                 <span className="text-2xl text-indigo-400 font-black">{planet.light_hunter_count || 0}</span>
+        
+        {/* Terminal Logs */}
+        <div className="bg-black/80 border border-white/10 p-6 rounded-2xl font-mono h-48 overflow-hidden relative">
+          <div className="absolute inset-0 bg-scanline opacity-10 pointer-events-none"></div>
+          <h4 className="text-[10px] font-black uppercase text-slate-500 mb-4 flex items-center gap-2">
+            <Terminal size={12} className="text-green-500"/> SYSTEM_LOGS
+          </h4>
+          <div className="text-[10px] space-y-2 text-green-500/80">
+            <p>&gt; Chantier naval : Connecté.</p>
+            <p>&gt; Vérification des stocks... OK.</p>
+            {isBusy && (
+              <>
+                <p className="text-yellow-500">&gt; PROCESSUS ACTIF : {planet.pending_fleet_type}</p>
+                <p className="animate-pulse">&gt; Soudure coque externe [{Math.floor(Math.random()*100)}%]</p>
+              </>
+            )}
+            {!isBusy && <p className="text-slate-600">&gt; En attente de commande...</p>}
+          </div>
+        </div>
+
+        {/* État de la flotte */}
+        <Card className="bg-slate-950 border border-white/5 p-6 rounded-3xl relative overflow-hidden">
+           <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none"><Swords size={100} /></div>
+           
+           <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-6">Hangar Orbital</h4>
+           
+           <div className="space-y-4">
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+                 <div className="flex flex-col">
+                    <span className="text-[9px] uppercase font-bold text-orange-500">Chasseurs</span>
+                    <span className="text-[8px] text-slate-500">Classe Légère</span>
+                 </div>
+                 <span className="text-xl text-white font-mono font-black">{planet.light_hunter_count || 0}</span>
               </div>
-              <div className="flex justify-between items-end border-b border-white/5 pb-2">
-                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-tighter">Croiseurs MK-II</span>
-                 <span className="text-2xl text-indigo-400 font-black">{planet.cruiser_count || 0}</span>
+              
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+                 <div className="flex flex-col">
+                    <span className="text-[9px] uppercase font-bold text-blue-500">Croiseurs</span>
+                    <span className="text-[8px] text-slate-500">Classe Lourde</span>
+                 </div>
+                 <span className="text-xl text-white font-mono font-black">{planet.cruiser_count || 0}</span>
               </div>
-              <div className="flex justify-between items-end border-b border-white/5 pb-2">
-                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-tighter">Unités Recycleur</span>
-                 <span className="text-2xl text-indigo-400 font-black">{planet.recycler_count || 0}</span>
+
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+                 <div className="flex flex-col">
+                    <span className="text-[9px] uppercase font-bold text-purple-500">Recycleurs</span>
+                    <span className="text-[8px] text-slate-500">Support</span>
+                 </div>
+                 <span className="text-xl text-white font-mono font-black">{planet.recycler_count || 0}</span>
               </div>
            </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
