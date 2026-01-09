@@ -4,3 +4,4 @@ pub mod prelude ;
 
 pub mod planet ;
 pub mod user ;
+pub mod combat_log;

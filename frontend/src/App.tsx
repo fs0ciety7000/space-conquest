@@ -7,31 +7,31 @@ import ExpeditionZone from './components/ExpeditionZone';
 import CombatModal from './components/CombatModal';
 import Login from './components/Login';
 import Leaderboard from './components/Leaderboard';
+import AttackModal from './components/AttackModal'; 
+import ReportsTerminal from './components/ReportsTerminal';
 import { LogOut, BellRing } from "lucide-react";
 
-// Types simplifiés (tu peux les déplacer dans un fichier types.ts plus tard)
 interface CombatReport {
   winner: string;
   log: string[];
   loot: number;
+  losses?: {
+    light_hunter: number;
+    cruiser: number;
+  };
 }
 
 export default function App() {
-  // --- ÉTATS GLOBAUX ---
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
-  const [activeTab, setActiveTab] = useState<'resources' | 'fleet' | 'tech' | 'expedition' | 'ranking'>('resources');
+  const [activeTab, setActiveTab] = useState<'resources' | 'fleet' | 'tech' | 'expedition' | 'ranking' | 'reports'>('resources');
   
   const [planet, setPlanet] = useState<any>(null);
-  
-  // États pour la Modale de Combat
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
   const [showCombatModal, setShowCombatModal] = useState(false);
-
-  // État pour les notifications "Toast" (en bas de l'écran)
+  const [targetPlanet, setTargetPlanet] = useState<{id: string, name: string} | null>(null);
   const [report, setReport] = useState<string | null>(null);
 
-  // Utilisation d'une Ref pour détecter les changements passifs (fin de construction, etc.)
   const prevPlanetRef = useRef<any>(null);
 
   const handleLogout = () => {
@@ -41,7 +41,6 @@ export default function App() {
     setPlanet(null);
   };
 
-  // --- RÉCUPÉRATION DES DONNÉES (POLLING) ---
   const fetchPlanet = useCallback(async () => {
     if (!planetId || !token) return;
     try {
@@ -55,14 +54,37 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         
-        // --- DETECTION FIN DE CONSTRUCTION (POLLING) ---
-        // Exemple : notification si une mine vient de finir
-        if (prevPlanetRef.current?.construction_end && !data.construction_end) {
-            setReport("CONSTRUCTION TERMINÉE : Bâtiment opérationnel.");
-            setTimeout(() => setReport(null), 5000);
+        // --- GESTION ALERTE DÉFENSE ---
+        if (data.unread_report) {
+            try {
+                const reportData = JSON.parse(data.unread_report);
+                const isVictory = reportData.winner === 'defender'; 
+                
+                const formattedReport: CombatReport = {
+                    winner: isVictory ? 'player' : 'enemy',
+                    log: reportData.log,
+                    loot: reportData.loot,
+                    losses: reportData.losses
+                };
+
+                setCombatReport(formattedReport);
+                setShowCombatModal(true);
+                
+                // Nettoyage de l'alerte
+                await fetch(`http://localhost:8080/planets/${planetId}/clear-report`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (err) {
+                console.error("Erreur lecture rapport défense", err);
+            }
         }
 
-        // Nettoyage des données
+        if (prevPlanetRef.current?.construction_end && !data.construction_end) {
+            setReport("CONSTRUCTION TERMINÉE.");
+            setTimeout(() => setReport(null), 4000);
+        }
+
         const sanitizedPlanet = {
           ...data,
           metal_amount: data.metal_amount ?? 0,
@@ -84,33 +106,20 @@ export default function App() {
     }
   }, [planetId, token]);
 
-  // --- ACTION SPÉCIALE : LANCER EXPÉDITION ---
-  // Cette fonction gère le POST et la réception du Rapport de Combat
   const launchExpedition = async () => {
     if (!planetId || !token) return;
-    
     try {
         const res = await fetch(`http://localhost:8080/planets/${planetId}/expedition`, {
             method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${token}` 
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (res.ok) {
             const data = await res.json();
-            
-            // 1. Mise à jour immédiate de la planète (ressources)
             setPlanet(data.planet);
-            
-            // 2. Gestion du Rapport de Combat
             if (data.report) {
                 setCombatReport(data.report);
                 setShowCombatModal(true);
-            } else {
-                // Fallback si pas de rapport (vieux code backend)
-                setReport("Expédition terminée. Données mises à jour.");
-                setTimeout(() => setReport(null), 4000);
             }
         } else {
             const err = await res.json();
@@ -122,16 +131,65 @@ export default function App() {
     }
   };
 
-  // --- EFFETS ---
+  const handlePrepareAttack = (targetId: string, targetName: string) => {
+    setTargetPlanet({ id: targetId, name: targetName });
+  };
+
+  const handleConfirmAttack = async (hunters: number, cruisers: number) => {
+    if (!planetId || !token || !targetPlanet) return;
+    setTargetPlanet(null);
+    setReport("LANCEMENT DES VECTEURS D'ATTAQUE...");
+
+    try {
+        const res = await fetch(`http://localhost:8080/attack?current_planet_id=${planetId}`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                target_planet_id: targetPlanet.id,
+                hunters: hunters,
+                cruisers: cruisers
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            fetchPlanet();
+            const pvpReport = data.report;
+            const formattedReport: CombatReport = {
+                winner: pvpReport.winner === 'attacker' ? 'player' : 'enemy',
+                log: pvpReport.log,
+                loot: (pvpReport.loot?.metal || 0) + (pvpReport.loot?.crystal || 0),
+                losses: {
+                    light_hunter: pvpReport.attacker_losses || 0,
+                    cruiser: 0
+                }
+            };
+            
+            setCombatReport(formattedReport);
+            setShowCombatModal(true);
+        } else {
+            setReport(`ERREUR ATTAQUE : ${data.error}`);
+            setTimeout(() => setReport(null), 5000);
+        }
+    } catch (e) {
+        console.error(e);
+        setReport("ÉCHEC TRANSMISSION ORDRE DE TIR.");
+        setTimeout(() => setReport(null), 4000);
+    }
+  };
+
   useEffect(() => {
     if (token && planetId) {
       fetchPlanet();
-      const interval = setInterval(fetchPlanet, 2000); // Polling toutes les 2s
+      const interval = setInterval(fetchPlanet, 2000);
       return () => clearInterval(interval);
     }
   }, [token, planetId, fetchPlanet]);
 
-  // --- RENDU LOGIN ---
   if (!token || !planetId) {
     return <Login onLogin={(t, p) => { 
         localStorage.setItem('token', t); 
@@ -141,7 +199,6 @@ export default function App() {
     }} />;
   }
 
-  // --- RENDU LOADING ---
   if (!planet) return (
     <div className="min-h-screen bg-black flex items-center justify-center text-cyan-400 font-mono animate-pulse">
       INITIALISATION DU LIEN NEURAL...
@@ -150,8 +207,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white pt-24 p-6 selection:bg-cyan-500/30 relative overflow-hidden font-sans">
-      
-      {/* BACKGROUND */}
       <div 
         className="absolute inset-0 z-0 opacity-20 pointer-events-none mix-blend-overlay bg-cover bg-center fixed"
         style={{ backgroundImage: "url('/assets/background.png')" }}
@@ -160,7 +215,6 @@ export default function App() {
       <div className="relative z-10">
         <EmpireBar planet={planet} />
 
-        {/* --- MODALE DE COMBAT --- */}
         {showCombatModal && combatReport && (
             <CombatModal 
                 report={combatReport} 
@@ -168,7 +222,18 @@ export default function App() {
             />
         )}
 
-        {/* --- BANDEAU DE NOTIFICATION (TOAST) --- */}
+        {targetPlanet && planet && (
+            <AttackModal 
+                targetName={targetPlanet.name}
+                myFleet={{
+                    hunters: planet.light_hunter_count,
+                    cruisers: planet.cruiser_count
+                }}
+                onConfirm={handleConfirmAttack}
+                onCancel={() => setTargetPlanet(null)}
+            />
+        )}
+
         {report && (
           <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-10 duration-500">
             <div className="bg-indigo-600/90 backdrop-blur text-white px-8 py-4 rounded-2xl border-2 border-indigo-400 shadow-[0_0_40px_rgba(99,102,241,0.4)] font-black uppercase text-[10px] tracking-[0.2em] flex items-center gap-4">
@@ -179,35 +244,40 @@ export default function App() {
         )}
 
         <div className="max-w-6xl mx-auto space-y-8">
-          {/* NAVIGATION */}
           <nav className="flex items-center justify-between border-b border-white/5 pb-4 text-white">
-            <div className="flex gap-2">
-              {(['resources', 'fleet', 'tech', 'expedition', 'ranking'] as const).map(tab => (
+            <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
+              {(['resources', 'fleet', 'tech', 'expedition', 'ranking', 'reports'] as const).map(tab => (
+     
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                  className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                     activeTab === tab 
                     ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)]' 
                     : 'text-slate-500 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  {tab === 'resources' ? 'Économie' : tab === 'fleet' ? 'Flotte' : tab === 'tech' ? 'Recherche' : tab === 'expedition' ? 'Missions' : 'Classement'}
+                  {tab === 'resources' ? 'Économie' 
+                   : tab === 'fleet' ? 'Flotte' 
+                   : tab === 'tech' ? 'Recherche' 
+                   : tab === 'expedition' ? 'Missions' 
+                   : tab === 'ranking' ? 'Classement'
+                   : 'Rapports'}
+                   
+
                 </button>
               ))}
             </div>
-            <button onClick={handleLogout} className="flex items-center gap-2 text-slate-500 hover:text-red-500 text-[10px] font-black uppercase transition-colors">
-              <LogOut size={14}/> Quitter
+            <button onClick={handleLogout} className="flex items-center gap-2 text-slate-500 hover:text-red-500 text-[10px] font-black uppercase transition-colors ml-4">
+              <LogOut size={14}/> <span className="hidden md:inline">Quitter</span>
             </button>
           </nav>
 
-          {/* CONTENU PRINCIPAL */}
           <main className="animate-in fade-in duration-500">
             {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} />}
             {activeTab === 'fleet' && <Shipyard planet={planet} onBuild={fetchPlanet} />}
             {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
             
-            {/* IMPORTANT : On passe launchExpedition ici pour gérer le retour JSON complexe */}
             {activeTab === 'expedition' && (
                 <ExpeditionZone 
                     planet={planet} 
@@ -215,7 +285,15 @@ export default function App() {
                 />
             )}
 
-            {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} />}
+            {activeTab === 'ranking' && (
+                <Leaderboard 
+                    currentPlanetId={planet.id} 
+                    onAttack={handlePrepareAttack} 
+                />
+            )}
+
+            {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
+
           </main>
         </div>
       </div>

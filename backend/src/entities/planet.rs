@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
-    pub owner_id: Uuid, // Ici : Pas de Option<>, c'est obligatoire !
+    pub owner_id: Uuid,
     pub name: String,
     
+    // Niveaux Mines
     #[sea_orm(default_value = 1)]
     pub metal_mine_level: i32,
     #[sea_orm(default_value = 1)]
@@ -16,6 +17,7 @@ pub struct Model {
     #[sea_orm(default_value = 1)]
     pub deuterium_mine_level: i32,
 
+    // Ressources
     #[sea_orm(default_value = 0.0)]
     pub metal_amount: f64,
     #[sea_orm(default_value = 0.0)]
@@ -23,15 +25,16 @@ pub struct Model {
     #[sea_orm(default_value = 0.0)]
     pub deuterium_amount: f64,
 
+    // Timers
     pub last_update: DateTime,
     pub construction_end: Option<DateTime>,
     pub construction_type: Option<String>,
-
     pub shipyard_construction_end: Option<DateTime>,
     pub pending_fleet_type: Option<String>,
     #[sea_orm(default_value = 0)]
     pub pending_fleet_count: i32,
     
+    // Flotte
     #[sea_orm(default_value = 0)]
     pub light_hunter_count: i32,
     #[sea_orm(default_value = 0)]
@@ -39,6 +42,7 @@ pub struct Model {
     #[sea_orm(default_value = 0)]
     pub recycler_count: i32,
 
+    // Tech
     #[sea_orm(default_value = 0)]
     pub energy_tech_level: i32,
     #[sea_orm(default_value = 0)]
@@ -46,7 +50,11 @@ pub struct Model {
     #[sea_orm(default_value = 0)]
     pub laser_battery_level: i32,
 
+    // Expédition
     pub expedition_end: Option<DateTime>,
+
+    // --- NOUVEAU CHAMP ---
+    pub unread_report: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

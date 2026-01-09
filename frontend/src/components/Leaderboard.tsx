@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trophy, Medal, Crown, Target } from "lucide-react";
+import { Trophy, Medal, Crown, Target, Skull } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
 interface RankItem {
@@ -7,9 +7,15 @@ interface RankItem {
   planet_name: string;
   score: number;
   is_me: boolean;
+  id: string; // <-- Ce champ existe maintenant
 }
 
-export default function Leaderboard({ currentPlanetId }: { currentPlanetId: string }) {
+interface LeaderboardProps {
+  currentPlanetId: string;
+  onAttack: (targetId: string, targetName: string) => void;
+}
+
+export default function Leaderboard({ currentPlanetId, onAttack }: LeaderboardProps) {
   const [ranking, setRanking] = useState<RankItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,35 +28,42 @@ export default function Leaderboard({ currentPlanetId }: { currentPlanetId: stri
           setRanking(data);
         }
       } catch (e) {
-        console.error(e);
+        console.error("Erreur chargement classement", e);
       } finally {
         setLoading(false);
       }
     };
-    fetchRanking();
+
+    if (currentPlanetId) {
+        fetchRanking();
+    }
   }, [currentPlanetId]);
 
-  if (loading) return <div className="text-center animate-pulse p-10 font-mono text-cyan-500">CHARGEMENT DES DONNÉES DE LA FLOTTE...</div>;
+  if (loading) return (
+    <div className="flex justify-center items-center h-64">
+        <div className="text-center animate-pulse font-mono text-cyan-500 tracking-widest">
+            CHARGEMENT DES DONNÉES TACTIQUES...
+        </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      
-      {/* Header */}
       <div className="flex items-center gap-4 mb-8">
-        <div className="p-4 bg-yellow-500/10 rounded-full border border-yellow-500/20">
+        <div className="p-4 bg-yellow-500/10 rounded-full border border-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.2)]">
             <Trophy size={40} className="text-yellow-500" />
         </div>
         <div>
             <h2 className="text-3xl font-black uppercase text-white tracking-tighter">Classement Galactique</h2>
-            <p className="text-slate-400 font-mono text-xs">Top Amiraux du Secteur</p>
+            <p className="text-slate-400 font-mono text-xs uppercase tracking-widest">Top Amiraux du Secteur</p>
         </div>
       </div>
 
-      <Card className="bg-black/60 border border-white/10 p-1 rounded-3xl overflow-hidden backdrop-blur-md">
+      <Card className="bg-black/60 border border-white/10 p-1 rounded-3xl overflow-hidden backdrop-blur-md shadow-2xl">
         <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
                 <thead>
-                    <tr className="bg-white/5 text-[10px] uppercase font-black tracking-widest text-slate-500">
+                    <tr className="bg-white/5 text-[10px] uppercase font-black tracking-widest text-slate-500 border-b border-white/5">
                         <th className="p-4 text-center w-20">Rang</th>
                         <th className="p-4">Commandant</th>
                         <th className="p-4 text-right">Score</th>
@@ -59,34 +72,33 @@ export default function Leaderboard({ currentPlanetId }: { currentPlanetId: stri
                 </thead>
                 <tbody className="divide-y divide-white/5">
                     {ranking.map((player) => (
-                        <tr 
-                            key={player.rank} 
-                            className={`group transition-colors hover:bg-white/5 ${player.is_me ? 'bg-indigo-900/20 hover:bg-indigo-900/30' : ''}`}
-                        >
+                        <tr key={player.rank} className={`group transition-colors hover:bg-white/5 ${player.is_me ? 'bg-indigo-900/20 hover:bg-indigo-900/30' : ''}`}>
                             <td className="p-4 text-center font-mono font-bold text-lg">
-                                {player.rank === 1 && <Crown size={20} className="text-yellow-400 mx-auto" />}
-                                {player.rank === 2 && <Medal size={20} className="text-slate-300 mx-auto" />}
-                                {player.rank === 3 && <Medal size={20} className="text-amber-600 mx-auto" />}
+                                {player.rank === 1 && <Crown size={24} className="text-yellow-400 mx-auto drop-shadow-lg" />}
+                                {player.rank === 2 && <Medal size={24} className="text-slate-300 mx-auto" />}
+                                {player.rank === 3 && <Medal size={24} className="text-amber-700 mx-auto" />}
                                 {player.rank > 3 && <span className="text-slate-500">#{player.rank}</span>}
                             </td>
                             <td className="p-4">
-                                <span className={`font-bold ${player.is_me ? 'text-indigo-400' : 'text-white'}`}>
-                                    {player.planet_name}
-                                </span>
-                                {player.is_me && <span className="ml-2 text-[9px] bg-indigo-500 text-white px-1.5 py-0.5 rounded">MOI</span>}
+                                <div className="flex items-center gap-2">
+                                    <span className={`font-bold text-sm tracking-wide ${player.is_me ? 'text-indigo-400' : 'text-white'}`}>
+                                        {player.planet_name}
+                                    </span>
+                                    {player.is_me && <span className="text-[9px] bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Moi</span>}
+                                </div>
                             </td>
-                            <td className="p-4 text-right font-mono text-cyan-400">
-                                {player.score.toLocaleString()}
-                            </td>
+                            <td className="p-4 text-right font-mono text-cyan-400 font-bold">{player.score.toLocaleString()}</td>
                             <td className="p-4 text-center">
                                 {!player.is_me && (
                                     <button 
-                                        className="p-2 rounded-full hover:bg-red-500/20 text-slate-600 hover:text-red-500 transition-colors"
-                                        title="Attaquer (Bientôt disponible)"
+                                        onClick={() => onAttack(player.id, player.planet_name)}
+                                        className="group/btn p-2 rounded-full hover:bg-red-500/20 text-slate-600 hover:text-red-500 transition-all duration-300 transform hover:scale-110 active:scale-95"
+                                        title="Lancer un raid"
                                     >
-                                        <Target size={18} />
+                                        <Skull size={20} className="group-hover/btn:animate-pulse" />
                                     </button>
                                 )}
+                                {player.is_me && <div className="flex justify-center opacity-20"><Target size={18} /></div>}
                             </td>
                         </tr>
                     ))}

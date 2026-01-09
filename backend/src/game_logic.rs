@@ -2,7 +2,7 @@ use chrono::{Utc, NaiveDateTime};
 use serde::Serialize;
 
 // TON SPEED FACTOR EST ICI
-pub const SPEED_FACTOR: f64 = 3.0; 
+pub const SPEED_FACTOR: f64 = 400000.0; 
 
 #[derive(Debug, Serialize, Clone, Copy)]
 pub enum ResourceType { Metal, Crystal, Deuterium }
@@ -15,6 +15,82 @@ pub struct CombatReport {
     pub victory: bool,
     pub ships_lost: i32,
     pub message: String,
+}
+
+#[derive(Serialize)]
+pub struct PvpReport {
+    pub winner: String, // "attacker" ou "defender"
+    pub log: Vec<String>,
+    pub loot: Cost,
+    pub attacker_losses: i32,
+    pub defender_losses: i32,
+}
+
+
+/// Résout un combat PvP (Attaquant vs Défenseur)
+pub fn resolve_pvp(
+    att_hunters: i32, 
+    att_cruisers: i32,
+    def_hunters: i32, 
+    def_cruisers: i32, 
+    def_lasers: i32,
+    def_resources: Cost
+) -> PvpReport {
+    let mut log = Vec::new();
+    
+    // 1. Calcul de la puissance de feu (Valeurs arbitraires pour l'équilibrage)
+    // Chasseur = 10 pts, Croiseur = 50 pts
+    let att_power = (att_hunters * 10) + (att_cruisers * 50);
+    
+    // Défenseur : Flotte + Lasers (Laser = 20 pts)
+    let def_power = (def_hunters * 10) + (def_cruisers * 50) + (def_lasers * 20);
+
+    log.push(format!("Analyse Tactique : Force Attaquante {} vs Force Défensive {}", att_power, def_power));
+
+    let winner;
+    let loot;
+    let attacker_losses;
+    let defender_losses;
+
+    if att_power > def_power {
+        // VICTOIRE ATTAQUANT
+        winner = "attacker".to_string();
+        log.push("VICTOIRE : La défense ennemie a cédé.".to_string());
+        
+        // Calcul des pertes (L'attaquant perd un % basé sur la résistance ennemie)
+        // Si la défense était faible, peu de pertes. Si forte, plus de pertes.
+        let resistance_ratio = if att_power > 0 { def_power as f64 / att_power as f64 } else { 0.0 };
+        let loss_percent = 0.1 + (0.4 * resistance_ratio); // Entre 10% et 50% de pertes
+        
+        attacker_losses = (att_hunters as f64 * loss_percent) as i32;
+        defender_losses = (def_hunters as f64 * 0.8) as i32; // Le défenseur perd 80% de sa flotte en cas de défaite
+
+        // Pillages (50% des ressources disponibles)
+        loot = Cost {
+            metal: def_resources.metal * 0.5,
+            crystal: def_resources.crystal * 0.5,
+            deuterium: def_resources.deuterium * 0.5,
+        };
+        log.push(format!("PILLAGE : {:.0} Métal, {:.0} Cristal volés.", loot.metal, loot.crystal));
+
+    } else {
+        // DÉFAITE ATTAQUANT
+        winner = "defender".to_string();
+        log.push("ECHEC : La flotte attaquante a été repoussée.".to_string());
+        
+        attacker_losses = (att_hunters as f64 * 0.7) as i32; // L'attaquant perd 70% en fuyant
+        defender_losses = (def_hunters as f64 * 0.2) as i32; // Le défenseur perd un peu
+        
+        loot = Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 };
+    }
+
+    PvpReport {
+        winner,
+        log,
+        loot,
+        attacker_losses,
+        defender_losses
+    }
 }
 
 pub fn get_production_per_hour(resource_type: ResourceType, level: i32) -> f64 {

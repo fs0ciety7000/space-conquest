@@ -8,6 +8,8 @@ mod m20260109_005503_add_fleet_and_shipyard;
 mod m20260109_013834_update_planet_table;
 mod m20260109_014709_create_user_table;
 mod m20260109_023850_add_ships_and_pending_system;
+mod m20260109_195343_add_unread_report;
+mod m20260109_200503_create_combat_log;
 
 pub struct Migrator;
 
@@ -23,6 +25,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260109_013834_update_planet_table::Migration),
             Box::new(m20260109_014709_create_user_table::Migration),
             Box::new(m20260109_023850_add_ships_and_pending_system::Migration),
+            Box::new(m20260109_195343_add_unread_report::Migration),
+            Box::new(m20260109_200503_create_combat_log::Migration),
         ]
     }
 }

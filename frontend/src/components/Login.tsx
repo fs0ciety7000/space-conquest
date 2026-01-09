@@ -1,72 +1,123 @@
 import { useState } from 'react';
-import { Card, CardContent } from "@/components/ui/card";
+import { Power, User, ArrowRight, ShieldCheck, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Rocket, ShieldCheck, UserPlus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 
-export default function Login({ onLogin }: { onLogin: (token: string, pId: string) => void }) {
-  const [isRegister, setIsRegister] = useState(false);
-  const [form, setForm] = useState({ username: '', password: '' });
-  const [error, setError] = useState("");
+interface LoginProps {
+  onLogin: (token: string, planetId: string) => void;
+}
+
+export default function Login({ onLogin }: LoginProps) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState(''); // Ajout du state mot de passe
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    const route = isRegister ? 'register' : 'login';
+    setError(null);
+    setLoading(true);
+
+    const endpoint = isRegistering ? 'http://localhost:8080/register' : 'http://localhost:8080/login';
+
     try {
-      const res = await fetch(`http://127.0.0.1:8080/auth/${route}`, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        // On envoie maintenant le mot de passe
+        body: JSON.stringify({ username, password })
       });
-      if (!res.ok) throw new Error("Identifiants invalides");
+
       const data = await res.json();
-      onLogin(data.token, data.planet_id);
-    } catch (e: any) {
-      setError(e.message);
+
+      if (res.ok) {
+        onLogin(data.token, data.planet_id);
+      } else {
+        setError(data.error || "Une erreur est survenue");
+      }
+    } catch (err) {
+      setError("Impossible de contacter le serveur");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-6 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]">
-      <Card className="w-full max-w-md bg-slate-950/80 backdrop-blur-xl border-white/10 p-8 shadow-2xl">
-        <div className="text-center mb-10 space-y-2">
-          <Rocket className="mx-auto h-12 w-12 text-indigo-500 animate-pulse" />
-          <h1 className="text-4xl font-black italic uppercase tracking-tighter text-white">Space <span className="text-indigo-500">Conquest</span></h1>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.4em]">Système de Commandement Global</p>
+    <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-black to-black"></div>
+      
+      <Card className="w-full max-w-md bg-black/80 border border-white/10 backdrop-blur-xl p-8 relative z-10 shadow-2xl">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-500/50 animate-pulse">
+            <Power className="text-indigo-400" size={32} />
+          </div>
+          {/* Titre original restauré */}
+          <h1 className="text-3xl font-black uppercase tracking-tighter text-white">
+            SPACE CONQUEST
+          </h1>
+          <p className="text-slate-500 text-xs uppercase tracking-widest mt-2">
+            {isRegistering ? 'Initialisation Colonie' : 'Identification Requise'}
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Champ Pseudo */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Matricule</label>
-            <input 
-              className="w-full bg-black border border-white/10 p-3 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 outline-none" 
-              placeholder="Username" 
-              onChange={e => setForm({...form, username: e.target.value})} 
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Code d'Accès</label>
-            <input 
-              className="w-full bg-black border border-white/10 p-3 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 outline-none" 
-              type="password" 
-              placeholder="••••••••" 
-              onChange={e => setForm({...form, password: e.target.value})} 
-            />
+            <label className="text-[10px] uppercase font-bold text-slate-400 ml-1">Identifiant</label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <Input 
+                type="text" 
+                placeholder="Votre pseudo" 
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-600 h-12 focus:border-indigo-500 transition-all"
+                required
+              />
+            </div>
           </div>
 
-          {error && <p className="text-red-500 text-[10px] font-bold text-center uppercase tracking-widest">{error}</p>}
+          {/* Champ Mot de passe (RESTAURÉ) */}
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase font-bold text-slate-400 ml-1">Mot de passe</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <Input 
+                type="password" 
+                placeholder="••••••••" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-600 h-12 focus:border-indigo-500 transition-all"
+                required
+              />
+            </div>
+          </div>
 
-          <Button className="w-full bg-indigo-600 hover:bg-indigo-500 h-12 font-black uppercase tracking-widest transition-all">
-            {isRegister ? <><UserPlus className="mr-2 h-4 w-4" /> Initialiser le compte</> : <><ShieldCheck className="mr-2 h-4 w-4" /> Établir la liaison</>}
+          {error && (
+            <div className="p-3 bg-red-900/20 border border-red-500/30 rounded text-red-400 text-xs flex items-center gap-2">
+              <ShieldCheck size={14} /> {error}
+            </div>
+          )}
+
+          <Button 
+            type="submit" 
+            disabled={loading}
+            className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest transition-all"
+          >
+            {loading ? 'Traitement...' : (isRegistering ? "Fondation Colonie" : "Connexion")} <ArrowRight size={18} className="ml-2" />
           </Button>
         </form>
 
-        <button 
-          onClick={() => setIsRegister(!isRegister)} 
-          className="mt-8 text-[10px] text-slate-500 hover:text-indigo-400 uppercase font-black w-full text-center transition-colors"
-        >
-          {isRegister ? "Liaison existante ? Connexion" : "Nouveau commandant ? Créer un matricule"}
-        </button>
+        <div className="mt-6 text-center">
+          <button 
+            onClick={() => { setIsRegistering(!isRegistering); setError(null); }}
+            className="text-slate-500 hover:text-white text-xs underline underline-offset-4 transition-colors"
+          >
+            {isRegistering ? "Retour à la connexion" : "Nouveau ? Créer un compte"}
+          </button>
+        </div>
       </Card>
     </div>
   );
