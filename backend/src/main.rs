@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query}, // J'ai ajouté Query ici
     http::{Method, StatusCode},
     response::{IntoResponse, Json},
     routing::{get, post},
@@ -9,8 +9,10 @@ use sea_orm::{
     ActiveModelTrait, ConnectionTrait, Database, DatabaseConnection, DbErr,
     EntityTrait, Set, Statement,
 };
+use serde::{Deserialize, Serialize}; // J'ai ajouté Deserialize/Serialize
 use serde_json::{json, Value};
 use std::net::SocketAddr;
+use std::collections::HashMap; // INDISPENSABLE pour le ranking
 use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
@@ -18,17 +20,34 @@ use rand::Rng;
 
 // --- MODULES ---
 mod auth;
-mod game_logic; // On charge ton fichier game_logic
-mod entities;
-// Note: Si tu as encore combat.rs séparé, garde 'mod combat;', sinon on utilise game_logic
+mod game_logic;
+mod combat;
+mod entities; 
 
 use entities::planet;
 use entities::planet::Entity as Planet;
-use game_logic::ResourceType; // On utilise tes types
+
+// ==========================================
+// ⚡ REGLAGES SPEED GAME ⚡
+// ==========================================
+const PRODUCTION_SPEED: f64 = 1000.0;
+const MINE_BUILD_TIME: i64 = 1;
+const FLEET_BUILD_DIVIDER: i64 = 100;
+const EXPEDITION_TIME: i64 = 10;
+// ==========================================
 
 #[derive(Clone)]
 struct AppState {
     db: DatabaseConnection,
+}
+
+// Structure pour le classement
+#[derive(Serialize)]
+struct RankItem {
+    rank: usize,
+    planet_name: String,
+    score: i32,
+    is_me: bool,
 }
 
 #[tokio::main]
@@ -38,7 +57,7 @@ async fn main() {
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = Database::connect(&db_url).await.unwrap();
 
-    // Migration
+    // Migration SQL
     let backend = db.get_database_backend();
     let _ = db.execute(Statement::from_string(
         backend,
@@ -82,6 +101,7 @@ async fn main() {
         .route("/planets/:id/upgrade/:type", post(upgrade_mine_handler))
         .route("/planets/:id/build-fleet/:type/:qty", post(build_fleet_handler))
         .route("/planets/:id/expedition", post(expedition_handler))
+        .route("/ranking", get(get_ranking_handler)) // Route Ranking
         .layer(cors)
         .with_state(state);
 
@@ -91,7 +111,45 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-// --- HANDLERS QUI UTILISENT GAME_LOGIC ---
+// --- HANDLERS ---
+
+// Handler Ranking corrigé (impl IntoResponse)
+async fn get_ranking_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    
+    let current_planet_id = params.get("current_planet_id")
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .unwrap_or_default();
+
+    // Récupération de toutes les planètes
+    let planets = planet::Entity::find().all(&state.db).await.unwrap_or_default();
+
+    // Calcul du score
+    let mut ranked_planets: Vec<RankItem> = planets.into_iter().map(|p| {
+        let score = (p.metal_mine_level + p.crystal_mine_level + p.deuterium_mine_level 
+                     + p.energy_tech_level + p.research_lab_level + p.laser_battery_level) * 100
+                     + (p.light_hunter_count + p.cruiser_count + p.recycler_count) * 10;
+        
+        RankItem {
+            rank: 0, 
+            planet_name: p.name,
+            score,
+            is_me: p.id == current_planet_id,
+        }
+    }).collect();
+
+    // Tri
+    ranked_planets.sort_by(|a, b| b.score.cmp(&a.score));
+
+    // Attribution rang
+    for (i, item) in ranked_planets.iter_mut().enumerate() {
+        item.rank = i + 1;
+    }
+
+    Json(ranked_planets)
+}
 
 async fn get_planet_handler(
     Path(id): Path<Uuid>,
@@ -102,24 +160,29 @@ async fn get_planet_handler(
         .one(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let p = p_opt.ok_or(StatusCode::NOT_FOUND)?;
     
     let now = Utc::now().naive_utc();
+    let elapsed = now.signed_duration_since(p.last_update).num_seconds();
+
     let mut active: planet::ActiveModel = p.clone().into();
 
-    // 1. UTILISATION DE GAME_LOGIC POUR LES RESSOURCES
-    // On calcule ce qui a été produit depuis la dernière fois
-    // game_logic::calculate_resources prend en compte ton SPEED_FACTOR
-    let new_metal = game_logic::calculate_resources(ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update);
-    let new_crystal = game_logic::calculate_resources(ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update);
-    let new_deut = game_logic::calculate_resources(ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update);
+    if elapsed > 0 {
+        let prod_factor = PRODUCTION_SPEED; 
 
-    active.metal_amount = Set(new_metal);
-    active.crystal_amount = Set(new_crystal);
-    active.deuterium_amount = Set(new_deut);
-    active.last_update = Set(now);
+        // Appel à game_logic pour calcul propre
+        let new_metal = game_logic::calculate_resources(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update);
+        let new_crystal = game_logic::calculate_resources(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update);
+        let new_deut = game_logic::calculate_resources(game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update);
 
-    // 2. Gestion des constructions terminées (reste identique)
+        active.metal_amount = Set(new_metal);
+        active.crystal_amount = Set(new_crystal);
+        active.deuterium_amount = Set(new_deut);
+        active.last_update = Set(now);
+    }
+
+    // Constructions
     if let Some(end_date) = p.construction_end {
         if now >= end_date {
             let type_str = p.construction_type.clone().unwrap_or_default();
@@ -137,6 +200,7 @@ async fn get_planet_handler(
         }
     }
 
+    // Flotte
     if let Some(fleet_end) = p.shipyard_construction_end {
         if now >= fleet_end {
             let fleet_str = p.pending_fleet_type.clone().unwrap_or_default();
@@ -153,6 +217,7 @@ async fn get_planet_handler(
         }
     }
     
+    // Expédition
     if let Some(exp_end) = p.expedition_end {
         if now >= exp_end {
             active.expedition_end = Set(None);
@@ -160,6 +225,7 @@ async fn get_planet_handler(
     }
 
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
     Ok(Json(updated_model))
 }
 
@@ -174,7 +240,7 @@ async fn upgrade_mine_handler(
         return Err(StatusCode::CONFLICT);
     }
 
-    // Déterminer le niveau actuel
+    // Calcul du niveau actuel pour game_logic
     let current_level = match type_mine.as_str() {
         "metal" => p.metal_mine_level,
         "crystal" => p.crystal_mine_level,
@@ -185,14 +251,12 @@ async fn upgrade_mine_handler(
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
-    // 1. UTILISATION DE GAME_LOGIC POUR LES COÛTS
     let cost = game_logic::get_upgrade_cost(&type_mine, current_level + 1);
 
     if p.metal_amount < cost.metal || p.crystal_amount < cost.crystal || p.deuterium_amount < cost.deuterium {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // 2. UTILISATION DE GAME_LOGIC POUR LE TEMPS (SPEED FACTOR)
     let build_time = game_logic::get_build_time(current_level + 1);
 
     let mut active: planet::ActiveModel = p.clone().into();
@@ -218,7 +282,6 @@ async fn build_fleet_handler(
         return Err(StatusCode::CONFLICT);
     }
 
-    // Ici on garde les coûts simples pour l'exemple, ou tu peux ajouter get_ship_cost dans game_logic
     let (cost_m, cost_c) = match type_ship.as_str() {
         "light_hunter" => {
             let stats = game_logic::get_light_hunter_stats();
@@ -236,7 +299,6 @@ async fn build_fleet_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // UTILISATION DE GAME_LOGIC POUR LE TEMPS DE FLOTTE (SPEED FACTOR)
     let build_time = game_logic::get_ship_production_time(qty);
 
     let mut active: planet::ActiveModel = p.clone().into();
@@ -244,6 +306,7 @@ async fn build_fleet_handler(
     active.crystal_amount = Set(p.crystal_amount - total_c);
     active.pending_fleet_type = Set(Some(type_ship));
     active.pending_fleet_count = Set(qty);
+    
     active.shipyard_construction_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(build_time)));
 
     active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -272,9 +335,7 @@ async fn expedition_handler(
     let mut active: planet::ActiveModel = p.clone().into();
     let mut loot = 0.0;
     let mut logs: Vec<String> = Vec::new();
-    let mut winner = "none";
-    
-    // Variables pour stocker les pertes précises
+    let winner; // Supprimé la valeur par défaut pour corriger le warning
     let mut lost_hunters = 0;
     let mut lost_cruisers = 0;
 
@@ -283,7 +344,6 @@ async fn expedition_handler(
     if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
         
-        // Simulation via game_logic
         let combat_res = game_logic::simulate_combat(
             p.light_hunter_count + p.cruiser_count, 
             p.laser_battery_level
@@ -297,10 +357,7 @@ async fn expedition_handler(
             logs.push(format!("RESULTAT : {}", combat_res.message));
             logs.push(format!("PILLAGE : +{:.0} Métal récupéré.", loot));
 
-            // VICTOIRE : On perd quelques chasseurs (chair à canon)
             lost_hunters = combat_res.ships_lost; 
-            
-            // On s'assure de ne pas enlever plus que ce qu'on a
             if lost_hunters > p.light_hunter_count {
                 lost_hunters = p.light_hunter_count;
             }
@@ -309,34 +366,32 @@ async fn expedition_handler(
             logs.push("ALERTE CRITIQUE : Boucliers percés.".to_string());
             logs.push(format!("RESULTAT : {}", combat_res.message));
             
-            // DÉFAITE : Pertes massives en pourcentage
-            lost_hunters = (p.light_hunter_count as f64 * 0.5) as i32; // 50% perte
-            lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;     // 30% perte
+            lost_hunters = (p.light_hunter_count as f64 * 0.5) as i32; 
+            lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;     
         }
         
-        // Application des pertes à la DB
         active.light_hunter_count = Set(p.light_hunter_count - lost_hunters);
         active.cruiser_count = Set(p.cruiser_count - lost_cruisers);
         active.metal_amount = Set(p.metal_amount + loot);
 
     } else {
         winner = "player"; 
-        loot = 50000.0; 
+        loot = 50000.0; // Gros gain en Speed Game
         logs.push("SCAN : Secteur calme.".to_string());
-        logs.push("EXPLORATION : Gisement massif trouvé.".to_string());
+        logs.push(format!("DECOUVERTE : Gisement massif trouvé (+{:.0} Métal).", loot));
         active.metal_amount = Set(p.metal_amount + loot);
     }
 
     let duration = std::cmp::max(1, (600.0 / game_logic::SPEED_FACTOR) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
     
-    if let Err(e) = active.update(&state.db).await {
+    if let Err(_) = active.update(&state.db).await { // _e pour supprimer le warning
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB Update Error"}))).into_response();
     }
     
+    // Récupération fraîche
     let updated_planet = planet::Entity::find_by_id(id).one(&state.db).await.unwrap().unwrap();
 
-    // --- CONSTRUCTION RÉPONSE AVEC PERTES DÉTAILLÉES ---
     let response = json!({
         "planet": updated_planet,
         "report": {

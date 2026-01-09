@@ -6,6 +6,7 @@ import TechTree from './components/TechTree';
 import ExpeditionZone from './components/ExpeditionZone';
 import CombatModal from './components/CombatModal';
 import Login from './components/Login';
+import Leaderboard from './components/Leaderboard';
 import { LogOut, BellRing } from "lucide-react";
 
 // Types simplifiés (tu peux les déplacer dans un fichier types.ts plus tard)
@@ -19,7 +20,7 @@ export default function App() {
   // --- ÉTATS GLOBAUX ---
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
-  const [activeTab, setActiveTab] = useState<'resources' | 'fleet' | 'tech' | 'expedition'>('resources');
+  const [activeTab, setActiveTab] = useState<'resources' | 'fleet' | 'tech' | 'expedition' | 'ranking'>('resources');
   
   const [planet, setPlanet] = useState<any>(null);
   
@@ -181,7 +182,7 @@ export default function App() {
           {/* NAVIGATION */}
           <nav className="flex items-center justify-between border-b border-white/5 pb-4 text-white">
             <div className="flex gap-2">
-              {(['resources', 'fleet', 'tech', 'expedition'] as const).map(tab => (
+              {(['resources', 'fleet', 'tech', 'expedition', 'ranking'] as const).map(tab => (
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -191,7 +192,7 @@ export default function App() {
                     : 'text-slate-500 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  {tab === 'resources' ? 'Économie' : tab === 'fleet' ? 'Flotte' : tab === 'tech' ? 'Recherche' : 'Missions'}
+                  {tab === 'resources' ? 'Économie' : tab === 'fleet' ? 'Flotte' : tab === 'tech' ? 'Recherche' : tab === 'expedition' ? 'Missions' : 'Classement'}
                 </button>
               ))}
             </div>
@@ -213,6 +214,8 @@ export default function App() {
                     onAction={launchExpedition} 
                 />
             )}
+
+            {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} />}
           </main>
         </div>
       </div>
