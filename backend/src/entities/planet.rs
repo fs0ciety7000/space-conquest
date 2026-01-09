@@ -8,7 +8,9 @@ pub struct Model {
     pub id: Uuid,
     pub owner_id: Uuid,
     pub name: String,
-    
+    #[serde(skip)] // IMPORTANT : Ne jamais renvoyer le hash du mdp au frontend
+    pub password: String,
+
     // Niveaux Mines
     #[sea_orm(default_value = 1)]
     pub metal_mine_level: i32,
@@ -42,6 +44,10 @@ pub struct Model {
     #[sea_orm(default_value = 0)]
     pub recycler_count: i32,
 
+    // AJOUT
+    #[sea_orm(default_value = 0)]
+    pub spy_probe_count: i32, // <--- ICI
+
     // Tech
     #[sea_orm(default_value = 0)]
     pub energy_tech_level: i32,
@@ -49,6 +55,16 @@ pub struct Model {
     pub research_lab_level: i32,
     #[sea_orm(default_value = 0)]
     pub laser_battery_level: i32,
+
+    // DÉFENSES (Nouveaux champs)
+    #[sea_orm(default_value = 0)]
+    pub missile_launcher_count: i32,
+    #[sea_orm(default_value = 0)]
+    pub plasma_turret_count: i32,
+    
+    // AJOUT
+    #[sea_orm(default_value = 0)]
+    pub espionage_tech_level: i32, // <--- ICI
 
     // Expédition
     pub expedition_end: Option<DateTime>,

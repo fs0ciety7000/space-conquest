@@ -9,6 +9,8 @@ import Login from './components/Login';
 import Leaderboard from './components/Leaderboard';
 import AttackModal from './components/AttackModal'; 
 import ReportsTerminal from './components/ReportsTerminal';
+import Defenses from './components/Defenses';
+import PlanetOverview from './components/PlanetOverview';
 import { LogOut, BellRing } from "lucide-react";
 
 interface CombatReport {
@@ -24,8 +26,8 @@ interface CombatReport {
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
-  const [activeTab, setActiveTab] = useState<'resources' | 'fleet' | 'tech' | 'expedition' | 'ranking' | 'reports'>('resources');
-  
+const [activeTab, setActiveTab] = useState<'overview' | 'resources' | 'fleet' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports'>('resources');
+const [speedFactor, setSpeedFactor] = useState<number>(1);
   const [planet, setPlanet] = useState<any>(null);
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
   const [showCombatModal, setShowCombatModal] = useState(false);
@@ -54,7 +56,7 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         
-        // --- GESTION ALERTE DÉFENSE ---
+        // --- GESTION ALERTE DÉFENSE (Rapport entrant) ---
         if (data.unread_report) {
             try {
                 const reportData = JSON.parse(data.unread_report);
@@ -80,6 +82,7 @@ export default function App() {
             }
         }
 
+        // Notification fin de construction
         if (prevPlanetRef.current?.construction_end && !data.construction_end) {
             setReport("CONSTRUCTION TERMINÉE.");
             setTimeout(() => setReport(null), 4000);
@@ -105,6 +108,8 @@ export default function App() {
       console.error("Liaison perdue avec le centre de commande");
     }
   }, [planetId, token]);
+
+  // --- ACTIONS ---
 
   const launchExpedition = async () => {
     if (!planetId || !token) return;
@@ -182,7 +187,81 @@ export default function App() {
     }
   };
 
+  // NOUVEAU : GESTION ESPIONNAGE
+  const handleSpy = async (targetId: string) => {
+    if (!planetId || !token) return;
+    
+    try {
+        const res = await fetch(`http://localhost:8080/spy?current_planet_id=${planetId}`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ target_planet_id: targetId })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            const r = data.report;
+            const logs = ["--- RAPPORT D'ESPIONNAGE ---"];
+            
+            // Formatage du rapport pour la modale
+            if (r.resources) {
+                logs.push(">>> RESSOURCES DÉTECTÉES <<<");
+                logs.push(`MÉTAL: ${Math.floor(r.resources.metal).toLocaleString()}`);
+                logs.push(`CRISTAL: ${Math.floor(r.resources.crystal).toLocaleString()}`);
+                logs.push(`DEUTÉRIUM: ${Math.floor(r.resources.deuterium).toLocaleString()}`);
+            } else {
+                logs.push(">>> RESSOURCES: INCONNU (Tech trop faible)");
+            }
+
+            if (r.fleet) {
+                logs.push(">>> FLOTTE STATIONNÉE <<<");
+                logs.push(`Chasseurs: ${r.fleet.light_hunter}`);
+                logs.push(`Croiseurs: ${r.fleet.cruiser}`);
+                logs.push(`Recycleurs: ${r.fleet.recycler}`);
+            } else if (r.detection_level === 'resources') {
+                 logs.push(">>> FLOTTE: INCONNU (Tech insuffisante)");
+            }
+
+            if (r.defense !== null && r.defense !== undefined) {
+                 logs.push(">>> DÉFENSES <<<");
+                 logs.push(`Batteries Laser: Niv. ${r.defense}`);
+            }
+
+            const formattedReport: CombatReport = {
+                winner: 'player', // Vert car c'est un rapport "réussi"
+                log: logs,
+                loot: 0,
+                losses: { light_hunter: 0, cruiser: 0 } // On ne compte pas la sonde perdue ici
+            };
+            
+            setCombatReport(formattedReport);
+            setShowCombatModal(true);
+            
+            fetchPlanet(); // Mettre à jour le nombre de sondes
+        } else {
+            setReport(`ÉCHEC ESPIONNAGE : ${data.error}`);
+            setTimeout(() => setReport(null), 4000);
+        }
+    } catch (e) {
+        console.error(e);
+        setReport("ERREUR SYSTEME ESPIONNAGE");
+    }
+  };
+
+  // --- EFFETS ---
   useEffect(() => {
+    fetch('http://localhost:8080/config')
+      .then(res => res.json())
+      .then(data => {
+          console.log("Vitesse du jeu synchronisée:", data.speed_factor);
+          setSpeedFactor(data.speed_factor);
+      })
+      .catch(err => console.error("Impossible de sync la vitesse", err));
+
     if (token && planetId) {
       fetchPlanet();
       const interval = setInterval(fetchPlanet, 2000);
@@ -190,6 +269,8 @@ export default function App() {
     }
   }, [token, planetId, fetchPlanet]);
 
+  // --- RENDU ---
+  
   if (!token || !planetId) {
     return <Login onLogin={(t, p) => { 
         localStorage.setItem('token', t); 
@@ -246,8 +327,7 @@ export default function App() {
         <div className="max-w-6xl mx-auto space-y-8">
           <nav className="flex items-center justify-between border-b border-white/5 pb-4 text-white">
             <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-              {(['resources', 'fleet', 'tech', 'expedition', 'ranking', 'reports'] as const).map(tab => (
-     
+            {(['overview', 'resources', 'fleet', 'defenses', 'tech', 'expedition', 'ranking', 'reports'] as const).map(tab => (
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -257,14 +337,15 @@ export default function App() {
                     : 'text-slate-500 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  {tab === 'resources' ? 'Économie' 
-                   : tab === 'fleet' ? 'Flotte' 
-                   : tab === 'tech' ? 'Recherche' 
-                   : tab === 'expedition' ? 'Missions' 
+                  {/* LABELS */}
+                  {tab === 'overview' ? 'Vue Générale' 
+                   : tab === 'resources' ? 'Mines' // J'ai renommé 'Économie' en 'Mines' pour distinguer de la vue générale
+                   : tab === 'fleet' ? 'Chantier Spatial' 
+                   : tab === 'defenses' ? 'Défense'
+                   : tab === 'tech' ? 'Laboratoire' 
+                   : tab === 'expedition' ? 'Expéditions' 
                    : tab === 'ranking' ? 'Classement'
                    : 'Rapports'}
-                   
-
                 </button>
               ))}
             </div>
@@ -273,28 +354,18 @@ export default function App() {
             </button>
           </nav>
 
-          <main className="animate-in fade-in duration-500">
+         <main className="animate-in fade-in duration-500">
+            {/* 4. AFFICHAGE */}
+            {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
+            
             {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} />}
             {activeTab === 'fleet' && <Shipyard planet={planet} onBuild={fetchPlanet} />}
+            {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
             {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
-            
-            {activeTab === 'expedition' && (
-                <ExpeditionZone 
-                    planet={planet} 
-                    onAction={launchExpedition} 
-                />
-            )}
-
-            {activeTab === 'ranking' && (
-                <Leaderboard 
-                    currentPlanetId={planet.id} 
-                    onAttack={handlePrepareAttack} 
-                />
-            )}
-
+            {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}
+            {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} />}
             {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
-
-          </main>
+        </main>
         </div>
       </div>
     </div>

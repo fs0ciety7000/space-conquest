@@ -6,13 +6,12 @@ use axum::{
     Router,
 };
 use sea_orm::{
-    ActiveModelTrait, ConnectionTrait, Database, DatabaseConnection, DbErr,
-    EntityTrait, Set, Statement, 
-    // 👇 TOUS LES TRAITS NÉCESSAIRES SONT LÀ 👇
+    ActiveModelTrait, Database, DatabaseConnection,
+    EntityTrait, Set, 
     QueryFilter, QueryOrder, ColumnTrait, QuerySelect, 
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value, to_string};
+use serde_json::{json, to_string}; // 'Value' retiré
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use tower_http::cors::{Any, CorsLayer};
@@ -26,10 +25,9 @@ mod combat;
 mod entities; 
 
 use entities::planet;
-use entities::planet::Entity as Planet;
 use entities::combat_log;
 
-const PRODUCTION_SPEED: f64 = 1000.0;
+// (PRODUCTION_SPEED retiré car inutilisé ici, c'est SPEED_FACTOR dans game_logic qui compte)
 
 #[derive(Clone)]
 struct AppState {
@@ -42,7 +40,7 @@ struct RankItem {
     planet_name: String,
     score: i32,
     is_me: bool,
-    id: Uuid, 
+    id: Uuid,
 }
 
 #[derive(Deserialize)]
@@ -68,6 +66,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/register", post(auth::register_handler))
+        .route("/config", get(get_game_config_handler))
         .route("/login", post(auth::login_handler))
         .route("/planets/:id", get(get_planet_handler))
         .route("/planets/:id/upgrade/:type", post(upgrade_mine_handler))
@@ -77,6 +76,7 @@ async fn main() {
         .route("/ranking", get(get_ranking_handler))
         .route("/attack", post(attack_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
+        .route("/spy", post(spy_handler))
         .layer(cors)
         .with_state(state);
 
@@ -87,6 +87,14 @@ async fn main() {
 }
 
 // --- HANDLERS ---
+
+// Handler pour envoyer la config au frontend
+async fn get_game_config_handler() -> impl IntoResponse {
+    Json(json!({
+        "speed_factor": game_logic::SPEED_FACTOR
+    }))
+}
+
 
 async fn get_ranking_handler(
     State(state): State<AppState>,
@@ -102,7 +110,8 @@ async fn get_ranking_handler(
     let mut ranked_planets: Vec<RankItem> = planets.into_iter().map(|p| {
         let score = (p.metal_mine_level + p.crystal_mine_level + p.deuterium_mine_level 
                      + p.energy_tech_level + p.research_lab_level + p.laser_battery_level) * 100
-                     + (p.light_hunter_count + p.cruiser_count + p.recycler_count) * 10;
+                     + (p.light_hunter_count + p.cruiser_count + p.recycler_count) * 10
+                     + (p.missile_launcher_count + p.plasma_turret_count) * 20;
         
         RankItem {
             rank: 0, 
@@ -160,6 +169,7 @@ async fn get_planet_handler(
                 "energy_tech" => active.energy_tech_level = Set(p.energy_tech_level + 1),
                 "research" => active.research_lab_level = Set(p.research_lab_level + 1),
                 "laser" => active.laser_battery_level = Set(p.laser_battery_level + 1),
+                "espionage" => active.espionage_tech_level = Set(p.espionage_tech_level + 1),
                 _ => {}
             }
             active.construction_end = Set(None);
@@ -175,6 +185,9 @@ async fn get_planet_handler(
                 "light_hunter" => active.light_hunter_count = Set(p.light_hunter_count + qty),
                 "cruiser" => active.cruiser_count = Set(p.cruiser_count + qty),
                 "recycler" => active.recycler_count = Set(p.recycler_count + qty),
+                "spy_probe" => active.spy_probe_count = Set(p.spy_probe_count + qty),
+                "missile_launcher" => active.missile_launcher_count = Set(p.missile_launcher_count + qty),
+                "plasma_turret" => active.plasma_turret_count = Set(p.plasma_turret_count + qty),
                 _ => {}
             }
             active.shipyard_construction_end = Set(None);
@@ -224,6 +237,7 @@ async fn upgrade_mine_handler(
         "energy_tech" => p.energy_tech_level,
         "research" => p.research_lab_level,
         "laser" => p.laser_battery_level,
+        "espionage" => p.espionage_tech_level,
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
@@ -233,7 +247,7 @@ async fn upgrade_mine_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let build_time = game_logic::get_build_time(current_level + 1);
+    let build_time = game_logic::get_build_time(cost.metal, cost.crystal);
 
     let mut active: planet::ActiveModel = p.into();
     active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
@@ -258,6 +272,9 @@ async fn build_fleet_handler(
         "light_hunter" => { let s = game_logic::get_light_hunter_stats(); (s.0, s.1) },
         "cruiser" => (20000.0, 7000.0),
         "recycler" => (10000.0, 6000.0),
+        "spy_probe" => { let s = game_logic::get_spy_probe_stats(); (s.0, s.1) },
+        "missile_launcher" => { let s = game_logic::get_missile_launcher_stats(); (s.0, s.1) },
+        "plasma_turret" => { let s = game_logic::get_plasma_turret_stats(); (s.0, s.1) },
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
@@ -324,8 +341,10 @@ async fn attack_handler(
         payload.cruisers, 
         def_planet.light_hunter_count, 
         def_planet.cruiser_count, 
-        def_planet.laser_battery_level,
-        def_resources
+        def_planet.laser_battery_level, 
+        def_planet.missile_launcher_count, 
+        def_planet.plasma_turret_count, 
+        def_resources 
     );
 
     // --- LOG POUR LE DÉFENSEUR ---
@@ -348,6 +367,10 @@ async fn attack_handler(
     def_active.crystal_amount = Set(def_active.crystal_amount.unwrap() - result.loot.crystal);
     def_active.light_hunter_count = Set(std::cmp::max(0, def_active.light_hunter_count.unwrap() - result.defender_losses));
     
+    let percent_loss = if result.winner == "attacker" { 0.6 } else { 0.1 };
+    def_active.missile_launcher_count = Set((def_planet.missile_launcher_count as f64 * (1.0 - percent_loss)) as i32);
+    def_active.plasma_turret_count = Set((def_planet.plasma_turret_count as f64 * (1.0 - percent_loss)) as i32);
+
     let defender_report = json!({
         "winner": result.winner, 
         "log": result.log,
@@ -494,4 +517,76 @@ async fn get_reports_handler(
         .unwrap_or_default();
 
     Json(logs)
+}
+
+#[derive(Deserialize)]
+struct SpyPayload {
+    target_planet_id: Uuid,
+}
+
+async fn spy_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<SpyPayload>,
+) -> impl IntoResponse {
+    
+    let attacker_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let attacker_id = Uuid::parse_str(&attacker_id_str).unwrap_or_default();
+    
+    let att_planet_opt = planet::Entity::find_by_id(attacker_id).one(&state.db).await.unwrap();
+    let def_planet_opt = planet::Entity::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap();
+
+    let att_planet = match att_planet_opt { Some(p) => p, None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Attaquant inconnu"}))).into_response() };
+    let def_planet = match def_planet_opt { Some(p) => p, None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible inconnue"}))).into_response() };
+
+    if att_planet.spy_probe_count < 1 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucune sonde disponible"}))).into_response();
+    }
+
+    let mut att_active: planet::ActiveModel = att_planet.clone().into();
+    att_active.spy_probe_count = Set(att_planet.spy_probe_count - 1);
+    let _ = att_active.update(&state.db).await;
+
+    let tech_diff = att_planet.espionage_tech_level - def_planet.espionage_tech_level;
+    
+    let mut detection = "none";
+    let mut resources = None;
+    let mut fleet = None;
+    let mut defense = None;
+
+    if tech_diff >= -1 { 
+        detection = "resources";
+        resources = Some(game_logic::Cost {
+            metal: def_planet.metal_amount,
+            crystal: def_planet.crystal_amount,
+            deuterium: def_planet.deuterium_amount
+        });
+    }
+    
+    if tech_diff >= 1 { 
+        detection = "fleet";
+        let mut fleet_map = HashMap::new();
+        fleet_map.insert("light_hunter".to_string(), def_planet.light_hunter_count);
+        fleet_map.insert("cruiser".to_string(), def_planet.cruiser_count);
+        fleet_map.insert("recycler".to_string(), def_planet.recycler_count);
+        fleet_map.insert("spy_probe".to_string(), def_planet.spy_probe_count);
+        fleet = Some(fleet_map);
+    }
+
+    if tech_diff >= 2 { 
+        detection = "full";
+        defense = Some(def_planet.missile_launcher_count + def_planet.plasma_turret_count); 
+    }
+
+    (StatusCode::OK, Json(json!({
+        "status": "success",
+        "report": {
+            "success": true,
+            "tech_difference": tech_diff,
+            "detection_level": detection,
+            "resources": resources,
+            "fleet": fleet,
+            "defense": defense
+        }
+    }))).into_response()
 }

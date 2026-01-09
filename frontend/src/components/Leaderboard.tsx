@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Trophy, Medal, Crown, Target, Skull } from "lucide-react";
+import { Trophy, Medal, Crown, Target, Skull, Eye } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
+// Structure des données venant de l'API
 interface RankItem {
   rank: number;
   planet_name: string;
   score: number;
   is_me: boolean;
-  id: string; // <-- Ce champ existe maintenant
+  id: string; 
 }
 
+// Props acceptées par le composant (venant de App.tsx)
 interface LeaderboardProps {
   currentPlanetId: string;
   onAttack: (targetId: string, targetName: string) => void;
+  onSpy: (targetId: string) => void; // <--- Nouvelle prop ajoutée ici
 }
 
-export default function Leaderboard({ currentPlanetId, onAttack }: LeaderboardProps) {
+export default function Leaderboard({ currentPlanetId, onAttack, onSpy }: LeaderboardProps) {
   const [ranking, setRanking] = useState<RankItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,6 +52,8 @@ export default function Leaderboard({ currentPlanetId, onAttack }: LeaderboardPr
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      
+      {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <div className="p-4 bg-yellow-500/10 rounded-full border border-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.2)]">
             <Trophy size={40} className="text-yellow-500" />
@@ -67,18 +72,22 @@ export default function Leaderboard({ currentPlanetId, onAttack }: LeaderboardPr
                         <th className="p-4 text-center w-20">Rang</th>
                         <th className="p-4">Commandant</th>
                         <th className="p-4 text-right">Score</th>
-                        <th className="p-4 text-center w-20">Action</th>
+                        <th className="p-4 text-center w-32">Actions</th> {/* Élargi pour 2 boutons */}
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                     {ranking.map((player) => (
                         <tr key={player.rank} className={`group transition-colors hover:bg-white/5 ${player.is_me ? 'bg-indigo-900/20 hover:bg-indigo-900/30' : ''}`}>
+                            
+                            {/* Rang */}
                             <td className="p-4 text-center font-mono font-bold text-lg">
                                 {player.rank === 1 && <Crown size={24} className="text-yellow-400 mx-auto drop-shadow-lg" />}
                                 {player.rank === 2 && <Medal size={24} className="text-slate-300 mx-auto" />}
                                 {player.rank === 3 && <Medal size={24} className="text-amber-700 mx-auto" />}
                                 {player.rank > 3 && <span className="text-slate-500">#{player.rank}</span>}
                             </td>
+
+                            {/* Nom */}
                             <td className="p-4">
                                 <div className="flex items-center gap-2">
                                     <span className={`font-bold text-sm tracking-wide ${player.is_me ? 'text-indigo-400' : 'text-white'}`}>
@@ -87,18 +96,41 @@ export default function Leaderboard({ currentPlanetId, onAttack }: LeaderboardPr
                                     {player.is_me && <span className="text-[9px] bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Moi</span>}
                                 </div>
                             </td>
+
+                            {/* Score */}
                             <td className="p-4 text-right font-mono text-cyan-400 font-bold">{player.score.toLocaleString()}</td>
+
+                            {/* Actions (Espionnage & Attaque) */}
                             <td className="p-4 text-center">
                                 {!player.is_me && (
-                                    <button 
-                                        onClick={() => onAttack(player.id, player.planet_name)}
-                                        className="group/btn p-2 rounded-full hover:bg-red-500/20 text-slate-600 hover:text-red-500 transition-all duration-300 transform hover:scale-110 active:scale-95"
-                                        title="Lancer un raid"
-                                    >
-                                        <Skull size={20} className="group-hover/btn:animate-pulse" />
-                                    </button>
+                                    <div className="flex items-center justify-center gap-2">
+                                        
+                                        {/* Bouton Espionnage */}
+                                        <button 
+                                            onClick={() => onSpy(player.id)}
+                                            className="group/btn p-2 rounded-full hover:bg-blue-500/20 text-slate-600 hover:text-blue-400 transition-all duration-300 transform hover:scale-110 active:scale-95 border border-transparent hover:border-blue-500/30"
+                                            title="Envoyer une sonde"
+                                        >
+                                            <Eye size={20} />
+                                        </button>
+
+                                        {/* Bouton Attaque */}
+                                        <button 
+                                            onClick={() => onAttack(player.id, player.planet_name)}
+                                            className="group/btn p-2 rounded-full hover:bg-red-500/20 text-slate-600 hover:text-red-500 transition-all duration-300 transform hover:scale-110 active:scale-95 border border-transparent hover:border-red-500/30"
+                                            title="Lancer un raid"
+                                        >
+                                            <Skull size={20} className="group-hover/btn:animate-pulse" />
+                                        </button>
+                                    </div>
                                 )}
-                                {player.is_me && <div className="flex justify-center opacity-20"><Target size={18} /></div>}
+                                
+                                {/* Si c'est moi */}
+                                {player.is_me && (
+                                    <div className="flex justify-center opacity-20">
+                                        <Target size={18} />
+                                    </div>
+                                )}
                             </td>
                         </tr>
                     ))}

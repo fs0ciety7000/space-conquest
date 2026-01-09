@@ -10,6 +10,9 @@ mod m20260109_014709_create_user_table;
 mod m20260109_023850_add_ships_and_pending_system;
 mod m20260109_195343_add_unread_report;
 mod m20260109_200503_create_combat_log;
+mod m20260109_202322_add_espionage;
+mod m20260109_210008_add_password;
+mod m20260109_211546_add_defenses;
 
 pub struct Migrator;
 
@@ -27,6 +30,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260109_023850_add_ships_and_pending_system::Migration),
             Box::new(m20260109_195343_add_unread_report::Migration),
             Box::new(m20260109_200503_create_combat_log::Migration),
+            Box::new(m20260109_202322_add_espionage::Migration),
+            Box::new(m20260109_210008_add_password::Migration),
+            Box::new(m20260109_211546_add_defenses::Migration),
         ]
     }
 }

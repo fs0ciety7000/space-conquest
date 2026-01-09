@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Rocket, Swords, Timer, Shield, Terminal, Zap, Box } from "lucide-react";
+import { Rocket, Swords, Timer, Shield, Terminal, Zap, Box, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -11,9 +11,9 @@ const SHIP_TYPES = [
     tier: 'MK I',
     desc: 'Unité d\'interception rapide.',
     m: 3000, c: 1000, time: 20, atk: 50, def: 400,
-    color: 'text-neon-orange',
-    border: 'border-neon-orange',
-    glow: 'glow-orange',
+    color: 'text-orange-400',
+    border: 'border-orange-500',
+    glow: 'shadow-[0_0_20px_rgba(251,146,60,0.5)]',
     bg: 'bg-orange-950/20'
   },
   { 
@@ -22,21 +22,32 @@ const SHIP_TYPES = [
     tier: 'MK II',
     desc: 'Vaisseau de ligne lourdement armé.',
     m: 20000, c: 7000, time: 60, atk: 400, def: 2700,
-    color: 'text-neon-blue',
-    border: 'border-neon-blue',
-    glow: 'glow-blue',
+    color: 'text-cyan-400',
+    border: 'border-cyan-500',
+    glow: 'shadow-[0_0_20px_rgba(34,211,238,0.5)]',
     bg: 'bg-cyan-950/20'
   },
   { 
     id: 'recycler', 
     name: 'Recycleur', 
-    tier: 'Civile',
+    tier: 'Logistique',
     desc: 'Collecteur de débris orbitaux.',
     m: 10000, c: 6000, time: 40, atk: 1, def: 1600,
-    color: 'text-neon-purple',
-    border: 'border-neon-purple',
-    glow: 'glow-purple',
+    color: 'text-purple-400',
+    border: 'border-purple-500',
+    glow: 'shadow-[0_0_20px_rgba(192,132,252,0.5)]',
     bg: 'bg-purple-950/20'
+  },
+  { 
+    id: 'spy_probe', 
+    name: 'Sonde Espion', 
+    tier: 'Recon',
+    desc: 'Unité furtive pour analyse tactique.',
+    m: 0, c: 1000, time: 5, atk: 0, def: 10,
+    color: 'text-emerald-400',
+    border: 'border-emerald-500',
+    glow: 'shadow-[0_0_20px_rgba(52,211,153,0.5)]',
+    bg: 'bg-emerald-950/20'
   }
 ];
 
@@ -49,7 +60,7 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
   useEffect(() => {
     if (planet?.shipyard_construction_end) {
       const interval = setInterval(() => {
-        const end = new Date(planet.shipyard_construction_end + "Z").getTime();
+        const end = new Date(planet.shipyard_construction_end).getTime(); // Retrait du "Z" si format UTC standard
         const now = new Date().getTime();
         const diff = Math.max(0, Math.floor((end - now) / 1000));
         
@@ -83,6 +94,16 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
   const canAfford = metalAvailable >= totalM && crystalAvailable >= totalC;
   const isBusy = planet.shipyard_construction_end !== null;
 
+  // Helper pour l'icone
+  const renderIcon = (id: string, size: number, className: string) => {
+    switch(id) {
+        case 'cruiser': return <Shield size={size} className={className}/>;
+        case 'recycler': return <Box size={size} className={className}/>;
+        case 'spy_probe': return <Eye size={size} className={className}/>;
+        default: return <Rocket size={size} className={className}/>;
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 animate-in fade-in duration-500">
       
@@ -90,20 +111,20 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
       <div className="lg:col-span-2 space-y-6">
         
         {/* SÉLECTEUR DE VAISSEAUX (CARTES) */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {SHIP_TYPES.map(s => {
             const isSelected = selected.id === s.id;
             return (
               <button 
                 key={s.id} 
                 onClick={() => setSelected(s)} 
-                className={`relative group overflow-hidden rounded-xl border transition-all duration-300 p-4 text-left h-32 flex flex-col justify-between
+                className={`relative group overflow-hidden rounded-xl border transition-all duration-300 p-4 text-left h-36 flex flex-col justify-between
                   ${isSelected 
-                    ? `${s.bg} ${s.border} shadow-[0_0_15px_-3px_rgba(0,0,0,0.5)] scale-105 z-10` 
+                    ? `${s.bg} ${s.border} ${s.glow} scale-105 z-10` 
                     : 'bg-black/40 border-white/10 hover:bg-white/5 hover:border-white/20'
                   }`}
               >
-                 {isSelected && <div className={`absolute inset-0 ${s.glow} opacity-20 pointer-events-none`}></div>}
+                 {isSelected && <div className={`absolute inset-0 bg-white/5 opacity-20 pointer-events-none`}></div>}
                  
                  <div>
                    <span className={`text-[9px] font-black uppercase tracking-widest ${isSelected ? s.color : 'text-slate-500'}`}>{s.tier}</span>
@@ -112,9 +133,7 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
                  
                  <div className="flex justify-between items-end">
                     <span className="text-[10px] font-mono text-slate-500">{s.time}s</span>
-                    {s.id === 'cruiser' ? <Shield size={18} className={isSelected ? s.color : 'text-slate-600'}/> : 
-                     s.id === 'recycler' ? <Box size={18} className={isSelected ? s.color : 'text-slate-600'}/> :
-                     <Rocket size={18} className={isSelected ? s.color : 'text-slate-600'}/>}
+                    {renderIcon(s.id, 18, isSelected ? s.color : 'text-slate-600')}
                  </div>
               </button>
             );
@@ -126,9 +145,7 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
           
           {/* Arrière-plan décoratif (Icone géante) */}
           <div className={`absolute -right-10 -top-10 opacity-10 rotate-12 transition-transform duration-700 ${isBusy ? 'animate-pulse' : ''}`}>
-             {selected.id === 'cruiser' ? <Shield size={250} className={selected.color} /> : 
-              selected.id === 'recycler' ? <Box size={250} className={selected.color} /> :
-              <Rocket size={250} className={selected.color} />}
+             {renderIcon(selected.id, 250, selected.color)}
           </div>
 
           <div className="relative z-10 space-y-8">
@@ -209,7 +226,7 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
                  "RESSOURCES INSUFFISANTES"
               ) : (
                  <span className="flex items-center gap-3 relative z-10">
-                   <Rocket size={18} /> INITIALISER L'ASSEMBLAGE
+                   {renderIcon(selected.id, 18, "")} INITIALISER L'ASSEMBLAGE
                  </span>
               )}
             </Button>
@@ -246,28 +263,37 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-6">Hangar Orbital</h4>
            
            <div className="space-y-4">
-              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 group hover:bg-orange-500/10 transition-colors">
                  <div className="flex flex-col">
-                    <span className="text-[9px] uppercase font-bold text-orange-500">Chasseurs</span>
+                    <span className="text-[9px] uppercase font-bold text-orange-400">Chasseurs</span>
                     <span className="text-[8px] text-slate-500">Classe Légère</span>
                  </div>
                  <span className="text-xl text-white font-mono font-black">{planet.light_hunter_count || 0}</span>
               </div>
               
-              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 group hover:bg-cyan-500/10 transition-colors">
                  <div className="flex flex-col">
-                    <span className="text-[9px] uppercase font-bold text-blue-500">Croiseurs</span>
+                    <span className="text-[9px] uppercase font-bold text-cyan-400">Croiseurs</span>
                     <span className="text-[8px] text-slate-500">Classe Lourde</span>
                  </div>
                  <span className="text-xl text-white font-mono font-black">{planet.cruiser_count || 0}</span>
               </div>
 
-              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 group hover:bg-purple-500/10 transition-colors">
                  <div className="flex flex-col">
-                    <span className="text-[9px] uppercase font-bold text-purple-500">Recycleurs</span>
+                    <span className="text-[9px] uppercase font-bold text-purple-400">Recycleurs</span>
                     <span className="text-[8px] text-slate-500">Support</span>
                  </div>
                  <span className="text-xl text-white font-mono font-black">{planet.recycler_count || 0}</span>
+              </div>
+
+              {/* Ligne ajoutée pour les Sondes */}
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 group hover:bg-emerald-500/10 transition-colors">
+                 <div className="flex flex-col">
+                    <span className="text-[9px] uppercase font-bold text-emerald-400">Sondes</span>
+                    <span className="text-[8px] text-slate-500">Espionnage</span>
+                 </div>
+                 <span className="text-xl text-white font-mono font-black">{planet.spy_probe_count || 0}</span>
               </div>
            </div>
         </Card>
