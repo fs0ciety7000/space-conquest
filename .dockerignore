@@ -1,0 +1,6 @@
+# .dockerignore
+target/
+.git/
+frontend/node_modules/
+backend/target
+node_modules/

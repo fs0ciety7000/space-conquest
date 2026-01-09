@@ -1,0 +1,39 @@
+services:
+  # Base de données
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: space_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data:Z
+
+  # Cache pour les files d'attente (constructions/combats)
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # API Rust
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://user:password@db:5432/space_db
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./backend:/app:Z
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  pgdata:
