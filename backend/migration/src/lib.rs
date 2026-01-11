@@ -16,6 +16,9 @@ mod m20260109_211546_add_defenses;
 mod m20260109_220528_add_debris;
 mod m20260109_222210_add_coordinates;
 mod m20260111_210917_add_colony_ship;
+mod m20260111_213610_add_transporter;
+mod m20260111_222219_create_fleet_mission;
+mod m20260111_223746_create_transport_log;
 
 pub struct Migrator;
 
@@ -39,6 +42,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260109_220528_add_debris::Migration),
             Box::new(m20260109_222210_add_coordinates::Migration),
             Box::new(m20260111_210917_add_colony_ship::Migration),
+            Box::new(m20260111_213610_add_transporter::Migration),
+            Box::new(m20260111_222219_create_fleet_mission::Migration),
+            Box::new(m20260111_223746_create_transport_log::Migration),
         ]
     }
 }

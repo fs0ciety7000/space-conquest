@@ -59,6 +59,17 @@ const SHIP_TYPES = [
       border: 'border-yellow-500',
       glow: 'shadow-[0_0_20px_rgba(250,204,21,0.5)]',
       bg: 'bg-yellow-950/20'
+  },
+  { 
+    id: 'transporter', 
+    name: 'Petit Transporteur', 
+    tier: 'Logistique',
+    desc: 'Navire cargo standard (Capacité: 5000).',
+    m: 2000, c: 2000, time: 10, atk: 5, def: 50,
+    color: 'text-blue-400',
+    border: 'border-blue-500',
+    glow: 'shadow-[0_0_20px_rgba(96,165,250,0.5)]',
+    bg: 'bg-blue-950/20'
   }
 ];
 
@@ -71,7 +82,7 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
   useEffect(() => {
     if (planet?.shipyard_construction_end) {
       const interval = setInterval(() => {
-        const end = new Date(planet.shipyard_construction_end).getTime(); // Retrait du "Z" si format UTC standard
+        const end = new Date(planet.shipyard_construction_end).getTime();
         const now = new Date().getTime();
         const diff = Math.max(0, Math.floor((end - now) / 1000));
         
@@ -112,6 +123,8 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
         case 'recycler': return <Box size={size} className={className}/>;
         case 'spy_probe': return <Eye size={size} className={className}/>;
         case 'colony_ship': return <Flag size={size} className={className}/>;
+        // AJOUT DE L'ICONE POUR LE TRANSPORTEUR
+        case 'transporter': return <Box size={size} className={className}/>; 
         default: return <Rocket size={size} className={className}/>;
     }
   };
@@ -307,13 +320,21 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
                  <span className="text-xl text-white font-mono font-black">{planet.spy_probe_count || 0}</span>
               </div>
 
-              {/* NOUVELLE ENTRÉE : COLONISATEURS */}
               <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 group hover:bg-yellow-500/10 transition-colors">
                  <div className="flex flex-col">
                     <span className="text-[9px] uppercase font-bold text-yellow-400">Colonisateurs</span>
                     <span className="text-[8px] text-slate-500">Expansion</span>
                  </div>
                  <span className="text-xl text-white font-mono font-black">{planet.colony_ship_count || 0}</span>
+              </div>
+
+              {/* NOUVELLE ENTRÉE : TRANSPORTEURS */}
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 group hover:bg-blue-500/10 transition-colors">
+                 <div className="flex flex-col">
+                    <span className="text-[9px] uppercase font-bold text-blue-400">Transporteurs</span>
+                    <span className="text-[8px] text-slate-500">Logistique</span>
+                 </div>
+                 <span className="text-xl text-white font-mono font-black">{planet.transporter_count || 0}</span>
               </div>
 
            </div>

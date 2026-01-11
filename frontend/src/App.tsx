@@ -12,9 +12,12 @@ import ReportsTerminal from './components/ReportsTerminal';
 import Defenses from './components/Defenses';
 import PlanetOverview from './components/PlanetOverview';
 import GalaxyView from './components/GalaxyView';
+
+// Import de Sonner (Toasts)
+import { Toaster, toast } from "sonner";
 import { 
   LogOut, BellRing, LayoutDashboard, Pickaxe, Hammer, 
-  ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe 
+  ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck 
 } from "lucide-react";
 
 interface CombatReport {
@@ -42,6 +45,9 @@ export default function App() {
   const [report, setReport] = useState<string | null>(null);
 
   const prevPlanetRef = useRef<any>(null);
+  
+  // NOUVEAU : Empêche le traitement multiple du même rapport pendant le polling
+  const processingReportRef = useRef(false);
 
   // --- GESTION AUTH & PLANÈTE ---
 
@@ -52,12 +58,10 @@ export default function App() {
     setPlanet(null);
   };
 
-  // Fonction pour changer de planète (Passée à EmpireBar -> PlanetSelector)
   const switchPlanet = (newId: string) => {
     console.log("Changement de planète vers :", newId);
     setPlanetId(newId);
     localStorage.setItem('planet_id', newId);
-    // Le useEffect de fetchPlanet se déclenchera automatiquement car planetId a changé
   };
 
   const fetchPlanet = useCallback(async () => {
@@ -73,36 +77,68 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         
-        // --- GESTION ALERTE DÉFENSE (Rapport entrant) ---
-        if (data.unread_report) {
+        // --- GESTION DES RAPPORTS (COMBATS / TRANSPORT) ---
+        // On vérifie si on n'est pas DÉJÀ en train de traiter un rapport
+        if (data.unread_report && !processingReportRef.current) {
+            
+            // On verrouille le traitement
+            processingReportRef.current = true;
+
             try {
                 const reportData = JSON.parse(data.unread_report);
-                const isVictory = reportData.winner === 'defender'; 
                 
-                const formattedReport: CombatReport = {
-                    winner: isVictory ? 'player' : 'enemy',
-                    log: reportData.log,
-                    loot: reportData.loot,
-                    losses: reportData.losses
-                };
+                // CAS 1: ARRIVÉE DE TRANSPORT
+                if (reportData.type === 'transport_arrival') {
+                    toast.success(`Cargaison reçue de : ${reportData.sender_name}`, { // <--- NOM AFFICHÉ ICI
+                        description: `Livraison: M:${Math.floor(reportData.metal).toLocaleString()} C:${Math.floor(reportData.crystal).toLocaleString()} D:${Math.floor(reportData.deuterium).toLocaleString()}`,
+                        duration: 8000,
+                        icon: <Truck className="h-5 w-5 text-green-500" />,
+                    });
+                }
+                // CAS 2: RAPPORT DE COMBAT
+                else {
+                    const isVictory = reportData.winner === 'defender'; 
+                    
+                    if(!isVictory && reportData.is_defense) {
+                         toast.error("ALERTE : Base Attaquée !", { description: "Consultez le rapport de combat." });
+                    }
 
-                setCombatReport(formattedReport);
-                setShowCombatModal(true);
+                    const formattedReport: CombatReport = {
+                        winner: isVictory ? 'player' : 'enemy',
+                        log: reportData.log,
+                        loot: reportData.loot,
+                        losses: reportData.losses
+                    };
+
+                    setCombatReport(formattedReport);
+                    setShowCombatModal(true);
+                }
                 
-                // Nettoyage de l'alerte
+                // Nettoyage de l'alerte en DB
                 await fetch(`http://localhost:8080/planets/${planetId}/clear-report`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+
             } catch (err) {
-                console.error("Erreur lecture rapport défense", err);
+                console.error("Erreur lecture rapport", err);
+            } finally {
+                // On déverrouille une fois fini (ou en cas d'erreur)
+                processingReportRef.current = false;
             }
         }
 
         // Notification fin de construction
         if (prevPlanetRef.current?.construction_end && !data.construction_end) {
-            setReport("CONSTRUCTION TERMINÉE.");
-            setTimeout(() => setReport(null), 4000);
+            toast.info("Construction Terminée", { 
+                description: "Les ingénieurs sont prêts pour de nouveaux ordres.",
+                icon: <Hammer className="h-4 w-4" />
+            });
+        }
+
+        // Fleet / Shipyard notification
+        if (prevPlanetRef.current?.shipyard_construction_end && !data.shipyard_construction_end) {
+             toast.info("Flotte assemblée", { description: "Unités prêtes au déploiement." });
         }
 
         const sanitizedPlanet = {
@@ -123,11 +159,10 @@ export default function App() {
       }
     } catch (e) {
       console.error("Liaison perdue avec le centre de commande", e);
-      setReport("ERREUR DE LIAISON");
     }
   }, [planetId, token]);
 
-  // --- ACTIONS DU JEU ---
+  // --- ACTIONS DU JEU --- (Le reste ne change pas)
 
   const launchExpedition = async () => {
     if (!planetId || !token) return;
@@ -146,8 +181,7 @@ export default function App() {
             }
         } else {
             const err = await res.json();
-            setReport(`ERREUR MISSION : ${err.error}`);
-            setTimeout(() => setReport(null), 4000);
+            toast.error("Mission Annulée", { description: err.error });
         }
     } catch (e) { console.error(e); }
   };
@@ -159,7 +193,7 @@ export default function App() {
   const handleConfirmAttack = async (hunters: number, cruisers: number) => {
     if (!planetId || !token || !targetPlanet) return;
     setTargetPlanet(null);
-    setReport("LANCEMENT DES VECTEURS D'ATTAQUE...");
+    toast.info("Lancement de l'attaque...");
 
     try {
         const res = await fetch(`http://localhost:8080/attack?current_planet_id=${planetId}`, {
@@ -192,13 +226,11 @@ export default function App() {
             setCombatReport(formattedReport);
             setShowCombatModal(true);
         } else {
-            setReport(`ERREUR ATTAQUE : ${data.error}`);
-            setTimeout(() => setReport(null), 5000);
+            toast.error("Erreur État-Major", { description: data.error });
         }
     } catch (e) {
         console.error(e);
-        setReport("ÉCHEC TRANSMISSION ORDRE DE TIR.");
-        setTimeout(() => setReport(null), 4000);
+        toast.error("Échec Connexion");
     }
   };
 
@@ -245,18 +277,15 @@ export default function App() {
             setShowCombatModal(true);
             fetchPlanet(); 
         } else {
-            setReport(`ÉCHEC ESPIONNAGE : ${data.error}`);
-            setTimeout(() => setReport(null), 4000);
+            toast.error("Échec Espionnage", { description: data.error });
         }
-    } catch (e) { console.error(e); setReport("ERREUR SYSTEME ESPIONNAGE"); }
+    } catch (e) { console.error(e); }
   };
 
-  // --- EFFETS ---
   useEffect(() => {
     fetch('http://localhost:8080/config')
       .then(res => res.json())
       .then(data => {
-          console.log("Vitesse du jeu synchronisée:", data.speed_factor);
           setSpeedFactor(data.speed_factor);
       })
       .catch(err => console.error("Impossible de sync la vitesse", err));
@@ -285,7 +314,6 @@ export default function App() {
     </div>
   );
 
-  // Configuration du Menu Sidebar
   const MENU_ITEMS = [
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
     { id: 'galaxy', label: 'Galaxie', icon: Globe, category: 'COMMANDEMENT' },
@@ -300,13 +328,11 @@ export default function App() {
 
   return (
     <div className="h-screen bg-slate-950 text-white font-sans overflow-hidden flex flex-col">
-      {/* 1. FOND D'ÉCRAN */}
       <div 
         className="absolute inset-0 z-0 opacity-20 pointer-events-none mix-blend-overlay bg-cover bg-center fixed"
         style={{ backgroundImage: "url('/assets/background.png')" }}
       ></div>
 
-      {/* 2. MODALES & ALERTS (Au-dessus de tout) */}
       <div className="relative z-50">
         {showCombatModal && combatReport && (
             <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />
@@ -319,25 +345,13 @@ export default function App() {
                 onCancel={() => setTargetPlanet(null)}
             />
         )}
-        {report && (
-          <div className="fixed bottom-10 right-10 z-[100] animate-in fade-in slide-in-from-bottom-10 duration-500">
-            <div className="bg-indigo-600/90 backdrop-blur text-white px-6 py-3 rounded-xl border border-indigo-400 shadow-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3">
-              <BellRing className="animate-bounce" size={16} />
-              {report}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* 3. BARRE DU HAUT (EmpireBar) - Avec la fonction de changement de planète */}
       <div className="relative z-40 shrink-0">
         <EmpireBar planet={planet} onSwitchPlanet={switchPlanet} />
       </div>
 
-      {/* 4. LAYOUT PRINCIPAL (Sidebar + Contenu) */}
       <div className="flex flex-1 overflow-hidden relative z-30 pt-20">
-        
-        {/* --- SIDEBAR (Navigation) --- */}
         <aside className="w-64 bg-slate-950/80 backdrop-blur-xl border-r border-white/5 flex flex-col h-full overflow-y-auto hidden md:flex">
             <div className="p-4 space-y-6">
                 {['COMMANDEMENT', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES'].map(cat => (
@@ -369,7 +383,6 @@ export default function App() {
                 ))}
             </div>
 
-            {/* Bouton Quitter en bas */}
             <div className="mt-auto p-4 border-t border-white/5">
                 <button 
                     onClick={handleLogout} 
@@ -380,7 +393,6 @@ export default function App() {
             </div>
         </aside>
 
-        {/* --- ZONE DE CONTENU PRINCIPAL --- */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-10 scrollbar-thin scrollbar-thumb-indigo-900 scrollbar-track-transparent">
             <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 md:pb-0">
                 {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
@@ -395,6 +407,8 @@ export default function App() {
             </div>
         </main>
       </div>
+
+      <Toaster position="top-center" richColors />
     </div>
   );
 }

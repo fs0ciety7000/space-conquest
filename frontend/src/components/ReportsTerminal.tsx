@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { ScrollText, ShieldAlert, Swords, Skull, Trophy, Search } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { fr } from "date-fns/locale";
 
 interface CombatLog {
   id: string;
   target_name: string;
-  mission_type: 'attack' | 'defense' | 'expedition';
+  mission_type: string;
   result: string;
   loot_metal: number;
   loot_crystal: number;
@@ -13,116 +14,160 @@ interface CombatLog {
   date: string;
 }
 
+interface TransportLog {
+  id: string;
+  target_planet_id: string;
+  target_planet_name: string;
+  source_planet_id: string;
+  source_planet_name: string;
+  metal: number;
+  crystal: number;
+  deuterium: number;
+  date: string;
+}
+
 export default function ReportsTerminal({ planetId }: { planetId: string }) {
-  const [logs, setLogs] = useState<CombatLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [combatLogs, setCombatLogs] = useState<CombatLog[]>([]);
+  const [transportLogs, setTransportLogs] = useState<TransportLog[]>([]);
+  const [view, setView] = useState<'combat' | 'transport'>('combat');
 
   useEffect(() => {
-    const fetchReports = async () => {
-      try {
-        const res = await fetch(`http://localhost:8080/planets/${planetId}/reports`);
-        if (res.ok) {
-          const data = await res.json();
-          setLogs(data);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchReports();
+    fetch(`http://localhost:8080/planets/${planetId}/reports`)
+      .then(res => res.json())
+      .then(setCombatLogs)
+      .catch(console.error);
+
+    fetch(`http://localhost:8080/planets/${planetId}/transport-logs`)
+      .then(res => res.json())
+      .then(setTransportLogs)
+      .catch(console.error);
   }, [planetId]);
 
-  if (loading) return <div className="text-center p-8 animate-pulse text-cyan-500 font-mono">DÉCRYPTAGE DES ARCHIVES...</div>;
-
-  if (logs.length === 0) return (
-    <div className="text-center p-12 text-slate-500 border border-white/5 rounded-3xl bg-black/40">
-        <ScrollText size={48} className="mx-auto mb-4 opacity-50"/>
-        <p className="uppercase tracking-widest text-xs">Aucune archive de combat</p>
-    </div>
-  );
+  // --- CORRECTION TIMEZONE ---
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "";
+    // On ajoute 'Z' si absent pour forcer le mode UTC
+    const utcDateString = dateString.endsWith("Z") ? dateString : dateString + "Z";
+    return formatDistanceToNow(new Date(utcDateString), { addSuffix: true, locale: fr });
+  };
 
   return (
-    <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
+    <div className="bg-slate-950/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl h-[600px] flex flex-col animate-in fade-in zoom-in-95 duration-500">
+      
+      {/* HEADER */}
+      <div className="bg-black/40 border-b border-white/5 p-4 flex items-center justify-between">
+        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
+          <ScrollText size={14} className="text-cyan-400" /> Journal de Bord
+        </h3>
         
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="p-3 bg-slate-800 rounded-xl border border-slate-700">
-            <ScrollText className="text-slate-300" />
-        </div>
-        <div>
-            <h2 className="text-2xl font-black uppercase text-white tracking-tighter">Archives Militaires</h2>
-            <p className="text-xs text-slate-400 font-mono">Historique des opérations</p>
+        {/* Onglets */}
+        <div className="flex bg-slate-900/50 p-1 rounded-lg">
+            <button 
+                onClick={() => setView('combat')}
+                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-2 ${view === 'combat' ? 'bg-red-500/20 text-red-400 shadow-[0_0_10px_rgba(248,113,113,0.2)]' : 'text-slate-500 hover:text-white'}`}
+            >
+                <Swords size={12} /> Opérations Militaires
+            </button>
+            <button 
+                onClick={() => setView('transport')}
+                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-2 ${view === 'transport' ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.2)]' : 'text-slate-500 hover:text-white'}`}
+            >
+                <Truck size={12} /> Logistique
+            </button>
         </div>
       </div>
 
-      <div className="grid gap-3">
-        {logs.map((log) => {
-            const isVictory = log.result === 'victory' || log.result === 'player';
-            const isDefense = log.mission_type === 'defense';
-            const isExpedition = log.mission_type === 'expedition';
+      {/* CONTENU */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-slate-800">
+        
+        {/* VUE COMBAT */}
+        {view === 'combat' && (
+            combatLogs.length === 0 ? (
+                <div className="text-center text-slate-600 text-xs py-10 font-mono">Aucun rapport de combat enregistré.</div>
+            ) : (
+                combatLogs.map(log => {
+                    const isVictory = log.result === 'victory';
+                    const isDefense = log.mission_type === 'defense';
 
-            let Icon = Swords;
-            let color = isVictory ? "text-green-500" : "text-red-500";
-            let bg = isVictory ? "bg-green-500/10 border-green-500/20" : "bg-red-500/10 border-red-500/20";
-            
-            if (isDefense) {
-                Icon = ShieldAlert;
-                color = isVictory ? "text-blue-400" : "text-red-500"; // Bleu si on a défendu avec succès
-                bg = isVictory ? "bg-blue-500/10 border-blue-500/20" : "bg-red-500/10 border-red-500/20";
-            } else if (isExpedition) {
-                Icon = Search;
-                color = isVictory ? "text-cyan-400" : "text-orange-500";
-                bg = isVictory ? "bg-cyan-500/10 border-cyan-500/20" : "bg-orange-500/10 border-orange-500/20";
-            }
+                    return (
+                        <div key={log.id} className="bg-black/20 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors">
+                            <div className="flex items-center gap-4">
+                                <div className={`p-2 rounded-lg ${isVictory ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                    {isDefense ? <ShieldAlert size={16} /> : <Swords size={16} />}
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-black uppercase ${isVictory ? 'text-green-400' : 'text-red-400'}`}>
+                                            {isVictory ? "VICTOIRE" : "DÉFAITE"}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 font-mono">
+                                            vs {log.target_name}
+                                        </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                        {formatDate(log.date)}
+                                    </div>
+                                </div>
+                            </div>
 
-            return (
-                <Card key={log.id} className={`p-4 border ${bg} backdrop-blur-sm transition-all hover:bg-white/5 flex items-center justify-between group`}>
+                            <div className="text-right">
+                                <div className="text-xs font-mono text-white">
+                                    <span className="text-yellow-500">+{Math.floor(log.loot_metal).toLocaleString()}</span> M / 
+                                    <span className="text-cyan-500"> +{Math.floor(log.loot_crystal).toLocaleString()}</span> C
+                                </div>
+                                <div className="text-[10px] text-red-400/70 font-mono">
+                                    Pertes: {log.ships_lost} vso.
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })
+            )
+        )}
+
+        {/* VUE LOGISTIQUE */}
+        {view === 'transport' && (
+            transportLogs.length === 0 ? (
+                <div className="text-center text-slate-600 text-xs py-10 font-mono">Aucun mouvement logistique récent.</div>
+            ) : (
+                transportLogs.map(log => {
+                    const isReceived = log.target_planet_id === planetId;
                     
-                    <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-full bg-black/40 border border-white/5 ${color}`}>
-                            <Icon size={20} />
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <span className={`text-xs font-black uppercase tracking-wider ${color}`}>
-                                    {isVictory ? "SUCCÈS" : "ÉCHEC"}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-mono">
-                                    {new Date(log.date).toLocaleTimeString()}
-                                </span>
+                    return (
+                        <div key={log.id} className={`bg-black/20 border p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors ${isReceived ? 'border-l-green-500 border-white/5' : 'border-l-yellow-500 border-white/5'}`}>
+                            <div className="flex items-center gap-4">
+                                <div className={`p-2 rounded-lg ${isReceived ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
+                                    {isReceived ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-black uppercase ${isReceived ? 'text-green-400' : 'text-yellow-400'}`}>
+                                            {isReceived ? "REÇU" : "ENVOYÉ"}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                                            {isReceived ? "De:" : "Vers:"} 
+                                            <span className="text-white font-bold">
+                                                {isReceived ? log.source_planet_name : log.target_planet_name}
+                                            </span>
+                                        </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                        {formatDate(log.date)}
+                                    </div>
+                                </div>
                             </div>
-                            <h3 className="text-sm font-bold text-white uppercase mt-0.5">
-                                {isDefense ? `Défense vs ${log.target_name}` : 
-                                 isExpedition ? "Expédition Lointaine" : 
-                                 `Attaque sur ${log.target_name}`}
-                            </h3>
-                        </div>
-                    </div>
 
-                    <div className="text-right flex flex-col items-end gap-1">
-                        {/* Ressources */}
-                        {(log.loot_metal !== 0 || log.loot_crystal !== 0) && (
-                            <div className={`text-xs font-mono font-bold ${log.loot_metal > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {log.loot_metal > 0 ? '+' : ''}{Math.round(log.loot_metal).toLocaleString()} M.
+                            <div className="flex gap-3 text-right text-xs font-mono">
+                                {log.metal > 0 && <span className="text-slate-300">{Math.floor(log.metal).toLocaleString()} <span className="text-[9px] text-slate-500">M</span></span>}
+                                {log.crystal > 0 && <span className="text-blue-300">{Math.floor(log.crystal).toLocaleString()} <span className="text-[9px] text-slate-500">C</span></span>}
+                                {log.deuterium > 0 && <span className="text-green-300">{Math.floor(log.deuterium).toLocaleString()} <span className="text-[9px] text-slate-500">D</span></span>}
                             </div>
-                        )}
-                        
-                        {/* Pertes */}
-                        {log.ships_lost > 0 && (
-                            <div className="flex items-center gap-1 text-[10px] text-red-400 uppercase font-bold">
-                                <Skull size={10} /> -{log.ships_lost} Vaisseaux
-                            </div>
-                        )}
-                        
-                        {log.ships_lost === 0 && isVictory && (
-                            <span className="text-[10px] text-green-500/50 uppercase font-bold">Aucune perte</span>
-                        )}
-                    </div>
-                </Card>
-            );
-        })}
+                        </div>
+                    )
+                })
+            )
+        )}
+
       </div>
     </div>
   );

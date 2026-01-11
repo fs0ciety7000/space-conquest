@@ -7,8 +7,8 @@ use axum::{
 };
 use sea_orm::{
     ActiveModelTrait, Database, DatabaseConnection,
-    EntityTrait, Set, IntoActiveModel, // <--- C'EST L'IMPORT QUI MANQUAIT !
-    QueryFilter, QueryOrder, ColumnTrait, QuerySelect, 
+    EntityTrait, Set, IntoActiveModel, 
+    QueryFilter, QueryOrder, ColumnTrait, QuerySelect, Condition 
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_string};
@@ -26,6 +26,8 @@ mod entities;
 
 use entities::planet;
 use entities::combat_log;
+use entities::fleet_mission;
+use entities::transport_log;
 
 #[derive(Clone)]
 struct AppState {
@@ -74,12 +76,14 @@ async fn main() {
         .route("/ranking", get(get_ranking_handler))
         .route("/attack", post(attack_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
+        .route("/planets/:id/transport-logs", get(get_transport_logs_handler))
         .route("/spy", post(spy_handler))
         .route("/recycle", post(recycle_handler))
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
         .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
         .route("/colonize", post(colonize_handler))
         .route("/my-planets", get(get_my_planets_handler))
+        .route("/transport", post(transport_handler))
         .layer(cors)
         .with_state(state);
 
@@ -190,7 +194,7 @@ async fn get_planet_handler(
                 "missile_launcher" => active.missile_launcher_count = Set(p.missile_launcher_count + qty),
                 "plasma_turret" => active.plasma_turret_count = Set(p.plasma_turret_count + qty),
                 "colony_ship" => active.colony_ship_count = Set(p.colony_ship_count + qty),
-
+                "transporter" => active.transporter_count = Set(p.transporter_count + qty),
                 _ => {}
             }
             active.shipyard_construction_end = Set(None);
@@ -205,6 +209,50 @@ async fn get_planet_handler(
         }
     }
 
+    // --- GESTION DES FLOTTES EN ARRIVÉE (TRANSPORT) ---
+  let missions = fleet_mission::Entity::find()
+        .filter(fleet_mission::Column::TargetPlanetId.eq(id))
+        .filter(fleet_mission::Column::ArrivalTime.lte(now))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    for m in missions {
+        // 1. Trouver le nom de l'expéditeur pour le Toast
+        let source_planet = planet::Entity::find_by_id(m.source_planet_id)
+            .one(&state.db)
+            .await
+            .ok()
+            .flatten();
+        let sender_name = source_planet.map(|sp| sp.name).unwrap_or("Inconnu".to_string());
+
+        // 2. Créditer les ressources et rendre les vaisseaux
+        let current_m = active.metal_amount.clone().unwrap();
+        let current_c = active.crystal_amount.clone().unwrap();
+        let current_d = active.deuterium_amount.clone().unwrap();
+        let current_ships = active.transporter_count.clone().unwrap();
+
+        active.metal_amount = Set(current_m + m.metal);
+        active.crystal_amount = Set(current_c + m.crystal);
+        active.deuterium_amount = Set(current_d + m.deuterium);
+        active.transporter_count = Set(current_ships + m.ships_count);
+
+        // 3. Juste la notification (Le log est déjà en DB depuis le départ)
+        let report = json!({
+            "type": "transport_arrival",
+            "sender_name": sender_name,
+            "metal": m.metal,
+            "crystal": m.crystal,
+            "deuterium": m.deuterium,
+            "ships": m.ships_count
+        });
+        active.unread_report = Set(Some(to_string(&report).unwrap()));
+
+        // 4. On supprime la mission
+        let _ = fleet_mission::Entity::delete_by_id(m.id).exec(&state.db).await;
+    }
+
+    // Sauvegarde finale
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(updated_model))
 }
@@ -276,10 +324,10 @@ async fn build_fleet_handler(
         "cruiser" => (20000.0, 7000.0),
         "recycler" => (10000.0, 6000.0),
         "spy_probe" => { let s = game_logic::get_spy_probe_stats(); (s.0, s.1) },
-        "colony_ship" => { let s = game_logic::get_colony_ship_stats(); (s.0, s.1) },
         "missile_launcher" => { let s = game_logic::get_missile_launcher_stats(); (s.0, s.1) },
         "plasma_turret" => { let s = game_logic::get_plasma_turret_stats(); (s.0, s.1) },
         "colony_ship" => { let s = game_logic::get_colony_ship_stats(); (s.0, s.1) },
+        "transporter" => { let s = game_logic::get_transporter_stats(); (s.0, s.1) },
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
@@ -528,9 +576,35 @@ async fn get_reports_handler(
     Json(logs)
 }
 
+async fn get_transport_logs_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Json<Vec<transport_log::Model>> {
+    let logs = transport_log::Entity::find()
+        .filter(
+            Condition::any()
+                .add(transport_log::Column::TargetPlanetId.eq(id))
+                .add(transport_log::Column::SourcePlanetId.eq(id))
+        )
+        .order_by_desc(transport_log::Column::Date)
+        .limit(50)
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    Json(logs)
+}
+
 #[derive(Deserialize)]
 struct SpyPayload {
     target_planet_id: Uuid,
+}
+
+fn calculate_flight_time(source_sys: i32, target_sys: i32, speed_factor: f64) -> i64 {
+    let distance = (source_sys - target_sys).abs() as f64;
+    let base_time = 30.0 + (distance * 10.0); 
+    let final_time = base_time / speed_factor;
+    std::cmp::max(10, final_time as i64)
 }
 
 async fn spy_handler(
@@ -683,13 +757,15 @@ async fn recycle_handler(
     }))).into_response()
 }
 
-// Structure de réponse simplifiée pour la galaxie
+// --- GALAXY SLOTS ---
+// C'est la structure que tu demandais !
 #[derive(Serialize)]
 struct GalaxySlot {
     position: i32,
     planet_id: Option<Uuid>,
     planet_name: Option<String>,
-    owner_name: Option<String>, // On utilise le nom de la planète comme nom de joueur pour l'instant
+    owner_name: Option<String>,
+    owner_id: Option<Uuid>, 
     has_debris: bool,
     is_me: bool,
 }
@@ -723,16 +799,18 @@ async fn get_galaxy_handler(
                 planet_id: Some(p.id),
                 planet_name: Some(p.name.clone()),
                 owner_name: Some(p.name.clone()), // Simplification
+                owner_id: Some(p.owner_id), // On met Some(p.owner_id) pour renvoyer une Option<Uuid>
                 has_debris: p.debris_metal > 0.0 || p.debris_crystal > 0.0,
                 is_me: p.id == current_id,
             });
         } else {
-            // Emplacement vide (colonisable plus tard)
+            // Emplacement vide
             slots.push(GalaxySlot {
                 position: pos,
                 planet_id: None,
                 planet_name: None,
                 owner_name: None,
+                owner_id: None,
                 has_debris: false,
                 is_me: false,
             });
@@ -747,7 +825,7 @@ async fn get_galaxy_handler(
 struct SystemSummary {
     system: i32,
     planet_count: i64,
-    has_me: bool, // Pour colorer ton système en vert
+    has_me: bool,
 }
 
 // Handler: GET /galaxy/:galaxy_id/scan
@@ -782,10 +860,22 @@ async fn get_galaxy_scan_handler(
         }
     }
 
-    // On transforme la map en vecteur pour le JSON
     let results: Vec<SystemSummary> = systems_map.into_values().collect();
     Json(results)
 }
+
+fn generate_colony_name() -> String {
+    let prefixes = ["Néo", "Alpha", "Terra", "Nova", "Proxima", "Sector", "Base", "Outpost"];
+    let suffixes = ["Prime", "Secundus", "X", "Y", "Z", "Major", "Minor", "Delta", "Omicron"];
+    
+    let mut rng = rand::thread_rng();
+    let prefix = prefixes[rng.gen_range(0..prefixes.len())];
+    let suffix = suffixes[rng.gen_range(0..suffixes.len())];
+    let num = rng.gen_range(1..999);
+
+    format!("{} {} {}", prefix, suffix, num)
+}
+
 #[derive(Deserialize)]
 struct ColonizePayload {
     galaxy: i32,
@@ -828,16 +918,17 @@ async fn colonize_handler(
     }
 
     // 4. Créer la Colonie
-    // On reprend le OwnerID et le Password de la planète mère pour lier le compte
     let owner_id = att_planet.owner_id.clone().unwrap();
-    let password = att_planet.password.clone().unwrap(); 
+    let password = att_planet.password.clone().unwrap();
+    
+    let colony_name = generate_colony_name();
     
     let new_id = Uuid::new_v4();
     let new_planet = planet::ActiveModel {
         id: Set(new_id),
         owner_id: Set(owner_id),
-        name: Set("Colonie".to_string()), // Nom par défaut
-        password: Set(password), // Même pass pour simplifier (idéalement géré par une table User séparée)
+        name: Set(colony_name),
+        password: Set(password), 
         
         galaxy: Set(payload.galaxy),
         system: Set(payload.system),
@@ -846,7 +937,7 @@ async fn colonize_handler(
         metal_mine_level: Set(1),
         crystal_mine_level: Set(1),
         deuterium_mine_level: Set(1),
-        metal_amount: Set(500.0), // Bonus de départ
+        metal_amount: Set(500.0),
         crystal_amount: Set(500.0),
         last_update: Set(Utc::now().naive_utc()),
         ..Default::default()
@@ -897,4 +988,112 @@ async fn get_my_planets_handler(
     }
     
     (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète introuvable"}))).into_response()
+}
+
+#[derive(Deserialize)]
+struct TransportPayload {
+    target_planet_id: Uuid,
+    transporters: i32,
+    metal: f64,
+    crystal: f64,
+    deuterium: f64,
+}
+
+async fn transport_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<TransportPayload>,
+) -> impl IntoResponse {
+    
+    let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
+
+    if current_id == payload.target_planet_id {
+         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Impossible de transporter vers la même planète"}))).into_response();
+    }
+
+    // 1. Charger Source et Cible (Lecture)
+    let source_model = match planet::Entity::find_by_id(current_id).one(&state.db).await.unwrap() {
+        Some(p) => p,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète source inconnue"}))).into_response(),
+    };
+
+    let target_model = match planet::Entity::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap() {
+        Some(p) => p,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète cible inconnue"}))).into_response(),
+    };
+
+    // --- CRITIQUE : SAUVEGARDE DES NOMS AVANT MODIFICATION ---
+    let source_name = source_model.name.clone();
+    let source_id = source_model.id;
+    let target_name = target_model.name.clone();
+    let target_id = target_model.id;
+
+    // 2. Vérifications
+    if payload.transporters > source_model.transporter_count || payload.transporters <= 0 {
+         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Transporteurs insuffisants"}))).into_response();
+    }
+
+    if payload.metal > source_model.metal_amount || payload.crystal > source_model.crystal_amount || payload.deuterium > source_model.deuterium_amount {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ressources insuffisantes"}))).into_response();
+    }
+    
+    if payload.metal < 0.0 || payload.crystal < 0.0 || payload.deuterium < 0.0 {
+         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Valeurs négatives interdites"}))).into_response();
+    }
+
+    let total_load = payload.metal + payload.crystal + payload.deuterium;
+    let capacity = payload.transporters as f64 * game_logic::TRANSPORTER_CAPACITY;
+
+    if total_load > capacity {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Surcharge !"}))).into_response();
+    }
+
+    // 3. Calcul Temps de Vol
+    let flight_duration = calculate_flight_time(source_model.system, target_model.system, game_logic::SPEED_FACTOR);
+    let arrival = Utc::now().naive_utc() + Duration::seconds(flight_duration);
+
+    // 4. Mise à jour Source (On consomme source_model ici)
+    let mut source: planet::ActiveModel = source_model.into();
+    source.metal_amount = Set(source.metal_amount.unwrap() - payload.metal);
+    source.crystal_amount = Set(source.crystal_amount.unwrap() - payload.crystal);
+    source.deuterium_amount = Set(source.deuterium_amount.unwrap() - payload.deuterium);
+    source.transporter_count = Set(source.transporter_count.unwrap() - payload.transporters);
+
+    // 5. Création Mission (La flotte qui part)
+    let mission = fleet_mission::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        source_planet_id: Set(source_id),
+        target_planet_id: Set(target_id),
+        mission_type: Set("transport".to_string()),
+        arrival_time: Set(arrival),
+        metal: Set(payload.metal),
+        crystal: Set(payload.crystal),
+        deuterium: Set(payload.deuterium),
+        ships_count: Set(payload.transporters),
+    };
+
+    // 6. Création LOG (Historique immédiat)
+    // C'est ici que ça échouait avant si la migration n'était pas faite
+    let log = transport_log::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        target_planet_id: Set(target_id),
+        target_planet_name: Set(target_name),
+        source_planet_id: Set(source_id),
+        source_planet_name: Set(source_name),
+        metal: Set(payload.metal),
+        crystal: Set(payload.crystal),
+        deuterium: Set(payload.deuterium),
+        date: Set(Utc::now().naive_utc()),
+    };
+
+    // Exécution des requêtes
+    let _ = source.update(&state.db).await;
+    let _ = mission.insert(&state.db).await;
+    let _ = log.insert(&state.db).await;
+
+    (StatusCode::OK, Json(json!({
+        "status": "success",
+        "message": format!("Flotte lancée ! Arrivée dans {}s", flight_duration)
+    }))).into_response()
 }

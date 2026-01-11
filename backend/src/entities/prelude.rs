@@ -2,3 +2,6 @@
 
 pub use super :: planet :: Entity as Planet ;
 pub use super :: user :: Entity as User ;
+pub use super :: fleet_mission :: Entity as FleetMission ;
+pub use super :: combat_log :: Entity as CombatLog ;
+pub use super :: transport_log :: Entity as TransportLog ;
