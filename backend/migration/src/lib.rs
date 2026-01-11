@@ -15,6 +15,7 @@ mod m20260109_210008_add_password;
 mod m20260109_211546_add_defenses;
 mod m20260109_220528_add_debris;
 mod m20260109_222210_add_coordinates;
+mod m20260111_210917_add_colony_ship;
 
 pub struct Migrator;
 
@@ -37,6 +38,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260109_211546_add_defenses::Migration),
             Box::new(m20260109_220528_add_debris::Migration),
             Box::new(m20260109_222210_add_coordinates::Migration),
+            Box::new(m20260111_210917_add_colony_ship::Migration),
         ]
     }
 }

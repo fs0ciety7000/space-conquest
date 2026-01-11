@@ -80,6 +80,10 @@ pub struct Model {
     #[sea_orm(default_value = 0)]
     pub espionage_tech_level: i32, // <--- ICI
 
+    #[sea_orm(default_value = 0)]
+    pub colony_ship_count: i32,
+
+    
     // Expédition
     pub expedition_end: Option<DateTime>,
 

@@ -28,10 +28,13 @@ interface CombatReport {
 }
 
 export default function App() {
+  // --- ÉTATS GLOBAUX ---
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
   const [activeTab, setActiveTab] = useState<'overview' | 'galaxy' | 'resources' | 'fleet' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports'>('overview');
   const [speedFactor, setSpeedFactor] = useState<number>(1);
+  
+  // --- ÉTATS DES DONNÉES ---
   const [planet, setPlanet] = useState<any>(null);
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
   const [showCombatModal, setShowCombatModal] = useState(false);
@@ -40,11 +43,21 @@ export default function App() {
 
   const prevPlanetRef = useRef<any>(null);
 
+  // --- GESTION AUTH & PLANÈTE ---
+
   const handleLogout = () => {
     localStorage.clear();
     setToken(null);
     setPlanetId(null);
     setPlanet(null);
+  };
+
+  // Fonction pour changer de planète (Passée à EmpireBar -> PlanetSelector)
+  const switchPlanet = (newId: string) => {
+    console.log("Changement de planète vers :", newId);
+    setPlanetId(newId);
+    localStorage.setItem('planet_id', newId);
+    // Le useEffect de fetchPlanet se déclenchera automatiquement car planetId a changé
   };
 
   const fetchPlanet = useCallback(async () => {
@@ -114,7 +127,7 @@ export default function App() {
     }
   }, [planetId, token]);
 
-  // --- ACTIONS ---
+  // --- ACTIONS DU JEU ---
 
   const launchExpedition = async () => {
     if (!planetId || !token) return;
@@ -136,9 +149,7 @@ export default function App() {
             setReport(`ERREUR MISSION : ${err.error}`);
             setTimeout(() => setReport(null), 4000);
         }
-    } catch (e) {
-        console.error(e);
-    }
+    } catch (e) { console.error(e); }
   };
 
   const handlePrepareAttack = (targetId: string, targetName: string) => {
@@ -178,7 +189,6 @@ export default function App() {
                     cruiser: 0
                 }
             };
-            
             setCombatReport(formattedReport);
             setShowCombatModal(true);
         } else {
@@ -194,17 +204,12 @@ export default function App() {
 
   const handleSpy = async (targetId: string) => {
     if (!planetId || !token) return;
-    
     try {
         const res = await fetch(`http://localhost:8080/spy?current_planet_id=${planetId}`, {
             method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ target_planet_id: targetId })
         });
-
         const data = await res.json();
 
         if (res.ok) {
@@ -216,18 +221,14 @@ export default function App() {
                 logs.push(`MÉTAL: ${Math.floor(r.resources.metal).toLocaleString()}`);
                 logs.push(`CRISTAL: ${Math.floor(r.resources.crystal).toLocaleString()}`);
                 logs.push(`DEUTÉRIUM: ${Math.floor(r.resources.deuterium).toLocaleString()}`);
-            } else {
-                logs.push(">>> RESSOURCES: INCONNU (Tech trop faible)");
-            }
+            } else { logs.push(">>> RESSOURCES: INCONNU (Tech trop faible)"); }
 
             if (r.fleet) {
                 logs.push(">>> FLOTTE STATIONNÉE <<<");
                 logs.push(`Chasseurs: ${r.fleet.light_hunter}`);
                 logs.push(`Croiseurs: ${r.fleet.cruiser}`);
                 logs.push(`Recycleurs: ${r.fleet.recycler}`);
-            } else if (r.detection_level === 'resources') {
-                 logs.push(">>> FLOTTE: INCONNU (Tech insuffisante)");
-            }
+            } else if (r.detection_level === 'resources') { logs.push(">>> FLOTTE: INCONNU (Tech insuffisante)"); }
 
             if (r.defense !== null && r.defense !== undefined) {
                  logs.push(">>> DÉFENSES <<<");
@@ -240,19 +241,14 @@ export default function App() {
                 loot: 0,
                 losses: { light_hunter: 0, cruiser: 0 } 
             };
-            
             setCombatReport(formattedReport);
             setShowCombatModal(true);
-            
             fetchPlanet(); 
         } else {
             setReport(`ÉCHEC ESPIONNAGE : ${data.error}`);
             setTimeout(() => setReport(null), 4000);
         }
-    } catch (e) {
-        console.error(e);
-        setReport("ERREUR SYSTEME ESPIONNAGE");
-    }
+    } catch (e) { console.error(e); setReport("ERREUR SYSTEME ESPIONNAGE"); }
   };
 
   // --- EFFETS ---
@@ -310,7 +306,7 @@ export default function App() {
         style={{ backgroundImage: "url('/assets/background.png')" }}
       ></div>
 
-      {/* 2. MODALES (Au-dessus de tout) */}
+      {/* 2. MODALES & ALERTS (Au-dessus de tout) */}
       <div className="relative z-50">
         {showCombatModal && combatReport && (
             <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />
@@ -333,9 +329,9 @@ export default function App() {
         )}
       </div>
 
-      {/* 3. BARRE DU HAUT (EmpireBar) */}
+      {/* 3. BARRE DU HAUT (EmpireBar) - Avec la fonction de changement de planète */}
       <div className="relative z-40 shrink-0">
-        <EmpireBar planet={planet} />
+        <EmpireBar planet={planet} onSwitchPlanet={switchPlanet} />
       </div>
 
       {/* 4. LAYOUT PRINCIPAL (Sidebar + Contenu) */}
@@ -398,12 +394,6 @@ export default function App() {
                 {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
             </div>
         </main>
-
-        {/* Navigation Mobile (Optionnelle, si besoin pour petits écrans) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/90 border-t border-white/10 p-4 flex justify-between overflow-x-auto gap-4 z-50">
-             {/* Tu pourras ajouter une version simplifiée ici pour le mobile */}
-        </nav>
-
       </div>
     </div>
   );

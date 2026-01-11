@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Rocket, Swords, Timer, Shield, Terminal, Zap, Box, Eye } from "lucide-react";
+import { Rocket, Swords, Timer, Shield, Terminal, Zap, Box, Eye, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -48,6 +48,17 @@ const SHIP_TYPES = [
     border: 'border-emerald-500',
     glow: 'shadow-[0_0_20px_rgba(52,211,153,0.5)]',
     bg: 'bg-emerald-950/20'
+  },
+  { 
+      id: 'colony_ship', 
+      name: 'Vaisseau Colon', 
+      tier: 'Expansion',
+      desc: 'Permet de fonder une nouvelle colonie.',
+      m: 10000, c: 20000, time: 120, atk: 50, def: 500,
+      color: 'text-yellow-400',
+      border: 'border-yellow-500',
+      glow: 'shadow-[0_0_20px_rgba(250,204,21,0.5)]',
+      bg: 'bg-yellow-950/20'
   }
 ];
 
@@ -100,6 +111,7 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
         case 'cruiser': return <Shield size={size} className={className}/>;
         case 'recycler': return <Box size={size} className={className}/>;
         case 'spy_probe': return <Eye size={size} className={className}/>;
+        case 'colony_ship': return <Flag size={size} className={className}/>;
         default: return <Rocket size={size} className={className}/>;
     }
   };
@@ -111,7 +123,7 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
       <div className="lg:col-span-2 space-y-6">
         
         {/* SÉLECTEUR DE VAISSEAUX (CARTES) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {SHIP_TYPES.map(s => {
             const isSelected = selected.id === s.id;
             return (
@@ -287,7 +299,6 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
                  <span className="text-xl text-white font-mono font-black">{planet.recycler_count || 0}</span>
               </div>
 
-              {/* Ligne ajoutée pour les Sondes */}
               <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 group hover:bg-emerald-500/10 transition-colors">
                  <div className="flex flex-col">
                     <span className="text-[9px] uppercase font-bold text-emerald-400">Sondes</span>
@@ -295,6 +306,16 @@ export default function Shipyard({ planet, onBuild }: { planet: any, onBuild: ()
                  </div>
                  <span className="text-xl text-white font-mono font-black">{planet.spy_probe_count || 0}</span>
               </div>
+
+              {/* NOUVELLE ENTRÉE : COLONISATEURS */}
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 group hover:bg-yellow-500/10 transition-colors">
+                 <div className="flex flex-col">
+                    <span className="text-[9px] uppercase font-bold text-yellow-400">Colonisateurs</span>
+                    <span className="text-[8px] text-slate-500">Expansion</span>
+                 </div>
+                 <span className="text-xl text-white font-mono font-black">{planet.colony_ship_count || 0}</span>
+              </div>
+
            </div>
         </Card>
       </div>

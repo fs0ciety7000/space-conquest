@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Search, Skull, Eye, Recycle, Map, List, Home, LocateFixed } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Skull, Eye, Recycle, Map, List, Home, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Slider } from "@/components/ui/slider"; // Si tu as shadcn/ui slider, sinon input range html standard (j'utilise standard ici pour être sûr)
 import StarMap from './StarMap';
 
 interface GalaxySlot {
@@ -45,6 +44,25 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy }: 
       setGalaxy(planet.galaxy);
       setSystem(planet.system);
       setViewMode('list');
+  };
+
+  const handleColonize = async (g: number, s: number, p: number) => {
+    if(!confirm(`Envoyer un vaisseau de colonisation vers [${g}:${s}:${p}] ?`)) return;
+
+    try {
+        const res = await fetch(`http://localhost:8080/colonize?current_planet_id=${planet.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ galaxy: g, system: s, position: p })
+        });
+        const data = await res.json();
+        if(res.ok) {
+            alert(data.message);
+            fetchSystem(); // Rafraîchir la vue
+        } else {
+            alert("Erreur: " + data.error);
+        }
+    } catch(e) { console.error(e); }
   };
 
   return (
@@ -157,7 +175,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy }: 
                         )}
                     </div>
 
-                    {/* Barre d'actions (Apparaît au survol) */}
+                    {/* ACTIONS SUR SLOT OCCUPÉ */}
                     {slot.planet_id && !slot.is_me && (
                         <div className="mt-4 pt-3 border-t border-white/5 flex gap-2 justify-end opacity-40 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
                             <Button size="sm" variant="ghost" className="h-8 text-blue-400 hover:bg-blue-500/20" onClick={() => onNavigateSpy(slot.planet_id!)}>
@@ -168,9 +186,20 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy }: 
                             </Button>
                         </div>
                     )}
+
+                    {/* ACTIONS SUR SLOT VIDE (COLONISATION) */}
                     {!slot.planet_id && (
-                        <div className="mt-4 pt-3 border-t border-white/5 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="text-[9px] text-slate-500 font-mono uppercase cursor-not-allowed">Données topographiques manquantes</span>
+                        <div className="mt-4 pt-3 border-t border-white/5 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
+                             <span className="text-[9px] text-slate-500 font-mono uppercase">Zone Colonisable</span>
+                             <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="h-8 w-8 p-0 rounded-lg text-yellow-500 hover:bg-yellow-500/20 border border-transparent hover:border-yellow-500/50 transition-all"
+                                onClick={() => handleColonize(galaxy, system, slot.position)}
+                                title="Coloniser cet emplacement"
+                            >
+                                <Flag size={14} />
+                            </Button>
                         </div>
                     )}
                 </div>

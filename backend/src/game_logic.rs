@@ -53,6 +53,11 @@ pub fn calculate_resources(res_type: ResourceType, level: i32, current_amount: f
 
 // --- COÛTS ---
 
+pub fn get_colony_ship_stats() -> (f64, f64) {
+    (10000.0, 20000.0) // 10k Métal, 20k Cristal (Coûteux en cristal !)
+}
+
+
 pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
     let factor = 2.0f64.powi(level - 1); // Coût double à chaque niveau
 

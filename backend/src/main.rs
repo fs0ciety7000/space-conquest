@@ -61,7 +61,7 @@ async fn main() {
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST])
         .allow_headers(Any);
-
+ 
     let app = Router::new()
         .route("/register", post(auth::register_handler))
         .route("/config", get(get_game_config_handler))
@@ -78,6 +78,8 @@ async fn main() {
         .route("/recycle", post(recycle_handler))
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
         .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
+        .route("/colonize", post(colonize_handler))
+        .route("/my-planets", get(get_my_planets_handler))
         .layer(cors)
         .with_state(state);
 
@@ -187,6 +189,8 @@ async fn get_planet_handler(
                 "spy_probe" => active.spy_probe_count = Set(p.spy_probe_count + qty),
                 "missile_launcher" => active.missile_launcher_count = Set(p.missile_launcher_count + qty),
                 "plasma_turret" => active.plasma_turret_count = Set(p.plasma_turret_count + qty),
+                "colony_ship" => active.colony_ship_count = Set(p.colony_ship_count + qty),
+
                 _ => {}
             }
             active.shipyard_construction_end = Set(None);
@@ -272,8 +276,10 @@ async fn build_fleet_handler(
         "cruiser" => (20000.0, 7000.0),
         "recycler" => (10000.0, 6000.0),
         "spy_probe" => { let s = game_logic::get_spy_probe_stats(); (s.0, s.1) },
+        "colony_ship" => { let s = game_logic::get_colony_ship_stats(); (s.0, s.1) },
         "missile_launcher" => { let s = game_logic::get_missile_launcher_stats(); (s.0, s.1) },
         "plasma_turret" => { let s = game_logic::get_plasma_turret_stats(); (s.0, s.1) },
+        "colony_ship" => { let s = game_logic::get_colony_ship_stats(); (s.0, s.1) },
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
@@ -779,4 +785,116 @@ async fn get_galaxy_scan_handler(
     // On transforme la map en vecteur pour le JSON
     let results: Vec<SystemSummary> = systems_map.into_values().collect();
     Json(results)
+}
+#[derive(Deserialize)]
+struct ColonizePayload {
+    galaxy: i32,
+    system: i32,
+    position: i32,
+}
+
+async fn colonize_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<ColonizePayload>,
+) -> impl IntoResponse {
+    
+    let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
+
+    // 1. Charger la planète mère
+    let mut att_planet = match planet::Entity::find_by_id(current_id).one(&state.db).await.unwrap() {
+        Some(p) => p.into_active_model(),
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète inconnue"}))).into_response(),
+    };
+
+    // 2. Vérifier Vaisseau
+    let ships = att_planet.colony_ship_count.clone().unwrap();
+    if ships < 1 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucun vaisseau de colonisation disponible"}))).into_response();
+    }
+
+    // 3. Vérifier si la place est libre
+    let exists = planet::Entity::find()
+        .filter(planet::Column::Galaxy.eq(payload.galaxy))
+        .filter(planet::Column::System.eq(payload.system))
+        .filter(planet::Column::Position.eq(payload.position))
+        .one(&state.db)
+        .await
+        .unwrap();
+
+    if exists.is_some() {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Cet emplacement est déjà occupé"}))).into_response();
+    }
+
+    // 4. Créer la Colonie
+    // On reprend le OwnerID et le Password de la planète mère pour lier le compte
+    let owner_id = att_planet.owner_id.clone().unwrap();
+    let password = att_planet.password.clone().unwrap(); 
+    
+    let new_id = Uuid::new_v4();
+    let new_planet = planet::ActiveModel {
+        id: Set(new_id),
+        owner_id: Set(owner_id),
+        name: Set("Colonie".to_string()), // Nom par défaut
+        password: Set(password), // Même pass pour simplifier (idéalement géré par une table User séparée)
+        
+        galaxy: Set(payload.galaxy),
+        system: Set(payload.system),
+        position: Set(payload.position),
+
+        metal_mine_level: Set(1),
+        crystal_mine_level: Set(1),
+        deuterium_mine_level: Set(1),
+        metal_amount: Set(500.0), // Bonus de départ
+        crystal_amount: Set(500.0),
+        last_update: Set(Utc::now().naive_utc()),
+        ..Default::default()
+    };
+
+    // 5. Consommer le vaisseau
+    att_planet.colony_ship_count = Set(ships - 1);
+
+    let _ = att_planet.update(&state.db).await;
+    let _ = new_planet.insert(&state.db).await;
+
+    (StatusCode::OK, Json(json!({
+        "status": "success",
+        "message": format!("Colonisation réussie en [{}:{}:{}]", payload.galaxy, payload.system, payload.position),
+        "new_planet_id": new_id
+    }))).into_response()
+}
+
+async fn get_my_planets_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
+
+    // Trouver le owner_id de la planète actuelle
+    let current = planet::Entity::find_by_id(current_id).one(&state.db).await.unwrap();
+    
+    if let Some(p) = current {
+        // Trouver toutes les planètes avec le même owner_id
+        let my_planets = planet::Entity::find()
+            .filter(planet::Column::OwnerId.eq(p.owner_id))
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+            
+        // On renvoie une liste simplifiée
+        let list: Vec<serde_json::Value> = my_planets.into_iter().map(|mp| json!({
+            "id": mp.id,
+            "name": mp.name,
+            "galaxy": mp.galaxy,
+            "system": mp.system,
+            "position": mp.position,
+            "is_current": mp.id == current_id
+        })).collect();
+
+        return Json(list).into_response();
+    }
+    
+    (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète introuvable"}))).into_response()
 }

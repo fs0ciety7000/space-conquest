@@ -1,6 +1,8 @@
 import { Database, Zap, Rocket, Gem, Activity } from "lucide-react";
+import PlanetSelector from "./PlanetSelector";
 
-export default function EmpireBar({ planet }: { planet: any }) {
+
+export default function EmpireBar({ planet, onSwitchPlanet }: { planet: any, onSwitchPlanet: (id: string) => void }) {
   if (!planet) return null;
 
   // Calcul du total de la flotte (Mise à jour avec les nouveaux vaisseaux)
@@ -19,13 +21,8 @@ export default function EmpireBar({ planet }: { planet: any }) {
   return (
     <div className="fixed top-0 left-0 right-0 h-20 bg-slate-950/80 backdrop-blur-md border-b border-white/10 z-50 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
       
-      {/* IDENTITÉ PLANÈTE */}
       <div className="flex items-center gap-4">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 border-2 border-white/20 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
-        <div className="hidden md:block">
-            <h1 className="text-sm font-black uppercase text-white tracking-widest">{planet.name}</h1>
-            <p className="text-[10px] text-slate-400 font-mono">Secteur Alpha-9</p>
-        </div>
+        <PlanetSelector currentPlanetId={planet.id} onSwitch={onSwitchPlanet} />
       </div>
 
       {/* RESSOURCES */}
