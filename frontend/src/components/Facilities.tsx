@@ -45,30 +45,16 @@ const getFacilityTheme = (type: string) => {
   return themes[type] || themes.shipyard;
 };
 
-// --- LOGIQUE DES BONUS (NOUVEAU) ---
+// --- LOGIQUE DES BONUS ---
 const getFacilityStats = (id: string, level: number) => {
     const next = level + 1;
     switch(id) {
         case 'hangar':
-            // Formule: 500 + (Niv * 500)
-            return {
-                label: "Capacité Flotte",
-                current: (500 + (level * 500)).toLocaleString(),
-                next: (500 + (next * 500)).toLocaleString(),
-            };
+            return { label: "Capacité Flotte", current: (500 + (level * 500)).toLocaleString(), next: (500 + (next * 500)).toLocaleString() };
         case 'shipyard':
-            // Le temps est divisé par (1 + Niv). Donc Vitesse = x(1 + Niv)
-            return {
-                label: "Vitesse Constr.",
-                current: `x${1 + level}`,
-                next: `x${1 + next}`,
-            };
+            return { label: "Vitesse Constr.", current: `x${1 + level}`, next: `x${1 + next}` };
         case 'research':
-            return {
-                label: "Vitesse Recherche",
-                current: `x${1 + level}`,
-                next: `x${1 + next}`,
-            };
+            return { label: "Vitesse Recherche", current: `x${1 + level}`, next: `x${1 + next}` };
         default:
             return { label: "Niveau", current: level, next: next };
     }
@@ -77,7 +63,6 @@ const getFacilityStats = (id: string, level: number) => {
 export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
   const [now, setNow] = useState(new Date().getTime());
 
-  // Timer unique pour tout le composant
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
     return () => clearInterval(interval);
@@ -94,7 +79,6 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     } catch (e) { console.error(e); }
   };
 
-  // Coûts
   const getCost = (type: string, lv: number) => {
     const factor = Math.pow(2, lv);
     if (type === 'shipyard') return { m: 400 * factor, c: 200 * factor, d: 100 * factor };
@@ -104,35 +88,22 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
   };
 
   const facilities = [
-    { 
-      id: 'shipyard', name: 'Chantier Spatial', lv: planet.shipyard_level ?? 0, 
-      desc: "Permet la construction de vaisseaux et défenses.", 
-    },
-    { 
-      id: 'research', name: 'Labo de Recherche', lv: planet.research_lab_level ?? 0, 
-      desc: "Nécessaire pour débloquer de nouvelles technologies.", 
-    },
-    { 
-      id: 'hangar', name: 'Hangar à Vaisseaux', lv: planet.hangar_level ?? 0, 
-      desc: "Augmente la capacité de stockage de la flotte.", 
-    },
+    { id: 'shipyard', name: 'Chantier Spatial', lv: planet.shipyard_level ?? 0, desc: "Permet la construction de vaisseaux et défenses." },
+    { id: 'research', name: 'Labo de Recherche', lv: planet.research_lab_level ?? 0, desc: "Nécessaire pour débloquer de nouvelles technologies." },
+    { id: 'hangar', name: 'Hangar à Vaisseaux', lv: planet.hangar_level ?? 0, desc: "Augmente la capacité de stockage de la flotte." },
   ];
 
-  // Gestion File d'attente
   const queue = planet.constructions || [];
   const isQueueFull = queue.length >= 3;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in zoom-in-95 duration-500 pb-20">
       {facilities.map((fac) => {
-        // Logique Queue
         const activeItem = queue.find((q: any) => q.building_type === fac.id);
         const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
-
         const cost = getCost(fac.id, fac.lv);
-        const stats = getFacilityStats(fac.id, fac.lv); // Récupération des stats
+        const stats = getFacilityStats(fac.id, fac.lv);
         const canAfford = (planet.metal_amount >= cost.m) && (planet.crystal_amount >= cost.c) && (planet.deuterium_amount >= cost.d);
-        
         const theme = getFacilityTheme(fac.id);
         const Icon = theme.icon;
         const BgIcon = theme.bgIcon;
@@ -140,7 +111,6 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
         return (
           <Card key={fac.id} className={`relative overflow-hidden border-t-4 ${theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group`}>
              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
-             {/* Icône de fond */}
              <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
                 <BgIcon size={150} className={theme.color} />
              </div>
@@ -160,7 +130,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                     <span className={`text-2xl font-black font-mono ${theme.color} opacity-80`}>Nv.{fac.lv}</span>
                 </div>
 
-                {/* STATS DYNAMIQUES (AJOUTÉ) */}
+                {/* STATS DYNAMIQUES */}
                 <div className="mb-4 p-2 bg-black/30 rounded border border-white/5 flex items-center justify-between">
                     <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
                         <TrendingUp size={12} className={theme.color} />
@@ -173,7 +143,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                     </div>
                 </div>
 
-                {/* Coûts (Design Grille) */}
+                {/* Grille Coûts */}
                 <div className="grid grid-cols-3 gap-2 mb-6">
                     <div className={`p-2 rounded bg-black/40 border border-white/5 text-xs font-mono flex flex-col items-center ${planet.metal_amount < cost.m ? 'text-red-500 border-red-900/50' : 'text-slate-300'}`}>
                         <span className="uppercase text-[9px] text-slate-500 font-bold mb-1">Métal</span>
@@ -193,14 +163,15 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
               <Button 
                 onClick={() => handleUpgrade(fac.id)}
                 disabled={(isQueueFull && !activeItem) || !canAfford}
-                className={`w-full font-bold uppercase tracking-widest ${
+                className={`w-full font-black uppercase tracking-widest transition-all duration-500 ${
                     activeItem 
                         ? 'bg-indigo-900/50 border border-indigo-500 text-indigo-300 animate-pulse' 
                         : isQueueFull
-                            ? 'bg-slate-800 text-slate-500'
+                            ? 'bg-slate-800 text-slate-500 border border-white/5 cursor-not-allowed'
                             : !canAfford 
-                                ? 'bg-red-950/20 border border-red-900/50 text-red-500' 
-                                : `bg-indigo-600 hover:bg-indigo-500 text-white`
+                                ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
+                                // NOUVEAU STYLE SCI-FI VIBRANT :
+                                : `bg-gradient-to-r from-indigo-950/60 to-purple-950/60 hover:from-indigo-900/80 hover:to-purple-900/80 border border-indigo-500/50 hover:border-cyan-400/80 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]`
                 }`}
               >
                 {activeItem ? (
