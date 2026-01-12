@@ -316,3 +316,28 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
         CombatResult { victory: false, message: "Défaite cuisante...".into(), ships_lost: lost }
     }
 }
+
+// --- NAVIGATION GALACTIQUE ---
+
+pub fn calculate_distance(start: (i32, i32, i32), end: (i32, i32, i32)) -> f64 {
+    let (g1, s1, p1) = start;
+    let (g2, s2, p2) = end;
+
+    if g1 != g2 {
+        return (g1 - g2).abs() as f64 * 20000.0;
+    }
+    if s1 != s2 {
+        return (s1 - s2).abs() as f64 * 2000.0 + 2700.0;
+    }
+    if p1 != p2 {
+        return (p1 - p2).abs() as f64 * 5.0 + 1000.0;
+    }
+    5.0 // Même planète
+}
+
+pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
+    // Formule adaptée pour un Speed Game : plus c'est loin, plus c'est long, mais bridé par le facteur vitesse
+    let base_time = 10.0 + (dist.sqrt() / 2.0);
+    let seconds = (base_time * 100.0) / speed_factor;
+    seconds.max(5.0) as i64 // Minimum 5 secondes de vol
+}

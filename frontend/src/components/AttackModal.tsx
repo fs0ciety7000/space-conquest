@@ -16,6 +16,7 @@ interface AttackModalProps {
 export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }: AttackModalProps) {
   const [hunters, setHunters] = useState(0);
   const [cruisers, setCruisers] = useState(0);
+  
 
   // Calcul de la puissance estimée (juste pour l'UI)
   const power = (hunters * 10) + (cruisers * 50);

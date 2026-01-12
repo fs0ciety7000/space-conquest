@@ -1,7 +1,8 @@
 import { 
   Stone, Gem, MapPin, Shield, Rocket, Globe, Scan, 
   Zap, Hammer, Clock, TrendingUp, AlertTriangle, 
-  Droplets, Microscope, Warehouse, Activity, ChevronRight, List, XCircle, ShieldCheck, Sword
+  Droplets, Microscope, Warehouse, Activity, ChevronRight, List, XCircle, ShieldCheck, Sword,
+  Radar, Radio, Navigation
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -127,9 +128,81 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const slotsUsed = constructionQueue.length;
   const maxSlots = 3;
 
+  // --- MISSIONS (Backend enrichit l'objet planet avec ces listes) ---
+  const incomingMissions = planet.incoming_missions || [];
+  const outgoingMissions = planet.outgoing_missions || [];
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
+      {/* SECTION RADAR / MISSIONS ALERTES */}
+      {(incomingMissions.length > 0 || outgoingMissions.length > 0) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* RADAR DE DÉTECTION (Incoming) */}
+              <Card className={`bg-slate-950 border ${incomingMissions.some((m: any) => m.mission_type === 'attack') ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-blue-500/30'} overflow-hidden relative`}>
+                  <div className="absolute top-0 right-0 p-2 opacity-10"><Radar size={80} /></div>
+                  <CardHeader className="pb-2 border-b border-white/5">
+                      <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-slate-400">
+                          <Radio size={14} className="animate-pulse text-blue-400" /> Flux de circulation entrant
+                      </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-3">
+                      {incomingMissions.length > 0 ? incomingMissions.map((m: any) => {
+                          const tl = getTimeLeft(m.arrival_time);
+                          const isAttack = m.mission_type === 'attack';
+                          return (
+                              <div key={m.id} className={`flex items-center justify-between p-3 rounded-lg border ${isAttack ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-500/5 border-blue-500/10'}`}>
+                                  <div className="flex items-center gap-3">
+                                      <div className={`p-2 rounded-full ${isAttack ? 'bg-red-500 animate-ping' : 'bg-blue-500'}`}>
+                                          <Rocket size={12} className="text-white" />
+                                      </div>
+                                      <div>
+                                          <p className={`text-xs font-black uppercase tracking-wider ${isAttack ? 'text-red-400' : 'text-blue-400'}`}>
+                                              {isAttack ? '⚠️ Attaque ennemie' : '📦 Transport civil'}
+                                          </p>
+                                          <p className="text-[9px] font-mono text-slate-500 uppercase">Impact : {tl}s</p>
+                                      </div>
+                                  </div>
+                                  <div className="text-right font-mono text-xs font-bold text-white">
+                                      {m.ships_count} Unités
+                                  </div>
+                              </div>
+                          );
+                      }) : (
+                          <div className="text-center py-4 text-slate-600 text-[10px] uppercase font-bold italic">Secteur Local Calme</div>
+                      )}
+                  </CardContent>
+              </Card>
+
+              {/* CENTRE DE COMMANDE (Outgoing) */}
+              <Card className="bg-slate-950 border border-emerald-500/30 overflow-hidden relative">
+                  <div className="absolute top-0 right-0 p-2 opacity-10"><Navigation size={80} /></div>
+                  <CardHeader className="pb-2 border-b border-white/5">
+                      <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-slate-400">
+                          <Navigation size={14} className="text-emerald-400" /> Missions de flotte actives
+                      </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-3">
+                      {outgoingMissions.length > 0 ? outgoingMissions.map((m: any) => {
+                          const tl = getTimeLeft(m.arrival_time);
+                          return (
+                              <div key={m.id} className="bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-lg flex flex-col gap-2">
+                                  <div className="flex justify-between items-center">
+                                      <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">{m.mission_type}</span>
+                                      <span className="text-xs font-mono font-bold text-white">{tl}s</span>
+                                  </div>
+                                  <Progress value={Math.max(5, 100 - (tl / 10))} className="h-1 bg-slate-800" />
+                                  <p className="text-[8px] text-slate-500 uppercase font-mono tracking-tighter">Coord : Destination confidentielle</p>
+                              </div>
+                          );
+                      }) : (
+                          <div className="text-center py-4 text-slate-600 text-[10px] uppercase font-bold italic">Aucune mission en cours</div>
+                      )}
+                  </CardContent>
+              </Card>
+          </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* CARTE PLANETE ET FILE */}
         <Card className="lg:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative group flex flex-col justify-between">
@@ -259,7 +332,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </Card>
       </div>
 
-      {/* --- NOUVELLE SECTION TACTIQUE MILITAIRE --- */}
+      {/* --- SECTION TACTIQUE MILITAIRE --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="bg-slate-900 border border-red-500/20 relative overflow-hidden group">
               <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors"></div>

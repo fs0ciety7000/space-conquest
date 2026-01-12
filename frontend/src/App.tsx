@@ -22,7 +22,7 @@ import { Toaster, toast } from "sonner";
 import { 
   LogOut, LayoutDashboard, Pickaxe, Hammer, 
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory 
+  Settings as SettingsIcon, Mail, Factory, Rocket 
 } from "lucide-react";
 
 interface CombatReport {
@@ -189,22 +189,38 @@ const [spyReport, setSpyReport] = useState<any>(null);
     } catch(e) { toast.error("Erreur réseau"); }
   };
 
-  const handleConfirmAttack = async (h: number, c: number) => {
-    if (!targetPlanet) return;
+const handleConfirmAttack = async (hunters: number, cruisers: number) => {
+    if (!planetId || !targetPlanet) return;
+
     try {
         const res = await fetch(`http://localhost:8080/attack?current_planet_id=${planetId}`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target_planet_id: targetPlanet.id, hunters: h, cruisers: c })
+            headers: { 
+              'Authorization': `Bearer ${token}`, // Ne pas oublier le token pour l'auth
+              'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({
+                target_planet_id: targetPlanet.id,
+                hunters: hunters,
+                cruisers: cruisers
+            })
         });
+
         const data = await res.json();
+
         if (res.ok) {
-            setCombatReport(data.report);
-            setShowCombatModal(true);
-            fetchPlanet();
-        } else { toast.error(data.error); }
-    } catch (e) { toast.error("Erreur attaque"); }
-    setTargetPlanet(null);
+            toast.success("ORDRE D'ATTAQUE CONFIRMÉ", {
+                description: `Votre flotte atteindra la cible vers ${new Date(data.arrival).toLocaleTimeString()}`,
+                icon: <Rocket className="text-red-500" />
+            });
+            setTargetPlanet(null); // On ferme la modal en vidant la cible
+            fetchPlanet(); // On rafraîchit pour voir les vaisseaux partir
+        } else {
+            toast.error(data.error || "Le haut commandement a annulé l'opération");
+        }
+    } catch (e) {
+        toast.error("Échec de la liaison avec la flotte");
+    }
   };
 
   useEffect(() => {
