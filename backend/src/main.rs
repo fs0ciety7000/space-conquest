@@ -28,6 +28,8 @@ use entities::planet;
 use entities::combat_log;
 use entities::fleet_mission;
 use entities::transport_log;
+use entities::user as users;
+
 
 #[derive(Clone)]
 struct AppState {
@@ -37,6 +39,7 @@ struct AppState {
 #[derive(Serialize)]
 struct RankItem {
     rank: usize,
+    username: String,
     planet_name: String,
     score: i32,
     is_me: bool,
@@ -84,6 +87,7 @@ async fn main() {
         .route("/colonize", post(colonize_handler))
         .route("/my-planets", get(get_my_planets_handler))
         .route("/transport", post(transport_handler))
+        .route("/planets/:id/rename", post(rename_planet_handler))
         .layer(cors)
         .with_state(state);
 
@@ -110,7 +114,16 @@ async fn get_ranking_handler(
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or_default();
 
+    // 1. Récupérer toutes les planètes
     let planets = planet::Entity::find().all(&state.db).await.unwrap_or_default();
+    
+    // 2. Récupérer tous les users pour avoir les noms
+    let users = users::Entity::find().all(&state.db).await.unwrap_or_default();
+    
+    // Créer une Map : OwnerID -> Username
+    let user_map: HashMap<Uuid, String> = users.into_iter()
+        .map(|u| (u.id, u.username))
+        .collect();
 
     let mut ranked_planets: Vec<RankItem> = planets.into_iter().map(|p| {
         let score = (p.metal_mine_level + p.crystal_mine_level + p.deuterium_mine_level 
@@ -118,8 +131,12 @@ async fn get_ranking_handler(
                      + (p.light_hunter_count + p.cruiser_count + p.recycler_count) * 10
                      + (p.missile_launcher_count + p.plasma_turret_count) * 20;
         
+        // Trouver le nom du joueur, sinon "Inconnu"
+        let username = user_map.get(&p.owner_id).cloned().unwrap_or("Inconnu".to_string());
+
         RankItem {
             rank: 0, 
+            username, // <--- On remplit le champ
             planet_name: p.name,
             score,
             is_me: p.id == current_planet_id,
@@ -1096,4 +1113,35 @@ async fn transport_handler(
         "status": "success",
         "message": format!("Flotte lancée ! Arrivée dans {}s", flight_duration)
     }))).into_response()
+}
+
+#[derive(Deserialize)]
+struct RenamePlanetPayload {
+    new_name: String,
+}
+
+async fn rename_planet_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<RenamePlanetPayload>,
+) -> impl IntoResponse {
+    let p_opt = planet::Entity::find_by_id(id).one(&state.db).await.unwrap();
+    
+    if let Some(p) = p_opt {
+        // Validation : pas de nom vide et pas trop long
+        if payload.new_name.trim().is_empty() || payload.new_name.len() > 20 {
+             return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nom invalide (1-20 caractères)"}))).into_response();
+        }
+
+        let mut active: planet::ActiveModel = p.into();
+        active.name = Set(payload.new_name);
+        
+        if let Err(_) = active.update(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response();
+        }
+        
+        return StatusCode::OK.into_response();
+    }
+    
+    StatusCode::NOT_FOUND.into_response()
 }

@@ -1,144 +1,274 @@
-import { Database, Gem, Activity, MapPin, Shield, Rocket, Globe } from "lucide-react";
+import { 
+  Database, Gem, Activity, MapPin, Shield, Rocket, Globe, Scan, 
+  Zap, Hammer, Clock, TrendingUp, AlertTriangle 
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-
+import { Progress } from "@/components/ui/progress";
 
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
   
-  // --- FORMULES DE PRODUCTION (Identiques au Backend) ---
-const calculateProduction = (level: number, baseFactor: number) => {
+  // --- FORMULES --- //
+  const calculateProduction = (level: number, baseFactor: number) => {
     const baseProd = baseFactor * level * Math.pow(1.1, level);
-    // On utilise la prop dynamique venant du backend
     return baseProd * speedFactor;
   };
 
-  // Production par HEURE
+  // 1. Production Ressources
   const prodMetal = calculateProduction(planet.metal_mine_level, 30);
   const prodCrystal = calculateProduction(planet.crystal_mine_level, 20);
   const prodDeut = calculateProduction(planet.deuterium_mine_level, 10);
 
-  // Totaux Militaires
-  const totalFleet = (planet.light_hunter_count || 0) + (planet.cruiser_count || 0) + (planet.recycler_count || 0) + (planet.spy_probe_count || 0);
-  const totalDefense = (planet.missile_launcher_count || 0) + (planet.plasma_turret_count || 0);
+  // 2. Gestion de l'Énergie
+  const energyProd = 20 * planet.energy_tech_level * Math.pow(1.1, planet.energy_tech_level);
+  const energyCons = (10 * planet.metal_mine_level) + (10 * planet.crystal_mine_level) + (20 * planet.deuterium_mine_level);
+  const energyNet = energyProd - energyCons;
+  const energyPercent = Math.min(100, Math.max(0, (energyProd / (energyCons || 1)) * 100));
 
-  // Helper pour formater les chiffres
+  // 3. Totaux Militaires
+  const totalFleet = (planet.light_hunter_count || 0) + (planet.cruiser_count || 0) + (planet.recycler_count || 0) + (planet.spy_probe_count || 0) + (planet.colony_ship_count || 0) + (planet.transporter_count || 0);
+  const totalDefense = (planet.missile_launcher_count || 0) + (planet.plasma_turret_count || 0);
+  
+  const firePower = (planet.light_hunter_count * 50) + (planet.cruiser_count * 400) + (planet.missile_launcher_count * 80);
+
+  // 4. Construction
+  const isBuilding = planet.construction_end && new Date(planet.construction_end) > new Date();
+  const buildingName = planet.construction_type ? planet.construction_type.replace('_', ' ').toUpperCase() : "AUCUNE";
+
+  // Helper formattage
   const fmt = (n: number) => Math.floor(n).toLocaleString();
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
-      {/* HEADER : INFO PLANÈTE */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/20 to-transparent pointer-events-none"></div>
-            <CardHeader className="flex flex-row items-center gap-4">
-                <div className="p-4 bg-indigo-500/10 rounded-full border border-indigo-500/30">
-                    <Globe size={40} className="text-indigo-400" />
+      {/* --- HEADER --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <Card className="lg:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative group">
+            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1614730341194-75c607ae363c?q=80&w=2696&auto=format&fit=crop')] bg-cover bg-center opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent"></div>
+            
+            <CardHeader className="relative z-10 flex flex-row items-center gap-6">
+                <div className="relative shrink-0">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 blur-md absolute animate-pulse"></div>
+                    <div className="w-20 h-20 rounded-full bg-slate-900 border-2 border-indigo-400/50 flex items-center justify-center relative z-10 shadow-xl">
+                        <Globe size={40} className="text-indigo-300" />
+                    </div>
                 </div>
                 <div>
-                    <h2 className="text-2xl font-black uppercase text-white tracking-widest">{planet.name}</h2>
-                    <div className="flex items-center gap-2 text-slate-400 font-mono text-xs">
-                        <MapPin size={12} />
-                        <span>COORDONNÉES: [4:202:{planet.id.substring(0, 4)}]</span>
+                    <div className="flex flex-wrap items-center gap-3 mb-1">
+                        <h2 className="text-3xl font-black uppercase text-white tracking-widest drop-shadow-md">{planet.name}</h2>
+                        <div className="px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-[10px] text-green-400 font-bold uppercase tracking-wider animate-pulse">
+                            Opérationnel
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 text-slate-400 font-mono text-xs">
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5">
+                            <MapPin size={12} className="text-indigo-400" />
+                            <span>[{planet.galaxy}:{planet.system}:{planet.position}]</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5">
+                            <Scan size={12} className="text-cyan-400" />
+                            <span>12,800 km</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5">
+                            <TrendingUp size={12} className="text-orange-400" />
+                            <span>Rang: Inconnu</span>
+                        </div>
                     </div>
                 </div>
             </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-2 gap-4 text-xs font-mono text-slate-300">
-                    <div className="bg-white/5 p-2 rounded border border-white/5">
-                        <span className="text-slate-500 block uppercase text-[9px]">Diamètre</span>
-                        12,800 km
+
+            <CardContent className="relative z-10 pt-0">
+                <div className="mt-4 p-3 bg-black/40 border-l-2 border-yellow-500 backdrop-blur-sm rounded-r-lg flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <Hammer size={16} className={`text-yellow-500 ${isBuilding ? 'animate-bounce' : ''}`} />
+                        <div>
+                            <p className="text-[10px] uppercase text-slate-500 font-bold">Ordre de Construction</p>
+                            <p className="text-xs font-bold text-white">{isBuilding ? buildingName : "EN ATTENTE D'ORDRES"}</p>
+                        </div>
                     </div>
-                    <div className="bg-white/5 p-2 rounded border border-white/5">
-                        <span className="text-slate-500 block uppercase text-[9px]">Température</span>
-                        approx. 14°C
-                    </div>
+                    {isBuilding && <Clock size={16} className="text-yellow-500 animate-spin-slow" />}
                 </div>
             </CardContent>
         </Card>
 
-        {/* RÉSUMÉ MILITAIRE */}
-        <Card className="bg-slate-950 border border-white/10 flex flex-col justify-center">
-            <CardContent className="space-y-4 pt-6">
-                <div className="flex justify-between items-center p-3 bg-blue-900/10 border border-blue-500/20 rounded-lg">
-                    <div className="flex items-center gap-3">
-                        <Rocket className="text-blue-400" size={20} />
-                        <span className="text-xs font-bold uppercase text-slate-300">Flotte Totale</span>
-                    </div>
-                    <span className="text-xl font-black text-white font-mono">{fmt(totalFleet)}</span>
+        {/* ÉNERGIE */}
+        <Card className="bg-slate-900/80 border border-white/10 backdrop-blur-md flex flex-col justify-between relative overflow-hidden">
+             <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-20 ${energyNet >= 0 ? 'bg-yellow-400' : 'bg-red-500'}`}></div>
+            
+            <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                    <Zap size={14} className={energyNet >= 0 ? "text-yellow-400" : "text-red-500"} /> Réseau Électrique
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="flex items-end justify-between">
+                    <span className="text-3xl font-mono font-black text-white">{fmt(energyNet)}</span>
+                    <span className={`text-xs font-bold px-2 py-1 rounded ${energyNet >= 0 ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'}`}>
+                        {energyNet >= 0 ? 'STABLE' : 'CRITIQUE'}
+                    </span>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-red-900/10 border border-red-500/20 rounded-lg">
-                    <div className="flex items-center gap-3">
-                        <Shield className="text-red-400" size={20} />
-                        <span className="text-xs font-bold uppercase text-slate-300">Défense Totale</span>
+                
+                <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
+                        <span>Charge Système</span>
+                        <span>{Math.floor(energyPercent)}%</span>
                     </div>
-                    <span className="text-xl font-black text-white font-mono">{fmt(totalDefense)}</span>
+                    <Progress value={energyPercent} className={`h-1.5 ${energyNet < 0 ? "bg-red-900" : "bg-slate-800"}`} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                    <div className="bg-white/5 p-2 rounded text-center">
+                        <span className="block text-slate-500">Prod.</span>
+                        <span className="text-green-400">+{fmt(energyProd)}</span>
+                    </div>
+                    <div className="bg-white/5 p-2 rounded text-center">
+                        <span className="block text-slate-500">Conso.</span>
+                        <span className="text-red-400">-{fmt(energyCons)}</span>
+                    </div>
                 </div>
             </CardContent>
         </Card>
       </div>
 
-      {/* TABLEAU DE PRODUCTION */}
-      <Card className="bg-black/60 border border-white/10 backdrop-blur-sm">
-        <CardHeader>
-            <CardTitle className="text-sm font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
-                <Activity size={16} /> Rapport de Production
-            </CardTitle>
-        </CardHeader>
-        <CardContent>
-            <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse font-mono text-xs">
-                    <thead>
-                        <tr className="border-b border-white/10 text-slate-500 uppercase tracking-wider">
-                            <th className="py-3 pl-4">Ressource</th>
-                            <th className="py-3 text-right">Actuel</th>
-                            <th className="py-3 text-right text-slate-600">/ Seconde</th>
-                            <th className="py-3 text-right text-white/80">/ Minute</th>
-                            <th className="py-3 text-right text-yellow-500">/ Heure</th>
-                            <th className="py-3 text-right pr-4 text-green-500">/ Jour</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {/* MÉTAL */}
-                        <tr className="hover:bg-white/5 transition-colors">
-                            <td className="py-4 pl-4 flex items-center gap-2 font-bold text-orange-400">
-                                <Database size={14} /> MÉTAL
-                            </td>
-                            <td className="py-4 text-right font-bold text-white">{fmt(planet.metal_amount)}</td>
-                            <td className="py-4 text-right text-slate-500">+{fmt(prodMetal / 3600)}</td>
-                            <td className="py-4 text-right text-slate-300">+{fmt(prodMetal / 60)}</td>
-                            <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodMetal)}</td>
-                            <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodMetal * 24)}</td>
-                        </tr>
+      {/* --- SECTION INFRASTRUCTURES & RESSOURCES --- */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+        
+        {/* Colonne de Gauche : INFRASTRUCTURES */}
+        <div className="md:col-span-1 space-y-4 min-w-0">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1">Infrastructures</h3>
+            
+            {[
+                { label: "Mine de Métal", level: planet.metal_mine_level, icon: Database, color: "text-orange-400", border: "border-orange-500/20" },
+                { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400", border: "border-cyan-500/20" },
+                { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Activity, color: "text-green-400", border: "border-green-500/20" },
+                { label: "Centrale Solaire", level: planet.energy_tech_level, icon: Zap, color: "text-yellow-400", border: "border-yellow-500/20" },
+            ].map((mine) => (
+                <div key={mine.label} className={`bg-slate-900/50 border ${mine.border} p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors`}>
+                    <div className="flex items-center gap-3 overflow-hidden">
+                        <mine.icon size={16} className={`shrink-0 ${mine.color}`} />
+                        <span className="text-xs font-bold text-slate-300 truncate">{mine.label}</span>
+                    </div>
+                    <span className="text-sm font-black font-mono text-white bg-black/40 px-2 py-0.5 rounded border border-white/5 shrink-0">
+                        Niv. {mine.level}
+                    </span>
+                </div>
+            ))}
+        </div>
 
-                        {/* CRISTAL */}
-                        <tr className="hover:bg-white/5 transition-colors">
-                            <td className="py-4 pl-4 flex items-center gap-2 font-bold text-cyan-400">
-                                <Gem size={14} /> CRISTAL
-                            </td>
-                            <td className="py-4 text-right font-bold text-white">{fmt(planet.crystal_amount)}</td>
-                            <td className="py-4 text-right text-slate-500">+{fmt(prodCrystal / 3600)}</td>
-                            <td className="py-4 text-right text-slate-300">+{fmt(prodCrystal / 60)}</td>
-                            <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodCrystal)}</td>
-                            <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodCrystal * 24)}</td>
-                        </tr>
+        {/* Colonne Centrale/Droite : TABLEAU DE PRODUCTION */}
+        {/* CORRECTION ICI : Pas de h-full sur la Card, min-w-0 sur le div */}
+        <div className="md:col-span-3 min-w-0">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1 mb-4">Rendement Industriel</h3>
+            <Card className="bg-black/40 border border-white/10 backdrop-blur-sm">
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse font-mono text-xs whitespace-nowrap">
+                            <thead>
+                                <tr className="bg-white/5 text-slate-500 uppercase tracking-wider text-[10px]">
+                                    <th className="py-3 pl-4">Ressource</th>
+                                    <th className="py-3 text-right">Stock</th>
+                                    <th className="py-3 text-right">Capacité</th>
+                                    <th className="py-3 text-right text-yellow-500">/ Heure</th>
+                                    <th className="py-3 text-right pr-4 text-green-500">/ Jour</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                <tr className="hover:bg-white/5 transition-colors">
+                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-orange-400"><Database size={14} /> MÉTAL</td>
+                                    <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.metal_amount)}</td>
+                                    <td className="py-4 text-right text-slate-600">Illimité</td>
+                                    <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodMetal)}</td>
+                                    <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodMetal * 24)}</td>
+                                </tr>
+                                <tr className="hover:bg-white/5 transition-colors">
+                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-cyan-400"><Gem size={14} /> CRISTAL</td>
+                                    <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.crystal_amount)}</td>
+                                    <td className="py-4 text-right text-slate-600">Illimité</td>
+                                    <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodCrystal)}</td>
+                                    <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodCrystal * 24)}</td>
+                                </tr>
+                                <tr className="hover:bg-white/5 transition-colors">
+                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-green-400"><Activity size={14} /> DEUTÉRIUM</td>
+                                    <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.deuterium_amount)}</td>
+                                    <td className="py-4 text-right text-slate-600">Illimité</td>
+                                    <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodDeut)}</td>
+                                    <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodDeut * 24)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+      </div>
 
-                        {/* DEUTERIUM */}
-                        <tr className="hover:bg-white/5 transition-colors">
-                            <td className="py-4 pl-4 flex items-center gap-2 font-bold text-green-400">
-                                <Activity size={14} /> DEUTÉRIUM
-                            </td>
-                            <td className="py-4 text-right font-bold text-white">{fmt(planet.deuterium_amount)}</td>
-                            <td className="py-4 text-right text-slate-500">+{fmt(prodDeut / 3600)}</td>
-                            <td className="py-4 text-right text-slate-300">+{fmt(prodDeut / 60)}</td>
-                            <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodDeut)}</td>
-                            <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodDeut * 24)}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </CardContent>
-      </Card>
+      {/* --- SECTION MILITAIRE --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            <Card className="bg-blue-950/10 border border-blue-500/20">
+                <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-blue-400">
+                        <span className="flex items-center gap-2"><Rocket size={14} /> Forces Spatiales (Stationnées)</span>
+                        <span className="bg-blue-500/20 px-2 py-1 rounded text-blue-300">{fmt(totalFleet)} Unités</span>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-2">
+                        {[
+                            { label: "Chasseurs Légers", val: planet.light_hunter_count },
+                            { label: "Croiseurs", val: planet.cruiser_count },
+                            { label: "Recycleurs", val: planet.recycler_count },
+                            { label: "Sondes", val: planet.spy_probe_count },
+                            { label: "Vaisseaux Colons", val: planet.colony_ship_count },
+                            { label: "Transporteurs", val: planet.transporter_count },
+                        ].map(item => (
+                            <div key={item.label} className="bg-slate-900/50 p-2 rounded border border-white/5">
+                                <span className="text-[10px] text-slate-500 uppercase block">{item.label}</span>
+                                <span className="text-white font-mono font-bold">{fmt(item.val || 0)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="bg-red-950/10 border border-red-500/20">
+                <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-red-400">
+                        <span className="flex items-center gap-2"><Shield size={14} /> Défenses Planétaires</span>
+                        <span className="bg-red-500/20 px-2 py-1 rounded text-red-300">{fmt(totalDefense)} Systèmes</span>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center gap-4">
+                         <div className="flex-1">
+                            <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-1">
+                                <span>Indice de Sécurité</span>
+                                <span>{fmt(firePower)} BP</span>
+                            </div>
+                            <Progress value={Math.min(100, totalDefense / 10)} className="h-2 bg-slate-800" />
+                            <p className="text-[10px] text-slate-600 mt-1">Basé sur la puissance de feu locale.</p>
+                         </div>
+                    </div>
+                     <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-slate-900/50 p-2 rounded border border-white/5">
+                            <span className="text-[10px] text-slate-500 uppercase block">Lanceur de Missiles</span>
+                            <span className="text-white font-mono font-bold">{fmt(planet.missile_launcher_count)}</span>
+                        </div>
+                        <div className="bg-slate-900/50 p-2 rounded border border-white/5">
+                            <span className="text-[10px] text-slate-500 uppercase block">Artillerie Plasma</span>
+                            <span className="text-white font-mono font-bold">{fmt(planet.plasma_turret_count)}</span>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+      </div>
+
+        {/* Note sur les flottes totales */}
+        <div className="flex items-center justify-center gap-2 text-[10px] text-slate-600 uppercase tracking-widest mt-8">
+            <AlertTriangle size={12} />
+            <span>Les données affichées concernent uniquement le secteur local [{planet.galaxy}:{planet.system}:{planet.position}]</span>
+        </div>
+
     </div>
   );
 }

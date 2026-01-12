@@ -20,6 +20,7 @@ mod m20260111_213610_add_transporter;
 mod m20260111_222219_create_fleet_mission;
 mod m20260111_223746_create_transport_log;
 
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -45,6 +46,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260111_213610_add_transporter::Migration),
             Box::new(m20260111_222219_create_fleet_mission::Migration),
             Box::new(m20260111_223746_create_transport_log::Migration),
+
         ]
     }
 }

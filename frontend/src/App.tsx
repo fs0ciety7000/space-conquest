@@ -12,12 +12,14 @@ import ReportsTerminal from './components/ReportsTerminal';
 import Defenses from './components/Defenses';
 import PlanetOverview from './components/PlanetOverview';
 import GalaxyView from './components/GalaxyView';
+import Settings from './components/Settings'; // <--- NOUVEAU
 
 // Import de Sonner (Toasts)
 import { Toaster, toast } from "sonner";
 import { 
   LogOut, BellRing, LayoutDashboard, Pickaxe, Hammer, 
-  ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck 
+  ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
+  Settings as SettingsIcon // <--- Alias pour éviter conflit de nom
 } from "lucide-react";
 
 interface CombatReport {
@@ -34,7 +36,8 @@ export default function App() {
   // --- ÉTATS GLOBAUX ---
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
-  const [activeTab, setActiveTab] = useState<'overview' | 'galaxy' | 'resources' | 'fleet' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports'>('overview');
+  // Ajout de 'settings' dans les types d'onglets
+  const [activeTab, setActiveTab] = useState<'overview' | 'galaxy' | 'resources' | 'fleet' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings'>('overview');
   const [speedFactor, setSpeedFactor] = useState<number>(1);
   
   // --- ÉTATS DES DONNÉES ---
@@ -78,10 +81,8 @@ export default function App() {
         const data = await res.json();
         
         // --- GESTION DES RAPPORTS (COMBATS / TRANSPORT) ---
-        // On vérifie si on n'est pas DÉJÀ en train de traiter un rapport
         if (data.unread_report && !processingReportRef.current) {
             
-            // On verrouille le traitement
             processingReportRef.current = true;
 
             try {
@@ -89,7 +90,7 @@ export default function App() {
                 
                 // CAS 1: ARRIVÉE DE TRANSPORT
                 if (reportData.type === 'transport_arrival') {
-                    toast.success(`Cargaison reçue de : ${reportData.sender_name}`, { // <--- NOM AFFICHÉ ICI
+                    toast.success(`Cargaison reçue de : ${reportData.sender_name}`, { 
                         description: `Livraison: M:${Math.floor(reportData.metal).toLocaleString()} C:${Math.floor(reportData.crystal).toLocaleString()} D:${Math.floor(reportData.deuterium).toLocaleString()}`,
                         duration: 8000,
                         icon: <Truck className="h-5 w-5 text-green-500" />,
@@ -123,7 +124,6 @@ export default function App() {
             } catch (err) {
                 console.error("Erreur lecture rapport", err);
             } finally {
-                // On déverrouille une fois fini (ou en cas d'erreur)
                 processingReportRef.current = false;
             }
         }
@@ -162,7 +162,7 @@ export default function App() {
     }
   }, [planetId, token]);
 
-  // --- ACTIONS DU JEU --- (Le reste ne change pas)
+  // --- ACTIONS DU JEU --- 
 
   const launchExpedition = async () => {
     if (!planetId || !token) return;
@@ -324,6 +324,8 @@ export default function App() {
     { id: 'expedition', label: 'Expéditions', icon: Telescope, category: 'MILITAIRE' },
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
     { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
+    // AJOUT DES PARAMÈTRES ICI
+    { id: 'settings', label: 'Paramètres', icon: SettingsIcon, category: 'SYSTÈME' },
   ] as const;
 
   return (
@@ -352,9 +354,12 @@ export default function App() {
       </div>
 
       <div className="flex flex-1 overflow-hidden relative z-30 pt-20">
+        
+        {/* SIDEBAR */}
         <aside className="w-64 bg-slate-950/80 backdrop-blur-xl border-r border-white/5 flex flex-col h-full overflow-y-auto hidden md:flex">
             <div className="p-4 space-y-6">
-                {['COMMANDEMENT', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES'].map(cat => (
+                {/* On ajoute 'SYSTÈME' à la liste des catégories */}
+                {['COMMANDEMENT', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
                     <div key={cat} className="space-y-2">
                         <h3 className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] pl-3">
                             {cat}
@@ -393,6 +398,7 @@ export default function App() {
             </div>
         </aside>
 
+        {/* CONTENU PRINCIPAL */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-10 scrollbar-thin scrollbar-thumb-indigo-900 scrollbar-track-transparent">
             <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 md:pb-0">
                 {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
@@ -404,6 +410,8 @@ export default function App() {
                 {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}
                 {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} />}
                 {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
+                {/* Rendu du composant Settings */}
+                {activeTab === 'settings' && <Settings planet={planet} onUpdate={fetchPlanet} onLogout={handleLogout} />}
             </div>
         </main>
       </div>
