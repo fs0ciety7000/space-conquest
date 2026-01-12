@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State, Query},
     http::{Method, StatusCode},
     response::{IntoResponse, Json},
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
 };
 use sea_orm::{
@@ -24,12 +24,10 @@ mod game_logic;
 mod combat;
 mod entities; 
 
-use entities::planet;
-use entities::combat_log;
-use entities::fleet_mission;
-use entities::transport_log;
-use entities::user as users;
-
+// --- IMPORT DU PRELUDE (CRUCIAL POUR EVITER LES ERREURS DE TYPE) ---
+use entities::prelude::*;
+// On garde les modules pour accéder aux colonnes spécifiques (ex: planet::Column)
+use entities::{planet, user, combat_log, fleet_mission, transport_log, message};
 
 #[derive(Clone)]
 struct AppState {
@@ -38,12 +36,15 @@ struct AppState {
 
 #[derive(Serialize)]
 struct RankItem {
-    rank: usize,
+   rank: usize,
     username: String,
     planet_name: String,
-    score: i32,
+    total_score: i32,
+    economy_score: i32,
+    military_score: i32,
     is_me: bool,
     id: Uuid,
+    owner_id: Uuid,
 }
 
 #[derive(Deserialize)]
@@ -51,6 +52,24 @@ struct AttackPayload {
     target_planet_id: Uuid,
     hunters: i32,
     cruisers: i32,
+}
+
+#[derive(Deserialize)]
+struct SendMessagePayload {
+    recipient_name: String,
+    subject: String,
+    content: String,
+}
+
+#[derive(Serialize)]
+struct MessageDisplay {
+    id: Uuid,
+    sender_id: Uuid,
+    sender_name: String,
+    subject: String,
+    content: String,
+    is_read: bool,
+    created_at: chrono::NaiveDateTime,
 }
 
 #[tokio::main]
@@ -64,30 +83,40 @@ async fn main() {
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST])
+        .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_headers(Any);
  
     let app = Router::new()
+        // Auth
         .route("/register", post(auth::register_handler))
-        .route("/config", get(get_game_config_handler))
         .route("/login", post(auth::login_handler))
+        // Config
+        .route("/config", get(get_game_config_handler))
+        // Planets
         .route("/planets/:id", get(get_planet_handler))
         .route("/planets/:id/upgrade/:type", post(upgrade_mine_handler))
         .route("/planets/:id/build-fleet/:type/:qty", post(build_fleet_handler))
         .route("/planets/:id/expedition", post(expedition_handler))
         .route("/planets/:id/clear-report", post(clear_report_handler))
-        .route("/ranking", get(get_ranking_handler))
-        .route("/attack", post(attack_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
         .route("/planets/:id/transport-logs", get(get_transport_logs_handler))
+        .route("/planets/:id/rename", post(rename_planet_handler))
+        .route("/my-planets", get(get_my_planets_handler))
+        // Actions
+        .route("/attack", post(attack_handler))
         .route("/spy", post(spy_handler))
         .route("/recycle", post(recycle_handler))
+        .route("/transport", post(transport_handler))
+        .route("/colonize", post(colonize_handler))
+        // Galaxy & Ranking
+        .route("/ranking", get(get_ranking_handler))
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
         .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
-        .route("/colonize", post(colonize_handler))
-        .route("/my-planets", get(get_my_planets_handler))
-        .route("/transport", post(transport_handler))
-        .route("/planets/:id/rename", post(rename_planet_handler))
+        // Messagerie
+        .route("/messages", get(get_messages_handler))
+        .route("/messages/send", post(send_message_handler))
+        .route("/messages/:id", delete(delete_message_handler))
+        .route("/messages/:id/read", post(mark_message_read_handler))
         .layer(cors)
         .with_state(state);
 
@@ -97,12 +126,124 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-// --- HANDLERS ---
+// --- HANDLERS MESSAGERIE ---
+
+async fn get_messages_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
+    let user_id = match Uuid::parse_str(&user_id_str) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "User ID invalide"}))).into_response(),
+    };
+
+    // Utilisation de Message (du prelude) au lieu de message::Entity
+    let messages = Message::find()
+        .filter(message::Column::ReceiverId.eq(user_id))
+        .order_by_desc(message::Column::CreatedAt)
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    let sender_ids: Vec<Uuid> = messages.iter().map(|m| m.sender_id).collect();
+    
+    if sender_ids.is_empty() {
+        return Json(Vec::<MessageDisplay>::new()).into_response();
+    }
+
+    let senders = User::find()
+        .filter(user::Column::Id.is_in(sender_ids))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    let sender_map: HashMap<Uuid, String> = senders.into_iter().map(|u| (u.id, u.username)).collect();
+
+    let display_list: Vec<MessageDisplay> = messages.into_iter().map(|m| {
+        let sender_name = sender_map.get(&m.sender_id).cloned().unwrap_or("Inconnu".to_string());
+        MessageDisplay {
+            id: m.id,
+            sender_id: m.sender_id,
+            sender_name,
+            subject: m.subject,
+            content: m.content,
+            is_read: m.is_read,
+            created_at: m.created_at,
+        }
+    }).collect();
+
+    Json(display_list).into_response()
+}
+
+async fn send_message_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<SendMessagePayload>,
+) -> impl IntoResponse {
+    
+    let sender_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
+    let sender_id = match Uuid::parse_str(&sender_id_str) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Expéditeur invalide"}))).into_response(),
+    };
+
+// 1. Trouver l'ID du destinataire à partir du nom
+    let recipient = User::find()
+        .filter(user::Column::Username.eq(&payload.recipient_name))
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    let recipient_id = match recipient {
+        Some(u) => u.id,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Commandant introuvable"}))).into_response(),
+    };
+
+ // 2. Créer le message
+    let new_message = message::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        sender_id: Set(sender_id),
+        receiver_id: Set(recipient_id),
+        subject: Set(payload.subject),
+        content: Set(payload.content),
+        created_at: Set(Utc::now().naive_utc()),
+        is_read: Set(false),
+    };
+
+    if let Err(e) = new_message.insert(&state.db).await {
+        println!("Erreur envoi message: {:?}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur envoi"}))).into_response();
+    }
+
+    StatusCode::OK.into_response()
+}
+
+async fn mark_message_read_handler(
+    Path(message_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let msg = Message::find_by_id(message_id).one(&state.db).await.unwrap_or(None);
+    if let Some(m) = msg {
+        let mut active = m.into_active_model();
+        active.is_read = Set(true);
+        let _ = active.update(&state.db).await;
+    }
+    StatusCode::OK.into_response()
+}
+
+async fn delete_message_handler(
+    Path(message_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let _ = Message::delete_by_id(message_id).exec(&state.db).await;
+    StatusCode::OK.into_response()
+}
+
+// --- HANDLERS JEU ---
 
 async fn get_game_config_handler() -> impl IntoResponse {
-    Json(json!({
-        "speed_factor": game_logic::SPEED_FACTOR
-    }))
+    Json(json!({ "speed_factor": game_logic::SPEED_FACTOR }))
 }
 
 async fn get_ranking_handler(
@@ -110,46 +251,51 @@ async fn get_ranking_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     
-    let current_planet_id = params.get("current_planet_id")
-        .and_then(|s| Uuid::parse_str(s).ok())
-        .unwrap_or_default();
+    let current_planet_id = params.get("current_planet_id").and_then(|s| Uuid::parse_str(s).ok()).unwrap_or_default();
+    // Récupérer le type de tri (general, economy, military)
+    let sort_type = params.get("type").map(|s| s.as_str()).unwrap_or("general");
 
-    // 1. Récupérer toutes les planètes
-    let planets = planet::Entity::find().all(&state.db).await.unwrap_or_default();
+    let planets = Planet::find().all(&state.db).await.unwrap_or_default();
+    let users = User::find().all(&state.db).await.unwrap_or_default();
     
-    // 2. Récupérer tous les users pour avoir les noms
-    let users = users::Entity::find().all(&state.db).await.unwrap_or_default();
-    
-    // Créer une Map : OwnerID -> Username
     let user_map: HashMap<Uuid, String> = users.into_iter()
         .map(|u| (u.id, u.username))
         .collect();
 
     let mut ranked_planets: Vec<RankItem> = planets.into_iter().map(|p| {
-        let score = (p.metal_mine_level + p.crystal_mine_level + p.deuterium_mine_level 
-                     + p.energy_tech_level + p.research_lab_level + p.laser_battery_level) * 100
-                     + (p.light_hunter_count + p.cruiser_count + p.recycler_count) * 10
-                     + (p.missile_launcher_count + p.plasma_turret_count) * 20;
+        // Calcul des scores détaillés
+        let economy = (p.metal_mine_level + p.crystal_mine_level + p.deuterium_mine_level 
+                     + p.energy_tech_level + p.research_lab_level) * 100;
         
-        // Trouver le nom du joueur, sinon "Inconnu"
+        let military = (p.light_hunter_count + p.cruiser_count + p.recycler_count + p.colony_ship_count + p.transporter_count + p.spy_probe_count) * 10
+                     + (p.missile_launcher_count + p.plasma_turret_count) * 20
+                     + (p.laser_battery_level * 50);
+
+        let total = economy + military;
+        
         let username = user_map.get(&p.owner_id).cloned().unwrap_or("Inconnu".to_string());
 
-        RankItem {
+ RankItem {
             rank: 0, 
-            username, // <--- On remplit le champ
+            username,
             planet_name: p.name,
-            score,
+            total_score: total,
+            economy_score: economy,
+            military_score: military,
             is_me: p.id == current_planet_id,
             id: p.id,
+            owner_id: p.owner_id,
         }
     }).collect();
 
-    ranked_planets.sort_by(|a, b| b.score.cmp(&a.score));
-
-    for (i, item) in ranked_planets.iter_mut().enumerate() {
-        item.rank = i + 1;
+ // Tri selon le type demandé
+    match sort_type {
+        "economy" => ranked_planets.sort_by(|a, b| b.economy_score.cmp(&a.economy_score)),
+        "military" => ranked_planets.sort_by(|a, b| b.military_score.cmp(&a.military_score)),
+        _ => ranked_planets.sort_by(|a, b| b.total_score.cmp(&a.total_score)),
     }
 
+    for (i, item) in ranked_planets.iter_mut().enumerate() { item.rank = i + 1; }
     Json(ranked_planets)
 }
 
@@ -158,11 +304,7 @@ async fn get_planet_handler(
     State(state): State<AppState>,
 ) -> Result<Json<planet::Model>, StatusCode> {
     
-    let p_opt = planet::Entity::find_by_id(id)
-        .one(&state.db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
+    let p_opt = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let p = p_opt.ok_or(StatusCode::NOT_FOUND)?;
     
     let now = Utc::now().naive_utc();
@@ -170,6 +312,7 @@ async fn get_planet_handler(
 
     let mut active: planet::ActiveModel = p.clone().into();
 
+    // 1. Mise à jour des Ressources
     if elapsed > 0 {
         let new_metal = game_logic::calculate_resources(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update);
         let new_crystal = game_logic::calculate_resources(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update);
@@ -181,6 +324,7 @@ async fn get_planet_handler(
         active.last_update = Set(now);
     }
 
+    // 2. Fin de construction Bâtiments
     if let Some(end_date) = p.construction_end {
         if now >= end_date {
             let type_str = p.construction_type.clone().unwrap_or_default();
@@ -199,6 +343,7 @@ async fn get_planet_handler(
         }
     }
 
+    // 3. Fin de construction Flotte / Défense
     if let Some(fleet_end) = p.shipyard_construction_end {
         if now >= fleet_end {
             let fleet_str = p.pending_fleet_type.clone().unwrap_or_default();
@@ -220,14 +365,15 @@ async fn get_planet_handler(
         }
     }
     
+    // 4. Fin Expédition
     if let Some(exp_end) = p.expedition_end {
         if now >= exp_end {
             active.expedition_end = Set(None);
         }
     }
 
-    // --- GESTION DES FLOTTES EN ARRIVÉE (TRANSPORT) ---
-  let missions = fleet_mission::Entity::find()
+    // 5. Arrivée des Transports (Fleet Missions)
+    let missions = FleetMission::find()
         .filter(fleet_mission::Column::TargetPlanetId.eq(id))
         .filter(fleet_mission::Column::ArrivalTime.lte(now))
         .all(&state.db)
@@ -235,15 +381,9 @@ async fn get_planet_handler(
         .unwrap_or_default();
 
     for m in missions {
-        // 1. Trouver le nom de l'expéditeur pour le Toast
-        let source_planet = planet::Entity::find_by_id(m.source_planet_id)
-            .one(&state.db)
-            .await
-            .ok()
-            .flatten();
+        let source_planet = Planet::find_by_id(m.source_planet_id).one(&state.db).await.ok().flatten();
         let sender_name = source_planet.map(|sp| sp.name).unwrap_or("Inconnu".to_string());
 
-        // 2. Créditer les ressources et rendre les vaisseaux
         let current_m = active.metal_amount.clone().unwrap();
         let current_c = active.crystal_amount.clone().unwrap();
         let current_d = active.deuterium_amount.clone().unwrap();
@@ -254,7 +394,7 @@ async fn get_planet_handler(
         active.deuterium_amount = Set(current_d + m.deuterium);
         active.transporter_count = Set(current_ships + m.ships_count);
 
-        // 3. Juste la notification (Le log est déjà en DB depuis le départ)
+        // Notification
         let report = json!({
             "type": "transport_arrival",
             "sender_name": sender_name,
@@ -265,8 +405,8 @@ async fn get_planet_handler(
         });
         active.unread_report = Set(Some(to_string(&report).unwrap()));
 
-        // 4. On supprime la mission
-        let _ = fleet_mission::Entity::delete_by_id(m.id).exec(&state.db).await;
+        // Suppression de la mission
+        let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
     }
 
     // Sauvegarde finale
@@ -278,14 +418,12 @@ async fn clear_report_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let p = match planet::Entity::find_by_id(id).one(&state.db).await {
+    let p = match Planet::find_by_id(id).one(&state.db).await {
         Ok(Some(p)) => p,
         _ => return StatusCode::NOT_FOUND,
     };
-
     let mut active: planet::ActiveModel = p.into();
     active.unread_report = Set(None);
-    
     let _ = active.update(&state.db).await;
     StatusCode::OK
 }
@@ -294,7 +432,7 @@ async fn upgrade_mine_handler(
     Path((id, type_mine)): Path<(Uuid, String)>,
     State(state): State<AppState>,
 ) -> Result<StatusCode, StatusCode> {
-    let p = planet::Entity::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if p.construction_end.is_some() { return Err(StatusCode::CONFLICT); }
 
@@ -332,7 +470,7 @@ async fn build_fleet_handler(
     Path((id, type_ship, qty)): Path<(Uuid, String, i32)>,
     State(state): State<AppState>,
 ) -> Result<StatusCode, StatusCode> {
-    let p = planet::Entity::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if p.shipyard_construction_end.is_some() || qty <= 0 { return Err(StatusCode::CONFLICT); }
 
@@ -382,12 +520,12 @@ async fn attack_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Impossible de s'attaquer soi-même"}))).into_response();
     }
 
-    let att_planet = match planet::Entity::find_by_id(attacker_id).one(&state.db).await {
+    let att_planet = match Planet::find_by_id(attacker_id).one(&state.db).await {
         Ok(Some(p)) => p,
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Attaquant introuvable"}))).into_response(),
     };
 
-    let def_planet = match planet::Entity::find_by_id(payload.target_planet_id).one(&state.db).await {
+    let def_planet = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await {
         Ok(Some(p)) => p,
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible introuvable"}))).into_response(),
     };
@@ -417,7 +555,7 @@ async fn attack_handler(
         def_resources 
     );
 
-    // --- LOG POUR LE DÉFENSEUR ---
+    // Log Défenseur
     let log_def = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(def_planet.id),
@@ -441,7 +579,7 @@ async fn attack_handler(
     def_active.missile_launcher_count = Set((def_planet.missile_launcher_count as f64 * (1.0 - percent_loss)) as i32);
     def_active.plasma_turret_count = Set((def_planet.plasma_turret_count as f64 * (1.0 - percent_loss)) as i32);
 
-    // Ajout des débris pour le défenseur
+    // Débris
     def_active.debris_metal = Set(def_planet.debris_metal + result.debris.metal);
     def_active.debris_crystal = Set(def_planet.debris_crystal + result.debris.crystal);
 
@@ -455,7 +593,7 @@ async fn attack_handler(
     def_active.unread_report = Set(Some(to_string(&defender_report).unwrap()));
     let _ = def_active.update(&state.db).await;
 
-    // --- LOG POUR L'ATTAQUANT ---
+    // Log Attaquant
     let log_att = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(att_planet.id),
@@ -484,7 +622,7 @@ async fn expedition_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse { 
     
-    let p_res = planet::Entity::find_by_id(id).one(&state.db).await;
+    let p_res = Planet::find_by_id(id).one(&state.db).await;
     let p = match p_res {
         Ok(Some(found)) => found,
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
@@ -547,7 +685,7 @@ async fn expedition_handler(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB Update Error"}))).into_response();
     }
     
-    let updated_planet = planet::Entity::find_by_id(id).one(&state.db).await.unwrap().unwrap();
+    let updated_planet = Planet::find_by_id(id).one(&state.db).await.unwrap().unwrap();
 
     let log_exp = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -582,7 +720,7 @@ async fn get_reports_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Json<Vec<combat_log::Model>> {
-    let logs = combat_log::Entity::find()
+    let logs = CombatLog::find()
         .filter(combat_log::Column::PlanetId.eq(id))
         .order_by_desc(combat_log::Column::Date)
         .limit(50)
@@ -597,7 +735,7 @@ async fn get_transport_logs_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Json<Vec<transport_log::Model>> {
-    let logs = transport_log::Entity::find()
+    let logs = TransportLog::find()
         .filter(
             Condition::any()
                 .add(transport_log::Column::TargetPlanetId.eq(id))
@@ -633,8 +771,8 @@ async fn spy_handler(
     let attacker_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let attacker_id = Uuid::parse_str(&attacker_id_str).unwrap_or_default();
     
-    let att_planet_opt = planet::Entity::find_by_id(attacker_id).one(&state.db).await.unwrap();
-    let def_planet_opt = planet::Entity::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap();
+    let att_planet_opt = Planet::find_by_id(attacker_id).one(&state.db).await.unwrap();
+    let def_planet_opt = Planet::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap();
 
     let att_planet = match att_planet_opt { Some(p) => p, None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Attaquant inconnu"}))).into_response() };
     let def_planet = match def_planet_opt { Some(p) => p, None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible inconnue"}))).into_response() };
@@ -706,28 +844,24 @@ async fn recycle_handler(
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
 
-    // Utilisation de into_active_model()
-    let mut att_planet = match planet::Entity::find_by_id(current_id).one(&state.db).await.unwrap() {
+    // Utilisation de Planet::find_by_id
+    let mut att_planet = match Planet::find_by_id(current_id).one(&state.db).await.unwrap() {
         Some(p) => p.into_active_model(),
         None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète inconnue"}))).into_response(),
     };
 
-    let target_res = planet::Entity::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap();
+    let target_res = Planet::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap();
     let mut target_planet = match target_res {
         Some(p) => p.into_active_model(),
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible inconnue"}))).into_response(),
     };
 
-    // 1. Vérification Flotte
     let current_recyclers = att_planet.recycler_count.clone().unwrap();
     if payload.recyclers > current_recyclers || payload.recyclers <= 0 {
          return (StatusCode::BAD_REQUEST, Json(json!({"error": "Recycleurs insuffisants"}))).into_response();
     }
 
-    // 2. Capacité (20k par recycleur)
     let capacity = (payload.recyclers as f64) * 20000.0;
-    
-    // 3. Récupération
     let debris_m = target_planet.debris_metal.clone().unwrap();
     let debris_c = target_planet.debris_crystal.clone().unwrap();
     let total_debris = debris_m + debris_c;
@@ -739,28 +873,22 @@ async fn recycle_handler(
          }))).into_response();
     }
 
-    // Logique simple : on prend tout ce qu'on peut, priorité Métal puis Cristal
     let mut harvested_m = 0.0;
     let mut harvested_c = 0.0;
     let mut remaining_capacity = capacity;
 
-    // Récolte Métal
     if debris_m > 0.0 {
         let take = f64::min(debris_m, remaining_capacity);
         harvested_m = take;
         remaining_capacity -= take;
         target_planet.debris_metal = Set(debris_m - take);
     }
-
-    // Récolte Cristal (s'il reste de la place)
     if debris_c > 0.0 && remaining_capacity > 0.0 {
         let take = f64::min(debris_c, remaining_capacity);
         harvested_c = take;
         target_planet.debris_crystal = Set(debris_c - take);
     }
 
-    // 4. Mise à jour DB
-    // On crédite l'attaquant
     att_planet.metal_amount = Set(att_planet.metal_amount.unwrap() + harvested_m);
     att_planet.crystal_amount = Set(att_planet.crystal_amount.unwrap() + harvested_c);
 
@@ -775,7 +903,6 @@ async fn recycle_handler(
 }
 
 // --- GALAXY SLOTS ---
-// C'est la structure que tu demandais !
 #[derive(Serialize)]
 struct GalaxySlot {
     position: i32,
@@ -787,7 +914,6 @@ struct GalaxySlot {
     is_me: bool,
 }
 
-// Handler GET /galaxy/:galaxy_id/:system_id
 async fn get_galaxy_handler(
     Path((galaxy_id, system_id)): Path<(i32, i32)>,
     State(state): State<AppState>,
@@ -797,31 +923,27 @@ async fn get_galaxy_handler(
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
 
-    // 1. Récupérer toutes les planètes de ce système
-    let planets = planet::Entity::find()
+    let planets = Planet::find()
         .filter(planet::Column::Galaxy.eq(galaxy_id))
         .filter(planet::Column::System.eq(system_id))
         .all(&state.db)
         .await
         .unwrap_or_default();
 
-    // 2. Construire la liste des 15 positions (vides ou occupées)
     let mut slots: Vec<GalaxySlot> = Vec::new();
 
     for pos in 1..=15 {
-        // Chercher si une planète existe à cette position
         if let Some(p) = planets.iter().find(|p| p.position == pos) {
             slots.push(GalaxySlot {
                 position: pos,
                 planet_id: Some(p.id),
                 planet_name: Some(p.name.clone()),
-                owner_name: Some(p.name.clone()), // Simplification
-                owner_id: Some(p.owner_id), // On met Some(p.owner_id) pour renvoyer une Option<Uuid>
+                owner_name: Some(p.name.clone()),
+                owner_id: Some(p.owner_id),
                 has_debris: p.debris_metal > 0.0 || p.debris_crystal > 0.0,
                 is_me: p.id == current_id,
             });
         } else {
-            // Emplacement vide
             slots.push(GalaxySlot {
                 position: pos,
                 planet_id: None,
@@ -837,7 +959,6 @@ async fn get_galaxy_handler(
     Json(slots)
 }
 
-// Structure légère pour la carte
 #[derive(Serialize)]
 struct SystemSummary {
     system: i32,
@@ -845,7 +966,6 @@ struct SystemSummary {
     has_me: bool,
 }
 
-// Handler: GET /galaxy/:galaxy_id/scan
 async fn get_galaxy_scan_handler(
     Path(galaxy_id): Path<i32>,
     State(state): State<AppState>,
@@ -855,14 +975,12 @@ async fn get_galaxy_scan_handler(
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
 
-    // On récupère toutes les planètes de la galaxie (optimisable avec raw sql plus tard)
-    let planets = planet::Entity::find()
+    let planets = Planet::find()
         .filter(planet::Column::Galaxy.eq(galaxy_id))
         .all(&state.db)
         .await
         .unwrap_or_default();
 
-    // On aggrège par système
     let mut systems_map: HashMap<i32, SystemSummary> = HashMap::new();
 
     for p in planets {
@@ -884,12 +1002,10 @@ async fn get_galaxy_scan_handler(
 fn generate_colony_name() -> String {
     let prefixes = ["Néo", "Alpha", "Terra", "Nova", "Proxima", "Sector", "Base", "Outpost"];
     let suffixes = ["Prime", "Secundus", "X", "Y", "Z", "Major", "Minor", "Delta", "Omicron"];
-    
     let mut rng = rand::thread_rng();
     let prefix = prefixes[rng.gen_range(0..prefixes.len())];
     let suffix = suffixes[rng.gen_range(0..suffixes.len())];
     let num = rng.gen_range(1..999);
-
     format!("{} {} {}", prefix, suffix, num)
 }
 
@@ -909,20 +1025,17 @@ async fn colonize_handler(
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
 
-    // 1. Charger la planète mère
-    let mut att_planet = match planet::Entity::find_by_id(current_id).one(&state.db).await.unwrap() {
+    let mut att_planet = match Planet::find_by_id(current_id).one(&state.db).await.unwrap() {
         Some(p) => p.into_active_model(),
         None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète inconnue"}))).into_response(),
     };
 
-    // 2. Vérifier Vaisseau
     let ships = att_planet.colony_ship_count.clone().unwrap();
     if ships < 1 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucun vaisseau de colonisation disponible"}))).into_response();
     }
 
-    // 3. Vérifier si la place est libre
-    let exists = planet::Entity::find()
+    let exists = Planet::find()
         .filter(planet::Column::Galaxy.eq(payload.galaxy))
         .filter(planet::Column::System.eq(payload.system))
         .filter(planet::Column::Position.eq(payload.position))
@@ -934,23 +1047,19 @@ async fn colonize_handler(
         return (StatusCode::CONFLICT, Json(json!({"error": "Cet emplacement est déjà occupé"}))).into_response();
     }
 
-    // 4. Créer la Colonie
     let owner_id = att_planet.owner_id.clone().unwrap();
     let password = att_planet.password.clone().unwrap();
-    
     let colony_name = generate_colony_name();
-    
     let new_id = Uuid::new_v4();
+    
     let new_planet = planet::ActiveModel {
         id: Set(new_id),
         owner_id: Set(owner_id),
         name: Set(colony_name),
         password: Set(password), 
-        
         galaxy: Set(payload.galaxy),
         system: Set(payload.system),
         position: Set(payload.position),
-
         metal_mine_level: Set(1),
         crystal_mine_level: Set(1),
         deuterium_mine_level: Set(1),
@@ -960,7 +1069,6 @@ async fn colonize_handler(
         ..Default::default()
     };
 
-    // 5. Consommer le vaisseau
     att_planet.colony_ship_count = Set(ships - 1);
 
     let _ = att_planet.update(&state.db).await;
@@ -979,19 +1087,15 @@ async fn get_my_planets_handler(
 ) -> impl IntoResponse {
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
-
-    // Trouver le owner_id de la planète actuelle
-    let current = planet::Entity::find_by_id(current_id).one(&state.db).await.unwrap();
+    let current = Planet::find_by_id(current_id).one(&state.db).await.unwrap();
     
     if let Some(p) = current {
-        // Trouver toutes les planètes avec le même owner_id
-        let my_planets = planet::Entity::find()
+        let my_planets = Planet::find()
             .filter(planet::Column::OwnerId.eq(p.owner_id))
             .all(&state.db)
             .await
             .unwrap_or_default();
             
-        // On renvoie une liste simplifiée
         let list: Vec<serde_json::Value> = my_planets.into_iter().map(|mp| json!({
             "id": mp.id,
             "name": mp.name,
@@ -1029,24 +1133,21 @@ async fn transport_handler(
          return (StatusCode::BAD_REQUEST, Json(json!({"error": "Impossible de transporter vers la même planète"}))).into_response();
     }
 
-    // 1. Charger Source et Cible (Lecture)
-    let source_model = match planet::Entity::find_by_id(current_id).one(&state.db).await.unwrap() {
+    let source_model = match Planet::find_by_id(current_id).one(&state.db).await.unwrap() {
         Some(p) => p,
         None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète source inconnue"}))).into_response(),
     };
 
-    let target_model = match planet::Entity::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap() {
+    let target_model = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap() {
         Some(p) => p,
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète cible inconnue"}))).into_response(),
     };
 
-    // --- CRITIQUE : SAUVEGARDE DES NOMS AVANT MODIFICATION ---
     let source_name = source_model.name.clone();
     let source_id = source_model.id;
     let target_name = target_model.name.clone();
     let target_id = target_model.id;
 
-    // 2. Vérifications
     if payload.transporters > source_model.transporter_count || payload.transporters <= 0 {
          return (StatusCode::BAD_REQUEST, Json(json!({"error": "Transporteurs insuffisants"}))).into_response();
     }
@@ -1055,10 +1156,6 @@ async fn transport_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ressources insuffisantes"}))).into_response();
     }
     
-    if payload.metal < 0.0 || payload.crystal < 0.0 || payload.deuterium < 0.0 {
-         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Valeurs négatives interdites"}))).into_response();
-    }
-
     let total_load = payload.metal + payload.crystal + payload.deuterium;
     let capacity = payload.transporters as f64 * game_logic::TRANSPORTER_CAPACITY;
 
@@ -1066,18 +1163,15 @@ async fn transport_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Surcharge !"}))).into_response();
     }
 
-    // 3. Calcul Temps de Vol
     let flight_duration = calculate_flight_time(source_model.system, target_model.system, game_logic::SPEED_FACTOR);
     let arrival = Utc::now().naive_utc() + Duration::seconds(flight_duration);
 
-    // 4. Mise à jour Source (On consomme source_model ici)
     let mut source: planet::ActiveModel = source_model.into();
     source.metal_amount = Set(source.metal_amount.unwrap() - payload.metal);
     source.crystal_amount = Set(source.crystal_amount.unwrap() - payload.crystal);
     source.deuterium_amount = Set(source.deuterium_amount.unwrap() - payload.deuterium);
     source.transporter_count = Set(source.transporter_count.unwrap() - payload.transporters);
 
-    // 5. Création Mission (La flotte qui part)
     let mission = fleet_mission::ActiveModel {
         id: Set(Uuid::new_v4()),
         source_planet_id: Set(source_id),
@@ -1090,8 +1184,6 @@ async fn transport_handler(
         ships_count: Set(payload.transporters),
     };
 
-    // 6. Création LOG (Historique immédiat)
-    // C'est ici que ça échouait avant si la migration n'était pas faite
     let log = transport_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         target_planet_id: Set(target_id),
@@ -1104,7 +1196,6 @@ async fn transport_handler(
         date: Set(Utc::now().naive_utc()),
     };
 
-    // Exécution des requêtes
     let _ = source.update(&state.db).await;
     let _ = mission.insert(&state.db).await;
     let _ = log.insert(&state.db).await;
@@ -1115,6 +1206,7 @@ async fn transport_handler(
     }))).into_response()
 }
 
+// --- STRUCTURE MANQUANTE AJOUTÉE ICI ---
 #[derive(Deserialize)]
 struct RenamePlanetPayload {
     new_name: String,
@@ -1125,10 +1217,9 @@ async fn rename_planet_handler(
     State(state): State<AppState>,
     Json(payload): Json<RenamePlanetPayload>,
 ) -> impl IntoResponse {
-    let p_opt = planet::Entity::find_by_id(id).one(&state.db).await.unwrap();
+    let p_opt = Planet::find_by_id(id).one(&state.db).await.unwrap();
     
     if let Some(p) = p_opt {
-        // Validation : pas de nom vide et pas trop long
         if payload.new_name.trim().is_empty() || payload.new_name.len() > 20 {
              return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nom invalide (1-20 caractères)"}))).into_response();
         }

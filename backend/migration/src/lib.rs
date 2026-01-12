@@ -19,7 +19,7 @@ mod m20260111_210917_add_colony_ship;
 mod m20260111_213610_add_transporter;
 mod m20260111_222219_create_fleet_mission;
 mod m20260111_223746_create_transport_log;
-
+mod m20260112_004006_create_message_table;
 
 pub struct Migrator;
 
@@ -46,7 +46,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260111_213610_add_transporter::Migration),
             Box::new(m20260111_222219_create_fleet_mission::Migration),
             Box::new(m20260111_223746_create_transport_log::Migration),
-
+            Box::new(m20260112_004006_create_message_table::Migration),
         ]
     }
 }
