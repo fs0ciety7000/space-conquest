@@ -1,15 +1,15 @@
 import { 
   Stone, Gem, MapPin, Shield, Rocket, Globe, Scan, 
   Zap, Hammer, Clock, TrendingUp, AlertTriangle, 
-  Droplets, Microscope, ChevronRight
+  Droplets, Microscope, Warehouse 
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useState, useEffect } from "react";
 
-// --- Dictionnaire de noms ---
+// --- Helper pour les noms ---
 const getLabel = (id: string | null) => {
-    if (!id) return "Inconnu";
+    if (!id) return null;
     const labels: Record<string, string> = {
         // Bâtiments
         metal: "Mine de Métal",
@@ -18,6 +18,7 @@ const getLabel = (id: string | null) => {
         solar_plant: "Centrale Solaire",
         shipyard: "Chantier Spatial",
         research: "Labo de Recherche",
+        hangar: "Hangar à Vaisseaux",
         // Techs
         energy_tech: "Tech. Énergie",
         laser: "Tech. Laser",
@@ -38,7 +39,7 @@ const getLabel = (id: string | null) => {
 
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
   
-  // --- ÉTAT DES TIMERS ---
+  // --- TIMERS ---
   const [buildTime, setBuildTime] = useState<number | null>(null);
   const [fleetTime, setFleetTime] = useState<number | null>(null);
 
@@ -46,7 +47,6 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     const updateTimers = () => {
         const now = new Date().getTime();
 
-        // Timer Construction / Recherche
         if (planet.construction_end) {
             const end = new Date(planet.construction_end + "Z").getTime();
             setBuildTime(Math.max(0, Math.floor((end - now) / 1000)));
@@ -54,7 +54,6 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             setBuildTime(null);
         }
 
-        // Timer Chantier Spatial
         if (planet.shipyard_construction_end) {
             const end = new Date(planet.shipyard_construction_end + "Z").getTime();
             setFleetTime(Math.max(0, Math.floor((end - now) / 1000)));
@@ -62,14 +61,13 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             setFleetTime(null);
         }
     };
-
-    updateTimers(); // Appel immédiat
+    updateTimers();
     const interval = setInterval(updateTimers, 1000);
     return () => clearInterval(interval);
   }, [planet.construction_end, planet.shipyard_construction_end]);
 
 
-  // --- FORMULES DE PROD --- //
+  // --- CALCULS ---
   const calculateProduction = (level: number, baseFactor: number) => {
     const baseProd = baseFactor * level * Math.pow(1.1, level);
     return baseProd * speedFactor;
@@ -93,24 +91,32 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const energyNet = energyProd - energyCons;
   const energyPercent = energyCons > 0 ? Math.min(100, (energyCons / energyProd) * 100) : 0;
 
-  // Totaux Militaires
+  // Flotte & Hangar
   const totalFleet = (planet.light_hunter_count || 0) + (planet.cruiser_count || 0) + (planet.recycler_count || 0) + (planet.spy_probe_count || 0) + (planet.colony_ship_count || 0) + (planet.transporter_count || 0);
+  const hangarCap = 500 + ((planet.hangar_level || 0) * 500);
+  const hangarPercent = Math.min(100, (totalFleet / hangarCap) * 100);
+
   const totalDefense = (planet.missile_launcher_count || 0) + (planet.plasma_turret_count || 0);
   const firePower = (planet.light_hunter_count * 50) + (planet.cruiser_count * 400) + (planet.missile_launcher_count * 80);
 
   const fmt = (n: number) => Math.floor(n).toLocaleString();
 
+  // Détection du type de construction (Tech vs Bâtiment)
+  const isTech = ['research', 'energy_tech', 'laser', 'espionage'].includes(planet.construction_type);
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
-      {/* --- HEADER --- */}
+      {/* --- HEADER GLOBAL --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <Card className="lg:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative group">
+        {/* CARTE PRINCIPALE : INFO & FILES D'ATTENTE */}
+        <Card className="lg:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative group flex flex-col justify-between">
             <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1614730341194-75c607ae363c?q=80&w=2696&auto=format&fit=crop')] bg-cover bg-center opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent"></div>
             
-            <CardHeader className="relative z-10 flex flex-row items-center gap-6">
+            {/* Header Info */}
+            <CardHeader className="relative z-10 flex flex-row items-center gap-6 pb-2">
                 <div className="relative shrink-0">
                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 blur-md absolute animate-pulse"></div>
                     <div className="w-20 h-20 rounded-full bg-slate-900 border-2 border-indigo-400/50 flex items-center justify-center relative z-10 shadow-xl">
@@ -121,7 +127,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     <div className="flex flex-wrap items-center gap-3 mb-1">
                         <h2 className="text-3xl font-black uppercase text-white tracking-widest drop-shadow-md">{planet.name}</h2>
                         <div className="px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-[10px] text-green-400 font-bold uppercase tracking-wider animate-pulse">
-                            Opérationnel
+                            Système Nominal
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-slate-400 font-mono text-xs">
@@ -131,57 +137,64 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         </div>
                         <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5">
                             <Scan size={12} className="text-cyan-400" />
-                            <span>12,800 km</span>
+                            <span>Temp. 22°C</span>
                         </div>
                     </div>
                 </div>
             </CardHeader>
 
-            <CardContent className="relative z-10 pt-2 space-y-2">
+            {/* FILES D'ATTENTE (En bas de la carte) */}
+            <CardContent className="relative z-10 pt-0 pb-4 px-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                {/* 1. STATUS CONSTRUCTION (Bâtiments / Techs) */}
-                <div className={`p-3 border-l-2 backdrop-blur-sm rounded-r-lg flex items-center justify-between transition-colors ${buildTime !== null ? 'bg-indigo-950/40 border-indigo-500' : 'bg-black/40 border-slate-700'}`}>
+                {/* 1. ARCHITECTURE / TECH */}
+                <div className={`p-3 rounded border backdrop-blur-sm flex items-center justify-between transition-all ${buildTime !== null ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-black/40 border-white/5'}`}>
                     <div className="flex items-center gap-3">
-                        {['research', 'energy_tech', 'laser', 'espionage'].includes(planet.construction_type) 
-                            ? <Microscope size={16} className={buildTime !== null ? "text-indigo-400 animate-pulse" : "text-slate-600"} />
-                            : <Hammer size={16} className={buildTime !== null ? "text-indigo-400 animate-bounce" : "text-slate-600"} />
-                        }
+                        <div className={`p-2 rounded-full ${buildTime !== null ? 'bg-indigo-500/20 text-indigo-400' : 'bg-slate-800 text-slate-500'}`}>
+                            {isTech ? <Microscope size={16} /> : <Hammer size={16} />}
+                        </div>
                         <div>
-                            <p className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Architecture / R&D</p>
+                            <p className="text-[9px] uppercase text-slate-500 font-bold tracking-wider mb-0.5">
+                                {isTech ? "Recherche en cours" : "Infrastructure & Tech"}
+                            </p>
                             <p className={`text-xs font-bold ${buildTime !== null ? 'text-white' : 'text-slate-500 italic'}`}>
-                                {buildTime !== null ? getLabel(planet.construction_type) : "Aucun ordre en cours"}
+                                {getLabel(planet.construction_type) || "Aucun ordre"}
                             </p>
                         </div>
                     </div>
                     {buildTime !== null && (
-                        <div className="flex items-center gap-2 text-indigo-300 font-mono text-sm bg-black/30 px-2 py-1 rounded">
-                            <Clock size={12} className="animate-spin-slow" /> {buildTime}s
+                        <div className="text-indigo-300 font-mono text-xs font-bold bg-black/50 px-2 py-1 rounded border border-indigo-500/30">
+                            {buildTime}s
                         </div>
                     )}
                 </div>
 
-                {/* 2. STATUS CHANTIER SPATIAL (Flotte) */}
-                <div className={`p-3 border-l-2 backdrop-blur-sm rounded-r-lg flex items-center justify-between transition-colors ${fleetTime !== null ? 'bg-orange-950/40 border-orange-500' : 'bg-black/40 border-slate-700'}`}>
-                    <div className="flex items-center gap-3">
-                        <Rocket size={16} className={fleetTime !== null ? "text-orange-400 animate-pulse" : "text-slate-600"} />
-                        <div>
-                            <p className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Ligne de Production</p>
-                            <p className={`text-xs font-bold ${fleetTime !== null ? 'text-white' : 'text-slate-500 italic'}`}>
-                                {fleetTime !== null ? (
-                                    <span className="flex items-center gap-2">
-                                        {getLabel(planet.pending_fleet_type)} 
-                                        <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1 rounded">x{planet.pending_fleet_count}</span>
-                                    </span>
-                                ) : "Hangar inactif"}
-                            </p>
-                        </div>
-                    </div>
-                    {fleetTime !== null && (
-                        <div className="flex items-center gap-2 text-orange-300 font-mono text-sm bg-black/30 px-2 py-1 rounded">
-                            <Clock size={12} className="animate-spin-slow" /> {fleetTime}s
-                        </div>
-                    )}
-                </div>
+               {/* 2. CHANTIER SPATIAL */}
+<div className={`p-3 rounded border backdrop-blur-sm flex items-center justify-between transition-all ${fleetTime !== null ? 'bg-orange-900/20 border-orange-500/50' : 'bg-black/40 border-white/5'}`}>
+    <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-full ${fleetTime !== null ? 'bg-orange-500/20 text-orange-400' : 'bg-slate-800 text-slate-500'}`}>
+            <Rocket size={16} />
+        </div>
+        <div>
+            <p className="text-[9px] uppercase text-slate-500 font-bold tracking-wider mb-0.5">Ligne de Production</p>
+            <p className={`text-xs font-bold ${fleetTime !== null ? 'text-white' : 'text-slate-500 italic'}`}>
+                {fleetTime !== null ? (
+                    <span className="flex items-center gap-2">
+                        {getLabel(planet.pending_fleet_type)} 
+                        <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1 rounded border border-orange-500/30">x{planet.pending_fleet_count}</span>
+                    </span>
+                ) : (
+                    // MODIFICATION ICI : Texte plus clair
+                    "File d'attente vide"
+                )}
+            </p>
+        </div>
+    </div>
+    {fleetTime !== null && (
+        <div className="text-orange-300 font-mono text-xs font-bold bg-black/50 px-2 py-1 rounded border border-orange-500/30">
+            {fleetTime}s
+        </div>
+    )}
+</div>
 
             </CardContent>
         </Card>
@@ -239,6 +252,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400", border: "border-cyan-500/20" },
                 { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Droplets, color: "text-green-400", border: "border-green-500/20" },
                 { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400", border: "border-yellow-500/20" },
+                // Ajout du Hangar ici
+                { label: "Hangar Vaisseaux", level: planet.hangar_level || 0, icon: Warehouse, color: "text-orange-400", border: "border-orange-500/20" }, 
             ].map((mine) => (
                 <div key={mine.label} className={`bg-slate-900/50 border ${mine.border} p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors`}>
                     <div className="flex items-center gap-3 overflow-hidden">
@@ -302,10 +317,14 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             <Card className="bg-blue-950/10 border border-blue-500/20">
                 <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-blue-400">
-                        <span className="flex items-center gap-2"><Rocket size={14} /> Forces Spatiales (Stationnées)</span>
-                        <span className="bg-blue-500/20 px-2 py-1 rounded text-blue-300">{fmt(totalFleet)} Unités</span>
-                    </CardTitle>
+                    <div className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-blue-400">
+                        <span className="flex items-center gap-2"><Rocket size={14} /> Forces Spatiales</span>
+                        <span className="bg-blue-500/20 px-2 py-1 rounded text-blue-300">{fmt(totalFleet)} / {fmt(hangarCap)}</span>
+                    </div>
+                    {/* Jauge Hangar */}
+                    <div className="mt-2 w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div className={`h-full ${hangarPercent >= 90 ? 'bg-red-500 animate-pulse' : 'bg-blue-500'}`} style={{ width: `${hangarPercent}%` }}></div>
+                    </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-2">
