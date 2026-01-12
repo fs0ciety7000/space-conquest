@@ -1,7 +1,7 @@
 import { 
   Stone, Gem, MapPin, Shield, Rocket, Globe, Scan, 
   Zap, Hammer, Clock, TrendingUp, AlertTriangle, 
-  Droplets, Microscope, Warehouse, Activity, ChevronRight, List, XCircle
+  Droplets, Microscope, Warehouse, Activity, ChevronRight, List, XCircle, ShieldCheck, Sword
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -21,6 +21,7 @@ const getLabel = (id: string | null) => {
         hangar: "Hangar à Vaisseaux",
         energy_tech: "Tech. Énergie",
         laser: "Tech. Laser",
+        armour: "Tech. Protection",
         espionage: "Tech. Espionnage",
         light_hunter: "Chasseur Léger",
         cruiser: "Croiseur",
@@ -37,7 +38,7 @@ const getLabel = (id: string | null) => {
 const getItemType = (id: string) => {
     if (['light_hunter', 'cruiser', 'colony_ship', 'transporter', 'recycler', 'spy_probe'].includes(id)) return 'fleet';
     if (['missile_launcher', 'plasma_turret'].includes(id)) return 'defense';
-    if (['research', 'energy_tech', 'laser', 'espionage'].includes(id)) return 'tech';
+    if (['research', 'energy_tech', 'laser', 'espionage', 'armour'].includes(id)) return 'tech';
     return 'building';
 };
 
@@ -99,10 +100,27 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const energyNet = energyProd - energyCons;
   const energyPercent = energyCons > 0 ? Math.min(100, (energyCons / energyProd) * 100) : 0;
 
+  // --- CALCULS MILITAIRES AVANCÉS ---
+  const atkBonus = 1 + ((planet.laser_battery_level || 0) * 0.1);
+  const hullBonus = 1 + ((planet.armour_tech_level || 0) * 0.1);
+
+  const totalAtk = (
+    (planet.light_hunter_count * 50) + 
+    (planet.cruiser_count * 400) + 
+    (planet.missile_launcher_count * 80) + 
+    (planet.plasma_turret_count * 3000)
+  ) * atkBonus;
+
+  const totalHull = (
+    (planet.light_hunter_count * 400) + 
+    (planet.cruiser_count * 2700) + 
+    (planet.missile_launcher_count * 200) + 
+    (planet.plasma_turret_count * 10000)
+  ) * hullBonus;
+
   const totalFleet = (planet.light_hunter_count || 0) + (planet.cruiser_count || 0) + (planet.recycler_count || 0) + (planet.spy_probe_count || 0) + (planet.colony_ship_count || 0) + (planet.transporter_count || 0);
   const hangarCap = 500 + ((planet.hangar_level || 0) * 500);
   const totalDefense = (planet.missile_launcher_count || 0) + (planet.plasma_turret_count || 0);
-  const firePower = (planet.light_hunter_count * 50) + (planet.cruiser_count * 400) + (planet.missile_launcher_count * 80);
 
   const fmt = (n: number) => Math.floor(n).toLocaleString();
   const constructionQueue = planet.constructions || [];
@@ -113,6 +131,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* CARTE PLANETE ET FILE */}
         <Card className="lg:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative group flex flex-col justify-between">
             <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1614730341194-75c607ae363c?q=80&w=2696&auto=format&fit=crop')] bg-cover bg-center opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent"></div>
@@ -129,11 +148,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         <h2 className="text-3xl font-black uppercase text-white tracking-widest drop-shadow-md">{planet.name}</h2>
                         <div className="px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-[10px] text-green-400 font-bold uppercase tracking-wider">Opérationnel</div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-4 text-slate-400 font-mono text-xs">
-                        <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5">
-                            <MapPin size={12} className="text-indigo-400" />
-                            <span>[{planet.galaxy}:{planet.system}:{planet.position}]</span>
-                        </div>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5 font-mono text-xs text-slate-400">
+                        <MapPin size={12} className="text-indigo-400" />
+                        <span>[{planet.galaxy}:{planet.system}:{planet.position}]</span>
                     </div>
                 </div>
             </CardHeader>
@@ -155,7 +172,6 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 const tl = getTimeLeft(item.end_time);
                                 const type = getItemType(item.building_type);
                                 const label = getLabel(item.building_type);
-                                // On simule l'affichage du ratio côté UI pour le survol
                                 const refundPercent = index === 0 ? Math.max(0, Math.min(95, Math.round((tl / 60) * 100))) : 95;
 
                                 let Icon = Hammer;
@@ -176,25 +192,19 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                                 </span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex items-center gap-2 text-indigo-300 font-mono bg-black/40 px-2 py-1 rounded border border-white/5 text-[10px]">
+                                        <div className="flex items-center gap-2 text-[10px]">
+                                            <div className="flex items-center gap-2 text-indigo-300 font-mono bg-black/40 px-2 py-1 rounded border border-white/5">
                                                 <Clock size={10} className={index === 0 ? "animate-spin-slow" : ""} />
                                                 {tl}s
                                             </div>
-
                                             <div className="relative group/cancel">
-                                                <button 
-                                                    onClick={() => cancelOperation(item.id)}
-                                                    className="text-slate-600 hover:text-red-500 transition-colors p-1"
-                                                >
+                                                <button onClick={() => cancelOperation(item.id)} className="text-slate-600 hover:text-red-500 transition-colors p-1">
                                                     <XCircle size={16} />
                                                 </button>
-                                                
                                                 <div className="absolute bottom-full right-0 mb-2 hidden group-hover/cancel:block z-50">
                                                     <div className="bg-slate-900 border border-red-500/50 text-white text-[9px] p-2 rounded shadow-2xl whitespace-nowrap flex flex-col gap-0.5">
                                                         <span className="text-red-400 font-black uppercase border-b border-white/10 pb-1 mb-1">Estimation Retour</span>
                                                         <span>Ratio: {refundPercent}%</span>
-                                                        <span className="text-slate-400 italic">Remboursement dégressif</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -213,6 +223,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             </CardContent>
         </Card>
 
+        {/* ENERGIE */}
         <Card className="bg-slate-900/80 border border-white/10 backdrop-blur-md flex flex-col justify-between relative overflow-hidden">
              <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-20 ${energyNet >= 0 ? 'bg-yellow-400' : 'bg-red-500'}`}></div>
             <CardHeader className="pb-2">
@@ -248,23 +259,76 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </Card>
       </div>
 
-      {/* --- INFRASTRUCTURES --- */}
+      {/* --- NOUVELLE SECTION TACTIQUE MILITAIRE --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="bg-slate-900 border border-red-500/20 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors"></div>
+              <CardHeader className="pb-2 relative z-10">
+                  <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-red-400 flex items-center gap-2">
+                          <Sword size={14} /> Capacité Offensive Globale
+                      </span>
+                      <TrendingUp size={14} className="text-red-500 animate-pulse" />
+                  </div>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                  <div className="flex items-end gap-2">
+                      <span className="text-4xl font-black font-mono text-white tracking-tighter">{fmt(totalAtk)}</span>
+                      <span className="text-xs font-bold text-red-500 mb-1 uppercase tracking-tighter">Dégâts / Round</span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center">
+                          <span>Armement (NV.{planet.laser_battery_level})</span>
+                          <span className="text-red-400 font-mono">+{Math.round((atkBonus-1)*100)}% DMG</span>
+                      </div>
+                      <Progress value={Math.min(100, planet.laser_battery_level * 8)} className="h-1 bg-slate-800" />
+                  </div>
+              </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900 border border-emerald-500/20 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors"></div>
+              <CardHeader className="pb-2 relative z-10">
+                  <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                          <ShieldCheck size={14} /> Structure & Blindage Global
+                      </span>
+                      <Activity size={14} className="text-emerald-500" />
+                  </div>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                  <div className="flex items-end gap-2">
+                      <span className="text-4xl font-black font-mono text-white tracking-tighter">{fmt(totalHull)}</span>
+                      <span className="text-xs font-bold text-emerald-500 mb-1 uppercase tracking-tighter">Points Coque</span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center">
+                          <span>Protection (NV.{planet.armour_tech_level})</span>
+                          <span className="text-emerald-400 font-mono">+{Math.round((hullBonus-1)*100)}% HULL</span>
+                      </div>
+                      <Progress value={Math.min(100, planet.armour_tech_level * 8)} className="h-1 bg-slate-800 text-emerald-500" />
+                  </div>
+              </CardContent>
+          </Card>
+      </div>
+
+      {/* INFRASTRUCTURES & RESSOURCES */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-        <div className="md:col-span-1 space-y-4 min-w-0">
+        <div className="md:col-span-1 space-y-4">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1">Infrastructures</h3>
             {[
-                { label: "Mine de Métal", level: planet.metal_mine_level, icon: Stone, color: "text-orange-300", border: "border-orange-500/20" },
-                { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400", border: "border-cyan-500/20" },
-                { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Droplets, color: "text-green-400", border: "border-green-500/20" },
-                { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400", border: "border-yellow-500/20" },
-                { label: "Hangar Vaisseaux", level: planet.hangar_level || 0, icon: Warehouse, color: "text-orange-400", border: "border-orange-500/20" }, 
+                { label: "Mine de Métal", level: planet.metal_mine_level, icon: Stone, color: "text-orange-300" },
+                { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400" },
+                { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Droplets, color: "text-green-400" },
+                { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400" },
+                { label: "Hangar Vaisseaux", level: planet.hangar_level || 0, icon: Warehouse, color: "text-orange-400" }, 
             ].map((mine) => (
-                <div key={mine.label} className={`bg-slate-900/50 border ${mine.border} p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors`}>
+                <div key={mine.label} className="bg-slate-900/50 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors">
                     <div className="flex items-center gap-3 overflow-hidden">
                         <mine.icon size={16} className={`shrink-0 ${mine.color}`} />
                         <span className="text-xs font-bold text-slate-300 truncate">{mine.label}</span>
                     </div>
-                    <span className="text-sm font-black font-mono text-white bg-black/40 px-2 py-0.5 rounded border border-white/5 shrink-0">Niv. {mine.level}</span>
+                    <span className="text-sm font-black font-mono text-white shrink-0 px-2 bg-black/40 rounded border border-white/5">Niv. {mine.level}</span>
                 </div>
             ))}
         </div>
@@ -272,49 +336,47 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         <div className="md:col-span-3 min-w-0">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1 mb-4">Rendement Industriel</h3>
             <Card className="bg-green-950/10 border border-green-500/20">
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse font-mono text-xs whitespace-nowrap">
-                            <thead>
-                                <tr className="bg-white/5 text-slate-500 uppercase tracking-wider text-[10px]">
-                                    <th className="py-3 pl-4">Ressource</th>
-                                    <th className="py-3 text-right">Stock</th>
-                                    <th className="py-3 text-right">Capacité</th>
-                                    <th className="py-3 text-right text-yellow-500">/ Heure</th>
-                                    <th className="py-3 text-right pr-4 text-green-500">/ Jour</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                <tr className="hover:bg-white/5 transition-colors">
-                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-orange-300"><Stone size={14} /> MÉTAL</td>
-                                    <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.metal_amount)}</td>
-                                    <td className="py-4 text-right text-slate-600">Illimité</td>
-                                    <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodMetal)}</td>
-                                    <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodMetal * 24)}</td>
-                                </tr>
-                                <tr className="hover:bg-white/5 transition-colors">
-                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-cyan-400"><Gem size={14} /> CRISTAL</td>
-                                    <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.crystal_amount)}</td>
-                                    <td className="py-4 text-right text-slate-600">Illimité</td>
-                                    <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodCrystal)}</td>
-                                    <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodCrystal * 24)}</td>
-                                </tr>
-                                <tr className="hover:bg-white/5 transition-colors">
-                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-green-400"><Droplets size={14} /> DEUTÉRIUM</td>
-                                    <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.deuterium_amount)}</td>
-                                    <td className="py-4 text-right text-slate-600">Illimité</td>
-                                    <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodDeut)}</td>
-                                    <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodDeut * 24)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                <CardContent className="p-0 overflow-x-auto">
+                    <table className="w-full text-left border-collapse font-mono text-xs whitespace-nowrap">
+                        <thead>
+                            <tr className="bg-white/5 text-slate-500 uppercase tracking-wider text-[10px]">
+                                <th className="py-3 pl-4">Ressource</th>
+                                <th className="py-3 text-right">Stock</th>
+                                <th className="py-3 text-right">Capacité</th>
+                                <th className="py-3 text-right text-yellow-500">/ Heure</th>
+                                <th className="py-3 text-right pr-4 text-green-500">/ Jour</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            <tr className="hover:bg-white/5 transition-colors">
+                                <td className="py-4 pl-4 flex items-center gap-2 font-bold text-orange-300"><Stone size={14} /> MÉTAL</td>
+                                <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.metal_amount)}</td>
+                                <td className="py-4 text-right text-slate-600">Illimité</td>
+                                <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodMetal)}</td>
+                                <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodMetal * 24)}</td>
+                            </tr>
+                            <tr className="hover:bg-white/5 transition-colors">
+                                <td className="py-4 pl-4 flex items-center gap-2 font-bold text-cyan-400"><Gem size={14} /> CRISTAL</td>
+                                <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.crystal_amount)}</td>
+                                <td className="py-4 text-right text-slate-600">Illimité</td>
+                                <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodCrystal)}</td>
+                                <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodCrystal * 24)}</td>
+                            </tr>
+                            <tr className="hover:bg-white/5 transition-colors">
+                                <td className="py-4 pl-4 flex items-center gap-2 font-bold text-green-400"><Droplets size={14} /> DEUTÉRIUM</td>
+                                <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.deuterium_amount)}</td>
+                                <td className="py-4 text-right text-slate-600">Illimité</td>
+                                <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodDeut)}</td>
+                                <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodDeut * 24)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </CardContent>
             </Card>
         </div>
       </div>
 
-      {/* --- SECTION MILITAIRE --- */}
+      {/* STATIONNEMENT FLOTTE & DEFENSES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             <Card className="bg-blue-950/10 border border-blue-500/20">
                 <CardHeader className="pb-2">
@@ -350,16 +412,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="flex items-center gap-4">
-                         <div className="flex-1">
-                            <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-1">
-                                <span>Indice de Sécurité</span>
-                                <span>{fmt(firePower)} BP</span>
-                            </div>
-                            <Progress value={Math.min(100, totalDefense / 10)} className="h-2 bg-slate-800" />
-                         </div>
-                    </div>
-                     <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                         <div className="bg-slate-900/50 p-2 rounded border border-white/5">
                             <span className="text-[10px] text-slate-500 uppercase block">Lanceur de Missiles</span>
                             <span className="text-white font-mono font-bold">{fmt(planet.missile_launcher_count)}</span>

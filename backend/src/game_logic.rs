@@ -29,22 +29,22 @@ pub struct CombatResult {
     pub ships_lost: i32,
 }
 
-// Nouvelle structure pour passer les techs au combat
 pub struct CombatTechs {
     pub laser: i32,
     pub energy: i32,
-    pub armour: i32, // Réservé pour futur usage (Coque)
+    pub armour: i32,
+}
+
+#[derive(Clone, Copy)]
+pub struct UnitStats {
+    pub attack: f64,
+    pub shield: f64,
+    pub hull: f64,
 }
 
 // --- VERIFICATION DES PREREQUIS ---
 pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<(), String> {
     match item_type {
-        // BÂTIMENTS
-        "crystal" | "deuterium" | "solar_plant" => Ok(()), 
-        "research" => Ok(()), 
-        "shipyard" => Ok(()),
-
-        // RECHERCHES
         "energy_tech" => {
             if planet.research_lab_level < 1 { return Err("Laboratoire de Recherche niveau 1 requis".to_string()); }
             Ok(())
@@ -58,40 +58,13 @@ pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<()
             if planet.research_lab_level < 3 { return Err("Laboratoire de Recherche niveau 3 requis".to_string()); }
             Ok(())
         },
-
-        // FLOTTE
         "light_hunter" => {
             if planet.shipyard_level < 1 { return Err("Chantier Spatial niveau 1 requis".to_string()); }
             Ok(())
         },
         "cruiser" => {
             if planet.shipyard_level < 5 { return Err("Chantier Spatial niveau 5 requis".to_string()); }
-            if planet.energy_tech_level < 4 { return Err("Technologie Énergie niveau 4 requise (Propulsion)".to_string()); }
-            Ok(())
-        },
-        "recycler" => {
-            if planet.shipyard_level < 4 { return Err("Chantier Spatial niveau 4 requis".to_string()); }
-            if planet.energy_tech_level < 3 { return Err("Technologie Énergie niveau 3 requise".to_string()); }
-            Ok(())
-        },
-        "spy_probe" => {
-            if planet.shipyard_level < 1 { return Err("Chantier Spatial niveau 1 requis".to_string()); }
-            if planet.espionage_tech_level < 1 { return Err("Technologie Espionnage niveau 1 requise".to_string()); }
-            Ok(())
-        },
-        "colony_ship" => {
-            if planet.shipyard_level < 4 { return Err("Chantier Spatial niveau 4 requis".to_string()); }
-            if planet.energy_tech_level < 3 { return Err("Technologie Énergie niveau 3 requise".to_string()); }
-            Ok(())
-        },
-        "transporter" => {
-            if planet.shipyard_level < 2 { return Err("Chantier Spatial niveau 2 requis".to_string()); }
-            Ok(())
-        },
-
-        // DÉFENSES
-        "missile_launcher" => {
-            if planet.shipyard_level < 1 { return Err("Chantier Spatial niveau 1 requis".to_string()); }
+            if planet.energy_tech_level < 4 { return Err("Technologie Énergie niveau 4 requise".to_string()); }
             Ok(())
         },
         "plasma_turret" => {
@@ -100,174 +73,99 @@ pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<()
             if planet.laser_battery_level < 3 { return Err("Technologie Laser niveau 3 requise".to_string()); }
             Ok(())
         },
-
         _ => Ok(()), 
     }
 }
 
 // --- CALCULS RESSOURCES ---
-
-pub enum ResourceType {
-    Metal,
-    Crystal,
-    Deuterium,
-}
+pub enum ResourceType { Metal, Crystal, Deuterium }
 
 pub fn calculate_resources(
     res_type: ResourceType, 
     level: i32, 
     current_amount: f64, 
     last_update: chrono::NaiveDateTime,
-    energy_tech_level: i32 // <-- Nouveau paramètre pour le bonus
+    energy_tech_level: i32
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
     let duration = now.signed_duration_since(last_update).num_seconds() as f64;
-    
-    // Bonus Tech Énergie : +5% par niveau
     let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.05);
 
-    // Formule de base : 30 * level * 1.1^level
     let base_production = match res_type {
         ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),
         ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),
         ResourceType::Deuterium => 10.0 * (level as f64) * 1.1f64.powi(level),
     };
 
-    // Production avec bonus
-    let total_production = base_production * tech_bonus;
-
-    // Production par seconde * Speed Factor
-    let production_per_sec = (total_production / 3600.0) * SPEED_FACTOR;
-    
+    let production_per_sec = (base_production * tech_bonus / 3600.0) * SPEED_FACTOR;
     current_amount + (production_per_sec * duration)
 }
 
-// --- COÛTS & UPGRADES ---
-
+// --- COÛTS & STATS ---
 pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
     let factor_mines = 1.5f64.powi(level - 1); 
     let factor_tech = 2.0f64.powi(level - 1);  
-
     match building_type {
-        // Mines
-        "metal" => Cost {
-            metal: 60.0 * factor_mines,
-            crystal: 15.0 * factor_mines,
+        "metal" => Cost { metal: 60.0 * factor_mines, crystal: 15.0 * factor_mines, deuterium: 0.0 },
+        "crystal" => Cost { metal: 48.0 * 1.6f64.powi(level - 1), crystal: 24.0 * 1.6f64.powi(level - 1), deuterium: 0.0 },
+        "shipyard" => Cost { metal: 400.0 * factor_tech, crystal: 200.0 * factor_tech, deuterium: 100.0 * factor_tech },
+        "energy_tech" => Cost { metal: 0.0, crystal: 800.0 * factor_tech, deuterium: 400.0 * factor_tech },
+        "armour" => Cost {
+            metal: 1000.0 * factor_tech,
+            crystal: 0.0,
             deuterium: 0.0,
-        },
-        "crystal" => Cost {
-            metal: 48.0 * 1.6f64.powi(level - 1), 
-            crystal: 24.0 * 1.6f64.powi(level - 1),
-            deuterium: 0.0,
-        },
-        "deuterium" => Cost {
-            metal: 225.0 * factor_mines,
-            crystal: 75.0 * factor_mines,
-            deuterium: 0.0,
-        },
-        "solar_plant" => Cost {
-            metal: 75.0 * factor_mines,
-            crystal: 30.0 * factor_mines,
-            deuterium: 0.0,
-        },
-        
-        // Installations
-        "shipyard" => Cost {
-            metal: 400.0 * factor_tech,
-            crystal: 200.0 * factor_tech,
-            deuterium: 100.0 * factor_tech,
-        },
-        "research" => Cost {
-            metal: 200.0 * factor_tech,
-            crystal: 400.0 * factor_tech,
-            deuterium: 200.0 * factor_tech,
-        },
-        "hangar" => Cost {
-            metal: 500.0 * factor_tech,
-            crystal: 250.0 * factor_tech,
-            deuterium: 100.0 * factor_tech,
-        },
-
-        // Technologies
-        "energy_tech" => Cost {
-            metal: 0.0,
-            crystal: 800.0 * factor_tech,
-            deuterium: 400.0 * factor_tech,
-        },
-        "laser" => Cost {
-            metal: 200.0 * factor_tech,
-            crystal: 100.0 * factor_tech,
-            deuterium: 0.0,
-        },
-        "espionage" => Cost { 
-            metal: 200.0 * factor_tech, 
-            crystal: 1000.0 * factor_tech, 
-            deuterium: 200.0 * factor_tech
         },
         _ => Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 },
     }
 }
 
-// --- TEMPS DE CONSTRUCTION ---
-
-// Prend en compte le niveau de l'installation (Labo ou Chantier)
 pub fn get_build_time(metal_cost: f64, crystal_cost: f64, facility_level: i32) -> i64 {
-    let total_cost = metal_cost + crystal_cost;
-    
-    // Le temps est réduit par le niveau du bâtiment (Robot/Chantier ou Labo)
-    // Formule : Temps / (1 + niveau)
     let reduction_factor = 1.0 + (facility_level as f64);
-    
-    let hours = (total_cost / 2500.0) / (SPEED_FACTOR * reduction_factor); 
-    let seconds = (hours * 3600.0) as i64;
-    
-    std::cmp::max(2, seconds)
+    let seconds = ((metal_cost + crystal_cost) / 2500.0) / (SPEED_FACTOR * reduction_factor) * 3600.0;
+    std::cmp::max(2, seconds as i64)
 }
 
-// Pour la flotte
 pub fn get_ship_production_time(qty: i32) -> i64 {
-    let base_time_per_unit = 20.0 / SPEED_FACTOR; 
-    std::cmp::max(1, (base_time_per_unit * qty as f64) as i64)
+    std::cmp::max(1, (20.0 / SPEED_FACTOR * qty as f64) as i64)
 }
-
-// --- STATS FLOTTE & DÉFENSES (Metal, Crystal) ---
 
 pub fn get_light_hunter_stats() -> (f64, f64) { (3000.0, 1000.0) }
-pub fn get_colony_ship_stats() -> (f64, f64) { (10000.0, 20000.0) }
-pub fn get_transporter_stats() -> (f64, f64) { (4000.0, 2000.0) }
+pub fn get_fleet_capacity(hangar_level: i32) -> i32 { 500 + (hangar_level * 500) }
+pub const TRANSPORTER_CAPACITY: f64 = 10000.0;
+
 pub fn get_spy_probe_stats() -> (f64, f64) { (0.0, 1000.0) }
 pub fn get_missile_launcher_stats() -> (f64, f64) { (2000.0, 0.0) }
 pub fn get_plasma_turret_stats() -> (f64, f64) { (50000.0, 50000.0) }
+pub fn get_colony_ship_stats() -> (f64, f64) { (10000.0, 20000.0) }
+pub fn get_transporter_stats() -> (f64, f64) { (4000.0, 2000.0) }
 
-pub fn get_fleet_capacity(hangar_level: i32) -> i32 {
-    // Base 500 places + 500 par niveau de hangar
-    500 + (hangar_level * 500)
+// --- MOTEUR DE COMBAT ---
+
+pub fn get_unit_base_stats(unit_type: &str) -> UnitStats {
+    match unit_type {
+        "light_hunter" => UnitStats { attack: 50.0, shield: 10.0, hull: 400.0 },
+        "cruiser" => UnitStats { attack: 400.0, shield: 50.0, hull: 2700.0 },
+        "missile_launcher" => UnitStats { attack: 80.0, shield: 20.0, hull: 200.0 },
+        "plasma_turret" => UnitStats { attack: 3000.0, shield: 300.0, hull: 10000.0 },
+        _ => UnitStats { attack: 1.0, shield: 1.0, hull: 10.0 },
+    }
 }
 
-pub const TRANSPORTER_CAPACITY: f64 = 10000.0;
+pub fn get_rapid_fire(attacker: &str, target: &str) -> i32 {
+    match (attacker, target) {
+        ("cruiser", "light_hunter") => 6,
+        ("cruiser", "missile_launcher") => 10,
+        ("plasma_turret", "cruiser") => 3,
+        _ => 0,
+    }
+}
 
-// --- COMBAT & LOGIQUE ---
-
-pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
-    let mut rng = rand::thread_rng();
-    let pirates_strength = rng.gen_range(10..100);
-    let player_strength = fleet_size + (defense_bonus * 5);
-
-    if player_strength > pirates_strength {
-        let loss_percent = rng.gen_range(0.0..0.2);
-        let ships_lost = (fleet_size as f64 * loss_percent) as i32;
-        CombatResult {
-            victory: true,
-            message: format!("Victoire ! L'ennemi (Force {}) a été écrasé.", pirates_strength),
-            ships_lost,
-        }
-    } else {
-        let loss_percent = rng.gen_range(0.3..0.8);
-        let ships_lost = (fleet_size as f64 * loss_percent) as i32;
-        CombatResult {
-            victory: false,
-            message: format!("Défaite... Les pirates (Force {}) étaient trop nombreux.", pirates_strength),
-            ships_lost,
+fn apply_losses(fleet: &mut Vec<(&str, i32, UnitStats)>, damage: f64) {
+    let total_hull: f64 = fleet.iter().map(|(_, qty, stats)| *qty as f64 * stats.hull).sum();
+    if total_hull > 0.0 {
+        let loss_ratio = (damage / total_hull).min(1.0);
+        for (_, qty, _) in fleet.iter_mut() {
+            *qty = (*qty as f64 * (1.0 - loss_ratio)).floor() as i32;
         }
     }
 }
@@ -275,125 +173,112 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
 pub fn resolve_pvp(
     att_hunters: i32, att_cruisers: i32, att_techs: CombatTechs,
     def_hunters: i32, def_cruisers: i32, 
-    def_lasers: i32, // (Optionnel si tu l'utilises pas, mets 0)
+    _def_lasers: i32, 
     def_missiles: i32, def_plasmas: i32, 
     def_techs: CombatTechs,
     def_resources: Cost   
 ) -> PvpReport {
     let mut log = Vec::new();
+    let mut rng = rand::thread_rng();
 
-    // 1. BONUS TECH (Armes)
-    let att_bonus = 1.0 + (att_techs.laser as f64 * 0.10);
-    let def_bonus = 1.0 + (def_techs.laser as f64 * 0.10);
+    let apply_techs = |base: UnitStats, techs: &CombatTechs| -> UnitStats {
+        UnitStats {
+            attack: base.attack * (1.0 + techs.laser as f64 * 0.1),
+            shield: base.shield * (1.0 + techs.energy as f64 * 0.1),
+            hull: base.hull * (1.0 + techs.armour as f64 * 0.1),
+        }
+    };
 
-    // 2. PUISSANCE D'ATTAQUE
-    // Chasseur: 50, Croiseur: 400
-    let att_power = ((att_hunters as f64 * 50.0) + (att_cruisers as f64 * 400.0)) * att_bonus;
-    
-    // 3. PUISSANCE DE DÉFENSE (C'est ici qu'elles comptent !)
-    // Missile: 80 (fort vs chasseurs), Plasma: 2000 (TRES fort)
- let def_power = (
-        (def_hunters as f64 * 50.0) + 
-        (def_cruisers as f64 * 400.0) +
-        (def_lasers as f64 * 100.0) +    // <--- AJOUTÉ (Valeur arbitraire 100)
-        (def_missiles as f64 * 80.0) +   
-        (def_plasmas as f64 * 2000.0)    
-    ) * def_bonus;
+    let mut attacker_fleet = vec![
+        ("light_hunter", att_hunters, apply_techs(get_unit_base_stats("light_hunter"), &att_techs)),
+        ("cruiser", att_cruisers, apply_techs(get_unit_base_stats("cruiser"), &att_techs)),
+    ];
 
-    log.push(format!("Forces en présence : Attaquant {:.0} vs Défenseur {:.0}", att_power, def_power));
+    let mut defender_fleet = vec![
+        ("light_hunter", def_hunters, apply_techs(get_unit_base_stats("light_hunter"), &def_techs)),
+        ("cruiser", def_cruisers, apply_techs(get_unit_base_stats("cruiser"), &def_techs)),
+        ("missile_launcher", def_missiles, apply_techs(get_unit_base_stats("missile_launcher"), &def_techs)),
+        ("plasma_turret", def_plasmas, apply_techs(get_unit_base_stats("plasma_turret"), &def_techs)),
+    ];
 
-    // Variables de résultat
-    let winner;
-    let loot;
-    let debris_metal;
-    let debris_crystal;
-    
-    // Pertes exactes
-    let att_lost_hunters;
-    let att_lost_cruisers;
-    let def_lost_hunters;
-    let def_lost_cruisers;
-    let lost_missiles;
-    let lost_plasmas;
+    log.push("--- Début de l'engagement orbital ---".to_string());
 
-    if att_power > def_power {
-        // --- VICTOIRE ATTAQUANT ---
-        winner = "attacker".to_string();
-        log.push("VICTOIRE ATTAQUANT : Les défenses ont été percées.".to_string());
+    for round in 1..=6 {
+        let mut att_dmg = 0.0;
+        let mut def_dmg = 0.0;
 
-        // Calcul des pertes basé sur le ratio de force (plus le combat est serré, plus on perd)
-        let ratio = if att_power > 0.0 { def_power / att_power } else { 0.0 };
-        
-        // L'attaquant perd entre 10% (écrasante victoire) et 50% (combat serré)
-        let att_loss_rate = 0.1 + (0.4 * ratio); 
-        att_lost_hunters = (att_hunters as f64 * att_loss_rate) as i32;
-        att_lost_cruisers = (att_cruisers as f64 * att_loss_rate) as i32;
+        // Attaquant tire
+        for (a_type, qty, a_stats) in attacker_fleet.clone() {
+            for _ in 0..qty {
+                let mut re_fire = true;
+                while re_fire {
+                    let target_idx = rng.gen_range(0..defender_fleet.len());
+                    let (d_type, d_qty, d_stats) = &defender_fleet[target_idx];
+                    if *d_qty > 0 {
+                        att_dmg += (a_stats.attack - d_stats.shield).max(a_stats.attack * 0.01);
+                        let rf = get_rapid_fire(a_type, d_type);
+                        re_fire = rf > 0 && rng.gen_range(0..rf) > 0;
+                    } else { re_fire = false; }
+                }
+            }
+        }
 
-        // Le défenseur perd tout sa flotte (classique OGame si défaite)
-        def_lost_hunters = def_hunters;
-        def_lost_cruisers = def_cruisers;
+        // Défenseur tire
+        for (d_type, qty, d_stats) in defender_fleet.clone() {
+            for _ in 0..qty {
+                let mut re_fire = true;
+                while re_fire {
+                    let target_idx = rng.gen_range(0..attacker_fleet.len());
+                    let (a_type, a_qty, a_stats) = &attacker_fleet[target_idx];
+                    if *a_qty > 0 {
+                        def_dmg += (d_stats.attack - a_stats.shield).max(d_stats.attack * 0.01);
+                        let rf = get_rapid_fire(d_type, a_type);
+                        re_fire = rf > 0 && rng.gen_range(0..rf) > 0;
+                    } else { re_fire = false; }
+                }
+            }
+        }
 
-        // MAIS les défenses ne sont pas toutes détruites (Règle des 70% de réparation max)
-        // Disons qu'on perd 30% à 60% des défenses définitivement
-        let def_struct_loss_rate = 0.3 + (0.3 * ratio); 
-        lost_missiles = (def_missiles as f64 * def_struct_loss_rate) as i32;
-        lost_plasmas = (def_plasmas as f64 * def_struct_loss_rate) as i32;
-
-        // Butin (50% des ressources stockées)
-        loot = Cost {
-            metal: def_resources.metal * 0.5,
-            crystal: def_resources.crystal * 0.5,
-            deuterium: def_resources.deuterium * 0.5,
-        };
-
-    } else {
-        // --- VICTOIRE DÉFENSEUR ---
-        winner = "defender".to_string();
-        log.push("VICTOIRE DÉFENSEUR : L'envahisseur a été repoussé.".to_string());
-
-        // L'attaquant perd tout (ou presque, 80%)
-        att_lost_hunters = (att_hunters as f64 * 0.8) as i32;
-        att_lost_cruisers = (att_cruisers as f64 * 0.8) as i32;
-
-        // Le défenseur perd peu (avantage terrain + boucliers)
-        def_lost_hunters = (def_hunters as f64 * 0.1) as i32;
-        def_lost_cruisers = (def_cruisers as f64 * 0.1) as i32;
-        
-        // Les défenses sont très peu endommagées en cas de victoire
-        lost_missiles = (def_missiles as f64 * 0.05) as i32;
-        lost_plasmas = (def_plasmas as f64 * 0.05) as i32;
-
-        loot = Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 };
+        apply_losses(&mut defender_fleet, att_dmg);
+        apply_losses(&mut attacker_fleet, def_dmg);
+        log.push(format!("Round {}: Dégâts infligés A: {:.0} | D: {:.0}", round, att_dmg, def_dmg));
+        if attacker_fleet.iter().all(|f| f.1 <= 0) || defender_fleet.iter().all(|f| f.1 <= 0) { break; }
     }
 
-    // CALCUL DU CHAMP DE DÉBRIS (CDR)
-    // 30% du métal et cristal des vaisseaux détruits (pas les défenses en général)
-    let (hunter_m, hunter_c) = get_light_hunter_stats();
-    let (cruiser_m, cruiser_c) = (20000.0, 7000.0);
+    let f_att_h = attacker_fleet.iter().find(|(t,_,_)| *t=="light_hunter").map(|f| f.1).unwrap_or(0);
+    let f_att_c = attacker_fleet.iter().find(|(t,_,_)| *t=="cruiser").map(|f| f.1).unwrap_or(0);
+    let f_def_h = defender_fleet.iter().find(|(t,_,_)| *t=="light_hunter").map(|f| f.1).unwrap_or(0);
+    let f_def_c = defender_fleet.iter().find(|(t,_,_)| *t=="cruiser").map(|f| f.1).unwrap_or(0);
+    let f_miss = defender_fleet.iter().find(|(t,_,_)| *t=="missile_launcher").map(|f| f.1).unwrap_or(0);
+    let f_plas = defender_fleet.iter().find(|(t,_,_)| *t=="plasma_turret").map(|f| f.1).unwrap_or(0);
 
-    let total_lost_ships_metal = 
-        ((att_lost_hunters + def_lost_hunters) as f64 * hunter_m) + 
-        ((att_lost_cruisers + def_lost_cruisers) as f64 * cruiser_m);
+    let winner = if f_def_h+f_def_c+f_miss+f_plas <= 0 { "attacker".into() } 
+                 else if f_att_h+f_att_c <= 0 { "defender".into() } 
+                 else { "draw".into() };
 
-    let total_lost_ships_crystal = 
-        ((att_lost_hunters + def_lost_hunters) as f64 * hunter_c) + 
-        ((att_lost_cruisers + def_lost_cruisers) as f64 * cruiser_c);
-
-    debris_metal = total_lost_ships_metal * 0.3;
-    debris_crystal = total_lost_ships_crystal * 0.3;
-
-    if debris_metal > 0.0 {
-        log.push(format!("Un champ de débris s'est formé : {:.0} Métal, {:.0} Cristal", debris_metal, debris_crystal));
-    }
+    let loot = if winner == "attacker" {
+        Cost { metal: def_resources.metal * 0.5, crystal: def_resources.crystal * 0.5, deuterium: def_resources.deuterium * 0.5 }
+    } else { Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 } };
 
     PvpReport {
-        winner,
-        log,
-        loot,
-        debris: Cost { metal: debris_metal, crystal: debris_crystal, deuterium: 0.0 },
-        attacker_losses: att_lost_hunters + att_lost_cruisers,
-        defender_losses: def_lost_hunters + def_lost_cruisers,
-        lost_missiles, // <-- Retourné spécifiquement
-        lost_plasmas,  // <-- Retourné spécifiquement
+        winner, log, loot,
+        debris: Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 }, // CDR simplifié pour l'instant
+        attacker_losses: (att_hunters - f_att_h) + (att_cruisers - f_att_c),
+        defender_losses: (def_hunters - f_def_h) + (def_cruisers - f_def_c),
+        lost_missiles: def_missiles - f_miss,
+        lost_plasmas: def_plasmas - f_plas,
+    }
+}
+
+pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
+    let mut rng = rand::thread_rng();
+    let pirates = rng.gen_range(10..100);
+    let player = fleet_size + (defense_bonus * 5);
+    if player > pirates {
+        let lost = (fleet_size as f64 * rng.gen_range(0.0..0.2)) as i32;
+        CombatResult { victory: true, message: "Victoire spatiale !".into(), ships_lost: lost }
+    } else {
+        let lost = (fleet_size as f64 * rng.gen_range(0.4..0.9)) as i32;
+        CombatResult { victory: false, message: "Défaite cuisante...".into(), ships_lost: lost }
     }
 }

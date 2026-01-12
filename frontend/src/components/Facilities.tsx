@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   Hammer, Microscope, Timer, ArrowUpCircle, 
-  Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp, Lock 
+  Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp, Lock, ShieldCheck, Shield 
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { checkPrerequisites } from "@/lib/gameRules"; // Importation de ta règle
@@ -25,6 +25,13 @@ const getFacilityTheme = (type: string) => {
       icon: Hammer,
       bgIcon: Scan
     },
+    armour: {
+  color: "text-emerald-400",
+  border: "border-emerald-500/50",
+  bg: "bg-emerald-500/10",
+  icon: ShieldCheck, // Importe ShieldCheck de lucide-react
+  bgIcon: Shield
+},
     research: {
       color: "text-fuchsia-400",
       border: "border-fuchsia-500/50",
@@ -56,6 +63,8 @@ const getFacilityStats = (id: string, level: number) => {
             return { label: "Vitesse Constr.", current: `x${1 + level}`, next: `x${1 + next}` };
         case 'research':
             return { label: "Vitesse Recherche", current: `x${1 + level}`, next: `x${1 + next}` };
+        case 'armour':
+            return { label: "Bonus Structure", current: `+${level * 10}%`, next: `+${next * 10}%` }; // Nouveau label
         default:
             return { label: "Niveau", current: level, next: next };
     }
@@ -92,6 +101,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     if (type === 'shipyard') return { m: 400 * factor, c: 200 * factor, d: 100 * factor };
     if (type === 'research') return { m: 200 * factor, c: 400 * factor, d: 200 * factor };
     if (type === 'hangar') return { m: 500 * factor, c: 250 * factor, d: 100 * factor };
+    if (type === 'armour') return { m: 1000 * factor, c: 0, d: 0 };
     return { m: 0, c: 0, d: 0 };
   };
 
@@ -99,6 +109,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     { id: 'shipyard', name: 'Chantier Spatial', lv: planet.shipyard_level ?? 0, desc: "Permet la construction de vaisseaux et défenses." },
     { id: 'research', name: 'Labo de Recherche', lv: planet.research_lab_level ?? 0, desc: "Nécessaire pour débloquer de nouvelles technologies." },
     { id: 'hangar', name: 'Hangar à Vaisseaux', lv: planet.hangar_level ?? 0, desc: "Augmente la capacité de stockage de la flotte." },
+    { id: 'armour', name: 'Technologie de Protection', lv: planet.armour_tech_level ?? 0, desc: "Augmente la coque des vaisseaux de 10% par niveau." },
   ];
 
   const queue = planet.constructions || [];
