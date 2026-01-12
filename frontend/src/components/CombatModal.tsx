@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, Skull, Trophy, ShieldAlert, Crosshair, Ban, User, Swords } from "lucide-react";
+import { X, Skull, Trophy, ShieldAlert, Crosshair, User, Swords, Box, Gem, Droplets, Zap, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CombatModalProps {
@@ -10,10 +10,10 @@ interface CombatModalProps {
 export default function CombatModal({ report, onClose }: CombatModalProps) {
   const [visibleLogs, setVisibleLogs] = useState<string[]>([]);
   const [parsedReport, setParsedReport] = useState<any>(null);
-
-  useEffect(() => {
+useEffect(() => {
     if (!report) {
       setParsedReport(null);
+      setVisibleLogs([]);
       return;
     }
 
@@ -22,128 +22,174 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
         try { data = JSON.parse(report); } 
         catch (e) { console.error("Erreur parsing", e); return; }
     }
+    
     setParsedReport(data);
 
+    // Correction ici : On vide d'abord et on utilise une variable locale pour le suivi
     if (data && Array.isArray(data.log)) {
-        setVisibleLogs([]);
+        setVisibleLogs([]); // Reset immédiat
+        
         const timeouts: NodeJS.Timeout[] = [];
+        
         data.log.forEach((line: string, index: number) => {
-            const id = setTimeout(() => setVisibleLogs(prev => [...prev, line]), index * 100);
-            timeouts.push(id);
+            const timeoutId = setTimeout(() => {
+                // On utilise la version fonctionnelle de setState pour s'assurer
+                // qu'on ne traite chaque index qu'une seule fois
+                setVisibleLogs(prev => {
+                    // Si la ligne existe déjà à cet index (cas du double trigger), on ne fait rien
+                    if (prev.length > index) return prev;
+                    return [...prev, line];
+                });
+            }, index * 80);
+            timeouts.push(timeoutId);
         });
-        return () => timeouts.forEach(clearTimeout);
+
+        // Nettoyage si le composant est démonté ou si le rapport change
+        return () => {
+            timeouts.forEach(clearTimeout);
+        };
     }
-  }, [report]);
+  }, [report]); // On ne dépend que de 'report'
 
   if (!parsedReport) return null;
 
-  // --- LOGIQUE DE NORMALISATION ---
-
-  // 1. Rôle : Défenseur ou Attaquant
+  // --- NORMALISATION ---
   const isDefense = parsedReport.is_defense === true || parsedReport.mission_type === 'defense';
   const isAttacker = !isDefense;
 
-  // 2. Nom de l'Adversaire
-  const opponentName = 
-    parsedReport.opponent_username || 
-    parsedReport.opponent_name || 
-    (isAttacker ? parsedReport.target_name : "Commandant Inconnu");
+  const opponentName = parsedReport.opponent_username || parsedReport.opponent_name || (isAttacker ? parsedReport.target_name : "Commandant Inconnu");
 
-  // 3. État de la Victoire
   let isVictory = false;
   if (parsedReport.result) {
       isVictory = parsedReport.result === 'victory';
   } else {
-      if (parsedReport.winner === 'player') isVictory = true; 
-      else if (parsedReport.winner === 'attacker') isVictory = isAttacker;
+      if (parsedReport.winner === 'attacker') isVictory = isAttacker;
       else if (parsedReport.winner === 'defender') isVictory = isDefense;
+      else if (parsedReport.winner === 'player') isVictory = true;
   }
 
-  // 4. Calcul du Butin (Gestion des formats imbriqués et plats)
-  const lootMetal = parsedReport.loot?.metal ?? parsedReport.loot_metal ?? (typeof parsedReport.loot === 'number' ? parsedReport.loot : 0);
-  const lootCrystal = parsedReport.loot?.crystal ?? parsedReport.loot_crystal ?? 0;
-  const lootTotal = Math.abs(lootMetal + lootCrystal + (parsedReport.loot?.deuterium ?? parsedReport.loot_deuterium ?? 0));
+  // Ressources
+  const loot = {
+    metal: parsedReport.loot?.metal ?? parsedReport.loot_metal ?? 0,
+    crystal: parsedReport.loot?.crystal ?? parsedReport.loot_crystal ?? 0,
+    deuterium: parsedReport.loot?.deuterium ?? parsedReport.loot_deuterium ?? 0,
+  };
+  const lootTotal = Math.floor(Math.abs(loot.metal + loot.crystal + loot.deuterium));
 
-  // 5. Calcul des Pertes
-  const lossesCount = typeof parsedReport.ships_lost === 'number' 
-    ? parsedReport.ships_lost 
-    : (parsedReport.losses?.ships || 0) + (parsedReport.losses?.light_hunter || 0) + (parsedReport.losses?.cruiser || 0);
+  // Pertes (On différencie les vaisseaux des structures)
+  const attackerLosses = parsedReport.attacker_losses ?? 0;
+  const defenderLosses = (parsedReport.defender_losses ?? 0);
+  const structureLosses = (parsedReport.lost_missiles ?? 0) + (parsedReport.lost_plasmas ?? 0);
 
   const theme = isVictory 
     ? { color: 'text-green-500', border: 'border-green-500/50', icon: Trophy, title: "VICTOIRE" }
-    : { color: 'text-red-500', border: 'border-red-500/50', icon: Skull, title: "DÉFAITE" };
+    : parsedReport.winner === 'draw' 
+      ? { color: 'text-slate-400', border: 'border-slate-500/50', icon: Swords, title: "MATCH NUL" }
+      : { color: 'text-red-500', border: 'border-red-500/50', icon: Skull, title: "DÉFAITE" };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className={`w-full max-w-2xl relative overflow-hidden rounded-3xl border-2 ${theme.border} bg-slate-950 shadow-2xl flex flex-col max-h-[90vh]`}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+      <div className={`w-full max-w-3xl relative overflow-hidden rounded-3xl border-2 ${theme.border} bg-slate-950 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col max-h-[95vh]`}>
         
-        {/* HEADER */}
-        <div className={`p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r ${isVictory ? 'from-green-900/30' : 'from-red-900/30'} to-slate-950`}>
-          <div className="flex items-center gap-5">
-            <div className="p-4 rounded-2xl bg-black/40 border border-white/10 shadow-xl">
-                <theme.icon size={36} className={theme.color} />
+        {/* HEADER TACTIQUE */}
+        <div className={`p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r ${isVictory ? 'from-green-900/40' : 'from-red-900/40'} to-transparent`}>
+          <div className="flex items-center gap-6">
+            <div className={`p-4 rounded-2xl bg-black/60 border border-white/10 shadow-2xl ${theme.color}`}>
+                <theme.icon size={40} />
             </div>
             <div>
-                <h2 className="text-4xl font-black uppercase tracking-tighter text-white">{theme.title}</h2>
-                <div className="flex flex-col gap-1">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-400 font-mono flex items-center gap-2">
-                        <Swords size={12}/> {isDefense ? "RAPPORT DÉFENSIF" : "RAPPORT OFFENSIF"}
-                    </p>
-                    <p className="text-sm font-bold text-white flex items-center gap-2">
-                        <User size={14} className="text-slate-500"/> 
-                        <span className="uppercase tracking-wider text-cyan-400">{opponentName}</span>
-                    </p>
+                <h2 className="text-5xl font-black uppercase tracking-tighter text-white leading-none">{theme.title}</h2>
+                <div className="flex items-center gap-3 mt-2">
+                    <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded font-mono text-slate-300">
+                        {isDefense ? "SECTEUR DÉFENSIF" : "INCURSION OFFENSIVE"}
+                    </span>
+                    <span className="text-sm font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-2">
+                        <User size={14} className="text-slate-500"/> {opponentName}
+                    </span>
                 </div>
             </div>
           </div>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors"><X size={24} /></button>
+          <button onClick={onClose} className="text-white/20 hover:text-white transition-colors"><X size={32} /></button>
         </div>
 
-        {/* CONTENU */}
-        <div className="p-6 md:p-8 space-y-6 overflow-y-auto custom-scrollbar">
-            {/* LOGS */}
-            <div className="bg-slate-950 border border-white/10 rounded-xl p-4 font-mono text-xs shadow-inner max-h-[250px] overflow-y-auto">
-                <div className="space-y-2">
+        <div className="p-6 overflow-y-auto space-y-8 custom-scrollbar">
+            
+            {/* GRILLE DE RESSOURCES (BUTIN) */}
+            {lootTotal > 0 && (
+                <div className="space-y-3">
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-2">
+                        <Zap size={12} className="text-yellow-500"/> Transfert de ressources
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4">
+                        <ResourceBox label="Métal" val={loot.metal} color="text-orange-400" icon={Box} isPos={isAttacker} />
+                        <ResourceBox label="Cristal" val={loot.crystal} color="text-cyan-400" icon={Gem} isPos={isAttacker} />
+                        <ResourceBox label="Deuterium" val={loot.deuterium} color="text-green-400" icon={Droplets} isPos={isAttacker} />
+                    </div>
+                </div>
+            )}
+
+            {/* ANALYSE DES PERTES */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-900/40 border border-white/5 p-5 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block mb-4 tracking-widest">Pertes Attaquant</span>
+                    <div className="flex items-end gap-3">
+                        <span className="text-4xl font-black text-red-500 font-mono">-{attackerLosses.toLocaleString()}</span>
+                        <span className="text-[10px] text-slate-500 mb-2 font-bold uppercase">Unités volantes</span>
+                    </div>
+                </div>
+                <div className="bg-slate-900/40 border border-white/5 p-5 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block mb-4 tracking-widest">Pertes Défenseur</span>
+                    <div className="space-y-1">
+                        <div className="flex justify-between items-baseline">
+                            <span className="text-3xl font-black text-white font-mono">-{defenderLosses.toLocaleString()}</span>
+                            <span className="text-[10px] text-slate-500 font-bold uppercase">Vaisseaux</span>
+                        </div>
+                        <div className="flex justify-between items-baseline border-t border-white/5 pt-1">
+                            <span className="text-xl font-black text-orange-500 font-mono">-{structureLosses.toLocaleString()}</span>
+                            <span className="text-[10px] text-slate-500 font-bold uppercase">Défenses</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* LOGS DE COMBAT DÉTAILLÉS */}
+            <div className="space-y-3">
+                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-2">
+                    <Activity size={12} className="text-indigo-500"/> Journal de l'IA de Combat
+                </h3>
+                <div className="bg-black border border-white/5 rounded-2xl p-6 font-mono text-[11px] leading-relaxed shadow-inner space-y-2">
                     {visibleLogs.map((log, i) => (
-                        <div key={i} className="flex gap-3">
-                            <span className="text-slate-600 font-bold">[{i+1}]</span>
-                            <span className={log.includes("VICTOIRE") ? "text-green-400" : log.includes("DÉFAITE") ? "text-red-400" : "text-slate-300"}>{log}</span>
+                        <div key={i} className="flex gap-4 group">
+                            <span className="text-slate-700 font-bold shrink-0">[{i+1}]</span>
+                            <span className={`
+                                ${log.includes("Round") ? "text-indigo-400 font-bold border-b border-indigo-500/20 w-full" : 
+                                  log.includes("VICTOIRE") ? "text-green-400 font-black" : 
+                                  log.includes("DÉFAITE") ? "text-red-400 font-black" : "text-slate-400"}
+                            `}>{log}</span>
                         </div>
                     ))}
+                    {visibleLogs.length === 0 && <span className="text-slate-700 italic">Initialisation des données tactiques...</span>}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* BUTIN / VOL */}
-                {lootTotal > 0 && (
-                    <div className={`flex items-center justify-between border p-4 rounded-xl shadow-lg ${isAttacker ? 'bg-green-950/20 border-green-500/30' : 'bg-red-950/20 border-red-500/30'}`}>
-                        <div className="flex flex-col">
-                            <span className={`text-[10px] uppercase font-bold ${isAttacker ? 'text-green-400' : 'text-red-400'}`}>
-                                {isAttacker ? "Butin Capturé" : "Ressources Volées"}
-                            </span>
-                            <span className="text-2xl font-black text-white">
-                                {isAttacker ? '+' : '-'}{Math.floor(lootTotal).toLocaleString()}
-                            </span>
-                        </div>
-                        <ShieldAlert size={32} className={isAttacker ? 'text-green-500/30' : 'text-red-500/30'} />
-                    </div>
-                )}
-
-                {/* PERTES */}
-                <div className="flex items-center justify-between bg-red-950/20 border border-red-500/30 p-4 rounded-xl shadow-lg">
-                    <div className="flex flex-col">
-                        <span className="text-[10px] uppercase font-bold text-red-400">Pertes Militaires</span>
-                        <span className="text-2xl font-black text-red-500">-{lossesCount.toLocaleString()}</span>
-                    </div>
-                    <Crosshair size={32} className="text-red-500/30" />
-                </div>
-            </div>
-
-            <Button onClick={onClose} className={`w-full h-14 font-black uppercase tracking-widest text-white ${isVictory ? 'bg-green-700 hover:bg-green-600' : 'bg-red-700 hover:bg-red-600'}`}>
-                Fermer le rapport
+            <Button onClick={onClose} className={`w-full h-16 text-lg font-black uppercase tracking-widest transition-all ${isVictory ? 'bg-green-600 hover:bg-green-500 shadow-green-900/20' : 'bg-red-600 hover:bg-red-500 shadow-red-900/20'} shadow-xl`}>
+                Archiver le rapport
             </Button>
         </div>
       </div>
     </div>
   );
+}
+
+function ResourceBox({ label, val, color, icon: Icon, isPos }: any) {
+    if (val === 0) return null;
+    return (
+        <div className="bg-slate-900/60 border border-white/5 p-3 rounded-xl flex flex-col items-center justify-center gap-1">
+            <Icon size={14} className={color} />
+            <span className={`text-sm font-mono font-bold ${val > 0 ? (isPos ? 'text-green-400' : 'text-red-400') : 'text-slate-400'}`}>
+                {val > 0 && isPos ? '+' : ''}{Math.floor(val).toLocaleString()}
+            </span>
+            <span className="text-[8px] font-black uppercase text-slate-500 tracking-tighter">{label}</span>
+        </div>
+    );
 }

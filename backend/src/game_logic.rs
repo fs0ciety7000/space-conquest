@@ -42,6 +42,21 @@ pub struct UnitStats {
     pub hull: f64,
 }
 
+// --- COÛTS DE BASE DES UNITÉS ---
+pub fn get_unit_cost(unit_type: &str) -> (f64, f64) {
+    match unit_type {
+        "light_hunter" => (3000.0, 1000.0),
+        "cruiser" => (20000.0, 7000.0),
+        "transporter" => (4000.0, 2000.0),
+        "colony_ship" => (10000.0, 20000.0),
+        "recycler" => (10000.0, 6000.0),
+        "spy_probe" => (0.0, 1000.0),
+        "missile_launcher" => (2000.0, 0.0),
+        "plasma_turret" => (50000.0, 50000.0),
+        _ => (0.0, 0.0),
+    }
+}
+
 // --- VERIFICATION DES PREREQUIS ---
 pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<(), String> {
     match item_type {
@@ -56,6 +71,10 @@ pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<()
         },
         "espionage" => {
             if planet.research_lab_level < 3 { return Err("Laboratoire de Recherche niveau 3 requis".to_string()); }
+            Ok(())
+        },
+        "armour" => {
+            if planet.research_lab_level < 2 { return Err("Laboratoire de Recherche niveau 2 requis".to_string()); }
             Ok(())
         },
         "light_hunter" => {
@@ -110,11 +129,7 @@ pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
         "crystal" => Cost { metal: 48.0 * 1.6f64.powi(level - 1), crystal: 24.0 * 1.6f64.powi(level - 1), deuterium: 0.0 },
         "shipyard" => Cost { metal: 400.0 * factor_tech, crystal: 200.0 * factor_tech, deuterium: 100.0 * factor_tech },
         "energy_tech" => Cost { metal: 0.0, crystal: 800.0 * factor_tech, deuterium: 400.0 * factor_tech },
-        "armour" => Cost {
-            metal: 1000.0 * factor_tech,
-            crystal: 0.0,
-            deuterium: 0.0,
-        },
+        "armour" => Cost { metal: 1000.0 * factor_tech, crystal: 0.0, deuterium: 0.0 },
         _ => Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 },
     }
 }
@@ -129,15 +144,15 @@ pub fn get_ship_production_time(qty: i32) -> i64 {
     std::cmp::max(1, (20.0 / SPEED_FACTOR * qty as f64) as i64)
 }
 
-pub fn get_light_hunter_stats() -> (f64, f64) { (3000.0, 1000.0) }
+pub fn get_light_hunter_stats() -> (f64, f64) { get_unit_cost("light_hunter") }
 pub fn get_fleet_capacity(hangar_level: i32) -> i32 { 500 + (hangar_level * 500) }
 pub const TRANSPORTER_CAPACITY: f64 = 10000.0;
 
-pub fn get_spy_probe_stats() -> (f64, f64) { (0.0, 1000.0) }
-pub fn get_missile_launcher_stats() -> (f64, f64) { (2000.0, 0.0) }
-pub fn get_plasma_turret_stats() -> (f64, f64) { (50000.0, 50000.0) }
-pub fn get_colony_ship_stats() -> (f64, f64) { (10000.0, 20000.0) }
-pub fn get_transporter_stats() -> (f64, f64) { (4000.0, 2000.0) }
+pub fn get_spy_probe_stats() -> (f64, f64) { get_unit_cost("spy_probe") }
+pub fn get_missile_launcher_stats() -> (f64, f64) { get_unit_cost("missile_launcher") }
+pub fn get_plasma_turret_stats() -> (f64, f64) { get_unit_cost("plasma_turret") }
+pub fn get_colony_ship_stats() -> (f64, f64) { get_unit_cost("colony_ship") }
+pub fn get_transporter_stats() -> (f64, f64) { get_unit_cost("transporter") }
 
 // --- MOTEUR DE COMBAT ---
 
@@ -260,11 +275,30 @@ pub fn resolve_pvp(
         Cost { metal: def_resources.metal * 0.5, crystal: def_resources.crystal * 0.5, deuterium: def_resources.deuterium * 0.5 }
     } else { Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 } };
 
+    // --- CALCUL DU CHAMP DE DÉBRIS (CDR) ---
+    let att_h_lost = att_hunters - f_att_h;
+    let att_c_lost = att_cruisers - f_att_c;
+    let def_h_lost = def_hunters - f_def_h;
+    let def_c_lost = def_cruisers - f_def_c;
+
+    let (h_m, h_c) = get_unit_cost("light_hunter");
+    let (c_m, c_c) = get_unit_cost("cruiser");
+
+    let total_metal_lost = (att_h_lost + def_h_lost) as f64 * h_m + (att_c_lost + def_c_lost) as f64 * c_m;
+    let total_crystal_lost = (att_h_lost + def_h_lost) as f64 * h_c + (att_c_lost + def_c_lost) as f64 * c_c;
+
+    let debris_m = total_metal_lost * 0.3;
+    let debris_c = total_crystal_lost * 0.3;
+
+    if debris_m > 0.0 {
+        log.push(format!("Champ de débris généré : {:.0} Métal, {:.0} Cristal.", debris_m, debris_c));
+    }
+
     PvpReport {
         winner, log, loot,
-        debris: Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 }, // CDR simplifié pour l'instant
-        attacker_losses: (att_hunters - f_att_h) + (att_cruisers - f_att_c),
-        defender_losses: (def_hunters - f_def_h) + (def_cruisers - f_def_c),
+        debris: Cost { metal: debris_m, crystal: debris_c, deuterium: 0.0 },
+        attacker_losses: att_h_lost + att_c_lost,
+        defender_losses: def_h_lost + def_c_lost,
         lost_missiles: def_missiles - f_miss,
         lost_plasmas: def_plasmas - f_plas,
     }
