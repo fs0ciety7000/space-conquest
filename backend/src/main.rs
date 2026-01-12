@@ -27,7 +27,7 @@ mod entities;
 
 // --- IMPORT DU PRELUDE ---
 use entities::prelude::*;
-use entities::{planet, user, combat_log, fleet_mission, transport_log, message};
+use entities::{planet, user, combat_log, fleet_mission, transport_log, message, construction_queue}; // <-- Ajout
 
 #[derive(Clone)]
 struct AppState {
@@ -302,10 +302,9 @@ async fn get_planet_handler(
     
     let now = Utc::now().naive_utc();
     let elapsed = now.signed_duration_since(p.last_update).num_seconds();
-
     let mut active: planet::ActiveModel = p.clone().into();
 
-    // 1. Mise à jour des Ressources (CORRIGÉ : Ajout du paramètre Tech Energy)
+    // 1. Ressources (Avec Bonus Tech)
     if elapsed > 0 {
         let new_metal = game_logic::calculate_resources(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update, p.energy_tech_level);
         let new_crystal = game_logic::calculate_resources(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update, p.energy_tech_level);
@@ -317,58 +316,54 @@ async fn get_planet_handler(
         active.last_update = Set(now);
     }
 
-    // 2. Fin de construction Bâtiments / Techs
-    if let Some(end_date) = p.construction_end {
-        if now >= end_date {
-            let type_str = p.construction_type.clone().unwrap_or_default();
-            match type_str.as_str() {
-                "metal" => active.metal_mine_level = Set(p.metal_mine_level + 1),
-                "crystal" => active.crystal_mine_level = Set(p.crystal_mine_level + 1),
-                "deuterium" => active.deuterium_mine_level = Set(p.deuterium_mine_level + 1),
-                "energy_tech" => active.energy_tech_level = Set(p.energy_tech_level + 1),
-                "research" => active.research_lab_level = Set(p.research_lab_level + 1),
-                "solar_plant" => active.solar_plant_level = Set(p.solar_plant_level + 1),
-                "shipyard" => active.shipyard_level = Set(p.shipyard_level + 1), // N'oublie pas le shipyard !
-                "laser" => active.laser_battery_level = Set(p.laser_battery_level + 1),
-                "hangar" => active.hangar_level = Set(p.hangar_level + 1),
-                "espionage" => active.espionage_tech_level = Set(p.espionage_tech_level + 1),
-                _ => {}
-            }
-            active.construction_end = Set(None);
-            active.construction_type = Set(None);
+    // 2. Traitement de la File d'Attente (CONSTRUCTION & FLOTTE)
+    let finished_items = ConstructionQueue::find()
+        .filter(construction_queue::Column::PlanetId.eq(p.id))
+        .filter(construction_queue::Column::EndTime.lte(now))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    for item in finished_items {
+        // NOTE : item.level contient :
+        // - Le Niveau cible pour les bâtiments
+        // - La Quantité pour les vaisseaux
+        
+        match item.building_type.as_str() {
+            // --- BÂTIMENTS & TECHS (On set le niveau) ---
+            "metal" => active.metal_mine_level = Set(item.level),
+            "crystal" => active.crystal_mine_level = Set(item.level),
+            "deuterium" => active.deuterium_mine_level = Set(item.level),
+            "energy_tech" => active.energy_tech_level = Set(item.level),
+            "research" => active.research_lab_level = Set(item.level),
+            "solar_plant" => active.solar_plant_level = Set(item.level),
+            "shipyard" => active.shipyard_level = Set(item.level),
+            "laser" => active.laser_battery_level = Set(item.level),
+            "espionage" => active.espionage_tech_level = Set(item.level),
+            "hangar" => active.hangar_level = Set(item.level),
+
+            // --- FLOTTE & DÉFENSE (On ajoute la quantité) ---
+            "light_hunter" => active.light_hunter_count = Set(active.light_hunter_count.unwrap() + item.level),
+            "cruiser" => active.cruiser_count = Set(active.cruiser_count.unwrap() + item.level),
+            "recycler" => active.recycler_count = Set(active.recycler_count.unwrap() + item.level),
+            "spy_probe" => active.spy_probe_count = Set(active.spy_probe_count.unwrap() + item.level),
+            "colony_ship" => active.colony_ship_count = Set(active.colony_ship_count.unwrap() + item.level),
+            "transporter" => active.transporter_count = Set(active.transporter_count.unwrap() + item.level),
+            
+            "missile_launcher" => active.missile_launcher_count = Set(active.missile_launcher_count.unwrap() + item.level),
+            "plasma_turret" => active.plasma_turret_count = Set(active.plasma_turret_count.unwrap() + item.level),
+            
+            _ => {}
         }
+        // Retirer de la file une fois traité
+        let _ = ConstructionQueue::delete_by_id(item.id).exec(&state.db).await;
     }
 
-    // 3. Fin de construction Flotte
-    if let Some(fleet_end) = p.shipyard_construction_end {
-        if now >= fleet_end {
-            let fleet_str = p.pending_fleet_type.clone().unwrap_or_default();
-            let qty = p.pending_fleet_count;
-            match fleet_str.as_str() {
-                "light_hunter" => active.light_hunter_count = Set(p.light_hunter_count + qty),
-                "cruiser" => active.cruiser_count = Set(p.cruiser_count + qty),
-                "recycler" => active.recycler_count = Set(p.recycler_count + qty),
-                "spy_probe" => active.spy_probe_count = Set(p.spy_probe_count + qty),
-                "missile_launcher" => active.missile_launcher_count = Set(p.missile_launcher_count + qty),
-                "plasma_turret" => active.plasma_turret_count = Set(p.plasma_turret_count + qty),
-                "colony_ship" => active.colony_ship_count = Set(p.colony_ship_count + qty),
-                "transporter" => active.transporter_count = Set(p.transporter_count + qty),
-                _ => {}
-            }
-            active.shipyard_construction_end = Set(None);
-            active.pending_fleet_type = Set(None);
-            active.pending_fleet_count = Set(0);
-        }
-    }
-    
-    // 4. Fin Expédition
+    // 3. (Le reste : Expéditions, Transports... inchangé)
     if let Some(exp_end) = p.expedition_end {
-        if now >= exp_end {
-            active.expedition_end = Set(None);
-        }
+        if now >= exp_end { active.expedition_end = Set(None); }
     }
 
-    // 5. Arrivée des Transports
     let missions = FleetMission::find()
         .filter(fleet_mission::Column::TargetPlanetId.eq(id))
         .filter(fleet_mission::Column::ArrivalTime.lte(now))
@@ -399,10 +394,10 @@ async fn get_planet_handler(
             "ships": m.ships_count
         });
         active.unread_report = Set(Some(to_string(&report).unwrap()));
-
         let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
     }
 
+    // SAUVEGARDE
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // --- CALCUL ÉNERGIE ---
@@ -429,13 +424,24 @@ async fn get_planet_handler(
         .await
         .unwrap_or(0);
 
+    // --- ENVOI DE LA LISTE ACTIVE ---
+    let active_queue = ConstructionQueue::find()
+        .filter(construction_queue::Column::PlanetId.eq(p.id))
+        .order_by_asc(construction_queue::Column::EndTime)
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
     let mut json_response = serde_json::to_value(updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
+        obj.insert("constructions".to_string(), json!(active_queue)); // <-- LISTE ENVOYÉE AU FRONT
         obj.insert("unread_messages".to_string(), json!(unread_count));
         obj.insert("energy".to_string(), json!(net_energy));
     }
     Ok(Json(json_response))
 }
+
+
 
 async fn clear_report_handler(
     Path(id): Path<Uuid>,
@@ -457,16 +463,28 @@ async fn upgrade_mine_handler(
 ) -> Result<StatusCode, StatusCode> {
     let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
-    if p.construction_end.is_some() { return Err(StatusCode::CONFLICT); }
+    // 1. VÉRIFIER LES SLOTS (MAX 3)
+    let active_constructions = ConstructionQueue::find()
+        .filter(construction_queue::Column::PlanetId.eq(p.id))
+        .count(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // VERIFICATION PREREQUIS (Appel game_logic)
-    if let Err(msg) = game_logic::check_prerequisites(&p, &type_mine) {
-        // Idéalement on renvoie le message d'erreur, mais ici pour respecter la signature on renvoie Forbidden
-        println!("Erreur prérequis: {}", msg);
-        return Err(StatusCode::FORBIDDEN);
+    if active_constructions >= 3 {
+        // Trop de constructions en cours
+        return Err(StatusCode::CONFLICT);
     }
 
-    let current_level = match type_mine.as_str() {
+    // 2. LOGIQUE NIVEAUX & COÛTS
+    // On doit vérifier si ce bâtiment est DÉJÀ dans la file pour calculer le bon niveau cible
+    let in_queue_count = ConstructionQueue::find()
+        .filter(construction_queue::Column::PlanetId.eq(p.id))
+        .filter(construction_queue::Column::BuildingType.eq(&type_mine))
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
+    let base_level = match type_mine.as_str() {
         "metal" => p.metal_mine_level,
         "crystal" => p.crystal_mine_level,
         "deuterium" => p.deuterium_mine_level,
@@ -475,34 +493,46 @@ async fn upgrade_mine_handler(
         "solar_plant" => p.solar_plant_level,
         "shipyard" => p.shipyard_level,
         "laser" => p.laser_battery_level,
-        "hangar" => p.hangar_level,
         "espionage" => p.espionage_tech_level,
+        "hangar" => p.hangar_level,
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
-    let cost = game_logic::get_upgrade_cost(&type_mine, current_level + 1);
+    // Le niveau cible est le niveau actuel + ce qui est déjà en file + 1
+    let target_level = base_level + (in_queue_count as i32) + 1;
+
+    let cost = game_logic::get_upgrade_cost(&type_mine, target_level);
 
     if p.metal_amount < cost.metal || p.crystal_amount < cost.crystal || p.deuterium_amount < cost.deuterium {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Calcul du niveau du bâtiment réduisant le temps (Labo ou Shipyard)
+    // 3. LANCEMENT
     let facility_level = match type_mine.as_str() {
         "research" | "energy_tech" | "laser" | "espionage" => p.research_lab_level,
-        _ => p.shipyard_level, // Pour les mines et bâtiments (simplifié sur shipyard ou robot)
+        _ => p.shipyard_level,
     };
 
-    // CORRIGÉ : Appel avec 3 paramètres
     let build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level);
-
-    let mut active: planet::ActiveModel = p.into();
+    
+    // Débiter les ressources
+    let mut active: planet::ActiveModel = p.clone().into();
     active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
     active.crystal_amount = Set(active.crystal_amount.unwrap() - cost.crystal);
     active.deuterium_amount = Set(active.deuterium_amount.unwrap() - cost.deuterium);
-    active.construction_type = Set(Some(type_mine));
-    active.construction_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(build_time)));
-
     active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Insérer dans la Queue
+    let queue_item = construction_queue::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(p.id),
+        building_type: Set(type_mine),
+        level: Set(target_level),
+        end_time: Set(Utc::now().naive_utc() + Duration::seconds(build_time)),
+    };
+    
+    queue_item.insert(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     Ok(StatusCode::OK)
 }
 
@@ -512,25 +542,43 @@ async fn build_fleet_handler(
 ) -> Result<StatusCode, StatusCode> {
     let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
-    if p.shipyard_construction_end.is_some() || qty <= 0 { return Err(StatusCode::CONFLICT); }
+    if qty <= 0 { return Err(StatusCode::BAD_REQUEST); }
 
+    // 1. VÉRIFIER LES SLOTS (MAX 3 - Partagé avec les bâtiments pour l'instant)
+    let active_constructions = ConstructionQueue::find()
+        .filter(construction_queue::Column::PlanetId.eq(p.id))
+        .count(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // 1. CALCUL CAPACITÉ
-    let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
-                           + p.spy_probe_count + p.colony_ship_count + p.transporter_count; // Ne compte pas les défenses
-    
-    let max_capacity = game_logic::get_fleet_capacity(p.hangar_level);
-    
-    // On vérifie si la nouvelle commande dépasse la capacité
-    if (current_fleet_size + qty) > max_capacity {
-        println!("Hangar plein ! {}/{}", current_fleet_size, max_capacity);
-        return Err(StatusCode::CONFLICT); // 409 Conflict
+    if active_constructions >= 3 {
+        return Err(StatusCode::CONFLICT); // File pleine
     }
 
+    // 2. VÉRIFIER LE HANGAR
+    let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
+                           + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
+    let max_capacity = game_logic::get_fleet_capacity(p.hangar_level);
     
-    // VERIFICATION PREREQUIS
-    if let Err(msg) = game_logic::check_prerequisites(&p, &type_ship) {
-        println!("Erreur prérequis: {}", msg);
+    // On compte aussi ce qui est déjà en cours de production dans la file !
+    let pending_in_queue: i32 = ConstructionQueue::find()
+        .filter(construction_queue::Column::PlanetId.eq(p.id))
+        // On pourrait filtrer sur les types de vaisseaux, mais pour simplifier on suppose que level = qty pour les vaisseaux
+        // Cette vérification simplifiée suffit pour l'instant
+        .all(&state.db)
+        .await
+        .unwrap_or_default()
+        .iter()
+        .filter(|i| ["light_hunter", "cruiser", "transporter", "colony_ship", "recycler", "spy_probe"].contains(&i.building_type.as_str()))
+        .map(|i| i.level) // Ici level = quantité
+        .sum();
+
+    if (current_fleet_size + pending_in_queue + qty) > max_capacity {
+        return Err(StatusCode::CONFLICT); // Hangar plein
+    }
+
+    // 3. VÉRIFIER PREREQUIS & COÛTS
+    if let Err(_) = game_logic::check_prerequisites(&p, &type_ship) {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -551,16 +599,25 @@ async fn build_fleet_handler(
 
     if p.metal_amount < total_m || p.crystal_amount < total_c { return Err(StatusCode::BAD_REQUEST); }
 
+    // 4. LANCEMENT
     let build_time = game_logic::get_ship_production_time(qty);
 
-    let mut active: planet::ActiveModel = p.into();
+    let mut active: planet::ActiveModel = p.clone().into();
     active.metal_amount = Set(active.metal_amount.unwrap() - total_m);
     active.crystal_amount = Set(active.crystal_amount.unwrap() - total_c);
-    active.pending_fleet_type = Set(Some(type_ship));
-    active.pending_fleet_count = Set(qty);
-    active.shipyard_construction_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(build_time)));
-
     active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Insertion dans la Queue (Note: 'level' stocke la 'quantité')
+    let queue_item = construction_queue::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(p.id),
+        building_type: Set(type_ship),
+        level: Set(qty), // <--- ASTUCE : On stocke la quantité ici
+        end_time: Set(Utc::now().naive_utc() + Duration::seconds(build_time)),
+    };
+    
+    queue_item.insert(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     Ok(StatusCode::OK)
 }
 

@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   Hammer, Microscope, Timer, ArrowUpCircle, 
-  Box, Gem, Droplets, Zap, Scan, Activity, ChevronRight, Warehouse 
+  Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp 
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -11,7 +11,7 @@ interface FacilitiesProps {
   onUpgrade: () => void;
 }
 
-// --- THÈMES VISUELS ---
+// --- THÈMES & CONFIGURATION ---
 const getFacilityTheme = (type: string) => {
   const themes: Record<string, any> = {
     shipyard: {
@@ -45,21 +45,43 @@ const getFacilityTheme = (type: string) => {
   return themes[type] || themes.shipyard;
 };
 
-export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
-  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+// --- LOGIQUE DES BONUS (NOUVEAU) ---
+const getFacilityStats = (id: string, level: number) => {
+    const next = level + 1;
+    switch(id) {
+        case 'hangar':
+            // Formule: 500 + (Niv * 500)
+            return {
+                label: "Capacité Flotte",
+                current: (500 + (level * 500)).toLocaleString(),
+                next: (500 + (next * 500)).toLocaleString(),
+            };
+        case 'shipyard':
+            // Le temps est divisé par (1 + Niv). Donc Vitesse = x(1 + Niv)
+            return {
+                label: "Vitesse Constr.",
+                current: `x${1 + level}`,
+                next: `x${1 + next}`,
+            };
+        case 'research':
+            return {
+                label: "Vitesse Recherche",
+                current: `x${1 + level}`,
+                next: `x${1 + next}`,
+            };
+        default:
+            return { label: "Niveau", current: level, next: next };
+    }
+};
 
+export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
+  const [now, setNow] = useState(new Date().getTime());
+
+  // Timer unique pour tout le composant
   useEffect(() => {
-    if (planet?.construction_end) {
-      const interval = setInterval(() => {
-        const end = new Date(planet.construction_end + "Z").getTime();
-        const now = new Date().getTime();
-        const diff = Math.max(0, Math.floor((end - now) / 1000));
-        setTimeLeft(diff);
-        if (diff === 0) { clearInterval(interval); onUpgrade(); }
-      }, 1000);
-      return () => clearInterval(interval);
-    } else { setTimeLeft(null); }
-  }, [planet?.construction_end, onUpgrade]);
+    const interval = setInterval(() => setNow(new Date().getTime()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleUpgrade = async (type: string) => {
     const token = localStorage.getItem('token');
@@ -72,6 +94,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     } catch (e) { console.error(e); }
   };
 
+  // Coûts
   const getCost = (type: string, lv: number) => {
     const factor = Math.pow(2, lv);
     if (type === 'shipyard') return { m: 400 * factor, c: 200 * factor, d: 100 * factor };
@@ -82,157 +105,114 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
 
   const facilities = [
     { 
-      id: 'shipyard', 
-      name: 'Chantier Spatial', 
-      lv: planet.shipyard_level ?? 0, 
-      type: 'CONSTRUCTION',
-      desc: "Infrastructure lourde permettant l'assemblage de vaisseaux et de défenses planétaires." 
+      id: 'shipyard', name: 'Chantier Spatial', lv: planet.shipyard_level ?? 0, 
+      desc: "Permet la construction de vaisseaux et défenses.", 
     },
     { 
-      id: 'research', 
-      name: 'Labo de Recherche', 
-      lv: planet.research_lab_level ?? 0, 
-      type: 'SCIENTIFIQUE',
-      desc: "Centre de développement pour les nouvelles technologies et moteurs spatiaux." 
+      id: 'research', name: 'Labo de Recherche', lv: planet.research_lab_level ?? 0, 
+      desc: "Nécessaire pour débloquer de nouvelles technologies.", 
     },
     { 
-      id: 'hangar', 
-      name: 'Hangar à Vaisseaux', 
-      lv: planet.hangar_level ?? 0, 
-      type: 'LOGISTIQUE',
-      desc: "Augmente la capacité maximale de la flotte stationnée (+500 places/niv)." 
+      id: 'hangar', name: 'Hangar à Vaisseaux', lv: planet.hangar_level ?? 0, 
+      desc: "Augmente la capacité de stockage de la flotte.", 
     },
   ];
 
-  const isBuilding = planet.construction_end !== null;
+  // Gestion File d'attente
+  const queue = planet.constructions || [];
+  const isQueueFull = queue.length >= 3;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in zoom-in-95 duration-500 pb-20">
       {facilities.map((fac) => {
-        // Calcul du coût pour le niveau SUIVANT (niveau actuel utilisé par la formule car elle fait pow(2, lv))
+        // Logique Queue
+        const activeItem = queue.find((q: any) => q.building_type === fac.id);
+        const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
+
         const cost = getCost(fac.id, fac.lv);
+        const stats = getFacilityStats(fac.id, fac.lv); // Récupération des stats
         const canAfford = (planet.metal_amount >= cost.m) && (planet.crystal_amount >= cost.c) && (planet.deuterium_amount >= cost.d);
-        const isThisBuilding = planet.construction_type === fac.id;
+        
         const theme = getFacilityTheme(fac.id);
         const Icon = theme.icon;
         const BgIcon = theme.bgIcon;
 
         return (
-          <Card key={fac.id} className={`relative overflow-hidden border-t-4 ${theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group hover:-translate-y-1 transition-all duration-300`}>
+          <Card key={fac.id} className={`relative overflow-hidden border-t-4 ${theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group`}>
+             <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
+             {/* Icône de fond */}
+             <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
+                <BgIcon size={150} className={theme.color} />
+             </div>
             
-            {/* Effet Scan Top */}
-            <div className="absolute top-0 inset-x-0 h-px bg-white/10 opacity-50 group-hover:bg-white/30 transition-all"></div>
-            
-            {/* Icône de fond géante */}
-            <div className="absolute -right-10 -top-10 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-                <BgIcon size={200} className={theme.color} />
-            </div>
-
-            <CardContent className="p-6 relative z-10 flex flex-col h-full">
-              
-              {/* HEADER */}
-              <div className="flex justify-between items-start mb-6">
-                <div className="flex gap-4 items-center">
-                    <div className={`p-3.5 rounded-xl border ${theme.border} bg-black/40 ${theme.glow} group-hover:scale-110 transition-transform duration-300`}>
-                        <Icon className={theme.color} size={28} />
-                    </div>
-                    <div>
-                        <div className={`text-[9px] font-black uppercase tracking-[0.25em] ${theme.color} mb-1 flex items-center gap-1.5`}>
-                            <Zap size={10} /> {fac.type}
+            <CardContent className="p-6 relative z-10 flex flex-col h-full justify-between">
+              <div>
+                <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-lg border ${theme.border} bg-black/20 ${theme.color} group-hover:text-white group-hover:bg-white/10 transition-all`}>
+                            <Icon size={24} />
                         </div>
-                        <h3 className="text-xl font-black uppercase text-white tracking-wide leading-none">{fac.name}</h3>
+                        <div>
+                            <h3 className="text-lg font-black uppercase tracking-wider text-white">{fac.name}</h3>
+                            <p className="text-xs text-slate-400 h-4 leading-tight">{fac.desc}</p>
+                        </div>
+                    </div>
+                    <span className={`text-2xl font-black font-mono ${theme.color} opacity-80`}>Nv.{fac.lv}</span>
+                </div>
+
+                {/* STATS DYNAMIQUES (AJOUTÉ) */}
+                <div className="mb-4 p-2 bg-black/30 rounded border border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
+                        <TrendingUp size={12} className={theme.color} />
+                        <span>{stats.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-mono">
+                        <span className="text-slate-300">{stats.current}</span>
+                        <ChevronRight size={12} className="text-slate-600" />
+                        <span className={`${theme.color} font-bold`}>{stats.next}</span>
                     </div>
                 </div>
-                
-                {/* Niveau */}
-                <div className="text-right">
-                    <span className={`text-4xl font-mono font-black ${theme.color} opacity-90`}>{fac.lv}</span>
-                    <p className="text-[9px] text-slate-500 uppercase tracking-widest font-bold -mt-1">Niveau</p>
+
+                {/* Coûts (Design Grille) */}
+                <div className="grid grid-cols-3 gap-2 mb-6">
+                    <div className={`p-2 rounded bg-black/40 border border-white/5 text-xs font-mono flex flex-col items-center ${planet.metal_amount < cost.m ? 'text-red-500 border-red-900/50' : 'text-slate-300'}`}>
+                        <span className="uppercase text-[9px] text-slate-500 font-bold mb-1">Métal</span>
+                        {Math.floor(cost.m).toLocaleString()}
+                    </div>
+                    <div className={`p-2 rounded bg-black/40 border border-white/5 text-xs font-mono flex flex-col items-center ${planet.crystal_amount < cost.c ? 'text-red-500 border-red-900/50' : 'text-slate-300'}`}>
+                        <span className="uppercase text-[9px] text-slate-500 font-bold mb-1">Cristal</span>
+                        {Math.floor(cost.c).toLocaleString()}
+                    </div>
+                    <div className={`p-2 rounded bg-black/40 border border-white/5 text-xs font-mono flex flex-col items-center ${planet.deuterium_amount < cost.d ? 'text-red-500 border-red-900/50' : 'text-slate-300'}`}>
+                        <span className="uppercase text-[9px] text-slate-500 font-bold mb-1">Deut.</span>
+                        {Math.floor(cost.d).toLocaleString()}
+                    </div>
                 </div>
               </div>
 
-              {/* DESCRIPTION */}
-              <div className="bg-black/30 p-4 rounded-lg border border-white/5 mb-6 backdrop-blur-sm min-h-[80px]">
-                 <p className="text-xs text-slate-300 leading-relaxed font-mono">
-                    {fac.desc}
-                 </p>
-              </div>
-
-              {/* COÛTS (Affichage explicite) */}
-              <div className="mb-6">
-                 <div className="flex justify-between items-end mb-2 px-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Coût d'amélioration</span>
-                    <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
-                        <span>Niv. {fac.lv}</span>
-                        <ChevronRight size={10} />
-                        <span className="text-white font-bold">Niv. {fac.lv + 1}</span>
-                    </div>
-                 </div>
-
-                 <div className="space-y-2">
-                     {/* Métal */}
-                     <div className={`flex justify-between items-center px-3 py-2 rounded bg-black/40 border ${planet.metal_amount >= cost.m ? 'border-white/5' : 'border-red-900/50'}`}>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-2">
-                            <Box size={12} /> Métal
-                        </span>
-                        <span className={`text-xs font-mono font-bold ${planet.metal_amount >= cost.m ? 'text-slate-300' : 'text-red-500'}`}>
-                            {Math.floor(cost.m).toLocaleString()}
-                        </span>
-                     </div>
-                     {/* Cristal */}
-                     <div className={`flex justify-between items-center px-3 py-2 rounded bg-black/40 border ${planet.crystal_amount >= cost.c ? 'border-white/5' : 'border-red-900/50'}`}>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-2">
-                            <Gem size={12} /> Cristal
-                        </span>
-                        <span className={`text-xs font-mono font-bold ${planet.crystal_amount >= cost.c ? 'text-slate-300' : 'text-red-500'}`}>
-                            {Math.floor(cost.c).toLocaleString()}
-                        </span>
-                     </div>
-                     {/* Deutérium */}
-                     <div className={`flex justify-between items-center px-3 py-2 rounded bg-black/40 border ${planet.deuterium_amount >= cost.d ? 'border-white/5' : 'border-red-900/50'}`}>
-                        <span className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-2">
-                            <Droplets size={12} /> Deutérium
-                        </span>
-                        <span className={`text-xs font-mono font-bold ${planet.deuterium_amount >= cost.d ? 'text-slate-300' : 'text-red-500'}`}>
-                            {Math.floor(cost.d).toLocaleString()}
-                        </span>
-                     </div>
-                 </div>
-              </div>
-
-              {/* BOUTON D'ACTION */}
-              <div className="mt-auto">
-                <Button 
-                    onClick={() => handleUpgrade(fac.id)}
-                    disabled={isBuilding || !canAfford}
-                    className={`w-full h-12 font-black uppercase text-[11px] tracking-[0.2em] transition-all rounded-xl relative overflow-hidden group/btn shadow-lg ${
-                        isBuilding 
-                        ? 'bg-slate-900 text-slate-500 border border-white/5' 
-                        : !canAfford 
-                            ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed'
-                            : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow}`
-                    }`}
-                >
-                    {/* Effet brillance au survol si actif */}
-                    {!isBuilding && canAfford && (
-                        <div className={`absolute top-0 bottom-0 w-2 bg-white/20 blur-md -skew-x-12 -left-10 group-hover/btn:left-[120%] transition-all duration-700`}></div>
-                    )}
-
-                    {isThisBuilding && timeLeft !== null ? (
-                        <span className="flex items-center gap-3 relative z-10 animate-pulse text-cyan-400">
-                            <Timer size={16} className="animate-spin" /> Construction : {timeLeft}s
-                        </span>
-                    ) : isBuilding ? (
-                        <span className="relative z-10">File d'attente occupée</span>
-                    ) : !canAfford ? (
-                        <span className="relative z-10">Ressources manquantes</span>
-                    ) : (
-                        <span className="flex items-center gap-2 relative z-10">
-                            <ArrowUpCircle size={16} /> Lancer Construction
-                        </span>
-                    )}
-                </Button>
-              </div>
+              <Button 
+                onClick={() => handleUpgrade(fac.id)}
+                disabled={(isQueueFull && !activeItem) || !canAfford}
+                className={`w-full font-bold uppercase tracking-widest ${
+                    activeItem 
+                        ? 'bg-indigo-900/50 border border-indigo-500 text-indigo-300 animate-pulse' 
+                        : isQueueFull
+                            ? 'bg-slate-800 text-slate-500'
+                            : !canAfford 
+                                ? 'bg-red-950/20 border border-red-900/50 text-red-500' 
+                                : `bg-indigo-600 hover:bg-indigo-500 text-white`
+                }`}
+              >
+                {activeItem ? (
+                    <span className="flex items-center gap-2"><Timer size={16} className="animate-spin" /> En cours: {timeLeft}s</span>
+                ) : isQueueFull ? (
+                    "File Pleine (3/3)"
+                ) : !canAfford ? (
+                    "Ressources Insuffisantes"
+                ) : (
+                    <span className="flex items-center gap-2"><ArrowUpCircle size={16} /> Améliorer</span>
+                )}
+              </Button>
 
             </CardContent>
           </Card>

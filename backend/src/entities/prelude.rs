@@ -6,3 +6,4 @@ pub use super :: fleet_mission :: Entity as FleetMission ;
 pub use super :: combat_log :: Entity as CombatLog ;
 pub use super :: transport_log :: Entity as TransportLog ;
 pub use super :: message :: Entity as Message ;
+pub use super :: construction_queue :: Entity as ConstructionQueue ;

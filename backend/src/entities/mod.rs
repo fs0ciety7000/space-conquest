@@ -8,3 +8,4 @@ pub mod combat_log;
 pub mod fleet_mission ;
 pub mod transport_log ;
 pub mod message ;
+pub mod construction_queue;
