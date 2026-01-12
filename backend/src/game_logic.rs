@@ -180,6 +180,11 @@ pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
             crystal: 400.0 * factor_tech,
             deuterium: 200.0 * factor_tech,
         },
+        "hangar" => Cost {
+            metal: 500.0 * factor_tech,
+            crystal: 250.0 * factor_tech,
+            deuterium: 100.0 * factor_tech,
+        },
 
         // Technologies
         "energy_tech" => Cost {
@@ -231,6 +236,11 @@ pub fn get_transporter_stats() -> (f64, f64) { (4000.0, 2000.0) }
 pub fn get_spy_probe_stats() -> (f64, f64) { (0.0, 1000.0) }
 pub fn get_missile_launcher_stats() -> (f64, f64) { (2000.0, 0.0) }
 pub fn get_plasma_turret_stats() -> (f64, f64) { (50000.0, 50000.0) }
+
+pub fn get_fleet_capacity(hangar_level: i32) -> i32 {
+    // Base 500 places + 500 par niveau de hangar
+    500 + (hangar_level * 500)
+}
 
 pub const TRANSPORTER_CAPACITY: f64 = 10000.0;
 

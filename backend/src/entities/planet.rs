@@ -96,6 +96,10 @@ pub struct Model {
 
     #[sea_orm(default_value = 0)]
     pub shipyard_level: i32,
+
+    #[sea_orm(default_value = 0)]
+    pub hangar_level: i32,
+
     
     // Expédition
     pub expedition_end: Option<DateTime>,

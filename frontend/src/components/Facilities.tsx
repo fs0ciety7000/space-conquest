@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   Hammer, Microscope, Timer, ArrowUpCircle, 
-  Box, Gem, Droplets, Zap, Scan, Activity, ChevronRight 
+  Box, Gem, Droplets, Zap, Scan, Activity, ChevronRight, Warehouse 
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -31,6 +31,15 @@ const getFacilityTheme = (type: string) => {
       gradient: "from-slate-950 to-fuchsia-950/20",
       icon: Microscope,
       bgIcon: Activity
+    },
+    hangar: {
+      color: "text-orange-400",
+      border: "border-orange-500/50",
+      bg: "bg-orange-500/10",
+      glow: "shadow-orange-500/20",
+      gradient: "from-slate-950 to-orange-950/20",
+      icon: Warehouse,
+      bgIcon: Warehouse
     }
   };
   return themes[type] || themes.shipyard;
@@ -67,6 +76,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     const factor = Math.pow(2, lv);
     if (type === 'shipyard') return { m: 400 * factor, c: 200 * factor, d: 100 * factor };
     if (type === 'research') return { m: 200 * factor, c: 400 * factor, d: 200 * factor };
+    if (type === 'hangar') return { m: 500 * factor, c: 250 * factor, d: 100 * factor };
     return { m: 0, c: 0, d: 0 };
   };
 
@@ -84,6 +94,13 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
       lv: planet.research_lab_level ?? 0, 
       type: 'SCIENTIFIQUE',
       desc: "Centre de développement pour les nouvelles technologies et moteurs spatiaux." 
+    },
+    { 
+      id: 'hangar', 
+      name: 'Hangar à Vaisseaux', 
+      lv: planet.hangar_level ?? 0, 
+      type: 'LOGISTIQUE',
+      desc: "Augmente la capacité maximale de la flotte stationnée (+500 places/niv)." 
     },
   ];
 

@@ -22,6 +22,7 @@ mod m20260111_223746_create_transport_log;
 mod m20260112_004006_create_message_table;
 mod m20260112_032740_add_solar_plant;
 mod m20260112_043825_add_shipyard_level;
+mod m20260112_054113_add_hangar_level;
 
 pub struct Migrator;
 
@@ -51,6 +52,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260112_004006_create_message_table::Migration),
             Box::new(m20260112_032740_add_solar_plant::Migration),
             Box::new(m20260112_043825_add_shipyard_level::Migration),
+            Box::new(m20260112_054113_add_hangar_level::Migration),
         ]
     }
 }

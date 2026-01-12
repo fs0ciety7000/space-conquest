@@ -330,6 +330,7 @@ async fn get_planet_handler(
                 "solar_plant" => active.solar_plant_level = Set(p.solar_plant_level + 1),
                 "shipyard" => active.shipyard_level = Set(p.shipyard_level + 1), // N'oublie pas le shipyard !
                 "laser" => active.laser_battery_level = Set(p.laser_battery_level + 1),
+                "hangar" => active.hangar_level = Set(p.hangar_level + 1),
                 "espionage" => active.espionage_tech_level = Set(p.espionage_tech_level + 1),
                 _ => {}
             }
@@ -474,6 +475,7 @@ async fn upgrade_mine_handler(
         "solar_plant" => p.solar_plant_level,
         "shipyard" => p.shipyard_level,
         "laser" => p.laser_battery_level,
+        "hangar" => p.hangar_level,
         "espionage" => p.espionage_tech_level,
         _ => return Err(StatusCode::BAD_REQUEST),
     };
@@ -512,6 +514,20 @@ async fn build_fleet_handler(
 
     if p.shipyard_construction_end.is_some() || qty <= 0 { return Err(StatusCode::CONFLICT); }
 
+
+    // 1. CALCUL CAPACITÉ
+    let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
+                           + p.spy_probe_count + p.colony_ship_count + p.transporter_count; // Ne compte pas les défenses
+    
+    let max_capacity = game_logic::get_fleet_capacity(p.hangar_level);
+    
+    // On vérifie si la nouvelle commande dépasse la capacité
+    if (current_fleet_size + qty) > max_capacity {
+        println!("Hangar plein ! {}/{}", current_fleet_size, max_capacity);
+        return Err(StatusCode::CONFLICT); // 409 Conflict
+    }
+
+    
     // VERIFICATION PREREQUIS
     if let Err(msg) = game_logic::check_prerequisites(&p, &type_ship) {
         println!("Erreur prérequis: {}", msg);

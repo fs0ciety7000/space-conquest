@@ -220,7 +220,7 @@ export default function App() {
     { id: 'galaxy', label: 'Galaxie', icon: Globe, category: 'COMMANDEMENT' },
     { id: 'messages', label: 'Messagerie', icon: Mail, category: 'COMMUNICATION' },
     
-    { id: 'resources', label: 'Mines', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
+    { id: 'resources', label: 'Ressources', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
     { id: 'facilities', label: 'Installations', icon: Factory, category: 'DÉVELOPPEMENT' }, 
     { id: 'tech', label: 'Laboratoire', icon: FlaskConical, category: 'DÉVELOPPEMENT' },
     
