@@ -19,6 +19,8 @@ pub struct PvpReport {
     pub debris: Cost,
     pub attacker_losses: i32,
     pub defender_losses: i32,
+    pub lost_missiles: i32,
+    pub lost_plasmas: i32,
 }
 
 pub struct CombatResult {
@@ -273,58 +275,71 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
 pub fn resolve_pvp(
     att_hunters: i32, att_cruisers: i32, att_techs: CombatTechs,
     def_hunters: i32, def_cruisers: i32, 
-    def_lasers: i32, def_missiles: i32, def_plasmas: i32, 
+    def_lasers: i32, // (Optionnel si tu l'utilises pas, mets 0)
+    def_missiles: i32, def_plasmas: i32, 
     def_techs: CombatTechs,
     def_resources: Cost   
 ) -> PvpReport {
     let mut log = Vec::new();
 
-    // 1. CALCUL DES BONUS TECH (Laser +10% par niveau)
-    let att_dmg_mult = 1.0 + (att_techs.laser as f64 * 0.10);
-    let def_dmg_mult = 1.0 + (def_techs.laser as f64 * 0.10);
+    // 1. BONUS TECH (Armes)
+    let att_bonus = 1.0 + (att_techs.laser as f64 * 0.10);
+    let def_bonus = 1.0 + (def_techs.laser as f64 * 0.10);
 
-    // 2. CALCUL PUISSANCE DE FEU
-    let att_power = ((att_hunters as f64 * 50.0) + (att_cruisers as f64 * 400.0)) * att_dmg_mult;
+    // 2. PUISSANCE D'ATTAQUE
+    // Chasseur: 50, Croiseur: 400
+    let att_power = ((att_hunters as f64 * 50.0) + (att_cruisers as f64 * 400.0)) * att_bonus;
     
-    let def_power = ((def_hunters as f64 * 50.0) 
-                  + (def_cruisers as f64 * 400.0) 
-                  + (def_lasers as f64 * 100.0)      
-                  + (def_missiles as f64 * 80.0) 
-                  + (def_plasmas as f64 * 2000.0)) * def_dmg_mult;
+    // 3. PUISSANCE DE DÉFENSE (C'est ici qu'elles comptent !)
+    // Missile: 80 (fort vs chasseurs), Plasma: 2000 (TRES fort)
+ let def_power = (
+        (def_hunters as f64 * 50.0) + 
+        (def_cruisers as f64 * 400.0) +
+        (def_lasers as f64 * 100.0) +    // <--- AJOUTÉ (Valeur arbitraire 100)
+        (def_missiles as f64 * 80.0) +   
+        (def_plasmas as f64 * 2000.0)    
+    ) * def_bonus;
 
-    log.push(format!("Analyse : Force Attaque {:.0} (Bonus Laser +{}%) vs Force Défense {:.0} (Bonus Laser +{}%)", 
-        att_power, (att_techs.laser * 10), def_power, (def_techs.laser * 10)));
+    log.push(format!("Forces en présence : Attaquant {:.0} vs Défenseur {:.0}", att_power, def_power));
 
+    // Variables de résultat
     let winner;
     let loot;
-    let attacker_losses;
-    let defender_losses;
-    let defense_struct_lost; 
-
-    // PERTES
+    let debris_metal;
+    let debris_crystal;
+    
+    // Pertes exactes
     let att_lost_hunters;
     let att_lost_cruisers;
     let def_lost_hunters;
     let def_lost_cruisers;
+    let lost_missiles;
+    let lost_plasmas;
 
-   if att_power > def_power {
+    if att_power > def_power {
+        // --- VICTOIRE ATTAQUANT ---
         winner = "attacker".to_string();
-        log.push("VICTOIRE : Défenses percées.".to_string());
-        
+        log.push("VICTOIRE ATTAQUANT : Les défenses ont été percées.".to_string());
+
+        // Calcul des pertes basé sur le ratio de force (plus le combat est serré, plus on perd)
         let ratio = if att_power > 0.0 { def_power / att_power } else { 0.0 };
-        let loss_percent = 0.1 + (0.4 * ratio);
         
-        att_lost_hunters = (att_hunters as f64 * loss_percent) as i32;
-        att_lost_cruisers = (att_cruisers as f64 * loss_percent) as i32;
-        
-        attacker_losses = att_lost_hunters + att_lost_cruisers;
+        // L'attaquant perd entre 10% (écrasante victoire) et 50% (combat serré)
+        let att_loss_rate = 0.1 + (0.4 * ratio); 
+        att_lost_hunters = (att_hunters as f64 * att_loss_rate) as i32;
+        att_lost_cruisers = (att_cruisers as f64 * att_loss_rate) as i32;
 
-        def_lost_hunters = (def_hunters as f64 * 0.8) as i32;
-        def_lost_cruisers = (def_cruisers as f64 * 0.8) as i32;
-        
-        defender_losses = def_lost_hunters + def_lost_cruisers;
-        defense_struct_lost = (def_missiles as f64 * 0.6) as i32;
+        // Le défenseur perd tout sa flotte (classique OGame si défaite)
+        def_lost_hunters = def_hunters;
+        def_lost_cruisers = def_cruisers;
 
+        // MAIS les défenses ne sont pas toutes détruites (Règle des 70% de réparation max)
+        // Disons qu'on perd 30% à 60% des défenses définitivement
+        let def_struct_loss_rate = 0.3 + (0.3 * ratio); 
+        lost_missiles = (def_missiles as f64 * def_struct_loss_rate) as i32;
+        lost_plasmas = (def_plasmas as f64 * def_struct_loss_rate) as i32;
+
+        // Butin (50% des ressources stockées)
         loot = Cost {
             metal: def_resources.metal * 0.5,
             crystal: def_resources.crystal * 0.5,
@@ -332,34 +347,43 @@ pub fn resolve_pvp(
         };
 
     } else {
+        // --- VICTOIRE DÉFENSEUR ---
         winner = "defender".to_string();
-        log.push("DÉFAITE : La forteresse a tenu bon.".to_string());
-        
+        log.push("VICTOIRE DÉFENSEUR : L'envahisseur a été repoussé.".to_string());
+
+        // L'attaquant perd tout (ou presque, 80%)
         att_lost_hunters = (att_hunters as f64 * 0.8) as i32;
         att_lost_cruisers = (att_cruisers as f64 * 0.8) as i32;
-        attacker_losses = att_lost_hunters + att_lost_cruisers;
 
+        // Le défenseur perd peu (avantage terrain + boucliers)
         def_lost_hunters = (def_hunters as f64 * 0.1) as i32;
         def_lost_cruisers = (def_cruisers as f64 * 0.1) as i32;
-        defender_losses = def_lost_hunters + def_lost_cruisers;
         
-        defense_struct_lost = (def_missiles as f64 * 0.1) as i32;
-        
+        // Les défenses sont très peu endommagées en cas de victoire
+        lost_missiles = (def_missiles as f64 * 0.05) as i32;
+        lost_plasmas = (def_plasmas as f64 * 0.05) as i32;
+
         loot = Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 };
     }
 
-    // CALCUL DU CDR (CHAMP DE DÉBRIS)
+    // CALCUL DU CHAMP DE DÉBRIS (CDR)
+    // 30% du métal et cristal des vaisseaux détruits (pas les défenses en général)
     let (hunter_m, hunter_c) = get_light_hunter_stats();
     let (cruiser_m, cruiser_c) = (20000.0, 7000.0);
 
-    let debris_metal = ((att_lost_hunters + def_lost_hunters) as f64 * hunter_m * 0.3) 
-                     + ((att_lost_cruisers + def_lost_cruisers) as f64 * cruiser_m * 0.3);
-    
-    let debris_crystal = ((att_lost_hunters + def_lost_hunters) as f64 * hunter_c * 0.3) 
-                       + ((att_lost_cruisers + def_lost_cruisers) as f64 * cruiser_c * 0.3);
+    let total_lost_ships_metal = 
+        ((att_lost_hunters + def_lost_hunters) as f64 * hunter_m) + 
+        ((att_lost_cruisers + def_lost_cruisers) as f64 * cruiser_m);
 
-    if debris_metal > 0.0 || debris_crystal > 0.0 {
-        log.push(format!("DÉBRIS : Un champ de débris s'est formé ({:.0} M, {:.0} C).", debris_metal, debris_crystal));
+    let total_lost_ships_crystal = 
+        ((att_lost_hunters + def_lost_hunters) as f64 * hunter_c) + 
+        ((att_lost_cruisers + def_lost_cruisers) as f64 * cruiser_c);
+
+    debris_metal = total_lost_ships_metal * 0.3;
+    debris_crystal = total_lost_ships_crystal * 0.3;
+
+    if debris_metal > 0.0 {
+        log.push(format!("Un champ de débris s'est formé : {:.0} Métal, {:.0} Cristal", debris_metal, debris_crystal));
     }
 
     PvpReport {
@@ -367,7 +391,9 @@ pub fn resolve_pvp(
         log,
         loot,
         debris: Cost { metal: debris_metal, crystal: debris_crystal, deuterium: 0.0 },
-        attacker_losses,
-        defender_losses: defender_losses + defense_struct_lost
+        attacker_losses: att_lost_hunters + att_lost_cruisers,
+        defender_losses: def_lost_hunters + def_lost_cruisers,
+        lost_missiles, // <-- Retourné spécifiquement
+        lost_plasmas,  // <-- Retourné spécifiquement
     }
 }

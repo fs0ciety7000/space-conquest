@@ -6,6 +6,7 @@ import { fr } from "date-fns/locale";
 interface CombatLog {
   id: string;
   target_name: string;
+  opponent_username?: string; // <-- NOUVEAU
   mission_type: string;
   result: string;
   loot_metal: number;
@@ -20,6 +21,7 @@ interface TransportLog {
   target_planet_name: string;
   source_planet_id: string;
   source_planet_name: string;
+  opponent_username?: string; // <-- NOUVEAU (Ex: Nom du joueur qui envoie/reçoit)
   metal: number;
   crystal: number;
   deuterium: number;
@@ -43,10 +45,8 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
       .catch(console.error);
   }, [planetId]);
 
-  // --- CORRECTION TIMEZONE ---
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
-    // On ajoute 'Z' si absent pour forcer le mode UTC
     const utcDateString = dateString.endsWith("Z") ? dateString : dateString + "Z";
     return formatDistanceToNow(new Date(utcDateString), { addSuffix: true, locale: fr });
   };
@@ -100,8 +100,10 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                                         <span className={`text-xs font-black uppercase ${isVictory ? 'text-green-400' : 'text-red-400'}`}>
                                             {isVictory ? "VICTOIRE" : "DÉFAITE"}
                                         </span>
+                                        {/* NOM DE PLANÈTE + USERNAME */}
                                         <span className="text-[10px] text-slate-500 font-mono">
-                                            vs {log.target_name}
+                                            vs {log.target_name} 
+                                            {log.opponent_username && <span className="text-slate-400 ml-1">(Cdt. {log.opponent_username})</span>}
                                         </span>
                                     </div>
                                     <div className="text-[10px] text-slate-400 mt-0.5">
@@ -148,6 +150,8 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                                             {isReceived ? "De:" : "Vers:"} 
                                             <span className="text-white font-bold">
                                                 {isReceived ? log.source_planet_name : log.target_planet_name}
+                                                {/* USERNAME LOGISTIQUE */}
+                                                {log.opponent_username && <span className="text-slate-400 font-normal ml-1">({log.opponent_username})</span>}
                                             </span>
                                         </span>
                                     </div>

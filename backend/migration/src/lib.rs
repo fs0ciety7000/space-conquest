@@ -24,6 +24,7 @@ mod m20260112_032740_add_solar_plant;
 mod m20260112_043825_add_shipyard_level;
 mod m20260112_054113_add_hangar_level;
 mod m20260112_060815_create_construction_queue;
+mod m20260112_072815_add_usernames_to_logs;
 
 pub struct Migrator;
 
@@ -55,6 +56,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260112_043825_add_shipyard_level::Migration),
             Box::new(m20260112_054113_add_hangar_level::Migration),
             Box::new(m20260112_060815_create_construction_queue::Migration),
+            Box::new(m20260112_072815_add_usernames_to_logs::Migration),
         ]
     }
 }

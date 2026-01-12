@@ -627,6 +627,7 @@ async fn attack_handler(
     Json(payload): Json<AttackPayload>,
 ) -> impl IntoResponse {
     
+    // 1. RÉCUPÉRATION DES JOUEURS ET PLANÈTES (Tout en haut !)
     let attacker_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let attacker_id = match Uuid::parse_str(&attacker_id_str) {
         Ok(id) => id,
@@ -637,118 +638,146 @@ async fn attack_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Impossible de s'attaquer soi-même"}))).into_response();
     }
 
+    // Récupération Attaquant + User
     let att_planet = match Planet::find_by_id(attacker_id).one(&state.db).await {
-        Ok(Some(p)) => p,
-        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Attaquant introuvable"}))).into_response(),
+        Ok(Some(p)) => p, _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Attaquant introuvable"}))).into_response(),
     };
+    let att_user = User::find_by_id(att_planet.owner_id).one(&state.db).await.unwrap().unwrap();
 
-    let def_planet = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await {
-        Ok(Some(p)) => p,
-        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible introuvable"}))).into_response(),
+    // Récupération Défenseur + User
+    let def_planet_raw = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p, _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible introuvable"}))).into_response(),
     };
+    let def_user = User::find_by_id(def_planet_raw.owner_id).one(&state.db).await.unwrap().unwrap();
 
+
+    // 2. MISE À JOUR RESSOURCES DÉFENSEUR (Production fraîche)
+    let now = Utc::now().naive_utc();
+    let def_metal_fresh = game_logic::calculate_resources(game_logic::ResourceType::Metal, def_planet_raw.metal_mine_level, def_planet_raw.metal_amount, def_planet_raw.last_update, def_planet_raw.energy_tech_level);
+    let def_crystal_fresh = game_logic::calculate_resources(game_logic::ResourceType::Crystal, def_planet_raw.crystal_mine_level, def_planet_raw.crystal_amount, def_planet_raw.last_update, def_planet_raw.energy_tech_level);
+    let def_deut_fresh = game_logic::calculate_resources(game_logic::ResourceType::Deuterium, def_planet_raw.deuterium_mine_level, def_planet_raw.deuterium_amount, def_planet_raw.last_update, def_planet_raw.energy_tech_level);
+
+    let mut def_planet = def_planet_raw.clone();
+    def_planet.metal_amount = def_metal_fresh;
+    def_planet.crystal_amount = def_crystal_fresh;
+    def_planet.deuterium_amount = def_deut_fresh;
+
+    // 3. VÉRIFICATIONS FLOTTE
     if payload.hunters > att_planet.light_hunter_count || payload.cruisers > att_planet.cruiser_count {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Flotte insuffisante"}))).into_response();
     }
-    
     if payload.hunters <= 0 && payload.cruisers <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucune flotte envoyée"}))).into_response();
     }
 
-    // --- CORRIGÉ : Création des objets CombatTechs ---
-    let att_techs = game_logic::CombatTechs {
-        laser: att_planet.laser_battery_level, // Utilise le niveau de laser comme tech offensive
-        energy: att_planet.energy_tech_level,
-        armour: 0,
-    };
+    // 4. COMBAT
+    let att_techs = game_logic::CombatTechs { laser: att_planet.laser_battery_level, energy: att_planet.energy_tech_level, armour: 0 };
+    let def_techs = game_logic::CombatTechs { laser: def_planet.laser_battery_level, energy: def_planet.energy_tech_level, armour: 0 };
+    let def_resources = game_logic::Cost { metal: def_planet.metal_amount, crystal: def_planet.crystal_amount, deuterium: def_planet.deuterium_amount };
 
-    let def_techs = game_logic::CombatTechs {
-        laser: def_planet.laser_battery_level,
-        energy: def_planet.energy_tech_level,
-        armour: 0,
-    };
-
-    let def_resources = game_logic::Cost {
-        metal: def_planet.metal_amount,
-        crystal: def_planet.crystal_amount,
-        deuterium: def_planet.deuterium_amount,
-    };
-
-    // --- CORRIGÉ : Appel avec les Techs ---
     let result = game_logic::resolve_pvp(
-        payload.hunters, 
-        payload.cruisers, 
-        att_techs, // <-- Ajouté
-        def_planet.light_hunter_count, 
-        def_planet.cruiser_count, 
-        def_planet.laser_battery_level, 
-        def_planet.missile_launcher_count, 
-        def_planet.plasma_turret_count, 
-        def_techs, // <-- Ajouté
-        def_resources 
+        payload.hunters, payload.cruisers, att_techs,
+        def_planet.light_hunter_count, def_planet.cruiser_count, 
+        0, // Laser légers (si implémenté)
+        def_planet.missile_launcher_count, def_planet.plasma_turret_count, 
+        def_techs, def_resources 
     );
 
-    // Log Défenseur
-    let log_def = combat_log::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        planet_id: Set(def_planet.id),
-        target_name: Set(att_planet.name.clone()),
-        mission_type: Set("defense".to_string()),
-        result: Set(if result.winner == "defender" { "victory".to_string() } else { "defeat".to_string() }),
-        loot_metal: Set(-result.loot.metal),
-        loot_crystal: Set(-result.loot.crystal),
-        ships_lost: Set(result.defender_losses),
-        date: Set(Utc::now().naive_utc()),
-    };
-    let _ = log_def.insert(&state.db).await;
+    // 5. APPLICATION RÉSULTATS
+    let (loot_metal, loot_crystal, loot_deuterium) = if result.winner == "attacker" {
+        (result.loot.metal, result.loot.crystal, result.loot.deuterium)
+    } else { (0.0, 0.0, 0.0) };
 
-    // Mise à jour Défenseur
-    let mut def_active: planet::ActiveModel = def_planet.clone().into();
-    def_active.metal_amount = Set(def_active.metal_amount.unwrap() - result.loot.metal);
-    def_active.crystal_amount = Set(def_active.crystal_amount.unwrap() - result.loot.crystal);
-    def_active.light_hunter_count = Set(std::cmp::max(0, def_active.light_hunter_count.unwrap() - result.defender_losses));
+    // --- SAUVEGARDE DÉFENSEUR ---
+    let mut def_active: planet::ActiveModel = def_planet_raw.into();
     
-    let percent_loss = if result.winner == "attacker" { 0.6 } else { 0.1 };
-    def_active.missile_launcher_count = Set((def_planet.missile_launcher_count as f64 * (1.0 - percent_loss)) as i32);
-    def_active.plasma_turret_count = Set((def_planet.plasma_turret_count as f64 * (1.0 - percent_loss)) as i32);
+    // Ressources & Last Update
+    if result.winner == "attacker" {
+        def_active.metal_amount = Set((def_planet.metal_amount - loot_metal).max(0.0));
+        def_active.crystal_amount = Set((def_planet.crystal_amount - loot_crystal).max(0.0));
+        def_active.deuterium_amount = Set((def_planet.deuterium_amount - loot_deuterium).max(0.0));
+    } else {
+        // Même si pas de vol, on sauvegarde la prod calculée
+        def_active.metal_amount = Set(def_planet.metal_amount);
+        def_active.crystal_amount = Set(def_planet.crystal_amount);
+        def_active.deuterium_amount = Set(def_planet.deuterium_amount);
+    }
+    def_active.last_update = Set(now);
 
-    // Débris
+    // Pertes
+    def_active.light_hunter_count = Set((def_planet.light_hunter_count - result.defender_losses).max(0));
+    def_active.missile_launcher_count = Set((def_planet.missile_launcher_count - result.lost_missiles).max(0));
+    def_active.plasma_turret_count = Set((def_planet.plasma_turret_count - result.lost_plasmas).max(0));
     def_active.debris_metal = Set(def_planet.debris_metal + result.debris.metal);
     def_active.debris_crystal = Set(def_planet.debris_crystal + result.debris.crystal);
 
+    // NOTIFICATION DÉFENSEUR (C'est ici que ça se joue !)
     let defender_report = json!({
         "winner": result.winner, 
         "log": result.log,
-        "loot": result.loot.metal + result.loot.crystal,
-        "losses": { "light_hunter": result.defender_losses, "cruiser": 0 },
-        "is_defense": true
+        "loot": loot_metal + loot_crystal + loot_deuterium,
+        "losses": { 
+            "ships": result.defender_losses,
+            "missiles": result.lost_missiles,
+            "plasmas": result.lost_plasmas 
+        },
+        "is_defense": true, // <--- OBLIGATOIRE POUR LE FRONT
+        "opponent_name": att_user.username // <--- OBLIGATOIRE POUR LE NOM
     });
     def_active.unread_report = Set(Some(to_string(&defender_report).unwrap()));
     let _ = def_active.update(&state.db).await;
 
-    // Log Attaquant
+
+    // --- SAUVEGARDE ATTAQUANT ---
+    let mut att_active: planet::ActiveModel = att_planet.clone().into();
+    att_active.metal_amount = Set(att_planet.metal_amount + loot_metal);
+    att_active.crystal_amount = Set(att_planet.crystal_amount + loot_crystal);
+    att_active.deuterium_amount = Set(att_planet.deuterium_amount + loot_deuterium);
+    att_active.light_hunter_count = Set((att_planet.light_hunter_count - result.attacker_losses).max(0));
+    let _ = att_active.update(&state.db).await;
+
+
+    // --- LOGS BDD (Historique) ---
+    // Défenseur
+    let log_def = combat_log::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(def_planet.id),
+        target_name: Set(att_planet.name.clone()),
+        opponent_username: Set(Some(att_user.username.clone())), // Nom de l'attaquant
+        mission_type: Set("defense".to_string()),
+        result: Set(if result.winner == "defender" { "victory".to_string() } else { "defeat".to_string() }),
+        loot_metal: Set(-loot_metal),
+        loot_crystal: Set(-loot_crystal),
+        ships_lost: Set(result.defender_losses),
+        date: Set(now),
+    };
+    let _ = log_def.insert(&state.db).await;
+
+    // Attaquant
     let log_att = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(att_planet.id),
         target_name: Set(def_planet.name.clone()),
+        opponent_username: Set(Some(def_user.username.clone())), // Nom du défenseur
         mission_type: Set("attack".to_string()),
         result: Set(if result.winner == "attacker" { "victory".to_string() } else { "defeat".to_string() }),
-        loot_metal: Set(result.loot.metal),
-        loot_crystal: Set(result.loot.crystal),
+        loot_metal: Set(loot_metal),
+        loot_crystal: Set(loot_crystal),
         ships_lost: Set(result.attacker_losses),
-        date: Set(Utc::now().naive_utc()),
+        date: Set(now),
     };
     let _ = log_att.insert(&state.db).await;
 
-    // Mise à jour Attaquant
-    let mut att_active: planet::ActiveModel = att_planet.into();
-    att_active.metal_amount = Set(att_active.metal_amount.unwrap() + result.loot.metal);
-    att_active.crystal_amount = Set(att_active.crystal_amount.unwrap() + result.loot.crystal);
-    att_active.light_hunter_count = Set(att_active.light_hunter_count.unwrap() - result.attacker_losses);
-    let _ = att_active.update(&state.db).await;
+    // Réponse immédiate pour l'attaquant
+    let mut response_json = serde_json::to_value(&result).unwrap();
+    if let Some(obj) = response_json.as_object_mut() {
+        obj.insert("opponent_name".to_string(), json!(def_user.username));
+        obj.insert("is_defense".to_string(), json!(false));
+    }
 
-    (StatusCode::OK, Json(json!({ "status": "success", "report": result }))).into_response()
+    (StatusCode::OK, Json(json!({ "status": "success", "report": response_json }))).into_response()
 }
+
 
 async fn expedition_handler(
     Path(id): Path<Uuid>,
@@ -824,6 +853,7 @@ async fn expedition_handler(
         id: Set(Uuid::new_v4()),
         planet_id: Set(id),
         target_name: Set("Secteur Inconnu".to_string()),
+        opponent_username: Set(None),
         mission_type: Set("expedition".to_string()),
         result: Set(winner.to_string()),
         loot_metal: Set(loot),
@@ -867,7 +897,7 @@ async fn get_reports_handler(
 async fn get_transport_logs_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
-) -> Json<Vec<transport_log::Model>> {
+) -> Json<Vec<serde_json::Value>> {
     let logs = TransportLog::find()
         .filter(
             Condition::any()
@@ -880,7 +910,30 @@ async fn get_transport_logs_handler(
         .await
         .unwrap_or_default();
 
-    Json(logs)
+   // Transformation pour le Frontend
+    let logs_json: Vec<serde_json::Value> = logs.into_iter().map(|log| {
+        // Logique : Si je suis la cible, l'opposant est la source, et vice-versa
+        let opponent_username = if log.target_planet_id == id {
+            log.source_owner_name.clone()
+        } else {
+            log.target_owner_name.clone()
+        };
+
+        json!({
+            "id": log.id,
+            "target_planet_id": log.target_planet_id,
+            "target_planet_name": log.target_planet_name,
+            "source_planet_id": log.source_planet_id,
+            "source_planet_name": log.source_planet_name,
+            "opponent_username": opponent_username, // <-- Ce que le front attend
+            "metal": log.metal,
+            "crystal": log.crystal,
+            "deuterium": log.deuterium,
+            "date": log.date
+        })
+    }).collect();
+
+    Json(logs_json)
 }
 
 #[derive(Deserialize)]
@@ -1286,6 +1339,10 @@ async fn transport_handler(
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète cible inconnue"}))).into_response(),
     };
 
+    // --- NOUVEAU : RÉCUPÉRATION DES USERS ---
+    let source_user = User::find_by_id(source_model.owner_id).one(&state.db).await.unwrap().unwrap();
+    let target_user = User::find_by_id(target_model.owner_id).one(&state.db).await.unwrap().unwrap();
+
     let source_name = source_model.name.clone();
     let source_id = source_model.id;
     let target_name = target_model.name.clone();
@@ -1331,8 +1388,12 @@ async fn transport_handler(
         id: Set(Uuid::new_v4()),
         target_planet_id: Set(target_id),
         target_planet_name: Set(target_name),
+        target_owner_name: Set(Some(target_user.username)),
+
         source_planet_id: Set(source_id),
         source_planet_name: Set(source_name),
+        source_owner_name: Set(Some(source_user.username)),
+
         metal: Set(payload.metal),
         crystal: Set(payload.crystal),
         deuterium: Set(payload.deuterium),

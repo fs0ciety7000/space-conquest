@@ -8,15 +8,35 @@ pub struct Model {
     pub id: Uuid,
     pub planet_id: Uuid,
     pub target_name: String,
-    pub mission_type: String, // "attack", "defense", "expedition"
-    pub result: String,       // "victory", "defeat"
+    pub opponent_username: Option<String>,
+    pub mission_type: String,
+    pub result: String,
+    #[sea_orm(column_type = "Double")]
     pub loot_metal: f64,
+    #[sea_orm(column_type = "Double")]
     pub loot_crystal: f64,
     pub ships_lost: i32,
     pub date: DateTime,
+    
+    
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::planet::Entity",
+        from = "Column::PlanetId",
+        to = "super::planet::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Planet,
+}
+
+impl Related<super::planet::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Planet.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}
