@@ -25,9 +25,8 @@ mod game_logic;
 mod combat;
 mod entities; 
 
-// --- IMPORT DU PRELUDE (CRUCIAL POUR EVITER LES ERREURS DE TYPE) ---
+// --- IMPORT DU PRELUDE ---
 use entities::prelude::*;
-// On garde les modules pour accéder aux colonnes spécifiques (ex: planet::Column)
 use entities::{planet, user, combat_log, fleet_mission, transport_log, message};
 
 #[derive(Clone)]
@@ -139,7 +138,6 @@ async fn get_messages_handler(
         Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "User ID invalide"}))).into_response(),
     };
 
-    // Utilisation de Message (du prelude) au lieu de message::Entity
     let messages = Message::find()
         .filter(message::Column::ReceiverId.eq(user_id))
         .order_by_desc(message::Column::CreatedAt)
@@ -189,7 +187,6 @@ async fn send_message_handler(
         Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Expéditeur invalide"}))).into_response(),
     };
 
-// 1. Trouver l'ID du destinataire à partir du nom
     let recipient = User::find()
         .filter(user::Column::Username.eq(&payload.recipient_name))
         .one(&state.db)
@@ -201,7 +198,6 @@ async fn send_message_handler(
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Commandant introuvable"}))).into_response(),
     };
 
- // 2. Créer le message
     let new_message = message::ActiveModel {
         id: Set(Uuid::new_v4()),
         sender_id: Set(sender_id),
@@ -253,7 +249,6 @@ async fn get_ranking_handler(
 ) -> impl IntoResponse {
     
     let current_planet_id = params.get("current_planet_id").and_then(|s| Uuid::parse_str(s).ok()).unwrap_or_default();
-    // Récupérer le type de tri (general, economy, military)
     let sort_type = params.get("type").map(|s| s.as_str()).unwrap_or("general");
 
     let planets = Planet::find().all(&state.db).await.unwrap_or_default();
@@ -264,7 +259,6 @@ async fn get_ranking_handler(
         .collect();
 
     let mut ranked_planets: Vec<RankItem> = planets.into_iter().map(|p| {
-        // Calcul des scores détaillés
         let economy = (p.metal_mine_level + p.crystal_mine_level + p.deuterium_mine_level 
                      + p.energy_tech_level + p.research_lab_level) * 100;
         
@@ -273,10 +267,9 @@ async fn get_ranking_handler(
                      + (p.laser_battery_level * 50);
 
         let total = economy + military;
-        
         let username = user_map.get(&p.owner_id).cloned().unwrap_or("Inconnu".to_string());
 
- RankItem {
+        RankItem {
             rank: 0, 
             username,
             planet_name: p.name,
@@ -289,7 +282,6 @@ async fn get_ranking_handler(
         }
     }).collect();
 
- // Tri selon le type demandé
     match sort_type {
         "economy" => ranked_planets.sort_by(|a, b| b.economy_score.cmp(&a.economy_score)),
         "military" => ranked_planets.sort_by(|a, b| b.military_score.cmp(&a.military_score)),
@@ -313,11 +305,11 @@ async fn get_planet_handler(
 
     let mut active: planet::ActiveModel = p.clone().into();
 
-    // 1. Mise à jour des Ressources
+    // 1. Mise à jour des Ressources (CORRIGÉ : Ajout du paramètre Tech Energy)
     if elapsed > 0 {
-        let new_metal = game_logic::calculate_resources(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update);
-        let new_crystal = game_logic::calculate_resources(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update);
-        let new_deut = game_logic::calculate_resources(game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update);
+        let new_metal = game_logic::calculate_resources(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update, p.energy_tech_level);
+        let new_crystal = game_logic::calculate_resources(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update, p.energy_tech_level);
+        let new_deut = game_logic::calculate_resources(game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update, p.energy_tech_level);
 
         active.metal_amount = Set(new_metal);
         active.crystal_amount = Set(new_crystal);
@@ -325,7 +317,7 @@ async fn get_planet_handler(
         active.last_update = Set(now);
     }
 
-    // 2. Fin de construction Bâtiments
+    // 2. Fin de construction Bâtiments / Techs
     if let Some(end_date) = p.construction_end {
         if now >= end_date {
             let type_str = p.construction_type.clone().unwrap_or_default();
@@ -336,6 +328,7 @@ async fn get_planet_handler(
                 "energy_tech" => active.energy_tech_level = Set(p.energy_tech_level + 1),
                 "research" => active.research_lab_level = Set(p.research_lab_level + 1),
                 "solar_plant" => active.solar_plant_level = Set(p.solar_plant_level + 1),
+                "shipyard" => active.shipyard_level = Set(p.shipyard_level + 1), // N'oublie pas le shipyard !
                 "laser" => active.laser_battery_level = Set(p.laser_battery_level + 1),
                 "espionage" => active.espionage_tech_level = Set(p.espionage_tech_level + 1),
                 _ => {}
@@ -345,7 +338,7 @@ async fn get_planet_handler(
         }
     }
 
-    // 3. Fin de construction Flotte / Défense
+    // 3. Fin de construction Flotte
     if let Some(fleet_end) = p.shipyard_construction_end {
         if now >= fleet_end {
             let fleet_str = p.pending_fleet_type.clone().unwrap_or_default();
@@ -374,7 +367,7 @@ async fn get_planet_handler(
         }
     }
 
-    // 5. Arrivée des Transports (Fleet Missions)
+    // 5. Arrivée des Transports
     let missions = FleetMission::find()
         .filter(fleet_mission::Column::TargetPlanetId.eq(id))
         .filter(fleet_mission::Column::ArrivalTime.lte(now))
@@ -396,7 +389,6 @@ async fn get_planet_handler(
         active.deuterium_amount = Set(current_d + m.deuterium);
         active.transporter_count = Set(current_ships + m.ships_count);
 
-        // Notification
         let report = json!({
             "type": "transport_arrival",
             "sender_name": sender_name,
@@ -407,25 +399,18 @@ async fn get_planet_handler(
         });
         active.unread_report = Set(Some(to_string(&report).unwrap()));
 
-        // Suppression de la mission
         let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
     }
 
- // Sauvegarde finale
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-// --- CALCUL ÉNERGIE (CORRIGÉ) ---
-    // 1. Production Solaire de base
+    // --- CALCUL ÉNERGIE ---
     let solar_lvl = updated_model.solar_plant_level as f64;
     let base_production = 20.0 * solar_lvl * 1.1f64.powf(solar_lvl);
-
-    // 2. Bonus Tech
     let energy_tech = updated_model.energy_tech_level as f64;
     let tech_bonus = 1.0 + (energy_tech * 0.05);
-
     let production = base_production * tech_bonus;
 
-    // 3. Consommation
     let metal_lvl = updated_model.metal_mine_level as f64;
     let crystal_lvl = updated_model.crystal_mine_level as f64;
     let deut_lvl = updated_model.deuterium_mine_level as f64;
@@ -436,7 +421,6 @@ async fn get_planet_handler(
 
     let net_energy = (production - consumption).floor() as i32;
 
-    // --- NOUVEAU : Compter les messages non lus ---
     let unread_count = Message::find()
         .filter(message::Column::ReceiverId.eq(updated_model.owner_id))
         .filter(message::Column::IsRead.eq(false))
@@ -444,13 +428,10 @@ async fn get_planet_handler(
         .await
         .unwrap_or(0);
 
-    // Conversion en JSON dynamique pour ajouter le champ
     let mut json_response = serde_json::to_value(updated_model).unwrap();
-    
-    // On injecte le compte
-  if let Some(obj) = json_response.as_object_mut() {
+    if let Some(obj) = json_response.as_object_mut() {
         obj.insert("unread_messages".to_string(), json!(unread_count));
-        obj.insert("energy".to_string(), json!(net_energy)); // <-- L'énergie calculée par le serveur
+        obj.insert("energy".to_string(), json!(net_energy));
     }
     Ok(Json(json_response))
 }
@@ -477,6 +458,13 @@ async fn upgrade_mine_handler(
 
     if p.construction_end.is_some() { return Err(StatusCode::CONFLICT); }
 
+    // VERIFICATION PREREQUIS (Appel game_logic)
+    if let Err(msg) = game_logic::check_prerequisites(&p, &type_mine) {
+        // Idéalement on renvoie le message d'erreur, mais ici pour respecter la signature on renvoie Forbidden
+        println!("Erreur prérequis: {}", msg);
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let current_level = match type_mine.as_str() {
         "metal" => p.metal_mine_level,
         "crystal" => p.crystal_mine_level,
@@ -484,6 +472,7 @@ async fn upgrade_mine_handler(
         "energy_tech" => p.energy_tech_level,
         "research" => p.research_lab_level,
         "solar_plant" => p.solar_plant_level,
+        "shipyard" => p.shipyard_level,
         "laser" => p.laser_battery_level,
         "espionage" => p.espionage_tech_level,
         _ => return Err(StatusCode::BAD_REQUEST),
@@ -495,7 +484,14 @@ async fn upgrade_mine_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let build_time = game_logic::get_build_time(cost.metal, cost.crystal);
+    // Calcul du niveau du bâtiment réduisant le temps (Labo ou Shipyard)
+    let facility_level = match type_mine.as_str() {
+        "research" | "energy_tech" | "laser" | "espionage" => p.research_lab_level,
+        _ => p.shipyard_level, // Pour les mines et bâtiments (simplifié sur shipyard ou robot)
+    };
+
+    // CORRIGÉ : Appel avec 3 paramètres
+    let build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level);
 
     let mut active: planet::ActiveModel = p.into();
     active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
@@ -516,15 +512,21 @@ async fn build_fleet_handler(
 
     if p.shipyard_construction_end.is_some() || qty <= 0 { return Err(StatusCode::CONFLICT); }
 
+    // VERIFICATION PREREQUIS
+    if let Err(msg) = game_logic::check_prerequisites(&p, &type_ship) {
+        println!("Erreur prérequis: {}", msg);
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let (cost_m, cost_c) = match type_ship.as_str() {
-        "light_hunter" => { let s = game_logic::get_light_hunter_stats(); (s.0, s.1) },
+        "light_hunter" => game_logic::get_light_hunter_stats(),
         "cruiser" => (20000.0, 7000.0),
         "recycler" => (10000.0, 6000.0),
-        "spy_probe" => { let s = game_logic::get_spy_probe_stats(); (s.0, s.1) },
-        "missile_launcher" => { let s = game_logic::get_missile_launcher_stats(); (s.0, s.1) },
-        "plasma_turret" => { let s = game_logic::get_plasma_turret_stats(); (s.0, s.1) },
-        "colony_ship" => { let s = game_logic::get_colony_ship_stats(); (s.0, s.1) },
-        "transporter" => { let s = game_logic::get_transporter_stats(); (s.0, s.1) },
+        "spy_probe" => game_logic::get_spy_probe_stats(),
+        "missile_launcher" => game_logic::get_missile_launcher_stats(),
+        "plasma_turret" => game_logic::get_plasma_turret_stats(),
+        "colony_ship" => game_logic::get_colony_ship_stats(),
+        "transporter" => game_logic::get_transporter_stats(),
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
@@ -580,20 +582,36 @@ async fn attack_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucune flotte envoyée"}))).into_response();
     }
 
+    // --- CORRIGÉ : Création des objets CombatTechs ---
+    let att_techs = game_logic::CombatTechs {
+        laser: att_planet.laser_battery_level, // Utilise le niveau de laser comme tech offensive
+        energy: att_planet.energy_tech_level,
+        armour: 0,
+    };
+
+    let def_techs = game_logic::CombatTechs {
+        laser: def_planet.laser_battery_level,
+        energy: def_planet.energy_tech_level,
+        armour: 0,
+    };
+
     let def_resources = game_logic::Cost {
         metal: def_planet.metal_amount,
         crystal: def_planet.crystal_amount,
         deuterium: def_planet.deuterium_amount,
     };
 
+    // --- CORRIGÉ : Appel avec les Techs ---
     let result = game_logic::resolve_pvp(
         payload.hunters, 
         payload.cruisers, 
+        att_techs, // <-- Ajouté
         def_planet.light_hunter_count, 
         def_planet.cruiser_count, 
         def_planet.laser_battery_level, 
         def_planet.missile_launcher_count, 
         def_planet.plasma_turret_count, 
+        def_techs, // <-- Ajouté
         def_resources 
     );
 
@@ -952,8 +970,8 @@ struct GalaxySlot {
     planet_name: Option<String>,
     owner_name: Option<String>,
     owner_id: Option<Uuid>, 
-    debris_metal: f64,    // <-- Modifié (avant: has_debris)
-    debris_crystal: f64,  // <-- Ajouté
+    debris_metal: f64,    
+    debris_crystal: f64, 
     is_me: bool,
     is_my_planet: bool
 }
@@ -967,7 +985,6 @@ async fn get_galaxy_handler(
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
 
-    // Récupérer la planète actuelle pour connaitre mon owner_id
     let current_planet_opt = Planet::find_by_id(current_id).one(&state.db).await.unwrap_or(None);
     let my_owner_id = current_planet_opt.map(|p| p.owner_id).unwrap_or_default();
 
@@ -1259,7 +1276,6 @@ async fn transport_handler(
     }))).into_response()
 }
 
-// --- STRUCTURE MANQUANTE AJOUTÉE ICI ---
 #[derive(Deserialize)]
 struct RenamePlanetPayload {
     new_name: String,

@@ -94,6 +94,9 @@ pub struct Model {
     #[sea_orm(default_value = 0)]
     pub transporter_count: i32,
 
+    #[sea_orm(default_value = 0)]
+    pub shipyard_level: i32,
+    
     // Expédition
     pub expedition_end: Option<DateTime>,
 

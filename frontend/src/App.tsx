@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import ResourceDisplay from './components/ResourceDisplay';
+import Facilities from './components/Facilities';
 import Shipyard from './components/Shipyard';
 import EmpireBar from './components/EmpireBar';
 import TechTree from './components/TechTree';
@@ -19,7 +20,7 @@ import { Toaster, toast } from "sonner";
 import { 
   LogOut, LayoutDashboard, Pickaxe, Hammer, 
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail
+  Settings as SettingsIcon, Mail, Factory 
 } from "lucide-react";
 
 interface CombatReport {
@@ -32,15 +33,17 @@ interface CombatReport {
   };
 }
 
+// CORRECTION ICI : Remplacement de 'fleet' par 'shipyard'
+type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages';
+
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
   const [userId, setUserId] = useState<string | null>(localStorage.getItem('user_id'));
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'galaxy' | 'resources' | 'fleet' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages'>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [speedFactor, setSpeedFactor] = useState<number>(1);
   
-  // État pour pré-remplir le destinataire du message
   const [messageRecipient, setMessageRecipient] = useState<string | null>(null);
 
   const [planet, setPlanet] = useState<any>(null);
@@ -51,7 +54,7 @@ export default function App() {
   const processingReportRef = useRef(false);
 
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
-  const prevUnreadCountRef = useRef<number | null>(null); // Pour comparer et toaster
+  const prevUnreadCountRef = useRef<number | null>(null); 
 
   const handleLogout = () => {
     localStorage.clear();
@@ -66,7 +69,6 @@ export default function App() {
     localStorage.setItem('planet_id', newId);
   };
 
-  // Nouvelle fonction pour gérer l'envoi de message depuis d'autres composants
   const handleOpenMessage = (username: string) => {
       setMessageRecipient(username);
       setActiveTab('messages');
@@ -82,27 +84,17 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         
-        // --- LOGIQUE TOAST MESSAGE ---
         const newUnreadCount = data.unread_messages || 0;
-        
-        // On ne notifie que si le nombre augmente et ce n'est pas le premier chargement
         if (prevUnreadCountRef.current !== null && newUnreadCount > prevUnreadCountRef.current) {
             toast.info("Nouvelle transmission reçue !", {
                 description: "Ouvrez la messagerie pour décrypter.",
                 icon: <Mail className="text-indigo-400" />,
-                action: {
-                    label: "Lire",
-                    onClick: () => setActiveTab('messages'),
-                },
+                action: { label: "Lire", onClick: () => setActiveTab('messages') },
                 duration: 5000,
             });
-            // Optionnel : Jouer un son ici
         }
-        
         setUnreadMessagesCount(newUnreadCount);
         prevUnreadCountRef.current = newUnreadCount;
-        // -----------------------------
-
 
         if (data.unread_report && !processingReportRef.current) {
             processingReportRef.current = true;
@@ -227,11 +219,16 @@ export default function App() {
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
     { id: 'galaxy', label: 'Galaxie', icon: Globe, category: 'COMMANDEMENT' },
     { id: 'messages', label: 'Messagerie', icon: Mail, category: 'COMMUNICATION' },
-    { id: 'resources', label: 'Production', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
+    
+    { id: 'resources', label: 'Mines', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
+    { id: 'facilities', label: 'Installations', icon: Factory, category: 'DÉVELOPPEMENT' }, 
     { id: 'tech', label: 'Laboratoire', icon: FlaskConical, category: 'DÉVELOPPEMENT' },
-    { id: 'fleet', label: 'Chantier Spatial', icon: Hammer, category: 'MILITAIRE' },
+    
+    // CORRECTION ICI : ID 'shipyard' au lieu de 'fleet' pour correspondre au TabType
+    { id: 'shipyard', label: 'Chantier Spatial', icon: Hammer, category: 'MILITAIRE' },
     { id: 'defenses', label: 'Défense', icon: ShieldCheck, category: 'MILITAIRE' },
     { id: 'expedition', label: 'Expéditions', icon: Telescope, category: 'MILITAIRE' },
+    
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
     { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
     { id: 'settings', label: 'Paramètres', icon: SettingsIcon, category: 'SYSTÈME' },
@@ -239,29 +236,24 @@ export default function App() {
 
   return (
     <div className="h-screen w-full bg-slate-950 text-white font-sans overflow-hidden flex flex-col relative">
-       {/* Background */}
        <div className="absolute inset-0 z-0 bg-cover bg-center opacity-30 pointer-events-none" style={{ backgroundImage: "url('/assets/background.png')" }}></div>
        <div className="absolute inset-0 z-0 bg-gradient-to-b from-slate-950/80 to-slate-900/80 pointer-events-none"></div>
 
-      {/* Modales */}
       <div className="relative z-50">
         {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
         {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
       </div>
 
-     {/* Barre Supérieure */}
       <div className="absolute top-0 left-0 w-full z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-md shadow-lg">
           <EmpireBar 
             planet={planet} 
             onSwitchPlanet={switchPlanet} 
-            unreadMessages={unreadMessagesCount} // <-- Passe le compteur
-            onOpenMessages={() => setActiveTab('messages')} // <-- Ouvre l'onglet
+            unreadMessages={unreadMessagesCount} 
+            onOpenMessages={() => setActiveTab('messages')} 
           />
       </div>
 
-      {/* Conteneur Principal */}
       <div className="flex flex-1 w-full h-full overflow-hidden relative z-30 pt-[72px]">
-        {/* Sidebar */}
         <aside className="w-64 bg-slate-950/90 backdrop-blur-xl border-r border-white/5 flex flex-col h-full overflow-y-auto hidden md:flex scrollbar-thin scrollbar-thumb-slate-800">
              <div className="p-4 space-y-8 mt-4">
                 {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
@@ -290,7 +282,6 @@ export default function App() {
              </div>
         </aside>
 
-        {/* Zone de Contenu */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8 scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent">
             <div className="max-w-7xl mx-auto pb-20 md:pb-0 min-h-full">
                 <div className="animate-in fade-in zoom-in-95 duration-300">
@@ -298,11 +289,18 @@ export default function App() {
                     {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} />}
                     {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
                     {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
+                    
+                    {/* Zones de Développement */}
                     {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} />}
-                    {activeTab === 'fleet' && <Shipyard planet={planet} onBuild={fetchPlanet} />}
-                    {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
+                    {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />} 
                     {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
+                    
+                    {/* Zones Militaires - CORRECTION ICI */}
+                    {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
+                    
+                    {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
                     {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}
+                    
                     {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
                     {activeTab === 'settings' && <Settings planet={planet} onUpdate={fetchPlanet} onLogout={handleLogout} />}
                 </div>

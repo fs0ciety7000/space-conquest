@@ -1,59 +1,103 @@
 import { 
   Stone, Gem, MapPin, Shield, Rocket, Globe, Scan, 
   Zap, Hammer, Clock, TrendingUp, AlertTriangle, 
-  Droplets
+  Droplets, Microscope, ChevronRight
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { useState, useEffect } from "react";
+
+// --- Dictionnaire de noms ---
+const getLabel = (id: string | null) => {
+    if (!id) return "Inconnu";
+    const labels: Record<string, string> = {
+        // Bâtiments
+        metal: "Mine de Métal",
+        crystal: "Mine de Cristal",
+        deuterium: "Synth. Deutérium",
+        solar_plant: "Centrale Solaire",
+        shipyard: "Chantier Spatial",
+        research: "Labo de Recherche",
+        // Techs
+        energy_tech: "Tech. Énergie",
+        laser: "Tech. Laser",
+        espionage: "Tech. Espionnage",
+        // Flotte
+        light_hunter: "Chasseur Léger",
+        cruiser: "Croiseur",
+        colony_ship: "Vaisseau Colon",
+        transporter: "Transporteur",
+        recycler: "Recycleur",
+        spy_probe: "Sonde Espionnage",
+        // Défense
+        missile_launcher: "Lanceur Missiles",
+        plasma_turret: "Tourelle Plasma"
+    };
+    return labels[id] || id;
+};
 
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
   
-  // --- FORMULES --- //
+  // --- ÉTAT DES TIMERS ---
+  const [buildTime, setBuildTime] = useState<number | null>(null);
+  const [fleetTime, setFleetTime] = useState<number | null>(null);
+
+  useEffect(() => {
+    const updateTimers = () => {
+        const now = new Date().getTime();
+
+        // Timer Construction / Recherche
+        if (planet.construction_end) {
+            const end = new Date(planet.construction_end + "Z").getTime();
+            setBuildTime(Math.max(0, Math.floor((end - now) / 1000)));
+        } else {
+            setBuildTime(null);
+        }
+
+        // Timer Chantier Spatial
+        if (planet.shipyard_construction_end) {
+            const end = new Date(planet.shipyard_construction_end + "Z").getTime();
+            setFleetTime(Math.max(0, Math.floor((end - now) / 1000)));
+        } else {
+            setFleetTime(null);
+        }
+    };
+
+    updateTimers(); // Appel immédiat
+    const interval = setInterval(updateTimers, 1000);
+    return () => clearInterval(interval);
+  }, [planet.construction_end, planet.shipyard_construction_end]);
+
+
+  // --- FORMULES DE PROD --- //
   const calculateProduction = (level: number, baseFactor: number) => {
     const baseProd = baseFactor * level * Math.pow(1.1, level);
     return baseProd * speedFactor;
   };
 
-  // 1. Production Ressources (Mines)
   const prodMetal = calculateProduction(planet.metal_mine_level, 30);
   const prodCrystal = calculateProduction(planet.crystal_mine_level, 20);
   const prodDeut = calculateProduction(planet.deuterium_mine_level, 10);
 
-// 2. Gestion de l'Énergie (MISE À JOUR)
+  // Énergie
   const solarLevel = planet.solar_plant_level || 0;
   const energyTechLevel = planet.energy_tech_level || 0;
-  
-  // Base
   const baseSolarProd = 20 * solarLevel * Math.pow(1.1, solarLevel);
-  // Bonus (+5% par niveau)
   const techBonus = 1 + (energyTechLevel * 0.05);
-  
   const energyProd = Math.floor(baseSolarProd * techBonus);
 
-
-  // Consommation : Mines (10 * Niv * 1.1^Niv pour Métal/Cristal, 20 pour Deut)
   const consMetal = 10 * planet.metal_mine_level * Math.pow(1.1, planet.metal_mine_level);
   const consCrystal = 10 * planet.crystal_mine_level * Math.pow(1.1, planet.crystal_mine_level);
   const consDeut = 20 * planet.deuterium_mine_level * Math.pow(1.1, planet.deuterium_mine_level);
-  
   const energyCons = Math.floor(consMetal + consCrystal + consDeut);
-  
-  // Bilan Énergétique
   const energyNet = energyProd - energyCons;
-  // Pourcentage de charge (max 100%)
   const energyPercent = energyCons > 0 ? Math.min(100, (energyCons / energyProd) * 100) : 0;
 
-  // 3. Totaux Militaires
+  // Totaux Militaires
   const totalFleet = (planet.light_hunter_count || 0) + (planet.cruiser_count || 0) + (planet.recycler_count || 0) + (planet.spy_probe_count || 0) + (planet.colony_ship_count || 0) + (planet.transporter_count || 0);
   const totalDefense = (planet.missile_launcher_count || 0) + (planet.plasma_turret_count || 0);
-  
   const firePower = (planet.light_hunter_count * 50) + (planet.cruiser_count * 400) + (planet.missile_launcher_count * 80);
 
-  // 4. Construction
-  const isBuilding = planet.construction_end && new Date(planet.construction_end) > new Date();
-  const buildingName = planet.construction_type ? planet.construction_type.replace('_', ' ').toUpperCase() : "AUCUNE";
-
-  // Helper formattage
   const fmt = (n: number) => Math.floor(n).toLocaleString();
 
   return (
@@ -89,25 +133,56 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             <Scan size={12} className="text-cyan-400" />
                             <span>12,800 km</span>
                         </div>
-                        <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5">
-                            <TrendingUp size={12} className="text-orange-400" />
-                            <span>Rang: Inconnu</span>
-                        </div>
                     </div>
                 </div>
             </CardHeader>
 
-            <CardContent className="relative z-10 pt-0">
-                <div className="mt-4 p-3 bg-black/40 border-l-2 border-yellow-500 backdrop-blur-sm rounded-r-lg flex items-center justify-between">
+            <CardContent className="relative z-10 pt-2 space-y-2">
+                
+                {/* 1. STATUS CONSTRUCTION (Bâtiments / Techs) */}
+                <div className={`p-3 border-l-2 backdrop-blur-sm rounded-r-lg flex items-center justify-between transition-colors ${buildTime !== null ? 'bg-indigo-950/40 border-indigo-500' : 'bg-black/40 border-slate-700'}`}>
                     <div className="flex items-center gap-3">
-                        <Hammer size={16} className={`text-yellow-500 ${isBuilding ? 'animate-bounce' : ''}`} />
+                        {['research', 'energy_tech', 'laser', 'espionage'].includes(planet.construction_type) 
+                            ? <Microscope size={16} className={buildTime !== null ? "text-indigo-400 animate-pulse" : "text-slate-600"} />
+                            : <Hammer size={16} className={buildTime !== null ? "text-indigo-400 animate-bounce" : "text-slate-600"} />
+                        }
                         <div>
-                            <p className="text-[10px] uppercase text-slate-500 font-bold">Ordre de Construction</p>
-                            <p className="text-xs font-bold text-white">{isBuilding ? buildingName : "EN ATTENTE D'ORDRES"}</p>
+                            <p className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Architecture / R&D</p>
+                            <p className={`text-xs font-bold ${buildTime !== null ? 'text-white' : 'text-slate-500 italic'}`}>
+                                {buildTime !== null ? getLabel(planet.construction_type) : "Aucun ordre en cours"}
+                            </p>
                         </div>
                     </div>
-                    {isBuilding && <Clock size={16} className="text-yellow-500 animate-spin-slow" />}
+                    {buildTime !== null && (
+                        <div className="flex items-center gap-2 text-indigo-300 font-mono text-sm bg-black/30 px-2 py-1 rounded">
+                            <Clock size={12} className="animate-spin-slow" /> {buildTime}s
+                        </div>
+                    )}
                 </div>
+
+                {/* 2. STATUS CHANTIER SPATIAL (Flotte) */}
+                <div className={`p-3 border-l-2 backdrop-blur-sm rounded-r-lg flex items-center justify-between transition-colors ${fleetTime !== null ? 'bg-orange-950/40 border-orange-500' : 'bg-black/40 border-slate-700'}`}>
+                    <div className="flex items-center gap-3">
+                        <Rocket size={16} className={fleetTime !== null ? "text-orange-400 animate-pulse" : "text-slate-600"} />
+                        <div>
+                            <p className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Ligne de Production</p>
+                            <p className={`text-xs font-bold ${fleetTime !== null ? 'text-white' : 'text-slate-500 italic'}`}>
+                                {fleetTime !== null ? (
+                                    <span className="flex items-center gap-2">
+                                        {getLabel(planet.pending_fleet_type)} 
+                                        <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1 rounded">x{planet.pending_fleet_count}</span>
+                                    </span>
+                                ) : "Hangar inactif"}
+                            </p>
+                        </div>
+                    </div>
+                    {fleetTime !== null && (
+                        <div className="flex items-center gap-2 text-orange-300 font-mono text-sm bg-black/30 px-2 py-1 rounded">
+                            <Clock size={12} className="animate-spin-slow" /> {fleetTime}s
+                        </div>
+                    )}
+                </div>
+
             </CardContent>
         </Card>
 
@@ -163,7 +238,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 { label: "Mine de Métal", level: planet.metal_mine_level, icon: Stone, color: "text-orange-300", border: "border-orange-500/20" },
                 { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400", border: "border-cyan-500/20" },
                 { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Droplets, color: "text-green-400", border: "border-green-500/20" },
-                { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400", border: "border-yellow-500/20" }, // <-- Corrigé ici aussi
+                { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400", border: "border-yellow-500/20" },
             ].map((mine) => (
                 <div key={mine.label} className={`bg-slate-900/50 border ${mine.border} p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors`}>
                     <div className="flex items-center gap-3 overflow-hidden">
