@@ -952,8 +952,10 @@ struct GalaxySlot {
     planet_name: Option<String>,
     owner_name: Option<String>,
     owner_id: Option<Uuid>, 
-    has_debris: bool,
+    debris_metal: f64,    // <-- Modifié (avant: has_debris)
+    debris_crystal: f64,  // <-- Ajouté
     is_me: bool,
+    is_my_planet: bool
 }
 
 async fn get_galaxy_handler(
@@ -964,6 +966,11 @@ async fn get_galaxy_handler(
     
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
+
+    // Récupérer la planète actuelle pour connaitre mon owner_id
+    let current_planet_opt = Planet::find_by_id(current_id).one(&state.db).await.unwrap_or(None);
+    let my_owner_id = current_planet_opt.map(|p| p.owner_id).unwrap_or_default();
+
 
     let planets = Planet::find()
         .filter(planet::Column::Galaxy.eq(galaxy_id))
@@ -982,18 +989,22 @@ async fn get_galaxy_handler(
                 planet_name: Some(p.name.clone()),
                 owner_name: Some(p.name.clone()),
                 owner_id: Some(p.owner_id),
-                has_debris: p.debris_metal > 0.0 || p.debris_crystal > 0.0,
+                debris_metal: p.debris_metal, 
+                debris_crystal: p.debris_crystal,
                 is_me: p.id == current_id,
+                is_my_planet: p.owner_id == my_owner_id
             });
         } else {
             slots.push(GalaxySlot {
-                position: pos,
-                planet_id: None,
-                planet_name: None,
-                owner_name: None,
-                owner_id: None,
-                has_debris: false,
+                position: pos, 
+                planet_id: None, 
+                planet_name: None, 
+                owner_name: None, 
+                owner_id: None, 
+                debris_metal: 0.0, 
+                debris_crystal: 0.0, 
                 is_me: false,
+                is_my_planet: false
             });
         }
     }
