@@ -1,11 +1,12 @@
 import { 
   Stone, Gem, MapPin, Shield, Rocket, Globe, Scan, 
   Zap, Hammer, Clock, TrendingUp, AlertTriangle, 
-  Droplets, Microscope, Warehouse, Activity, ChevronRight, List
+  Droplets, Microscope, Warehouse, Activity, ChevronRight, List, XCircle
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 // --- Dictionnaire de noms ---
 const getLabel = (id: string | null) => {
@@ -17,7 +18,7 @@ const getLabel = (id: string | null) => {
         solar_plant: "Centrale Solaire",
         shipyard: "Chantier Spatial",
         research: "Labo de Recherche",
-        hangar: "Hangar à Vaisseaux", // Nouveau
+        hangar: "Hangar à Vaisseaux",
         energy_tech: "Tech. Énergie",
         laser: "Tech. Laser",
         espionage: "Tech. Espionnage",
@@ -33,7 +34,6 @@ const getLabel = (id: string | null) => {
     return labels[id] || id;
 };
 
-// --- Helper pour identifier le type ---
 const getItemType = (id: string) => {
     if (['light_hunter', 'cruiser', 'colony_ship', 'transporter', 'recycler', 'spy_probe'].includes(id)) return 'fleet';
     if (['missile_launcher', 'plasma_turret'].includes(id)) return 'defense';
@@ -42,9 +42,6 @@ const getItemType = (id: string) => {
 };
 
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
-  
-  // --- TICKER GLOBAL ---
-  // On utilise un simple compteur pour forcer le re-render toutes les secondes
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -52,14 +49,36 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     return () => clearInterval(interval);
   }, []);
 
-  // Fonction pour calculer le temps restant d'un item spécifique
   const getTimeLeft = (endDate: string) => {
     const end = new Date(endDate.endsWith("Z") ? endDate : endDate + "Z").getTime();
     const now = new Date().getTime();
     return Math.max(0, Math.floor((end - now) / 1000));
   };
 
-  // --- CALCULS PRODUCTION & ÉNERGIE ---
+  const cancelOperation = async (queueId: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://localhost:8080/planets/${planet.id}/cancel-construction/${queueId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        const total = data.refund_metal + data.refund_crystal + data.refund_deuterium;
+        
+        toast.success("Opération annulée", { 
+          description: `Remboursement de ${Math.floor(total).toLocaleString()} ressources (${Math.round(data.ratio * 100)}%).` 
+        });
+      } else {
+        toast.error("Erreur lors de l'annulation");
+      }
+    } catch (e) {
+      toast.error("Serveur injoignable");
+    }
+  };
+
+  // --- CALCULS PRODUCTION ---
   const calculateProduction = (level: number, baseFactor: number) => {
     const baseProd = baseFactor * level * Math.pow(1.1, level);
     return baseProd * speedFactor;
@@ -71,26 +90,21 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
   const solarLevel = planet.solar_plant_level || 0;
   const energyTechLevel = planet.energy_tech_level || 0;
-  const baseSolarProd = 20 * solarLevel * Math.pow(1.1, solarLevel);
-  const techBonus = 1 + (energyTechLevel * 0.05);
-  const energyProd = Math.floor(baseSolarProd * techBonus);
-
-  const consMetal = 10 * planet.metal_mine_level * Math.pow(1.1, planet.metal_mine_level);
-  const consCrystal = 10 * planet.crystal_mine_level * Math.pow(1.1, planet.crystal_mine_level);
-  const consDeut = 20 * planet.deuterium_mine_level * Math.pow(1.1, planet.deuterium_mine_level);
-  const energyCons = Math.floor(consMetal + consCrystal + consDeut);
+  const energyProd = Math.floor((20 * solarLevel * Math.pow(1.1, solarLevel)) * (1 + (energyTechLevel * 0.05)));
+  const energyCons = Math.floor(
+    (10 * planet.metal_mine_level * Math.pow(1.1, planet.metal_mine_level)) +
+    (10 * planet.crystal_mine_level * Math.pow(1.1, planet.crystal_mine_level)) +
+    (20 * planet.deuterium_mine_level * Math.pow(1.1, planet.deuterium_mine_level))
+  );
   const energyNet = energyProd - energyCons;
   const energyPercent = energyCons > 0 ? Math.min(100, (energyCons / energyProd) * 100) : 0;
 
-  // --- CALCULS MILITAIRES ---
   const totalFleet = (planet.light_hunter_count || 0) + (planet.cruiser_count || 0) + (planet.recycler_count || 0) + (planet.spy_probe_count || 0) + (planet.colony_ship_count || 0) + (planet.transporter_count || 0);
   const hangarCap = 500 + ((planet.hangar_level || 0) * 500);
   const totalDefense = (planet.missile_launcher_count || 0) + (planet.plasma_turret_count || 0);
   const firePower = (planet.light_hunter_count * 50) + (planet.cruiser_count * 400) + (planet.missile_launcher_count * 80);
 
   const fmt = (n: number) => Math.floor(n).toLocaleString();
-
-  // Récupération de la file d'attente (Active Queue)
   const constructionQueue = planet.constructions || [];
   const slotsUsed = constructionQueue.length;
   const maxSlots = 3;
@@ -98,12 +112,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
-      {/* --- HEADER GRID --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* CARTE PRINCIPALE : PLANÈTE & FILE D'ATTENTE */}
         <Card className="lg:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative group flex flex-col justify-between">
-            {/* Background Image */}
             <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1614730341194-75c607ae363c?q=80&w=2696&auto=format&fit=crop')] bg-cover bg-center opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent"></div>
             
@@ -117,24 +127,17 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 <div>
                     <div className="flex flex-wrap items-center gap-3 mb-1">
                         <h2 className="text-3xl font-black uppercase text-white tracking-widest drop-shadow-md">{planet.name}</h2>
-                        <div className="px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-[10px] text-green-400 font-bold uppercase tracking-wider animate-pulse">
-                            Opérationnel
-                        </div>
+                        <div className="px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-[10px] text-green-400 font-bold uppercase tracking-wider">Opérationnel</div>
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-slate-400 font-mono text-xs">
                         <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5">
                             <MapPin size={12} className="text-indigo-400" />
                             <span>[{planet.galaxy}:{planet.system}:{planet.position}]</span>
                         </div>
-                        <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5">
-                            <Scan size={12} className="text-cyan-400" />
-                            <span>12,800 km</span>
-                        </div>
                     </div>
                 </div>
             </CardHeader>
 
-            {/* --- FILE DE CONSTRUCTION UNIFIÉE --- */}
             <CardContent className="relative z-10 pt-0 pb-4 px-6">
                 <div className="bg-black/40 border border-white/10 rounded-lg p-3 backdrop-blur-md">
                     <div className="flex justify-between items-end mb-2">
@@ -148,21 +151,22 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
                     <div className="space-y-2">
                         {constructionQueue.length > 0 ? (
-                            constructionQueue.map((item: any) => {
+                            constructionQueue.map((item: any, index: number) => {
                                 const tl = getTimeLeft(item.end_time);
                                 const type = getItemType(item.building_type);
                                 const label = getLabel(item.building_type);
-                                
-                                // Icône et Couleur selon le type
+                                // On simule l'affichage du ratio côté UI pour le survol
+                                const refundPercent = index === 0 ? Math.max(0, Math.min(95, Math.round((tl / 60) * 100))) : 95;
+
                                 let Icon = Hammer;
                                 let color = "text-white";
                                 if (type === 'tech') { Icon = Microscope; color = "text-purple-400"; }
                                 else if (type === 'fleet') { Icon = Rocket; color = "text-orange-400"; }
                                 else if (type === 'defense') { Icon = Shield; color = "text-red-400"; }
-                                else { color = "text-blue-300"; } // Buildings
+                                else { color = "text-blue-300"; }
 
                                 return (
-                                    <div key={item.id} className="flex justify-between items-center text-xs bg-slate-900/60 p-2 rounded border border-white/5 hover:border-white/10 transition-colors">
+                                    <div key={item.id} className={`flex justify-between items-center text-xs p-2 rounded border border-white/5 group/item transition-all ${index === 0 ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-slate-900/60'}`}>
                                         <div className="flex items-center gap-3">
                                             <Icon size={14} className={color} />
                                             <div>
@@ -172,9 +176,28 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                                 </span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 text-indigo-300 font-mono bg-black/40 px-2 py-1 rounded border border-white/5">
-                                            <Clock size={12} className="animate-spin-slow" />
-                                            {tl}s
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 text-indigo-300 font-mono bg-black/40 px-2 py-1 rounded border border-white/5 text-[10px]">
+                                                <Clock size={10} className={index === 0 ? "animate-spin-slow" : ""} />
+                                                {tl}s
+                                            </div>
+
+                                            <div className="relative group/cancel">
+                                                <button 
+                                                    onClick={() => cancelOperation(item.id)}
+                                                    className="text-slate-600 hover:text-red-500 transition-colors p-1"
+                                                >
+                                                    <XCircle size={16} />
+                                                </button>
+                                                
+                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover/cancel:block z-50">
+                                                    <div className="bg-slate-900 border border-red-500/50 text-white text-[9px] p-2 rounded shadow-2xl whitespace-nowrap flex flex-col gap-0.5">
+                                                        <span className="text-red-400 font-black uppercase border-b border-white/10 pb-1 mb-1">Estimation Retour</span>
+                                                        <span>Ratio: {refundPercent}%</span>
+                                                        <span className="text-slate-400 italic">Remboursement dégressif</span>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -190,10 +213,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             </CardContent>
         </Card>
 
-        {/* ÉNERGIE */}
         <Card className="bg-slate-900/80 border border-white/10 backdrop-blur-md flex flex-col justify-between relative overflow-hidden">
              <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-20 ${energyNet >= 0 ? 'bg-yellow-400' : 'bg-red-500'}`}></div>
-            
             <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
                     <Zap size={14} className={energyNet >= 0 ? "text-yellow-400" : "text-red-500"} /> Réseau Électrique
@@ -201,14 +222,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="flex items-end justify-between">
-                    <span className={`text-3xl font-mono font-black ${energyNet >= 0 ? 'text-white' : 'text-red-400'}`}>
-                        {fmt(energyNet)}
-                    </span>
+                    <span className={`text-3xl font-mono font-black ${energyNet >= 0 ? 'text-white' : 'text-red-400'}`}>{fmt(energyNet)}</span>
                     <span className={`text-xs font-bold px-2 py-1 rounded ${energyNet >= 0 ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'}`}>
                         {energyNet >= 0 ? 'STABLE' : 'CRITIQUE'}
                     </span>
                 </div>
-                
                 <div className="space-y-1">
                     <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
                         <span>Charge Système</span>
@@ -216,7 +234,6 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     </div>
                     <Progress value={energyPercent} className={`h-1.5 ${energyNet < 0 ? "bg-red-900" : "bg-slate-800"}`} />
                 </div>
-
                 <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
                     <div className="bg-white/5 p-2 rounded text-center">
                         <span className="block text-slate-500">Prod.</span>
@@ -231,13 +248,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </Card>
       </div>
 
-      {/* --- SECTION INFRASTRUCTURES & RESSOURCES --- */}
+      {/* --- INFRASTRUCTURES --- */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-        
-        {/* Colonne de Gauche : INFRASTRUCTURES */}
         <div className="md:col-span-1 space-y-4 min-w-0">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1">Infrastructures</h3>
-            
             {[
                 { label: "Mine de Métal", level: planet.metal_mine_level, icon: Stone, color: "text-orange-300", border: "border-orange-500/20" },
                 { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400", border: "border-cyan-500/20" },
@@ -250,14 +264,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         <mine.icon size={16} className={`shrink-0 ${mine.color}`} />
                         <span className="text-xs font-bold text-slate-300 truncate">{mine.label}</span>
                     </div>
-                    <span className="text-sm font-black font-mono text-white bg-black/40 px-2 py-0.5 rounded border border-white/5 shrink-0">
-                        Niv. {mine.level}
-                    </span>
+                    <span className="text-sm font-black font-mono text-white bg-black/40 px-2 py-0.5 rounded border border-white/5 shrink-0">Niv. {mine.level}</span>
                 </div>
             ))}
         </div>
 
-        {/* Colonne Centrale/Droite : TABLEAU DE PRODUCTION */}
         <div className="md:col-span-3 min-w-0">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1 mb-4">Rendement Industriel</h3>
             <Card className="bg-green-950/10 border border-green-500/20">
@@ -346,7 +357,6 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 <span>{fmt(firePower)} BP</span>
                             </div>
                             <Progress value={Math.min(100, totalDefense / 10)} className="h-2 bg-slate-800" />
-                            <p className="text-[10px] text-slate-600 mt-1">Basé sur la puissance de feu locale.</p>
                          </div>
                     </div>
                      <div className="grid grid-cols-2 gap-2">
@@ -363,12 +373,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             </Card>
       </div>
 
-        {/* Note sur les flottes totales */}
-        <div className="flex items-center justify-center gap-2 text-[10px] text-slate-600 uppercase tracking-widest mt-8">
+      <div className="flex items-center justify-center gap-2 text-[10px] text-slate-600 uppercase tracking-widest mt-8">
             <AlertTriangle size={12} />
-            <span>Les données affichées concernent uniquement le secteur local [{planet.galaxy}:{planet.system}:{planet.position}]</span>
-        </div>
-
+            <span>Données limitées au secteur local [{planet.galaxy}:{planet.system}:{planet.position}]</span>
+      </div>
     </div>
   );
 }

@@ -2,9 +2,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   Hammer, Microscope, Timer, ArrowUpCircle, 
-  Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp 
+  Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp, Lock 
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { checkPrerequisites } from "@/lib/gameRules"; // Importation de ta règle
+import { toast } from "sonner";
 
 interface FacilitiesProps {
   planet: any;
@@ -45,7 +47,6 @@ const getFacilityTheme = (type: string) => {
   return themes[type] || themes.shipyard;
 };
 
-// --- LOGIQUE DES BONUS ---
 const getFacilityStats = (id: string, level: number) => {
     const next = level + 1;
     switch(id) {
@@ -69,6 +70,13 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
   }, []);
 
   const handleUpgrade = async (type: string) => {
+    // Sécurité supplémentaire côté client
+    const { locked } = checkPrerequisites(planet, type);
+    if (locked) {
+        toast.error("Données technologiques manquantes");
+        return;
+    }
+
     const token = localStorage.getItem('token');
     try {
       await fetch(`http://localhost:8080/planets/${planet.id}/upgrade/${type}`, {
@@ -99,6 +107,9 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in zoom-in-95 duration-500 pb-20">
       {facilities.map((fac) => {
+        // Utilisation de ta fonction de prérequis
+        const { locked, requirements } = checkPrerequisites(planet, fac.id);
+        
         const activeItem = queue.find((q: any) => q.building_type === fac.id);
         const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
         const cost = getCost(fac.id, fac.lv);
@@ -109,7 +120,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
         const BgIcon = theme.bgIcon;
 
         return (
-          <Card key={fac.id} className={`relative overflow-hidden border-t-4 ${theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group`}>
+          <Card key={fac.id} className={`relative overflow-hidden border-t-4 ${locked ? 'border-red-900/50 grayscale-[0.5]' : theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group`}>
              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
              <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
                 <BgIcon size={150} className={theme.color} />
@@ -119,29 +130,44 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
               <div>
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-lg border ${theme.border} bg-black/20 ${theme.color} group-hover:text-white group-hover:bg-white/10 transition-all`}>
-                            <Icon size={24} />
+                        <div className={`p-3 rounded-lg border ${locked ? 'border-red-500/30 bg-red-500/10 text-red-500' : `${theme.border} bg-black/20 ${theme.color}`} group-hover:text-white group-hover:bg-white/10 transition-all`}>
+                            {locked ? <Lock size={24} /> : <Icon size={24} />}
                         </div>
                         <div>
                             <h3 className="text-lg font-black uppercase tracking-wider text-white">{fac.name}</h3>
                             <p className="text-xs text-slate-400 h-4 leading-tight">{fac.desc}</p>
                         </div>
                     </div>
-                    <span className={`text-2xl font-black font-mono ${theme.color} opacity-80`}>Nv.{fac.lv}</span>
+                    <span className={`text-2xl font-black font-mono ${locked ? 'text-red-500/50' : theme.color} opacity-80`}>Nv.{fac.lv}</span>
                 </div>
 
                 {/* STATS DYNAMIQUES */}
-                <div className="mb-4 p-2 bg-black/30 rounded border border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
-                        <TrendingUp size={12} className={theme.color} />
-                        <span>{stats.label}</span>
+                {!locked && (
+                    <div className="mb-4 p-2 bg-black/30 rounded border border-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
+                            <TrendingUp size={12} className={theme.color} />
+                            <span>{stats.label}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs font-mono">
+                            <span className="text-slate-300">{stats.current}</span>
+                            <ChevronRight size={12} className="text-slate-600" />
+                            <span className={`${theme.color} font-bold`}>{stats.next}</span>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                        <span className="text-slate-300">{stats.current}</span>
-                        <ChevronRight size={12} className="text-slate-600" />
-                        <span className={`${theme.color} font-bold`}>{stats.next}</span>
-                    </div>
-                </div>
+                )}
+
+                {/* PRÉREQUIS SI VERROUILLÉ */}
+                {locked && (
+                  <div className="mb-4 p-3 bg-red-950/20 rounded border border-red-500/20 space-y-1">
+                      <p className="text-[9px] uppercase font-black text-red-500 tracking-tighter mb-2">Transmissions cryptées - Requis :</p>
+                      {requirements.map((req, i) => (
+                          <div key={i} className="flex items-center justify-between text-[10px] font-mono">
+                              <span className={req.met ? "text-green-500" : "text-red-400"}>{req.label}</span>
+                              {req.met ? <Zap size={10} className="text-green-500" /> : <Lock size={10} className="text-red-600" />}
+                          </div>
+                      ))}
+                  </div>
+                )}
 
                 {/* Grille Coûts */}
                 <div className="grid grid-cols-3 gap-2 mb-6">
@@ -162,20 +188,23 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
 
               <Button 
                 onClick={() => handleUpgrade(fac.id)}
-                disabled={(isQueueFull && !activeItem) || !canAfford}
+                disabled={locked || (isQueueFull && !activeItem) || !canAfford}
                 className={`w-full font-black uppercase tracking-widest transition-all duration-500 ${
                     activeItem 
                         ? 'bg-indigo-900/50 border border-indigo-500 text-indigo-300 animate-pulse' 
-                        : isQueueFull
-                            ? 'bg-slate-800 text-slate-500 border border-white/5 cursor-not-allowed'
-                            : !canAfford 
-                                ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
-                                // NOUVEAU STYLE SCI-FI VIBRANT :
-                                : `bg-gradient-to-r from-indigo-950/60 to-purple-950/60 hover:from-indigo-900/80 hover:to-purple-900/80 border border-indigo-500/50 hover:border-cyan-400/80 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]`
+                        : locked
+                            ? 'bg-slate-900 text-slate-600 border border-red-900/20 cursor-not-allowed'
+                            : isQueueFull
+                                ? 'bg-slate-800 text-slate-500 border border-white/5 cursor-not-allowed'
+                                : !canAfford 
+                                    ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
+                                    : `bg-gradient-to-r from-indigo-950/60 to-purple-950/60 hover:from-indigo-900/80 hover:to-purple-900/80 border border-indigo-500/50 hover:border-cyan-400/80 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]`
                 }`}
               >
                 {activeItem ? (
                     <span className="flex items-center gap-2"><Timer size={16} className="animate-spin" /> En cours: {timeLeft}s</span>
+                ) : locked ? (
+                    "Accès Refusé"
                 ) : isQueueFull ? (
                     "File Pleine (3/3)"
                 ) : !canAfford ? (

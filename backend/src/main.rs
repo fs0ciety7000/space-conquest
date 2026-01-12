@@ -95,6 +95,7 @@ async fn main() {
         // Planets
         .route("/planets/:id", get(get_planet_handler))
         .route("/planets/:id/upgrade/:type", post(upgrade_mine_handler))
+        .route("/planets/:id/cancel-construction/:queue_id", delete(cancel_construction_handler))
         .route("/planets/:id/build-fleet/:type/:qty", post(build_fleet_handler))
         .route("/planets/:id/expedition", post(expedition_handler))
         .route("/planets/:id/clear-report", post(clear_report_handler))
@@ -1438,4 +1439,90 @@ async fn rename_planet_handler(
     }
     
     StatusCode::NOT_FOUND.into_response()
+}
+
+async fn cancel_construction_handler(
+    Path((planet_id, queue_id)): Path<(Uuid, Uuid)>,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // 1. Récupérer l'item
+    let item = ConstructionQueue::find_by_id(queue_id)
+        .one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if item.planet_id != planet_id { return Err(StatusCode::FORBIDDEN); }
+
+    // 2. Récupérer la planète
+    let p = Planet::find_by_id(planet_id)
+        .one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // 3. Recalculer la durée totale initiale
+    // On doit savoir combien de temps cette construction était censée durer
+    let (base_m, base_c, base_d) = match item.building_type.as_str() {
+        "light_hunter" | "cruiser" | "recycler" | "spy_probe" | "colony_ship" | "transporter" | "missile_launcher" | "plasma_turret" => {
+            let (m, c) = match item.building_type.as_str() {
+                "light_hunter" => game_logic::get_light_hunter_stats(),
+                "cruiser" => (20000.0, 7000.0),
+                "recycler" => (10000.0, 6000.0),
+                "spy_probe" => game_logic::get_spy_probe_stats(),
+                "colony_ship" => game_logic::get_colony_ship_stats(),
+                "transporter" => game_logic::get_transporter_stats(),
+                "missile_launcher" => game_logic::get_missile_launcher_stats(),
+                "plasma_turret" => game_logic::get_plasma_turret_stats(),
+                _ => (0.0, 0.0),
+            };
+            (m * item.level as f64, c * item.level as f64, 0.0)
+        },
+        _ => {
+            let cost = game_logic::get_upgrade_cost(&item.building_type, item.level);
+            (cost.metal, cost.crystal, cost.deuterium)
+        }
+    };
+
+    // Recalcul de la durée totale (formule du game_logic)
+    let total_duration = match item.building_type.as_str() {
+        "light_hunter" | "cruiser" | "recycler" | "spy_probe" | "colony_ship" | "transporter" | "missile_launcher" | "plasma_turret" => {
+             game_logic::get_ship_production_time(item.level) as f64
+        },
+        _ => {
+            let facility_level = match item.building_type.as_str() {
+                "research" | "energy_tech" | "laser" | "espionage" => p.research_lab_level,
+                _ => p.shipyard_level,
+            };
+            game_logic::get_build_time(base_m, base_c, facility_level) as f64
+        }
+    };
+
+    // 4. Calcul du Ratio de remboursement
+    let now = Utc::now().naive_utc();
+    let time_left = item.end_time.signed_duration_since(now).num_seconds() as f64;
+    
+    // Le ratio est : Temps restant / Durée totale
+    // On applique un malus de sécurité de 5% (on ne rend jamais plus de 95%) pour éviter les abus
+    let refund_ratio = (time_left / total_duration).clamp(0.0, 0.95); 
+
+    let refund_m = base_m * refund_ratio;
+    let refund_c = base_c * refund_ratio;
+    let refund_d = base_d * refund_ratio;
+
+    // 5. Créditer et Supprimer
+    let mut active: planet::ActiveModel = p.into();
+    active.metal_amount = Set(active.metal_amount.unwrap() + refund_m);
+    active.crystal_amount = Set(active.crystal_amount.unwrap() + refund_c);
+    active.deuterium_amount = Set(active.deuterium_amount.unwrap() + refund_d);
+
+    active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+ConstructionQueue::delete_by_id(queue_id).exec(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((StatusCode::OK, Json(json!({
+    "refund_metal": refund_m,
+    "refund_crystal": refund_c,
+    "refund_deuterium": refund_d,
+    "ratio": refund_ratio
+}))).into_response())
 }
