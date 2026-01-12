@@ -15,6 +15,8 @@ import PlanetOverview from './components/PlanetOverview';
 import GalaxyView from './components/GalaxyView';
 import Settings from './components/Settings';
 import MessagesView from './components/MessagesView';
+import TransportModal from './components/TransportModal';
+import SpyModal from './components/SpyModal';
 
 import { Toaster, toast } from "sonner";
 import { 
@@ -50,6 +52,8 @@ export default function App() {
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
   const [showCombatModal, setShowCombatModal] = useState(false);
   const [targetPlanet, setTargetPlanet] = useState<{id: string, name: string} | null>(null);
+  const [transportTarget, setTransportTarget] = useState<{id: string, name: string, system: number} | null>(null);
+const [spyReport, setSpyReport] = useState<any>(null);
   const prevPlanetRef = useRef<any>(null);
   const processingReportRef = useRef(false);
 
@@ -100,8 +104,10 @@ export default function App() {
             processingReportRef.current = true;
             try {
                 const reportData = JSON.parse(data.unread_report);
+                
                 if (reportData.type === 'transport_arrival') {
-                    toast.success(`Cargaison reçue de : ${reportData.sender_name}`, { 
+                     // ... (inchangé)
+                     toast.success(`Cargaison reçue de : ${reportData.sender_name}`, { 
                         description: `Livraison: M:${Math.floor(reportData.metal)} C:${Math.floor(reportData.crystal)} D:${Math.floor(reportData.deuterium)}`,
                         icon: <Truck className="h-5 w-5 text-green-500" />,
                     });
@@ -110,12 +116,14 @@ export default function App() {
                     if(!isVictory && reportData.is_defense) {
                          toast.error("ALERTE : Base Attaquée !", { description: "Consultez le rapport." });
                     }
+                    
+                    // ON PASSE TOUT L'OBJET reportData
                     setCombatReport({
-                        winner: isVictory ? 'player' : 'enemy',
-                        log: reportData.log,
-                        loot: reportData.loot,
-                        losses: reportData.losses
+                        ...reportData, // <--- C'EST LA LIGNE QUI SAUVE TOUT (transmet is_defense, opponent_name, etc.)
+                        // On garde ce calcul de winner pour compatibilité si le back n'envoie pas 'result'
+                        winner: reportData.winner || (isVictory ? 'player' : 'enemy'), 
                     });
+                    
                     setShowCombatModal(true);
                 }
                 await fetch(`http://localhost:8080/planets/${planetId}/clear-report`, {
@@ -157,6 +165,12 @@ export default function App() {
   };
 
   const handlePrepareAttack = (id: string, name: string) => setTargetPlanet({id, name});
+
+  const handlePrepareTransport = (id: string, name: string, system: number) => {
+      setTransportTarget({id, name, system});
+  };
+
+
   const handleSpy = async (targetId: string) => {
     try {
         const res = await fetch(`http://localhost:8080/spy?current_planet_id=${planetId}`, {
@@ -166,12 +180,12 @@ export default function App() {
         });
         const data = await res.json();
         if(res.ok) {
-            toast.success("Rapport d'espionnage", {
-                description: <pre className="text-xs bg-slate-950 p-2 rounded mt-2 overflow-x-auto">{JSON.stringify(data.report, null, 2)}</pre>,
-                duration: 10000,
-            });
-            fetchPlanet();
-        } else { toast.error(data.error); }
+          // MODIFICATION ICI : Au lieu du toast, on set le state
+          setSpyReport(data.report);
+          fetchPlanet();
+      } else { 
+          toast.error(data.error || "Échec de l'espionnage"); 
+      }
     } catch(e) { toast.error("Erreur réseau"); }
   };
 
@@ -242,6 +256,29 @@ export default function App() {
       <div className="relative z-50">
         {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
         {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
+     
+     {transportTarget && (
+            <TransportModal 
+                currentPlanet={planet} 
+                targetPlanet={transportTarget} 
+                onClose={() => setTransportTarget(null)} 
+                onConfirm={() => {
+                    fetchPlanet(); 
+                    setTransportTarget(null);
+                }} 
+            />
+
+            
+        )}
+     
+  {spyReport && (
+    <SpyModal 
+        report={spyReport} 
+        onClose={() => setSpyReport(null)} 
+    />
+)}
+
+
       </div>
 
       <div className="absolute top-0 left-0 w-full z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-md shadow-lg">
@@ -286,7 +323,7 @@ export default function App() {
             <div className="max-w-7xl mx-auto pb-20 md:pb-0 min-h-full">
                 <div className="animate-in fade-in zoom-in-95 duration-300">
                     {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
-                    {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} />}
+                    {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} onNavigateTransport={handlePrepareTransport} />}
                     {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
                     {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
                     

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { 
     ChevronLeft, ChevronRight, Search, 
     Crosshair, Eye, Send, Recycle, MapPin, 
-    Rocket, User, List, LayoutGrid, Sparkles, X, ShieldCheck, Crown, Flag
+    Rocket, User, List, LayoutGrid, Sparkles, X, ShieldCheck, Crown, Flag, Truck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+// --- INTERFACES ---
 
 interface GalaxySlot {
     position: number;
@@ -31,9 +33,12 @@ interface GalaxyViewProps {
     planet: any;
     onNavigateAttack: (id: string, name: string) => void;
     onNavigateSpy: (id: string) => void;
+    onNavigateTransport: (id: string, name: string, system: number) => void;
 }
 
-export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy }: GalaxyViewProps) {
+// --- COMPOSANT PRINCIPAL ---
+
+export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, onNavigateTransport }: GalaxyViewProps) {
     const [galaxy, setGalaxy] = useState(planet.galaxy);
     const [system, setSystem] = useState(planet.system);
     const [slots, setSlots] = useState<GalaxySlot[]>([]);
@@ -99,7 +104,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy }: 
     return (
         <div className="space-y-6 pb-20 relative min-h-[80vh]">
             
-            {/* Navigation (Reste inchangée) */}
+            {/* NAVIGATION */}
             <div className="sticky top-0 z-30 -mx-4 px-4 py-4 bg-slate-950/90 backdrop-blur-xl border-b border-white/10 flex flex-col xl:flex-row justify-between items-center gap-4 shadow-2xl">
                 <div className="flex items-center gap-4 bg-black/40 p-2 rounded-xl border border-white/10">
                     <div className="flex items-center">
@@ -137,7 +142,15 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy }: 
 
             {viewMode === 'list' ? (
                 <div className="rounded-xl border border-white/5 overflow-hidden bg-slate-950/50 shadow-2xl">
-                    <ListView slots={slots} onNavigateAttack={onNavigateAttack} onNavigateSpy={onNavigateSpy} handleColonize={handleColonize} handleRecycle={handleRecycle} getPlanetStyle={getPlanetStyle} />
+                    <ListView 
+                        slots={slots} 
+                        onNavigateAttack={onNavigateAttack} 
+                        onNavigateSpy={onNavigateSpy} 
+                        onNavigateTransport={(id: string, name: string) => onNavigateTransport(id, name, system)} 
+                        handleColonize={handleColonize} 
+                        handleRecycle={handleRecycle} 
+                        getPlanetStyle={getPlanetStyle} 
+                    />
                 </div>
             ) : (
                 <div className="relative w-full aspect-square md:aspect-[16/9] max-w-5xl mx-auto mt-8 bg-slate-950/80 rounded-full md:rounded-3xl border border-white/5 shadow-2xl overflow-hidden group/orbit">
@@ -220,42 +233,58 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy }: 
                                     <div className="grid grid-cols-2 gap-3 w-full">
                                         {selectedSlot.planet_id ? (
                                             !selectedSlot.is_my_planet ? (
-                                                // --- CAS : ENNEMI ---
+                                                // --- CAS : ENNEMI / NEUTRE ---
                                                 <>
-                                                    <Button onClick={() => onNavigateSpy(selectedSlot.planet_id!)} variant="outline" className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10">
+                                                    <Button onClick={() => onNavigateSpy(selectedSlot.planet_id!)} variant="outline" className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300">
                                                         <Eye className="mr-2" size={16} /> Espionner
                                                     </Button>
-                                                    <Button onClick={() => onNavigateAttack(selectedSlot.planet_id!, selectedSlot.planet_name!)} variant="default" className="bg-red-600 hover:bg-red-700">
+                                                    <Button onClick={() => onNavigateAttack(selectedSlot.planet_id!, selectedSlot.planet_name!)} variant="default" className="bg-red-600 hover:bg-red-700 text-white shadow-red-900/20 shadow-lg">
                                                         <Crosshair className="mr-2" size={16} /> Attaquer
                                                     </Button>
-                                                    <Button variant="outline" className="col-span-2 border-slate-700 text-slate-400 hover:text-white">
-                                                        <Send className="mr-2" size={16} /> Transport
+                                                    {/* BOUTON TRANSPORT : STYLE "LOGISTIQUE" (EMERAUDE) */}
+                                                    <Button 
+                                                        onClick={() => onNavigateTransport(selectedSlot.planet_id!, selectedSlot.planet_name!, system)} 
+                                                        variant="outline" 
+                                                        className="col-span-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all"
+                                                    >
+                                                        <Truck className="mr-2" size={16} /> Transport
                                                     </Button>
                                                 </>
                                             ) : (
                                                 // --- CAS : C'EST À MOI ---
-                                                <div className={`col-span-2 py-4 border rounded-lg flex flex-col items-center justify-center gap-2 transition-colors ${
-                                                    selectedSlot.is_me 
-                                                        ? 'bg-indigo-600/20 border-indigo-500/50 shadow-[inset_0_0_20px_rgba(79,70,229,0.2)]' // Style Planète Mère
-                                                        : 'bg-blue-900/20 border-blue-500/30' // Style Colonie
-                                                }`}>
-                                                    {selectedSlot.is_me ? (
-                                                        <>
-                                                            <Crown className="text-indigo-300 animate-pulse" size={28} />
-                                                            <div className="text-center">
-                                                                <span className="block text-indigo-200 text-xs font-black uppercase tracking-widest">Planète Mère</span>
-                                                                <span className="text-[10px] text-indigo-400 font-mono">Base de Commandement Actuelle</span>
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Flag className="text-blue-400" size={24} />
-                                                            <div className="text-center">
-                                                                <span className="block text-blue-300 text-xs font-black uppercase tracking-widest">Colonie Impériale</span>
-                                                                <span className="text-[10px] text-blue-500 font-mono">Territoire Annexé</span>
-                                                            </div>
-                                                            {/* Tu pourras ajouter un bouton "Basculer vers cette colonie" ici plus tard */}
-                                                        </>
+                                                <div className="col-span-2 space-y-2">
+                                                    <div className={`py-4 border rounded-lg flex flex-col items-center justify-center gap-2 transition-colors ${
+                                                        selectedSlot.is_me 
+                                                            ? 'bg-indigo-600/20 border-indigo-500/50 shadow-[inset_0_0_20px_rgba(79,70,229,0.2)]' // Style Planète Mère
+                                                            : 'bg-blue-900/20 border-blue-500/30' // Style Colonie
+                                                    }`}>
+                                                        {selectedSlot.is_me ? (
+                                                            <>
+                                                                <Crown className="text-indigo-300 animate-pulse" size={28} />
+                                                                <div className="text-center">
+                                                                    <span className="block text-indigo-200 text-xs font-black uppercase tracking-widest">Planète Mère</span>
+                                                                    <span className="text-[10px] text-indigo-400 font-mono">Base de Commandement Actuelle</span>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Flag className="text-blue-400" size={24} />
+                                                                <div className="text-center">
+                                                                    <span className="block text-blue-300 text-xs font-black uppercase tracking-widest">Colonie Impériale</span>
+                                                                    <span className="text-[10px] text-blue-500 font-mono">Territoire Annexé</span>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {/* Bouton Ravitailler : Style "Logistique" (Solid Emerald) */}
+                                                    {!selectedSlot.is_me && (
+                                                        <Button 
+                                                            onClick={() => onNavigateTransport(selectedSlot.planet_id!, selectedSlot.planet_name!, system)} 
+                                                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-900/20"
+                                                        >
+                                                            <Truck className="mr-2" size={16} /> Ravitailler
+                                                        </Button>
                                                     )}
                                                 </div>
                                             )
@@ -276,7 +305,19 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy }: 
     );
 }
 
-function ListView({ slots, onNavigateAttack, onNavigateSpy, handleColonize, handleRecycle, getPlanetStyle }: any) {
+// --- SOUS-COMPOSANT : VUE LISTE ---
+
+interface ListViewProps {
+    slots: GalaxySlot[];
+    onNavigateAttack: (id: string, name: string) => void;
+    onNavigateSpy: (id: string) => void;
+    onNavigateTransport: (id: string, name: string) => void;
+    handleColonize: (position: number) => void;
+    handleRecycle: (id: string) => void;
+    getPlanetStyle: (name: string) => string;
+}
+
+function ListView({ slots, onNavigateAttack, onNavigateSpy, onNavigateTransport, handleColonize, handleRecycle, getPlanetStyle }: ListViewProps) {
     return (
         <table className="w-full text-left border-collapse">
             <thead>
@@ -288,13 +329,13 @@ function ListView({ slots, onNavigateAttack, onNavigateSpy, handleColonize, hand
                 </tr>
             </thead>
             <tbody className="text-sm divide-y divide-white/5">
-                {slots.map((slot: GalaxySlot) => (
+                {slots.map((slot) => (
                     <tr key={slot.position} className={`group hover:bg-white/5 transition-colors ${slot.is_my_planet ? 'bg-indigo-900/10' : ''}`}>
                         <td className="p-4 text-center font-mono text-slate-500 font-bold">{slot.position}</td>
                         <td className="p-4">
                             {slot.planet_id ? (
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getPlanetStyle(slot.planet_name)} shadow-md`}></div>
+                                    <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getPlanetStyle(slot.planet_name!)} shadow-md`}></div>
                                     <div>
                                         <span className={`font-bold ${slot.is_me ? 'text-indigo-300' : 'text-white'}`}>{slot.planet_name}</span>
                                         {slot.is_my_planet && <span className="ml-2 text-[9px] bg-indigo-500/20 text-indigo-300 px-1 rounded border border-indigo-500/30">MOI</span>}
@@ -304,13 +345,22 @@ function ListView({ slots, onNavigateAttack, onNavigateSpy, handleColonize, hand
                         </td>
                         <td className="p-4 text-slate-300">{slot.owner_name || "-"}</td>
                         <td className="p-4 text-center flex justify-center gap-2">
-                            {slot.planet_id && !slot.is_my_planet && ( // CORRECTION ICI
+                            {/* Actions sur planètes ennemies */}
+                            {slot.planet_id && !slot.is_my_planet && (
                                 <>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-blue-500/20 hover:text-blue-400" onClick={() => onNavigateSpy(slot.planet_id)}><Eye size={14}/></Button>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-red-500/20 hover:text-red-400" onClick={() => onNavigateAttack(slot.planet_id, slot.planet_name)}><Crosshair size={14}/></Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-blue-500/20 hover:text-blue-400 transition-colors" onClick={() => onNavigateSpy(slot.planet_id!)}><Eye size={14}/></Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-red-500/20 hover:text-red-400 transition-colors" onClick={() => onNavigateAttack(slot.planet_id!, slot.planet_name!)}><Crosshair size={14}/></Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors" onClick={() => onNavigateTransport(slot.planet_id!, slot.planet_name!)}><Truck size={14}/></Button>
                                 </>
                             )}
-                            {!slot.planet_id && <Button size="sm" variant="ghost" className="h-7 text-[10px] uppercase" onClick={() => handleColonize(slot.position)}>Coloniser</Button>}
+                            
+                            {/* Actions sur mes colonies (Transport uniquement) */}
+                            {slot.is_my_planet && !slot.is_me && (
+                                 <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors" onClick={() => onNavigateTransport(slot.planet_id!, slot.planet_name!)}><Truck size={14}/></Button>
+                            )}
+
+                            {/* Colonisation */}
+                            {!slot.planet_id && <Button size="sm" variant="ghost" className="h-7 text-[10px] uppercase text-emerald-400 hover:text-emerald-300" onClick={() => handleColonize(slot.position)}>Coloniser</Button>}
                         </td>
                     </tr>
                 ))}
