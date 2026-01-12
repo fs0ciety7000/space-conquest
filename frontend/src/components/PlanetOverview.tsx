@@ -1,6 +1,7 @@
 import { 
-  Database, Gem, Activity, MapPin, Shield, Rocket, Globe, Scan, 
-  Zap, Hammer, Clock, TrendingUp, AlertTriangle 
+  Stone, Gem, MapPin, Shield, Rocket, Globe, Scan, 
+  Zap, Hammer, Clock, TrendingUp, AlertTriangle, 
+  Droplets
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -13,16 +14,34 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     return baseProd * speedFactor;
   };
 
-  // 1. Production Ressources
+  // 1. Production Ressources (Mines)
   const prodMetal = calculateProduction(planet.metal_mine_level, 30);
   const prodCrystal = calculateProduction(planet.crystal_mine_level, 20);
   const prodDeut = calculateProduction(planet.deuterium_mine_level, 10);
 
-  // 2. Gestion de l'Énergie
-  const energyProd = 20 * planet.energy_tech_level * Math.pow(1.1, planet.energy_tech_level);
-  const energyCons = (10 * planet.metal_mine_level) + (10 * planet.crystal_mine_level) + (20 * planet.deuterium_mine_level);
+// 2. Gestion de l'Énergie (MISE À JOUR)
+  const solarLevel = planet.solar_plant_level || 0;
+  const energyTechLevel = planet.energy_tech_level || 0;
+  
+  // Base
+  const baseSolarProd = 20 * solarLevel * Math.pow(1.1, solarLevel);
+  // Bonus (+5% par niveau)
+  const techBonus = 1 + (energyTechLevel * 0.05);
+  
+  const energyProd = Math.floor(baseSolarProd * techBonus);
+
+
+  // Consommation : Mines (10 * Niv * 1.1^Niv pour Métal/Cristal, 20 pour Deut)
+  const consMetal = 10 * planet.metal_mine_level * Math.pow(1.1, planet.metal_mine_level);
+  const consCrystal = 10 * planet.crystal_mine_level * Math.pow(1.1, planet.crystal_mine_level);
+  const consDeut = 20 * planet.deuterium_mine_level * Math.pow(1.1, planet.deuterium_mine_level);
+  
+  const energyCons = Math.floor(consMetal + consCrystal + consDeut);
+  
+  // Bilan Énergétique
   const energyNet = energyProd - energyCons;
-  const energyPercent = Math.min(100, Math.max(0, (energyProd / (energyCons || 1)) * 100));
+  // Pourcentage de charge (max 100%)
+  const energyPercent = energyCons > 0 ? Math.min(100, (energyCons / energyProd) * 100) : 0;
 
   // 3. Totaux Militaires
   const totalFleet = (planet.light_hunter_count || 0) + (planet.cruiser_count || 0) + (planet.recycler_count || 0) + (planet.spy_probe_count || 0) + (planet.colony_ship_count || 0) + (planet.transporter_count || 0);
@@ -103,7 +122,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="flex items-end justify-between">
-                    <span className="text-3xl font-mono font-black text-white">{fmt(energyNet)}</span>
+                    <span className={`text-3xl font-mono font-black ${energyNet >= 0 ? 'text-white' : 'text-red-400'}`}>
+                        {fmt(energyNet)}
+                    </span>
                     <span className={`text-xs font-bold px-2 py-1 rounded ${energyNet >= 0 ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'}`}>
                         {energyNet >= 0 ? 'STABLE' : 'CRITIQUE'}
                     </span>
@@ -139,10 +160,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1">Infrastructures</h3>
             
             {[
-                { label: "Mine de Métal", level: planet.metal_mine_level, icon: Database, color: "text-orange-400", border: "border-orange-500/20" },
+                { label: "Mine de Métal", level: planet.metal_mine_level, icon: Stone, color: "text-orange-300", border: "border-orange-500/20" },
                 { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400", border: "border-cyan-500/20" },
-                { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Activity, color: "text-green-400", border: "border-green-500/20" },
-                { label: "Centrale Solaire", level: planet.energy_tech_level, icon: Zap, color: "text-yellow-400", border: "border-yellow-500/20" },
+                { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Droplets, color: "text-green-400", border: "border-green-500/20" },
+                { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400", border: "border-yellow-500/20" }, // <-- Corrigé ici aussi
             ].map((mine) => (
                 <div key={mine.label} className={`bg-slate-900/50 border ${mine.border} p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors`}>
                     <div className="flex items-center gap-3 overflow-hidden">
@@ -157,10 +178,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </div>
 
         {/* Colonne Centrale/Droite : TABLEAU DE PRODUCTION */}
-        {/* CORRECTION ICI : Pas de h-full sur la Card, min-w-0 sur le div */}
         <div className="md:col-span-3 min-w-0">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1 mb-4">Rendement Industriel</h3>
-            <Card className="bg-black/40 border border-white/10 backdrop-blur-sm">
+            <Card className="bg-green-950/10 border border-green-500/20">
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse font-mono text-xs whitespace-nowrap">
@@ -175,7 +195,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 <tr className="hover:bg-white/5 transition-colors">
-                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-orange-400"><Database size={14} /> MÉTAL</td>
+                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-orange-300"><Stone size={14} /> MÉTAL</td>
                                     <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.metal_amount)}</td>
                                     <td className="py-4 text-right text-slate-600">Illimité</td>
                                     <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodMetal)}</td>
@@ -189,7 +209,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                     <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodCrystal * 24)}</td>
                                 </tr>
                                 <tr className="hover:bg-white/5 transition-colors">
-                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-green-400"><Activity size={14} /> DEUTÉRIUM</td>
+                                    <td className="py-4 pl-4 flex items-center gap-2 font-bold text-green-400"><Droplets size={14} /> DEUTÉRIUM</td>
                                     <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.deuterium_amount)}</td>
                                     <td className="py-4 text-right text-slate-600">Illimité</td>
                                     <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodDeut)}</td>

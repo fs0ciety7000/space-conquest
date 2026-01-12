@@ -20,6 +20,7 @@ mod m20260111_213610_add_transporter;
 mod m20260111_222219_create_fleet_mission;
 mod m20260111_223746_create_transport_log;
 mod m20260112_004006_create_message_table;
+mod m20260112_032740_add_solar_plant;
 
 pub struct Migrator;
 
@@ -47,6 +48,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260111_222219_create_fleet_mission::Migration),
             Box::new(m20260111_223746_create_transport_log::Migration),
             Box::new(m20260112_004006_create_message_table::Migration),
+            Box::new(m20260112_032740_add_solar_plant::Migration),
         ]
     }
 }

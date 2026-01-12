@@ -18,6 +18,7 @@ use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use rand::Rng;
+use sea_orm::PaginatorTrait;
 
 mod auth;
 mod game_logic;
@@ -302,7 +303,7 @@ async fn get_ranking_handler(
 async fn get_planet_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
-) -> Result<Json<planet::Model>, StatusCode> {
+) -> Result<Json<serde_json::Value>, StatusCode> {
     
     let p_opt = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let p = p_opt.ok_or(StatusCode::NOT_FOUND)?;
@@ -334,6 +335,7 @@ async fn get_planet_handler(
                 "deuterium" => active.deuterium_mine_level = Set(p.deuterium_mine_level + 1),
                 "energy_tech" => active.energy_tech_level = Set(p.energy_tech_level + 1),
                 "research" => active.research_lab_level = Set(p.research_lab_level + 1),
+                "solar_plant" => active.solar_plant_level = Set(p.solar_plant_level + 1),
                 "laser" => active.laser_battery_level = Set(p.laser_battery_level + 1),
                 "espionage" => active.espionage_tech_level = Set(p.espionage_tech_level + 1),
                 _ => {}
@@ -409,9 +411,48 @@ async fn get_planet_handler(
         let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
     }
 
-    // Sauvegarde finale
+ // Sauvegarde finale
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(updated_model))
+
+// --- CALCUL ÉNERGIE (CORRIGÉ) ---
+    // 1. Production Solaire de base
+    let solar_lvl = updated_model.solar_plant_level as f64;
+    let base_production = 20.0 * solar_lvl * 1.1f64.powf(solar_lvl);
+
+    // 2. Bonus Tech
+    let energy_tech = updated_model.energy_tech_level as f64;
+    let tech_bonus = 1.0 + (energy_tech * 0.05);
+
+    let production = base_production * tech_bonus;
+
+    // 3. Consommation
+    let metal_lvl = updated_model.metal_mine_level as f64;
+    let crystal_lvl = updated_model.crystal_mine_level as f64;
+    let deut_lvl = updated_model.deuterium_mine_level as f64;
+
+    let consumption = (10.0 * metal_lvl * 1.1f64.powf(metal_lvl))
+                    + (10.0 * crystal_lvl * 1.1f64.powf(crystal_lvl))
+                    + (20.0 * deut_lvl * 1.1f64.powf(deut_lvl));
+
+    let net_energy = (production - consumption).floor() as i32;
+
+    // --- NOUVEAU : Compter les messages non lus ---
+    let unread_count = Message::find()
+        .filter(message::Column::ReceiverId.eq(updated_model.owner_id))
+        .filter(message::Column::IsRead.eq(false))
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
+    // Conversion en JSON dynamique pour ajouter le champ
+    let mut json_response = serde_json::to_value(updated_model).unwrap();
+    
+    // On injecte le compte
+  if let Some(obj) = json_response.as_object_mut() {
+        obj.insert("unread_messages".to_string(), json!(unread_count));
+        obj.insert("energy".to_string(), json!(net_energy)); // <-- L'énergie calculée par le serveur
+    }
+    Ok(Json(json_response))
 }
 
 async fn clear_report_handler(
@@ -442,6 +483,7 @@ async fn upgrade_mine_handler(
         "deuterium" => p.deuterium_mine_level,
         "energy_tech" => p.energy_tech_level,
         "research" => p.research_lab_level,
+        "solar_plant" => p.solar_plant_level,
         "laser" => p.laser_battery_level,
         "espionage" => p.espionage_tech_level,
         _ => return Err(StatusCode::BAD_REQUEST),

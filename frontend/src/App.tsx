@@ -50,6 +50,9 @@ export default function App() {
   const prevPlanetRef = useRef<any>(null);
   const processingReportRef = useRef(false);
 
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
+  const prevUnreadCountRef = useRef<number | null>(null); // Pour comparer et toaster
+
   const handleLogout = () => {
     localStorage.clear();
     setToken(null);
@@ -79,6 +82,28 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         
+        // --- LOGIQUE TOAST MESSAGE ---
+        const newUnreadCount = data.unread_messages || 0;
+        
+        // On ne notifie que si le nombre augmente et ce n'est pas le premier chargement
+        if (prevUnreadCountRef.current !== null && newUnreadCount > prevUnreadCountRef.current) {
+            toast.info("Nouvelle transmission reçue !", {
+                description: "Ouvrez la messagerie pour décrypter.",
+                icon: <Mail className="text-indigo-400" />,
+                action: {
+                    label: "Lire",
+                    onClick: () => setActiveTab('messages'),
+                },
+                duration: 5000,
+            });
+            // Optionnel : Jouer un son ici
+        }
+        
+        setUnreadMessagesCount(newUnreadCount);
+        prevUnreadCountRef.current = newUnreadCount;
+        // -----------------------------
+
+
         if (data.unread_report && !processingReportRef.current) {
             processingReportRef.current = true;
             try {
@@ -202,7 +227,7 @@ export default function App() {
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
     { id: 'galaxy', label: 'Galaxie', icon: Globe, category: 'COMMANDEMENT' },
     { id: 'messages', label: 'Messagerie', icon: Mail, category: 'COMMUNICATION' },
-    { id: 'resources', label: 'Mines', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
+    { id: 'resources', label: 'Production', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
     { id: 'tech', label: 'Laboratoire', icon: FlaskConical, category: 'DÉVELOPPEMENT' },
     { id: 'fleet', label: 'Chantier Spatial', icon: Hammer, category: 'MILITAIRE' },
     { id: 'defenses', label: 'Défense', icon: ShieldCheck, category: 'MILITAIRE' },
@@ -224,9 +249,14 @@ export default function App() {
         {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
       </div>
 
-      {/* Barre Supérieure */}
+     {/* Barre Supérieure */}
       <div className="absolute top-0 left-0 w-full z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-md shadow-lg">
-          <EmpireBar planet={planet} onSwitchPlanet={switchPlanet} />
+          <EmpireBar 
+            planet={planet} 
+            onSwitchPlanet={switchPlanet} 
+            unreadMessages={unreadMessagesCount} // <-- Passe le compteur
+            onOpenMessages={() => setActiveTab('messages')} // <-- Ouvre l'onglet
+          />
       </div>
 
       {/* Conteneur Principal */}

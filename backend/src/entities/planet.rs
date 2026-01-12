@@ -19,6 +19,11 @@ pub struct Model {
     #[sea_orm(default_value = 1)]
     pub deuterium_mine_level: i32,
 
+// --- AJOUTEZ CETTE LIGNE ---
+    #[sea_orm(default_value = 0)]
+    pub solar_plant_level: i32,
+    // ---------------------------
+
     // Ressources
     #[sea_orm(default_value = 0.0)]
     pub metal_amount: f64,
@@ -88,7 +93,7 @@ pub struct Model {
 
     #[sea_orm(default_value = 0)]
     pub transporter_count: i32,
-    
+
     // Expédition
     pub expedition_end: Option<DateTime>,
 
