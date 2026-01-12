@@ -474,60 +474,84 @@ async fn get_planet_handler(
         active.last_update = Set(now);
     }
 
-    // 2. Queue de construction
-    let finished = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(id)).filter(construction_queue::Column::EndTime.lte(now)).all(&state.db).await.unwrap_or_default();
+    // 2. Queue de construction (Complétée avec tous tes types)
+    let finished = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).filter(construction_queue::Column::EndTime.lte(now)).all(&state.db).await.unwrap_or_default();
     for item in finished {
         match item.building_type.as_str() {
             "metal" => active.metal_mine_level = Set(item.level),
+            "crystal" => active.crystal_mine_level = Set(item.level),
+            "deuterium" => active.deuterium_mine_level = Set(item.level),
+            "solar_plant" => active.solar_plant_level = Set(item.level),
+            "shipyard" => active.shipyard_level = Set(item.level),
+            "research" => active.research_lab_level = Set(item.level),
+            "hangar" => active.hangar_level = Set(item.level),
+            "energy_tech" => active.energy_tech_level = Set(item.level),
+            "laser" => active.laser_battery_level = Set(item.level),
+            "espionage" => active.espionage_tech_level = Set(item.level),
+            "armour" => active.armour_tech_level = Set(item.level),
             "light_hunter" => active.light_hunter_count = Set(active.light_hunter_count.unwrap() + item.level),
+            "cruiser" => active.cruiser_count = Set(active.cruiser_count.unwrap() + item.level),
+            "missile_launcher" => active.missile_launcher_count = Set(active.missile_launcher_count.unwrap() + item.level),
+            "plasma_turret" => active.plasma_turret_count = Set(active.plasma_turret_count.unwrap() + item.level),
             _ => {}
         }
         let _ = ConstructionQueue::delete_by_id(item.id).exec(&state.db).await;
     }
 
-   // --- 3. TRAITEMENT DES MISSIONS ARRIVÉES ---
-    // On cherche les missions dont l'heure d'arrivée est passée (<= now)
-    // ET qui concernent cette planète (soit en cible, soit en source pour les retours)
-    let missions = FleetMission::find()
-        .filter(
-            Condition::any()
-                .add(fleet_mission::Column::TargetPlanetId.eq(id))
-                .add(fleet_mission::Column::SourcePlanetId.eq(id))
-        )
+    // 3. Traitement des missions arrivées
+    let arrived = FleetMission::find()
+        .filter(Condition::any().add(fleet_mission::Column::TargetPlanetId.eq(id)).add(fleet_mission::Column::SourcePlanetId.eq(id)))
         .filter(fleet_mission::Column::ArrivalTime.lte(now))
-        .all(&state.db)
-        .await
-        .unwrap_or_default();
+        .all(&state.db).await.unwrap_or_default();
 
-    for m in missions {
+    for m in arrived {
         if m.mission_type == "attack" {
-            // resolve_attack_mission contient le code de combat et supprime la mission à la fin
             let _ = resolve_attack_mission(&state.db, m).await;
         } else if m.mission_type == "transport" {
-            let current_m = active.metal_amount.clone().unwrap();
-            let current_c = active.crystal_amount.clone().unwrap();
-            let current_d = active.deuterium_amount.clone().unwrap();
-
-            active.metal_amount = Set(current_m + m.metal);
-            active.crystal_amount = Set(current_c + m.crystal);
-            active.deuterium_amount = Set(current_d + m.deuterium);
-
-            // On supprime la mission de transport une fois les ressources déposées
+            active.metal_amount = Set(active.metal_amount.clone().unwrap() + m.metal);
+            active.crystal_amount = Set(active.crystal_amount.clone().unwrap() + m.crystal);
+            active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() + m.deuterium);
             let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
         }
     }
 
-    let incoming = FleetMission::find().filter(fleet_mission::Column::TargetPlanetId.eq(id)).all(&state.db).await.unwrap_or_default();
-    let outgoing = FleetMission::find().filter(fleet_mission::Column::SourcePlanetId.eq(id)).all(&state.db).await.unwrap_or_default();
+    // 4. Préparation des données pour le RADAR (Détails des cibles)
+    let incoming_raw = FleetMission::find().filter(fleet_mission::Column::TargetPlanetId.eq(id)).all(&state.db).await.unwrap_or_default();
+    let outgoing_raw = FleetMission::find().filter(fleet_mission::Column::SourcePlanetId.eq(id)).all(&state.db).await.unwrap_or_default();
 
-    let updated = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let mut res = serde_json::to_value(updated).unwrap();
-    if let Some(obj) = res.as_object_mut() {
-        obj.insert("incoming_missions".into(), json!(incoming));
-        obj.insert("outgoing_missions".into(), json!(outgoing));
+    let mut outgoing_detailed = Vec::new();
+    for m in outgoing_raw {
+        let target_p = Planet::find_by_id(m.target_planet_id).one(&state.db).await.ok().flatten();
+        let mut val = serde_json::to_value(&m).unwrap();
+        if let Some(tp) = target_p {
+            if let Some(obj) = val.as_object_mut() {
+                obj.insert("target_name".into(), json!(tp.name));
+                obj.insert("coords".into(), json!(format!("[{}:{}:{}]", tp.galaxy, tp.system, tp.position)));
+            }
+        }
+        outgoing_detailed.push(val);
     }
-    Ok(Json(res))
+
+    // 5. Sauvegarde et réponse enrichie
+    let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Calcul énergie pour le front
+    let energy_prod = (20.0 * updated_model.solar_plant_level as f64 * 1.1f64.powf(updated_model.solar_plant_level as f64) * (1.0 + (updated_model.energy_tech_level as f64 * 0.05))) as i32;
+    let energy_cons = (10.0 * updated_model.metal_mine_level as f64 * 1.1f64.powf(updated_model.metal_mine_level as f64)) as i32; // simplifié pour l'exemple
+
+    let mut json_response = serde_json::to_value(updated_model).unwrap();
+    if let Some(obj) = json_response.as_object_mut() {
+        obj.insert("incoming_missions".into(), json!(incoming_raw));
+        obj.insert("outgoing_missions".into(), json!(outgoing_detailed));
+        obj.insert("energy".into(), json!(energy_prod - energy_cons));
+        // On rajoute les autres champs nécessaires
+        let active_queue = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).order_by_asc(construction_queue::Column::EndTime).all(&state.db).await.unwrap_or_default();
+        obj.insert("constructions".into(), json!(active_queue));
+    }
+
+    Ok(Json(json_response))
 }
+
 
 async fn clear_report_handler(
     Path(id): Path<Uuid>,

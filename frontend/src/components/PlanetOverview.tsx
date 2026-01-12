@@ -174,32 +174,67 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                   </CardContent>
               </Card>
 
-              {/* CENTRE DE COMMANDE (Outgoing) */}
-              <Card className="bg-slate-950 border border-emerald-500/30 overflow-hidden relative">
-                  <div className="absolute top-0 right-0 p-2 opacity-10"><Navigation size={80} /></div>
-                  <CardHeader className="pb-2 border-b border-white/5">
-                      <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-slate-400">
-                          <Navigation size={14} className="text-emerald-400" /> Missions de flotte actives
-                      </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 space-y-3">
-                      {outgoingMissions.length > 0 ? outgoingMissions.map((m: any) => {
-                          const tl = getTimeLeft(m.arrival_time);
-                          return (
-                              <div key={m.id} className="bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-lg flex flex-col gap-2">
-                                  <div className="flex justify-between items-center">
-                                      <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">{m.mission_type}</span>
-                                      <span className="text-xs font-mono font-bold text-white">{tl}s</span>
-                                  </div>
-                                  <Progress value={Math.max(5, 100 - (tl / 10))} className="h-1 bg-slate-800" />
-                                  <p className="text-[8px] text-slate-500 uppercase font-mono tracking-tighter">Coord : Destination confidentielle</p>
-                              </div>
-                          );
-                      }) : (
-                          <div className="text-center py-4 text-slate-600 text-[10px] uppercase font-bold italic">Aucune mission en cours</div>
-                      )}
-                  </CardContent>
-              </Card>
+           {/* CENTRE DE COMMANDE (Missions sortantes) */}
+<Card className="bg-slate-950 border border-emerald-500/30 overflow-hidden relative shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+    <div className="absolute top-0 right-0 p-2 opacity-10"><Navigation size={80} /></div>
+    <CardHeader className="pb-2 border-b border-white/5 bg-emerald-950/20">
+        <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-emerald-400">
+            <Navigation size={14} className="animate-pulse" /> Centre de Commandement Flotte
+        </CardTitle>
+    </CardHeader>
+    <CardContent className="p-4 space-y-4">
+        {outgoingMissions.length > 0 ? outgoingMissions.map((m: any) => {
+            const tl = getTimeLeft(m.arrival_time);
+            
+            // Traduction et Style
+            const isAttack = m.mission_type.toLowerCase() === 'attack';
+            const label = isAttack ? "OFFENSIVE" : "TRANSPORT";
+            const statusColor = isAttack ? "text-red-400" : "text-emerald-400";
+            const barColor = isAttack ? "bg-red-500" : "bg-emerald-500";
+
+            return (
+                <div key={m.id} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-3 group hover:border-emerald-500/30 transition-all">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <span className={`text-[10px] font-black ${statusColor} uppercase tracking-[0.2em]`}>
+                                {label}
+                            </span>
+                            <h4 className="text-sm font-bold text-slate-200 mt-1">
+                                Vers : {m.target_name || "Secteur Inconnu"}
+                            </h4>
+                            <p className="text-[10px] font-mono text-slate-500 mt-0.5">
+                                Coordonnées : {m.coords || "[X:X:X]"}
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-sm font-mono font-black text-white bg-black px-2 py-1 rounded border border-white/10 shadow-inner">
+                                {tl}s
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Barre de progression ultra visible */}
+                    <div className="space-y-1">
+                        <div className="h-3 w-full bg-slate-900 rounded-full border border-white/5 overflow-hidden p-0.5 shadow-inner">
+                            <div 
+                                className={`h-full ${barColor} rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.4)]`}
+                                style={{ width: `${Math.max(2, 100 - (tl / 10))}%` }} // Ajuster le /10 selon la durée max réelle
+                            />
+                        </div>
+                        <div className="flex justify-between text-[8px] font-bold text-slate-600 uppercase tracking-tighter">
+                            <span>Décollage</span>
+                            <span>Impact imminent</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        }) : (
+            <div className="text-center py-8 text-slate-600 border-2 border-dashed border-white/5 rounded-xl">
+                <p className="text-[10px] uppercase font-black tracking-widest opacity-50 italic">Hangar de lancement vide</p>
+            </div>
+        )}
+    </CardContent>
+</Card>
           </div>
       )}
 
