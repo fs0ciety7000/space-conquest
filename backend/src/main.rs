@@ -18,7 +18,7 @@ use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use rand::Rng;
-use sea_orm::PaginatorTrait;
+use sea_orm_migration::MigratorTrait;
 
 mod auth;
 mod game_logic;
@@ -135,12 +135,19 @@ struct SystemSummary {
 
 #[tokio::main]
 async fn main() {
-    migration::Migrator::up(&db, None).await.unwrap();
+
     dotenvy::dotenv().ok();
     
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = Database::connect(&db_url).await.unwrap();
 
+
+     // EXÉCUTER LES MIGRATIONS
+    println!("🔄 Exécution des migrations...");
+    migration::Migrator::up(&db, None).await.unwrap();
+    println!("✅ Migrations terminées !");
+
+    
     let state = AppState { db };
 
     let cors = CorsLayer::new()
