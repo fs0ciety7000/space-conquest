@@ -13,9 +13,9 @@ serde_json = "1.0"
 jsonwebtoken = "9.3"
 bcrypt = "0.15"
 rand = "0.8.5"
-sea-orm = { version = "0.12", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { version = "1.1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+migration = { path = "../migration" }
 dotenvy = "0.15"
 tower-http = { version = "0.5", features = ["cors"] }
-http = "1.0" 
-migration = { path = "../migration" }  # <-- Pas "./migration"
-sea-orm-migration = { version = "1.1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+http = "1.0"

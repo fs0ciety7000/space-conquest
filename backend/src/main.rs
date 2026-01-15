@@ -22,7 +22,6 @@ use chrono::{Utc, Duration};
 use rand::Rng;
 
 // Importer le module et le trait APRÈS les autres imports
-use migration::Migrator;
 use sea_orm_migration::MigratorTrait;
 
 mod auth;
@@ -148,11 +147,10 @@ async fn main() {
 
     // FORCER L'EXÉCUTION DES MIGRATIONS (corrigé)
     println!("🔄 Exécution des migrations...");
-    match migration::Migrator::up(&db, None).await {
-        Ok(_) => println!("✅ Migrations réussies !"),
-        Err(e) => {
-            eprintln!("❌ Erreur migrations : {:?}", e);
-        }
+   match migration::Migrator::up(&db, None).await {
+    Ok(_) => println!("✅ Migrations réussies !"),
+    Err(e) => eprintln!("❌ Erreur migrations : {:?}", e),
+}
     }
 
     let state = AppState { db };
