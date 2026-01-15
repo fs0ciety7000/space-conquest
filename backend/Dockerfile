@@ -11,10 +11,9 @@ WORKDIR /app
 # Copier le dossier migration
 COPY migration ./migration
 
-# Build le binaire de migration AVEC downgrade
+# Build le binaire de migration (downgrade seulement home)
 WORKDIR /app/migration
 RUN cargo generate-lockfile && \
-    cargo update -p base64ct --precise 1.6.0 && \
     cargo update -p home --precise 0.5.9 && \
     cargo build --release
 
