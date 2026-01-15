@@ -15,6 +15,7 @@ use serde_json::{json, to_string};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use tower_http::cors::{Any, CorsLayer};
+use http::header::{AUTHORIZATION, CONTENT_TYPE, ACCEPT};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use rand::Rng;
@@ -144,11 +145,12 @@ async fn main() {
     let state = AppState { db };
 
     let cors = CorsLayer::new()
-        .allow_origin(Any)  // Permet toutes les origines (pour Railway)
-        .allow_methods(Any)  // Permet toutes les méthodes (GET, POST, etc.)
-        .allow_headers(Any)  // Permet tous les headers
-        .allow_credentials(true);  // Permet les cookies/credentials
- 
+        .allow_origin(Any)  // Permet toutes les origines
+    .allow_methods(Any)  // Permet toutes les méthodes
+    .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])  // Headers spécifiques au lieu de Any
+    .allow_credentials(true);  // Maintenant compatible
+
+
     let app = Router::new()
         // Auth
         .route("/register", post(auth::register_handler))
