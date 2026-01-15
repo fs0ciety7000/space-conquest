@@ -1,25 +1,42 @@
-# Utilisation de la version Nightly pour accepter toutes les nouvelles éditions
-FROM rustlang/rust:nightly-bookworm-slim
+# Build stage
+FROM rustlang/rust:nightly-bookworm-slim AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
-    curl \
     && rm -rf /var/lib/apt/lists/*
-
-# Installation de cargo-watch
-RUN cargo install cargo-watch
 
 WORKDIR /app
 
-# Copie et build
-COPY Cargo.toml ./
-# On ne copie pas le lock s'il existe pour laisser le container le générer
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build
+# Copier les manifests
+COPY Cargo.toml Cargo.lock ./
 
+# Créer un projet dummy pour cacher les dépendances
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -rf src
+
+# Copier le code source réel
 COPY . .
+
+# Build en release avec le vrai code
+RUN touch src/main.rs && \
+    cargo build --release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copier le binaire depuis le builder
+COPY --from=builder /app/target/release/backend /app/backend
 
 EXPOSE 8080
 
-CMD ["cargo-watch", "-x", "run"]
+CMD ["./backend"]
