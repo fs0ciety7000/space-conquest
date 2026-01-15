@@ -142,9 +142,10 @@ async fn main() {
     let state = AppState { db };
 
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST, Method::DELETE])
-        .allow_headers(Any);
+        .allow_origin(Any)  // Permet toutes les origines (pour Railway)
+        .allow_methods(Any)  // Permet toutes les méthodes (GET, POST, etc.)
+        .allow_headers(Any)  // Permet tous les headers
+        .allow_credentials(true);  // Permet les cookies/credentials
  
     let app = Router::new()
         // Auth
