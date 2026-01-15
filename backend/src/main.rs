@@ -19,13 +19,14 @@ use http::header::{AUTHORIZATION, CONTENT_TYPE, ACCEPT};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use rand::Rng;
-
+use sea_orm_migration::prelude::*;
 
 mod auth;
 mod game_logic;
 mod combat;
 mod entities; 
 
+pub use migration::Migrator;
 
 // --- IMPORT DU PRELUDE ---
 use entities::prelude::*;
@@ -141,6 +142,16 @@ async fn main() {
     
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = Database::connect(&db_url).await.unwrap();
+
+    // FORCER L'EXÉCUTION DES MIGRATIONS
+    println!("🔄 Exécution des migrations...");
+    match Migrator::up(&db, None).await {
+        Ok(_) => println!("✅ Migrations réussies !"),
+        Err(e) => {
+            eprintln!("❌ Erreur migrations : {:?}", e);
+            // Ne pas panic, continuer quand même
+        }
+    }
 
     let state = AppState { db };
 
