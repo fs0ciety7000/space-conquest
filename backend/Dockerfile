@@ -11,9 +11,12 @@ WORKDIR /app
 # Copier le dossier migration
 COPY migration ./migration
 
-# Build le binaire de migration
+# Build le binaire de migration AVEC downgrade
 WORKDIR /app/migration
-RUN cargo build --release
+RUN cargo generate-lockfile && \
+    cargo update -p base64ct --precise 1.6.0 && \
+    cargo update -p home --precise 0.5.9 && \
+    cargo build --release
 
 # Revenir à la racine pour le backend
 WORKDIR /app/backend
@@ -32,7 +35,7 @@ RUN cargo generate-lockfile && \
 # Build les dépendances du backend
 RUN cargo build --release && rm -rf src target
 
-# Copier tout le code source du backend (src/ contient déjà auth.rs, game_logic.rs, etc.)
+# Copier tout le code source du backend
 COPY src ./src
 
 # Build final du backend
