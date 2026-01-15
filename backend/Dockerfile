@@ -1,5 +1,5 @@
-# Build stage
-FROM rustlang/rust:nightly-bookworm-slim AS builder
+# Build stage - UTILISER STABLE AU LIEU DE NIGHTLY
+FROM rust:1.84-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -20,7 +20,7 @@ RUN mkdir src && \
 # Copier le code source réel
 COPY . .
 
-# Build en release avec le vrai code
+# Rebuild avec le vrai code (touch force la recompilation)
 RUN touch src/main.rs && \
     cargo build --release
 
