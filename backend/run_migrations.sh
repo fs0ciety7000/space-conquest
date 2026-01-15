@@ -5,7 +5,7 @@ echo "🔄 Exécution des migrations..."
 echo "DATABASE_URL: ${DATABASE_URL:0:30}..."
 
 # Exécuter avec le chemin absolu
-migration up
+cd /app && ./migration up
 
 echo "✅ Migrations terminées !"
 echo "🚀 Démarrage du backend..."
