@@ -1,5 +1,5 @@
-# Build stage - Version nightly du 5 janvier 2026
-FROM rustlang/rust:nightly-2026-01-05-bookworm-slim AS builder
+# Build stage - Utiliser nightly sans date spécifique
+FROM rustlang/rust:nightly-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
