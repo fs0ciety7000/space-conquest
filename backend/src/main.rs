@@ -156,7 +156,7 @@ async fn main() {
     let state = AppState { db };
 
     let cors = CorsLayer::new()
-        .allow_origin(Any)  // Permet toutes les origines
+    .allow_origin(frontend_url.parse::<HeaderValue>().unwrap())
     .allow_methods(Any)  // Permet toutes les méthodes
     .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])  // Headers spécifiques au lieu de Any
     .allow_credentials(true);  // Maintenant compatible
