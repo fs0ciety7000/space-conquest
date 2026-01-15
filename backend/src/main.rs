@@ -24,6 +24,7 @@ mod auth;
 mod game_logic;
 mod combat;
 mod entities; 
+mod migration; 
 
 // --- IMPORT DU PRELUDE ---
 use entities::prelude::*;
@@ -134,6 +135,7 @@ struct SystemSummary {
 
 #[tokio::main]
 async fn main() {
+    migration::Migrator::up(&db, None).await.unwrap();
     dotenvy::dotenv().ok();
     
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");

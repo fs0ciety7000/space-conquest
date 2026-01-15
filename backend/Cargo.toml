@@ -14,5 +14,6 @@ jsonwebtoken = "9.3"
 bcrypt = "0.15"
 rand = "0.8.5"
 sea-orm = { version = "0.12", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { version = "0.12", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 dotenvy = "0.15"
 tower-http = { version = "0.5", features = ["cors"] }
