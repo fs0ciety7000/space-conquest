@@ -1,5 +1,5 @@
-# Build stage - Utiliser Rust 1.85 qui supporte edition 2024
-FROM rust:1.85-bookworm AS builder
+# Build stage - Version nightly du 5 janvier 2026
+FROM rustlang/rust:nightly-2026-01-05-bookworm-slim AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier les manifests
+# Copier les manifests avec le lock
 COPY Cargo.toml Cargo.lock ./
 
 # Créer un projet dummy pour cacher les dépendances
