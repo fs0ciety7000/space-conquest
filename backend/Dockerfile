@@ -1,5 +1,5 @@
-# Build stage - Utiliser nightly sans date spécifique
-FROM rustlang/rust:nightly-bookworm AS builder
+# Build stage - Rust stable 1.83
+FROM rust:1.83-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier seulement Cargo.toml (sans le lock)
+# Copier seulement Cargo.toml
 COPY Cargo.toml ./
 
 # Créer un projet dummy et générer un nouveau Cargo.lock
@@ -33,7 +33,6 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier le binaire depuis le builder
 COPY --from=builder /app/target/release/backend /app/backend
 
 EXPOSE 8080
