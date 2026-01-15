@@ -8,14 +8,19 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier seulement Cargo.toml
+# Copier Cargo.toml
 COPY Cargo.toml ./
 
-# Créer un projet dummy et générer un nouveau Cargo.lock
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src target
+# Créer un projet dummy
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+
+# Générer Cargo.lock avec downgrade des crates problématiques
+RUN cargo generate-lockfile && \
+    cargo update -p base64ct --precise 1.6.0 && \
+    cargo update -p home --precise 0.5.9
+
+# Build les dépendances
+RUN cargo build --release && rm -rf src target
 
 # Copier le code source réel
 COPY . .
