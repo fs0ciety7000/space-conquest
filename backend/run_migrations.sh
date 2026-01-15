@@ -2,10 +2,10 @@
 set -e
 
 echo "🔄 Exécution des migrations..."
-echo "DATABASE_URL: ${DATABASE_URL:0:30}..." # Affiche le début de l'URL (debug)
+echo "DATABASE_URL: ${DATABASE_URL:0:30}..."
 
-# Exécuter les migrations avec DATABASE_URL
-DATABASE_URL="$DATABASE_URL" /app/migration up
+# Exécuter avec le chemin absolu
+migration up
 
 echo "✅ Migrations terminées !"
 echo "🚀 Démarrage du backend..."

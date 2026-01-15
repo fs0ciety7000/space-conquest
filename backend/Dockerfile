@@ -57,3 +57,6 @@ COPY --from=builder /app/migration/target/release/migration /app/migration
 # Copier le script d'entrée
 COPY run_migrations.sh /app/run_migrations.sh
 RUN chmod +x /app/run_migrations.sh
+
+# AJOUTEZ CETTE LIGNE : Point d'entrée pour lancer le script
+ENTRYPOINT ["/app/run_migrations.sh"]
