@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-echo "🔄 Exécution des migrations..."
-/app/migration
-echo "✅ Migrations terminées !"
-
 echo "🚀 Démarrage du backend..."
+echo "⚠️  NOTE: Migrations à exécuter manuellement"
 exec /app/backend

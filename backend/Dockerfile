@@ -8,10 +8,19 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier Cargo.toml du backend
+# Copier les deux projets Rust (backend + migration)
+COPY Cargo.toml ./backend_cargo.toml
+COPY migration ./migration
+
+# Build le binaire de migration d'abord
+WORKDIR /app/migration
+RUN cargo build --release
+
+# Revenir à la racine et préparer le backend
+WORKDIR /app
 COPY Cargo.toml ./
 
-# Créer un projet dummy
+# Créer un projet dummy pour le backend
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # Générer Cargo.lock avec downgrade des crates problématiques
@@ -19,13 +28,14 @@ RUN cargo generate-lockfile && \
     cargo update -p base64ct --precise 1.6.0 && \
     cargo update -p home --precise 0.5.9
 
-# Build les dépendances
+# Build les dépendances du backend
 RUN cargo build --release && rm -rf src target
 
-# Copier le code source réel
-COPY . .
+# Copier le code source réel du backend
+COPY src ./src
+COPY auth.rs game_logic.rs combat.rs entities ./
 
-# Build final
+# Build final du backend
 RUN cargo build --release
 
 # Runtime stage
@@ -38,8 +48,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier le binaire backend
+# Copier les DEUX binaires
 COPY --from=builder /app/target/release/backend /app/backend
+COPY --from=builder /app/migration/target/release/migration /app/migration
 
 # Copier le script d'entrée
 COPY run_migrations.sh /app/run_migrations.sh
@@ -47,5 +58,4 @@ RUN chmod +x /app/run_migrations.sh
 
 EXPOSE 8080
 
-# Utiliser le script comme point d'entrée
 CMD ["/app/run_migrations.sh"]
