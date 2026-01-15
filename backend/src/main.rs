@@ -20,6 +20,8 @@ use http::header::{AUTHORIZATION, CONTENT_TYPE, ACCEPT};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use rand::Rng;
+use http::HeaderValue;
+use http::Method;
 
 // Importer le module et le trait APRÈS les autres imports
 use sea_orm_migration::MigratorTrait;
@@ -155,11 +157,16 @@ async fn main() {
 
     let state = AppState { db };
 
-    let cors = CorsLayer::new()
+    let frontend_url = std::env::var("FRONTEND_URL")
+    .unwrap_or_else(|_| "http://localhost:5173".to_string());
+
+
+let cors = CorsLayer::new()
     .allow_origin(frontend_url.parse::<HeaderValue>().unwrap())
-    .allow_methods(Any)  // Permet toutes les méthodes
-    .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])  // Headers spécifiques au lieu de Any
-    .allow_credentials(true);  // Maintenant compatible
+    .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+    .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])
+    .allow_credentials(true);
+
 
 
     let app = Router::new()
