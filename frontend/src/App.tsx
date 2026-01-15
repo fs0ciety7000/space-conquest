@@ -81,7 +81,7 @@ const [spyReport, setSpyReport] = useState<any>(null);
   const fetchPlanet = useCallback(async () => {
     if (!planetId || !token) return;
     try {
-      const res = await fetch(`http://localhost:8080/planets/${planetId}`, {
+      const res = await fetch(`/api/planets/${planetId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -126,7 +126,7 @@ const [spyReport, setSpyReport] = useState<any>(null);
                     
                     setShowCombatModal(true);
                 }
-                await fetch(`http://localhost:8080/planets/${planetId}/clear-report`, {
+                await fetch(`/api/planets/${planetId}/clear-report`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -148,7 +148,7 @@ const [spyReport, setSpyReport] = useState<any>(null);
   const launchExpedition = async () => {
     if (!planetId || !token) return;
     try {
-      const res = await fetch(`http://localhost:8080/planets/${planetId}/expedition`, {
+      const res = await fetch(`/api/planets/${planetId}/expedition`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -173,7 +173,7 @@ const [spyReport, setSpyReport] = useState<any>(null);
 
   const handleSpy = async (targetId: string) => {
     try {
-        const res = await fetch(`http://localhost:8080/spy?current_planet_id=${planetId}`, {
+        const res = await fetch(`/api/spy?current_planet_id=${planetId}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ target_planet_id: targetId })
@@ -193,7 +193,7 @@ const handleConfirmAttack = async (hunters: number, cruisers: number) => {
     if (!planetId || !targetPlanet) return;
 
     try {
-        const res = await fetch(`http://localhost:8080/attack?current_planet_id=${planetId}`, {
+        const res = await fetch(`/api/attack?current_planet_id=${planetId}`, {
             method: 'POST',
             headers: { 
               'Authorization': `Bearer ${token}`, // Ne pas oublier le token pour l'auth
@@ -224,7 +224,7 @@ const handleConfirmAttack = async (hunters: number, cruisers: number) => {
   };
 
   useEffect(() => {
-    fetch('http://localhost:8080/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor)).catch(console.error);
+    fetch('/api/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor)).catch(console.error);
     if (token && planetId) {
       fetchPlanet();
       const interval = setInterval(fetchPlanet, 2000);

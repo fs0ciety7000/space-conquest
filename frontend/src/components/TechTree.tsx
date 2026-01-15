@@ -50,7 +50,7 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
 
   const handleResearch = async (type: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/planets/${planet.id}/upgrade/${type}`, { 
+      const res = await fetch(`/api/planets/${planet.id}/upgrade/${type}`, { 
           method: 'POST',
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });

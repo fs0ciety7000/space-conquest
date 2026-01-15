@@ -60,7 +60,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const cancelOperation = async (queueId: string) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:8080/planets/${planet.id}/cancel-construction/${queueId}`, {
+      const res = await fetch(`/api/planets/${planet.id}/cancel-construction/${queueId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

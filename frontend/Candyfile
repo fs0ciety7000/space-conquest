@@ -1,0 +1,12 @@
+:{$PORT} {
+
+  # Proxy API -> backend (strip /api)
+  handle_path /* {
+    reverse_proxy {$BACKEND_URL}
+  }
+
+  # SPA static hosting
+  root * /app/dist
+  try_files {path} /index.html
+  file_server
+}

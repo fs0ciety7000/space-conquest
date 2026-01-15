@@ -22,7 +22,11 @@ export default function Login({ onLogin }: LoginProps) {
     setError(null);
     setLoading(true);
 
-    const endpoint = isRegistering ? 'http://localhost:8080/register' : 'http://localhost:8080/login';
+const API = import.meta.env.VITE_API_URL;
+
+const endpoint = isRegistering
+  ? `${API}/register`
+  : `${API}/login`;
     
     const body = isRegistering 
         ? { username, email, password }

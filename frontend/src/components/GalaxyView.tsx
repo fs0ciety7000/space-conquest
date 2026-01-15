@@ -51,7 +51,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const fetchSystem = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:8080/galaxy/${galaxy}/${system}?current_planet_id=${planet.id}`);
+            const res = await fetch(`/api/galaxy/${galaxy}/${system}?current_planet_id=${planet.id}`);
             if (res.ok) setSlots(await res.json());
         } catch (e) { toast.error("Erreur de radar"); } finally { setLoading(false); }
     };
@@ -59,7 +59,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const handleColonize = async (position: number) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`http://localhost:8080/colonize?current_planet_id=${planet.id}`, {
+            const res = await fetch(`/api/colonize?current_planet_id=${planet.id}`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ galaxy, system, position })
@@ -75,7 +75,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const handleRecycle = async (targetId: string) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`http://localhost:8080/recycle?current_planet_id=${planet.id}`, {
+            const res = await fetch(`/api/recycle?current_planet_id=${planet.id}`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ target_planet_id: targetId, recyclers: 50 })

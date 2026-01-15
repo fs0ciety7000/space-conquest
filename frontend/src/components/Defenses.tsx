@@ -55,7 +55,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
 
   const startBuild = async () => {
     try {
-      const res = await fetch(`http://localhost:8080/planets/${planet.id}/build-fleet/${selected.id}/${qty}`, {
+      const res = await fetch(`/api/planets/${planet.id}/build-fleet/${selected.id}/${qty}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });

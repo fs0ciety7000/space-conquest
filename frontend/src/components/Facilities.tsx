@@ -88,7 +88,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
 
     const token = localStorage.getItem('token');
     try {
-      await fetch(`http://localhost:8080/planets/${planet.id}/upgrade/${type}`, {
+      await fetch(`/api/planets/${planet.id}/upgrade/${type}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });

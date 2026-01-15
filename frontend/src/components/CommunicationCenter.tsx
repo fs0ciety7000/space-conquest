@@ -19,7 +19,7 @@ export default function CommunicationCenter({ userId }: { userId: string }) {
     const fetchMessages = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:8080/messages/list/${userId}`);
+        const res = await fetch(`/api/messages/list/${userId}`);
         if (res.ok) {
           const data = await res.json();
           setMessages(data);
@@ -42,7 +42,7 @@ export default function CommunicationCenter({ userId }: { userId: string }) {
 
     if (!msg.is_read) {
       try {
-        const res = await fetch(`http://localhost:8080/messages/read/${msg.id}`, { 
+        const res = await fetch(`/api/messages/read/${msg.id}`, { 
           method: 'POST' 
         });
         
@@ -61,7 +61,7 @@ export default function CommunicationCenter({ userId }: { userId: string }) {
   // 3. Supprimer un message (Route: /messages/delete/:id)
   const handleDeleteMessage = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/messages/delete/${id}`, {
+      const res = await fetch(`/api/messages/delete/${id}`, {
         method: 'DELETE',
       });
 
