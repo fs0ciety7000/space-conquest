@@ -8,21 +8,20 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier les manifests avec le lock
-COPY Cargo.toml Cargo.lock ./
+# Copier seulement Cargo.toml (sans le lock)
+COPY Cargo.toml ./
 
-# Créer un projet dummy pour cacher les dépendances
+# Créer un projet dummy et générer un nouveau Cargo.lock
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
-    rm -rf src
+    rm -rf src target
 
 # Copier le code source réel
 COPY . .
 
-# Rebuild avec le vrai code
-RUN touch src/main.rs && \
-    cargo build --release
+# Build final
+RUN cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim
