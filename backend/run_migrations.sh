@@ -2,6 +2,8 @@
 set -e
 
 echo "🔄 Exécution des migrations..."
-cd /app/migration
-cargo run --release
+/app/migration
 echo "✅ Migrations terminées !"
+
+echo "🚀 Démarrage du backend..."
+exec /app/backend
