@@ -151,7 +151,7 @@ async fn main() {
     Ok(_) => println!("✅ Migrations réussies !"),
     Err(e) => eprintln!("❌ Erreur migrations : {:?}", e),
 }
-    }
+    
 
     let state = AppState { db };
 
