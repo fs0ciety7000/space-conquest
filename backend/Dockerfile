@@ -8,19 +8,20 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier les deux projets Rust (backend + migration)
-COPY Cargo.toml ./backend_cargo.toml
+# Copier le dossier migration
 COPY migration ./migration
 
-# Build le binaire de migration d'abord
+# Build le binaire de migration
 WORKDIR /app/migration
 RUN cargo build --release
 
-# Revenir à la racine et préparer le backend
-WORKDIR /app
+# Revenir à la racine pour le backend
+WORKDIR /app/backend
+
+# Copier le Cargo.toml du backend
 COPY Cargo.toml ./
 
-# Créer un projet dummy pour le backend
+# Créer un projet dummy
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # Générer Cargo.lock avec downgrade des crates problématiques
@@ -31,9 +32,8 @@ RUN cargo generate-lockfile && \
 # Build les dépendances du backend
 RUN cargo build --release && rm -rf src target
 
-# Copier le code source réel du backend
+# Copier tout le code source du backend (src/ contient déjà auth.rs, game_logic.rs, etc.)
 COPY src ./src
-COPY auth.rs game_logic.rs combat.rs entities ./
 
 # Build final du backend
 RUN cargo build --release
@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copier les DEUX binaires
-COPY --from=builder /app/target/release/backend /app/backend
+COPY --from=builder /app/backend/target/release/backend /app/backend
 COPY --from=builder /app/migration/target/release/migration /app/migration
 
 # Copier le script d'entrée
