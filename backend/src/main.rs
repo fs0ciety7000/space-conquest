@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State, Query},
-    http::StatusCode,  // Pas Method
+    http::StatusCode,
     response::{IntoResponse, Json},
     routing::{get, post, delete},
     Router,
@@ -8,7 +8,8 @@ use axum::{
 use sea_orm::{
     ActiveModelTrait, Database, DatabaseConnection,
     EntityTrait, Set, IntoActiveModel, 
-    QueryFilter, QueryOrder, ColumnTrait, QuerySelect, Condition, PaginatorTrait
+    QueryFilter, QueryOrder, ColumnTrait, QuerySelect, Condition,
+    PaginatorTrait
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_string};
@@ -19,14 +20,16 @@ use http::header::{AUTHORIZATION, CONTENT_TYPE, ACCEPT};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use rand::Rng;
-use sea_orm_migration::prelude::*;
+
+// Importer le module et le trait APRÈS les autres imports
+use migration::Migrator;
+use sea_orm_migration::MigratorTrait;
 
 mod auth;
 mod game_logic;
 mod combat;
-mod entities; 
+mod entities;
 
-pub use migration::Migrator;
 
 // --- IMPORT DU PRELUDE ---
 use entities::prelude::*;
@@ -143,13 +146,12 @@ async fn main() {
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = Database::connect(&db_url).await.unwrap();
 
-    // FORCER L'EXÉCUTION DES MIGRATIONS
+    // FORCER L'EXÉCUTION DES MIGRATIONS (corrigé)
     println!("🔄 Exécution des migrations...");
-    match Migrator::up(&db, None).await {
+    match migration::Migrator::up(&db, None).await {
         Ok(_) => println!("✅ Migrations réussies !"),
         Err(e) => {
             eprintln!("❌ Erreur migrations : {:?}", e);
-            // Ne pas panic, continuer quand même
         }
     }
 
