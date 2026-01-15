@@ -11,10 +11,11 @@ WORKDIR /app
 # Copier le dossier migration
 COPY migration ./migration
 
-# Build le binaire de migration (downgrade seulement home)
+# Build le binaire de migration avec downgrades
 WORKDIR /app/migration
 RUN cargo generate-lockfile && \
     cargo update -p home --precise 0.5.9 && \
+    cargo update -p async-lock --precise 3.3.0 && \
     cargo build --release
 
 # Revenir à la racine pour le backend
