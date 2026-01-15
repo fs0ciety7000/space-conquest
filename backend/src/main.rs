@@ -8,7 +8,7 @@ use axum::{
 use sea_orm::{
     ActiveModelTrait, Database, DatabaseConnection,
     EntityTrait, Set, IntoActiveModel, 
-    QueryFilter, QueryOrder, ColumnTrait, QuerySelect, Condition 
+    QueryFilter, QueryOrder, ColumnTrait, QuerySelect, Condition, PaginatorTrait
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_string};
@@ -18,13 +18,13 @@ use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use rand::Rng;
-use sea_orm_migration::MigratorTrait;
+
 
 mod auth;
 mod game_logic;
 mod combat;
 mod entities; 
-mod migration; 
+
 
 // --- IMPORT DU PRELUDE ---
 use entities::prelude::*;
@@ -141,13 +141,6 @@ async fn main() {
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = Database::connect(&db_url).await.unwrap();
 
-
-     // EXÉCUTER LES MIGRATIONS
-    println!("🔄 Exécution des migrations...");
-    migration::Migrator::up(&db, None).await.unwrap();
-    println!("✅ Migrations terminées !");
-
-    
     let state = AppState { db };
 
     let cors = CorsLayer::new()
