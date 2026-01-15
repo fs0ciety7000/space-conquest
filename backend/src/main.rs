@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State, Query},
-    http::{Method, StatusCode},
+    http::StatusCode,  // Pas Method
     response::{IntoResponse, Json},
     routing::{get, post, delete},
     Router,
@@ -351,7 +351,8 @@ async fn send_message_handler(
 ) -> impl IntoResponse {
     
     let user_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
-    let sender_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
+    let _sender_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
+
     let sender_id = match Uuid::parse_str(&user_id_str) {
         Ok(id) => id,
         Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Expéditeur invalide"}))).into_response(),

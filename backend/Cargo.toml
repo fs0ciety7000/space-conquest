@@ -16,3 +16,4 @@ rand = "0.8.5"
 sea-orm = { version = "0.12", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
 dotenvy = "0.15"
 tower-http = { version = "0.5", features = ["cors"] }
+http = "1.0" 
