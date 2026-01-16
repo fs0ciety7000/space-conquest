@@ -34,7 +34,7 @@ const getApiUrl = (): string => {
     console.error('⚠️ VITE_API_URL non définie dans .env');
     // Fallback selon l'environnement
     if (import.meta.env.DEV) {
-      return 'http://localhost:3000';
+      return 'http://localhost:8080';
     } else {
       return 'https://fearless-determination-production-a495.up.railway.app';
     }
