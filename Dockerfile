@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier le dossier migration
-COPY migration ./migration
+# Copier le dossier migration depuis backend/migration
+COPY backend/migration ./migration
 
 # Build le binaire de migration
 WORKDIR /app/migration
@@ -57,6 +57,9 @@ COPY --from=builder /app/migration/target/release/migration /app/migration
 # Copier le script d'entrée
 COPY run_migrations.sh /app/run_migrations.sh
 RUN chmod +x /app/run_migrations.sh
+
+# Exposer le port (optionnel, pour documentation)
+EXPOSE 8080
 
 # Point d'entrée pour lancer le script
 ENTRYPOINT ["/app/run_migrations.sh"]
