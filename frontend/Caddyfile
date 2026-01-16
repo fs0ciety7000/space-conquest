@@ -1,4 +1,4 @@
-:{$PORT} {
+:8080 {
   handle_path /api/* {
     reverse_proxy {$BACKEND_URL}
   }
