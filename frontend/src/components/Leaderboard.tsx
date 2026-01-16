@@ -27,7 +27,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
     const [category, setCategory] = useState<'general' | 'economy' | 'military'>('general');
 
     useEffect(() => {
-        fetch(`/api/ranking?current_planet_id=${currentPlanetId}&type=${category}`)
+        fetch(`/ranking?current_planet_id=${currentPlanetId}&type=${category}`)
             .then(res => res.json())
             .then(setRanking)
             .catch(console.error);

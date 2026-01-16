@@ -46,7 +46,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
 
         try {
             // On passe l'ID actuel pour que le backend sache qui est le owner
-            const res = await fetch(`/api/my-planets?current_planet_id=${planet.id}`, {
+            const res = await fetch(`/my-planets?current_planet_id=${planet.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {

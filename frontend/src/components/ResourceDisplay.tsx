@@ -35,7 +35,7 @@ export default function ResourceDisplay({ planet, onUpgrade }: ResourceDisplayPr
   const handleUpgrade = async (type: string) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`/api/planets/${planet.id}/upgrade/${type}`, {
+      const res = await fetch(`/planets/${planet.id}/upgrade/${type}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });

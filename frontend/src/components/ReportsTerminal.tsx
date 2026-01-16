@@ -34,12 +34,12 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
   const [view, setView] = useState<'combat' | 'transport'>('combat');
 
   useEffect(() => {
-    fetch(`/api/planets/${planetId}/reports`)
+    fetch(`/planets/${planetId}/reports`)
       .then(res => res.json())
       .then(setCombatLogs)
       .catch(console.error);
 
-    fetch(`/api/planets/${planetId}/transport-logs`)
+    fetch(`/planets/${planetId}/transport-logs`)
       .then(res => res.json())
       .then(setTransportLogs)
       .catch(console.error);

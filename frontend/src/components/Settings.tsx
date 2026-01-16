@@ -25,7 +25,7 @@ export default function Settings({ planet, onUpdate, onLogout }: SettingsProps) 
     if (!planetName.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/planets/${planet.id}/rename`, {
+      const res = await fetch(`/planets/${planet.id}/rename`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ new_name: planetName }),

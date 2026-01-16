@@ -46,7 +46,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
     const fetchMessages = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/messages?user_id=${userId}`, {
+            const res = await fetch(`/messages?user_id=${userId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -66,7 +66,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
 
     const handleDelete = async (id: string) => {
         try {
-            await fetch(`/api/messages/${id}`, {
+            await fetch(`/messages/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -79,7 +79,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
 
     const handleMarkRead = async (id: string) => {
         try {
-             await fetch(`/api/messages/${id}/read`, {
+             await fetch(`/messages/${id}/read`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -93,7 +93,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
 
         setIsSending(true);
         try {
-            const res = await fetch(`/api/messages/send?user_id=${userId}`, {
+            const res = await fetch(`/messages/send?user_id=${userId}`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ recipient_name: recipientName, subject, content })

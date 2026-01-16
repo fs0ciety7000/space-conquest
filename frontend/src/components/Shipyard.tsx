@@ -60,7 +60,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
     if (amount > remainingSpace) { toast.error("Capacité insuffisante !"); return; }
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`/api/planets/${planet.id}/build-fleet/${type}/${amount}`, {
+        const res = await fetch(`/planets/${planet.id}/build-fleet/${type}/${amount}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });

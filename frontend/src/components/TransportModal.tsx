@@ -50,7 +50,7 @@ export default function TransportModal({ currentPlanet, targetPlanet, onClose, o
 
     setIsSending(true);
     try {
-        const res = await fetch(`/api/transport?current_planet_id=${currentPlanet.id}`, {
+        const res = await fetch(`/transport?current_planet_id=${currentPlanet.id}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

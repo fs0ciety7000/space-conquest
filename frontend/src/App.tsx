@@ -81,7 +81,7 @@ const [spyReport, setSpyReport] = useState<any>(null);
   const fetchPlanet = useCallback(async () => {
     if (!planetId || !token) return;
     try {
-      const res = await fetch(`/api/planets/${planetId}`, {
+      const res = await fetch(`/planets/${planetId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -126,7 +126,7 @@ const [spyReport, setSpyReport] = useState<any>(null);
                     
                     setShowCombatModal(true);
                 }
-                await fetch(`/api/planets/${planetId}/clear-report`, {
+                await fetch(`/planets/${planetId}/clear-report`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -148,7 +148,7 @@ const [spyReport, setSpyReport] = useState<any>(null);
   const launchExpedition = async () => {
     if (!planetId || !token) return;
     try {
-      const res = await fetch(`/api/planets/${planetId}/expedition`, {
+      const res = await fetch(`/planets/${planetId}/expedition`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -173,7 +173,7 @@ const [spyReport, setSpyReport] = useState<any>(null);
 
   const handleSpy = async (targetId: string) => {
     try {
-        const res = await fetch(`/api/spy?current_planet_id=${planetId}`, {
+        const res = await fetch(`/spy?current_planet_id=${planetId}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ target_planet_id: targetId })
@@ -193,7 +193,7 @@ const handleConfirmAttack = async (hunters: number, cruisers: number) => {
     if (!planetId || !targetPlanet) return;
 
     try {
-        const res = await fetch(`/api/attack?current_planet_id=${planetId}`, {
+        const res = await fetch(`/attack?current_planet_id=${planetId}`, {
             method: 'POST',
             headers: { 
               'Authorization': `Bearer ${token}`, // Ne pas oublier le token pour l'auth

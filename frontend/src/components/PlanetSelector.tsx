@@ -21,7 +21,7 @@ export default function PlanetSelector({ currentPlanetId, onSwitch }: { currentP
   const [planets, setPlanets] = useState<PlanetSummary[]>([]);
 
   useEffect(() => {
-    fetch(`/api/my-planets?current_planet_id=${currentPlanetId}`)
+    fetch(`/my-planets?current_planet_id=${currentPlanetId}`)
       .then(res => res.json())
       .then(data => setPlanets(data))
       .catch(console.error);

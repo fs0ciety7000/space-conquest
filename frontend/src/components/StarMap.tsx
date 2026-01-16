@@ -22,7 +22,7 @@ export default function StarMap({ galaxy, currentSystem, onSystemSelect, current
   
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/galaxy/${galaxy}/scan?current_planet_id=${currentPlanetId}`)
+    fetch(`/galaxy/${galaxy}/scan?current_planet_id=${currentPlanetId}`)
       .then(res => res.json())
       .then(data => setSystemsData(data))
       .catch(console.error)
