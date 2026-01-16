@@ -26,23 +26,24 @@ interface ErrorResponse {
   message?: string;
 }
 
-// ⭐ Fonction pour obtenir l'URL de l'API de manière sûre
 const getApiUrl = (): string => {
-  const apiUrl = import.meta.env.VITE_API_URL;
+  // Priorité 1: Vite env (Railway + build)
+  let apiUrl = import.meta.env.VITE_API_URL;
   
-  if (!apiUrl || apiUrl === 'undefined') {
-    console.error('⚠️ VITE_API_URL non définie dans .env');
-    // Fallback selon l'environnement
-    if (import.meta.env.DEV) {
-      return 'http://localhost:8080';
-    } else {
-      return 'https://fearless-determination-production-a495.up.railway.app';
-    }
+  // Priorité 2: si pas définie et en dev, localhost
+  if (!apiUrl && import.meta.env.DEV) {
+    return 'http://localhost:8080';
   }
   
-  // Supprimer le slash final s'il existe
+  // Priorité 3: prod sans VITE_API_URL = erreur explicite
+  if (!apiUrl) {
+    console.error('❌ VITE_API_URL manquante en prod !');
+    throw new Error('Configuration API manquante');
+  }
+  
   return apiUrl.replace(/\/$/, '');
 };
+
 
 export default function Login({ onLogin }: LoginProps) {
   const [username, setUsername] = useState('');
