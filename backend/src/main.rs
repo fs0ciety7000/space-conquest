@@ -159,12 +159,18 @@ async fn main() {
 
     let state = AppState { db };
 
+    let frontend_urls = vec![
+    "http://localhost:3000",
+    "https://dependable-encouragement-production.up.railway.app",
+    "https://fabulous-crostata-7017c1.netlify.app"
+];
+
     // Configuration CORS avec l'URL du frontend
-    let cors = CorsLayer::new()
-        .allow_origin(config.frontend_url.parse::<HeaderValue>().expect("Invalid FRONTEND_URL"))
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
-        .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])
-        .allow_credentials(true);
+let cors = CorsLayer::new()
+    .allow_origin(frontend_urls.iter().map(|u| u.parse::<HeaderValue>().unwrap()).collect::<Vec<_>>())
+    .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+    .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])
+    .allow_credentials(true);
 
     let app = Router::new()
         // Auth
