@@ -224,7 +224,9 @@ const handleConfirmAttack = async (hunters: number, cruisers: number) => {
   };
 
   useEffect(() => {
-    fetch('/api/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor)).catch(console.error);
+   // ✅ CORRIGÉ :
+fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor))
+.catch(console.error);
     if (token && planetId) {
       fetchPlanet();
       const interval = setInterval(fetchPlanet, 2000);
