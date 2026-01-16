@@ -1,20 +1,9 @@
-# Use {$PORT} to bind to the port Railway assigns
 :{$PORT} {
-    # 1. Handle API Proxy
-    # handle_path strips the /api prefix before sending to backend
-    # This matches your Vite rewrite logic: (p) => p.replace(/^\/api/, "")
-    handle_path /api/* {
-        reverse_proxy {$BACKEND_URL} {
-            # Optional: Host header manipulation if needed by backend
-            header_up Host {upstream_hostport}
-        }
-    }
+  handle_path /api/* {
+    reverse_proxy https://space-conquest-production.up.railway.app
+  }
 
-    # 2. Serve Static Files
-    root * ./dist
-    
-    # 3. SPA Fallback (for React Router)
-    try_files {path} /index.html
-    
-    file_server
+  root * /srv
+  try_files {path} /index.html
+  file_server
 }
