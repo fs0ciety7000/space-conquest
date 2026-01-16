@@ -1,5 +1,6 @@
 export const config = {
-  apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8080',
+  apiUrl: import.meta,
+//  apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8080',
   isDevelopment: import.meta.env.DEV,
   isProduction: import.meta.env.PROD,
   mode: import.meta.env.MODE,
@@ -19,7 +20,3 @@ if (config.isDevelopment) {
     environment: config.mode,
   });
 }
-
-// Exemple d'utilisation:
-// import { apiUrl } from '@/config/api';
-// fetch(apiUrl('planets/123'))
