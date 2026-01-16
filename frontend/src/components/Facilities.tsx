@@ -219,7 +219,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                 ) : isQueueFull ? (
                     "File Pleine (3/3)"
                 ) : !canAfford ? (
-                    "Ressources Insuffisantes !"
+                    "Ressources Insuffisantes!"
                 ) : (
                     <span className="flex items-center gap-2"><ArrowUpCircle size={16} /> Améliorer</span>
                 )}
