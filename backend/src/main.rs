@@ -15,13 +15,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, to_string};
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use http::header::{AUTHORIZATION, CONTENT_TYPE, ACCEPT};
+use http::{HeaderValue, Method};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use rand::Rng;
-use http::HeaderValue;
-use http::Method;
 
 // Importer le module et le trait APRÈS les autres imports
 use sea_orm_migration::MigratorTrait;
@@ -30,7 +29,9 @@ mod auth;
 mod game_logic;
 mod combat;
 mod entities;
+mod config;
 
+use config::Config;
 
 // --- IMPORT DU PRELUDE ---
 use entities::prelude::*;
@@ -141,33 +142,29 @@ struct SystemSummary {
 
 #[tokio::main]
 async fn main() {
-
-    dotenvy::dotenv().ok();
+    // Charge la configuration depuis les variables d'environnement
+    let config = Config::from_env();
     
-    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let db = Database::connect(&db_url).await.unwrap();
+    // Connexion à la base de données
+    let db = Database::connect(&config.database_url)
+        .await
+        .expect("Failed to connect to database");
 
-    // FORCER L'EXÉCUTION DES MIGRATIONS (corrigé)
+    // Exécution des migrations
     println!("🔄 Exécution des migrations...");
-   match migration::Migrator::up(&db, None).await {
-    Ok(_) => println!("✅ Migrations réussies !"),
-    Err(e) => eprintln!("❌ Erreur migrations : {:?}", e),
-}
-    
+    match migration::Migrator::up(&db, None).await {
+        Ok(_) => println!("✅ Migrations réussies !"),
+        Err(e) => eprintln!("❌ Erreur migrations : {:?}", e),
+    }
 
     let state = AppState { db };
 
-    let frontend_url = std::env::var("FRONTEND_URL")
-    .unwrap_or_else(|_| "http://localhost:3000".to_string());
-
-
-let cors = CorsLayer::new()
-    .allow_origin(frontend_url.parse::<HeaderValue>().unwrap())
-    .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
-    .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])
-    .allow_credentials(true);
-
-
+    // Configuration CORS avec l'URL du frontend
+    let cors = CorsLayer::new()
+        .allow_origin(config.frontend_url.parse::<HeaderValue>().expect("Invalid FRONTEND_URL"))
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])
+        .allow_credentials(true);
 
     let app = Router::new()
         // Auth
@@ -204,7 +201,11 @@ let cors = CorsLayer::new()
         .layer(cors)
         .with_state(state);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    // Utilisation de l'adresse depuis la configuration
+    let addr: SocketAddr = config.bind_address()
+        .parse()
+        .expect("Invalid bind address");
+    
     println!("🚀 SPEED_GAME Backend opérationnel sur http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
@@ -624,7 +625,7 @@ async fn upgrade_mine_handler(
         "shipyard" => p.shipyard_level,
         "laser" => p.laser_battery_level,
         "espionage" => p.espionage_tech_level,
-        "armour" => p.armour_tech_level, // <-- AJOUTÉ
+        "armour" => p.armour_tech_level,
         "hangar" => p.hangar_level,
         _ => return Err(StatusCode::BAD_REQUEST),
     };
@@ -637,19 +638,18 @@ async fn upgrade_mine_handler(
     }
 
     let facility_level = match type_mine.as_str() {
-        "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level, // <-- AJOUTÉ armour
+        "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level,
         _ => p.shipyard_level,
     };
 
     let build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level);
     
-// DÉBIT DES RESSOURCES
-let mut active: planet::ActiveModel = p.clone().into();
-active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
-active.crystal_amount = Set(active.crystal_amount.unwrap() - cost.crystal);
-active.deuterium_amount = Set(active.deuterium_amount.unwrap() - cost.deuterium);
-active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
+    // DÉBIT DES RESSOURCES
+    let mut active: planet::ActiveModel = p.clone().into();
+    active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
+    active.crystal_amount = Set(active.crystal_amount.unwrap() - cost.crystal);
+    active.deuterium_amount = Set(active.deuterium_amount.unwrap() - cost.deuterium);
+    active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let queue_item = construction_queue::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -784,7 +784,6 @@ async fn attack_handler(
     };
     new_mission.insert(&state.db).await.unwrap();
 
-    // ICI : On renvoie un succès explicite pour le frontend
     (StatusCode::OK, Json(json!({ 
         "status": "success", 
         "message": "Flotte en route",
