@@ -27,22 +27,19 @@ interface ErrorResponse {
 }
 
 const getApiUrl = (): string => {
-  // Priorité 1: Vite env (Railway + build)
-  let apiUrl = import.meta.env.VITE_API_URL;
+  const apiUrl = import.meta.env.VITE_API_URL;
   
-  // Priorité 2: si pas définie et en dev, localhost
-  if (!apiUrl && import.meta.env.DEV) {
+  if (import.meta.env.DEV) {
     return 'http://localhost:8080';
   }
   
-  // Priorité 3: prod sans VITE_API_URL = erreur explicite
   if (!apiUrl) {
-    console.error('❌ VITE_API_URL manquante en prod !');
-    throw new Error('Configuration API manquante');
+    throw new Error('VITE_API_URL manquante en prod');
   }
   
   return apiUrl.replace(/\/$/, '');
 };
+
 
 
 export default function Login({ onLogin }: LoginProps) {
