@@ -33,7 +33,9 @@ impl Config {
         }
     }
 
-    pub fn bind_address(&self) -> String {
-        format!("{}:{}", self.backend_host, self.backend_port)
+    fn bind_address(&self) -> String {
+        let port = std::env::var("PORT")
+            .unwrap_or_else(|_| self.backend_port.to_string());
+        format!("0.0.0.0:{}", port)
     }
 }
