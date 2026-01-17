@@ -18,6 +18,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { GalaxyMiniMap } from "./GalaxyMiniMap";
 
@@ -29,6 +35,7 @@ interface EmpireBarProps {
   onToggleSidebar?: () => void;
   onNavigateToGalaxy?: () => void;
   onNavigateToOverview?: () => void;
+  speedFactor?: number;
 }
 
 interface PlanetSummary {
@@ -40,7 +47,7 @@ interface PlanetSummary {
   is_current: boolean;
 }
 
-export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar, onNavigateToGalaxy, onNavigateToOverview }: EmpireBarProps) {
+export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar, onNavigateToGalaxy, onNavigateToOverview, speedFactor = 10 }: EmpireBarProps) {
   
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
 
@@ -67,6 +74,17 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   }, [planet?.id]);
 
   const energyAvailable = planet.energy ?? 0;
+
+  // Calculs production (AJOUT)
+  const calculateProduction = (level: number, baseFactor: number) => {
+    const baseProd = baseFactor * level * Math.pow(1.1, level);
+    return Math.floor(baseProd * speedFactor);
+  };
+
+  const prodMetal = calculateProduction(planet.metal_mine_level || 0, 30);
+  const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, 20);
+  const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, 10);
+  const prodEnergy = calculateProduction(planet.solar_plant_level || 0, 20);
 
   return (
     <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-slate-950/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-white/10 min-h-[60px] md:h-[72px] w-full shadow-2xl z-50">
@@ -154,17 +172,31 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         
         {/* Ressources - Version desktop */}
         <div className="hidden lg:flex items-center gap-6">
-            <ResourceItem icon={Stone} value={planet.metal_amount} label="Métal" color="text-orange-300" />
-            <ResourceItem icon={Gem} value={planet.crystal_amount} label="Cristal" color="text-cyan-300" />
-            <ResourceItem icon={Droplets} value={planet.deuterium_amount} label="Deutérium" color="text-green-300" />
+            <ResourceItem icon={Stone} value={planet.metal_amount} label="Métal" color="text-orange-300" production={prodMetal} />
+            <ResourceItem icon={Gem} value={planet.crystal_amount} label="Cristal" color="text-cyan-300" production={prodCrystal} />
+            <ResourceItem icon={Droplets} value={planet.deuterium_amount} label="Deutérium" color="text-green-300" production={prodDeut} />
             
             {/* ÉNERGIE */}
-            <div className="flex items-center gap-3 group bg-black/20 px-3 py-1.5 rounded-full border border-white/5" title="Énergie (Réseau)">
-                <Zap size={18} className={energyAvailable < 0 ? "text-red-500 animate-pulse" : "text-yellow-400"} />
-                <span className={`font-mono text-sm font-bold min-w-[60px] text-right ${energyAvailable < 0 ? "text-red-400" : "text-white"}`}>
-                    {Math.floor(energyAvailable).toLocaleString()}
-                </span>
-            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-3 group bg-black/20 px-3 py-1.5 rounded-full border border-white/5 cursor-help">
+                      <Zap size={18} className={energyAvailable < 0 ? "text-red-500 animate-pulse" : "text-yellow-400"} />
+                      <span className={`font-mono text-sm font-bold min-w-[60px] text-right ${energyAvailable < 0 ? "text-red-400" : "text-white"}`}>
+                          {Math.floor(energyAvailable).toLocaleString()}
+                      </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
+                  <div className="text-xs space-y-1">
+                    <p className="text-slate-400">Énergie disponible</p>
+                    <p className="text-yellow-400 font-mono font-bold">
+                      +{formatCompact(prodEnergy)}/h
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
         </div>
 
         {/* Ressources - Version mobile compacte */}
@@ -187,30 +219,42 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                   <Stone size={14} className="text-orange-300" />
                   <span className="text-xs">Métal</span>
                 </div>
-                <span className="font-mono text-xs font-bold">{formatFull(planet.metal_amount)}</span>
+                <div className="text-right">
+                  <div className="font-mono text-xs font-bold">{formatFull(planet.metal_amount)}</div>
+                  <div className="text-[10px] text-green-400">+{formatCompact(prodMetal)}/h</div>
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Gem size={14} className="text-cyan-300" />
                   <span className="text-xs">Cristal</span>
                 </div>
-                <span className="font-mono text-xs font-bold">{formatFull(planet.crystal_amount)}</span>
+                <div className="text-right">
+                  <div className="font-mono text-xs font-bold">{formatFull(planet.crystal_amount)}</div>
+                  <div className="text-[10px] text-green-400">+{formatCompact(prodCrystal)}/h</div>
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Droplets size={14} className="text-green-300" />
                   <span className="text-xs">Deutérium</span>
                 </div>
-                <span className="font-mono text-xs font-bold">{formatFull(planet.deuterium_amount)}</span>
+                <div className="text-right">
+                  <div className="font-mono text-xs font-bold">{formatFull(planet.deuterium_amount)}</div>
+                  <div className="text-[10px] text-green-400">+{formatCompact(prodDeut)}/h</div>
+                </div>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-white/10">
                 <div className="flex items-center gap-2">
                   <Zap size={14} className={energyAvailable < 0 ? "text-red-500" : "text-yellow-400"} />
                   <span className="text-xs">Énergie</span>
                 </div>
-                <span className={`font-mono text-xs font-bold ${energyAvailable < 0 ? "text-red-400" : "text-white"}`}>
-                  {Math.floor(energyAvailable).toLocaleString()}
-                </span>
+                <div className="text-right">
+                  <div className={`font-mono text-xs font-bold ${energyAvailable < 0 ? "text-red-400" : "text-white"}`}>
+                    {Math.floor(energyAvailable).toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-yellow-400">+{formatCompact(prodEnergy)}/h</div>
+                </div>
               </div>
             </div>
           </DropdownMenuContent>
@@ -249,19 +293,33 @@ function GlobeIcon() {
     )
 }
 
-function ResourceItem({ icon: Icon, value, label, color }: any) {
+function ResourceItem({ icon: Icon, value, label, color, production }: any) {
     const format = (n: number) => {
         if(n >= 1000000) return (n/1000000).toFixed(2) + 'M';
         if(n >= 1000) return (n/1000).toFixed(1) + 'k';
         return Math.floor(n).toLocaleString();
     }
     return (
-        <div className="flex items-center gap-3 group" title={label}>
-            <Icon size={18} className={`${color} transition-transform group-hover:scale-110`} />
-            <span className="font-mono text-sm font-bold text-white min-w-[60px] text-right">
-                {format(value)}
-            </span>
-        </div>
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <div className="flex items-center gap-3 group cursor-help">
+                        <Icon size={18} className={`${color} transition-transform group-hover:scale-110`} />
+                        <span className="font-mono text-sm font-bold text-white min-w-[60px] text-right">
+                            {format(value)}
+                        </span>
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
+                    <div className="text-xs space-y-1">
+                        <p className="text-slate-400">{label}</p>
+                        <p className="text-green-400 font-mono font-bold">
+                            +{format(production)}/h
+                        </p>
+                    </div>
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
     )
 }
 
