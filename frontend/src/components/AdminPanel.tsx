@@ -69,6 +69,7 @@ export default function AdminPanel() {
 
   const token = localStorage.getItem('token');
   const currentUsername = localStorage.getItem('username');
+  const userId = localStorage.getItem('user_id'); // ✅ RÉCUPÉRATION user_id
 
   // Vérification sécurité
   if (currentUsername !== 'phantomhex') {
@@ -92,12 +93,15 @@ export default function AdminPanel() {
 
   const fetchPlayers = async () => {
     try {
-      const res = await fetch(apiUrl('/admin/players'), {
+      // ✅ AJOUT user_id dans l'URL
+      const res = await fetch(apiUrl(`/admin/players?user_id=${userId}`), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
         setPlayers(data);
+      } else {
+        console.error('Erreur chargement joueurs:', res.status);
       }
     } catch (e) {
       console.error('Erreur chargement joueurs', e);
@@ -107,7 +111,8 @@ export default function AdminPanel() {
   const fetchPlanetData = async (planetId: string) => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl(`/admin/planet/${planetId}`), {
+      // ✅ AJOUT user_id dans l'URL
+      const res = await fetch(apiUrl(`/admin/planet/${planetId}?user_id=${userId}`), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -134,7 +139,8 @@ export default function AdminPanel() {
     
     setLoading(true);
     try {
-      const res = await fetch(apiUrl(`/admin/planet/${planetData.id}`), {
+      // ✅ AJOUT user_id dans l'URL
+      const res = await fetch(apiUrl(`/admin/planet/${planetData.id}?user_id=${userId}`), {
         method: 'PATCH',
         headers: { 
           'Authorization': `Bearer ${token}`,
