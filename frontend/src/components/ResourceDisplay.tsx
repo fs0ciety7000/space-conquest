@@ -9,6 +9,7 @@ import { apiUrl } from '@/config/api';
 interface ResourceDisplayProps {
   planet: any;
   onUpgrade: () => void;
+  speedFactor?: number; // ← AJOUT
 }
 
 // --- CONFIGURATION VISUELLE (Design Riche) ---
@@ -22,7 +23,7 @@ const getResourceTheme = (type: string) => {
   return themes[type] || themes.metal;
 };
 
-export default function ResourceDisplay({ planet, onUpgrade }: ResourceDisplayProps) {
+export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }: ResourceDisplayProps) {
   const [now, setNow] = useState(new Date().getTime());
 
   useEffect(() => {
@@ -43,14 +44,14 @@ export default function ResourceDisplay({ planet, onUpgrade }: ResourceDisplayPr
     } catch (e) { console.error("Erreur upgrade", e); }
   };
 
-  // --- FORMULES ---
+  // --- FORMULES (CORRECTION : utiliser speedFactor au lieu de *10) ---
   const calculateProd = (type: string, level: number, base: number) => {
       if (type === 'solar_plant') {
           const baseProd = 20 * level * Math.pow(1.1, level);
           const techLevel = planet.energy_tech_level || 0;
           return Math.floor(baseProd * (1 + (techLevel * 0.05)));
       }
-      return Math.floor(base * level * Math.pow(1.1, level) * 10);
+      return Math.floor(base * level * Math.pow(1.1, level) * speedFactor); // ✅ CORRECTION ICI
   };
 
   const calculateEnergyCons = (type: string, level: number) => {
@@ -154,13 +155,10 @@ export default function ResourceDisplay({ planet, onUpgrade }: ResourceDisplayPr
                         </div>
                     </div>
 
-                    {/* Ligne Énergie */}
+                    {/* Ligne Énergie (VERSION SIMPLIFIÉE - une seule ligne) */}
                     <div>
                         <div className="flex justify-between items-center text-[9px] uppercase font-bold text-slate-500 mb-1">
                             <span className="flex items-center gap-1"><Zap size={12}/> {isSolar ? 'Production Énergie' : 'Conso. Énergie'}</span>
-                            <span className={isSolar ? "text-green-400" : "text-red-400"}>
-                                {isSolar ? '+' : '-'}{Math.abs(diffEnergy).toLocaleString()}
-                            </span>
                         </div>
                         <div className="flex items-center justify-between font-mono text-xs">
                             <span className="text-slate-400">{isSolar ? '+' : '-'}{currentEnergy.toLocaleString()}</span>
