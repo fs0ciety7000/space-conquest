@@ -1,8 +1,16 @@
+// 🎯 Configuration multi-environnements
+const API_URLS = {
+  development: 'http://localhost:8080',
+  render: 'https://space-conquest.onrender.com',  // à remplacer après déploiement
+  railway: 'https://space-conquest-production.up.railway.app',
+} as const;
+
 export const config = {
+  // Priorité: VITE_API_URL > PROD (Render/Railway) > DEV (localhost)
   apiUrl: import.meta.env.VITE_API_URL || 
-    import.meta.env.PROD 
-      ? 'https://space-conquest-production.up.railway.app' 
-      : 'http://localhost:8080',
+    (import.meta.env.PROD 
+      ? API_URLS.render  // Production par défaut = Render
+      : API_URLS.development),
   isDevelopment: import.meta.env.DEV,
   isProduction: import.meta.env.PROD,
   mode: import.meta.env.MODE,
@@ -14,8 +22,15 @@ export const apiUrl = (path: string): string => {
   return `${config.apiUrl}/${cleanPath}`;
 };
 
-// DEBUG LOG (à supprimer après)
-console.log('🔧 API URL:', config.apiUrl, 'Mode:', config.mode);
+// Log configuration (dev uniquement)
+if (config.isDevelopment) {
+  console.log('🔧 API Config:', {
+    url: config.apiUrl,
+    mode: config.mode,
+    env: import.meta.env.VITE_API_URL || 'default',
+  });
+}
 
-// Exemple d'utilisation:
-// fetch(apiUrl('config')) → https://space-conquest-production.up.railway.app/config ✅
+// Exemples d'utilisation:
+// fetch(apiUrl('planets/123'))  // http://localhost:8080/planets/123 (dev)
+// fetch(apiUrl('/config'))      // https://space-conquest.onrender.com/config (prod)
