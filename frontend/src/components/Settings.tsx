@@ -80,6 +80,7 @@ export default function Settings({
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 </div>
                 <div className="pb-2 text-center md:text-left space-y-2">
+                    {/* FIX: Afficher username au lieu de "Commandant" */}
                     <h2 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3 justify-center md:justify-start">
                         {username} <Shield size={20} className="text-indigo-400" />
                     </h2>
