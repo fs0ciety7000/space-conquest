@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Save, User, Globe, Shield, Terminal, LogOut, Mail, Fingerprint, Moon, Sun } from "lucide-react";
+import { Save, User, Globe, Shield, Terminal, LogOut, Mail, Fingerprint, Moon, Sun, Volume2, VolumeX, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,9 +12,12 @@ interface SettingsProps {
   planet: any;
   onUpdate: () => void;
   onLogout: () => void;
+  soundEnabled: boolean;
+  onToggleSound: (enabled: boolean) => void;
+  onStartTutorial: () => void;
 }
 
-export default function Settings({ planet, onUpdate, onLogout }: SettingsProps) {
+export default function Settings({ planet, onUpdate, onLogout, soundEnabled, onToggleSound, onStartTutorial }: SettingsProps) {
   const [planetName, setPlanetName] = useState(planet.name);
   const [loading, setLoading] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -169,7 +172,44 @@ export default function Settings({ planet, onUpdate, onLogout }: SettingsProps) 
                     </div>
                 </div>
 
+                {/* Toggle audio */}
+                <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Effets sonores</label>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onToggleSound(true)}
+                            className={`flex-1 ${soundEnabled ? 'bg-white/20 border-white/30' : 'bg-white/5 border-white/10'}`}
+                        >
+                            <Volume2 size={16} className="mr-2" />
+                            Activé
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onToggleSound(false)}
+                            className={`flex-1 ${!soundEnabled ? 'bg-white/20 border-white/30' : 'bg-white/5 border-white/10'}`}
+                        >
+                            <VolumeX size={16} className="mr-2" />
+                            Désactivé
+                        </Button>
+                    </div>
+                </div>
+
                 <div className="space-y-3 pt-4 border-t border-white/5">
+                    <Button 
+                        variant="outline"
+                        className="w-full border-indigo-500/30 bg-indigo-950/30 hover:bg-indigo-900/50 text-xs text-indigo-300 flex items-center justify-between"
+                        onClick={onStartTutorial}
+                    >
+                        <span className="flex items-center gap-2">
+                            <GraduationCap size={16} />
+                            RELANCER LE TUTORIEL
+                        </span>
+                        <ArrowRight size={14} />
+                    </Button>
+
                     <Button 
                         variant="outline"
                         className="w-full border-white/5 bg-white/5 hover:bg-white/10 text-xs text-slate-300 flex items-center justify-between"
