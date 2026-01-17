@@ -159,10 +159,11 @@ async fn main() {
 
     let state = AppState { db };
 
-    let frontend_urls = vec![
+  let frontend_urls = vec![
     "http://localhost:3000",
     "https://dependable-encouragement-production.up.railway.app",
-    "https://fabulous-crostata-7017c1.netlify.app"
+    "https://fabulous-crostata-7017c1.netlify.app",  // ✅ AJOUTÉ
+    "https://*.netlify.app"  // ✅ Wildcard Netlify
 ];
 
     // Configuration CORS avec l'URL du frontend
@@ -174,8 +175,9 @@ let cors = CorsLayer::new()
 
     let app = Router::new()
         // Auth
-        .route("/register", post(auth::register_handler))
-        .route("/login", post(auth::login_handler))
+       .route("/login", options(|_| async { StatusCode::OK }))
+.route("/register", options(|_| async { StatusCode::OK }))
+
         // Config
         .route("/config", get(get_game_config_handler))
         // Planets
