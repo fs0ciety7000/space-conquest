@@ -45,6 +45,12 @@ struct AppState {
     db: DatabaseConnection,
 }
 
+impl AppState {
+    pub async fn new(pool: PgPool) -> Self {
+        Self { db: pool }
+    }
+}
+
 #[derive(Serialize)]
 struct RankItem {
    rank: usize,
@@ -176,6 +182,7 @@ async fn main() {
 //     .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])
 //     .allow_credentials(true);
 let cors = CorsLayer::permissive();
+let state = AppState::new(pool.clone()).await;
     let app = Router::new()
         .route("/register", post(auth::register_handler))
 .route("/login", post(auth::login_handler))
@@ -209,7 +216,7 @@ let cors = CorsLayer::permissive();
         .route("/messages/:id/read", post(mark_message_read_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-    .with_state(AppState::new(pool).await);
+        .with_state(state);
 
     // Utilisation de l'adresse depuis la configuration
     let addr: SocketAddr = config.bind_address()
