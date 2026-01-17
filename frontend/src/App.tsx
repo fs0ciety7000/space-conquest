@@ -15,6 +15,7 @@ import PlanetOverview from './components/PlanetOverview';
 import GalaxyView from './components/GalaxyView';
 import Settings from './components/Settings';
 import MessagesView from './components/MessagesView';
+import AdminPanel from './components/AdminPanel';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
@@ -27,7 +28,7 @@ import { Toaster, toast } from "sonner";
 import { 
   LogOut, LayoutDashboard, Pickaxe, Hammer, 
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Keyboard
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Keyboard, Database
 } from "lucide-react";
 
 interface CombatReport {
@@ -40,12 +41,13 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages';
+type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'admin';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
   const [userId, setUserId] = useState<string | null>(localStorage.getItem('user_id'));
+  const [username, setUsername] = useState<string | null>(localStorage.getItem('username'));
   
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [speedFactor, setSpeedFactor] = useState<number>(1);
@@ -144,6 +146,7 @@ export default function App() {
     setToken(null);
     setPlanetId(null);
     setUserId(null);
+    setUsername(null);
     setPlanet(null);
   };
 
@@ -374,17 +377,22 @@ export default function App() {
   }, [token, planetId, fetchPlanet]);
   
   if (!token || !planetId || !userId) {
-    return <Login onLogin={(t, p, u) => { 
+    return <Login onLogin={(t, p, u, user) => { 
         localStorage.setItem('token', t); 
         localStorage.setItem('planet_id', p);
         localStorage.setItem('user_id', u);
+        localStorage.setItem('username', user);
         setToken(t); 
         setPlanetId(p); 
         setUserId(u);
+        setUsername(user);
     }} />;
   }
 
   if (!planet) return <div className="min-h-screen bg-black text-cyan-500 flex items-center justify-center font-mono animate-pulse">CONNEXION AU RÉSEAU NEURAL...</div>;
+
+  // Vérifier si l'utilisateur est admin
+  const isAdmin = username === 'phantomhex';
 
   const MENU_ITEMS = [
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
@@ -402,7 +410,8 @@ export default function App() {
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
     { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
     { id: 'settings', label: 'Paramètres', icon: SettingsIcon, category: 'SYSTÈME' },
-  ] as const;
+    ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin Panel', icon: Database, category: 'SYSTÈME' }] : []),
+  ];
 
   return (
     <div className="h-screen w-full bg-slate-950 text-white font-sans overflow-hidden flex flex-col relative">
@@ -593,6 +602,7 @@ export default function App() {
                             onVolumeChange={handleVolumeChange}
                         />
                     )}
+                    {activeTab === 'admin' && isAdmin && <AdminPanel />}
                 </div>
             </div>
         </main>
