@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State, Query},
     http::StatusCode,
     response::{IntoResponse, Json},
-    routing::{get, post, delete},
+    routing::{get, post, delete, options},
     Router,
 };
 use sea_orm::{
@@ -174,12 +174,12 @@ let cors = CorsLayer::new()
     .allow_credentials(true);
 
     let app = Router::new()
-        // Auth
-       .route("/login", options(|_| async { StatusCode::OK }))
-.route("/register", options(|_| async { StatusCode::OK }))
+        .route("/register", post(auth::register_handler))
+.route("/login", post(auth::login_handler))
+.route("/register", options(|_| async { StatusCode::OK }))  // ✅ Preflight
+.route("/login", options(|_| async { StatusCode::OK }))     // ✅ Preflight
+.route("/config", get(get_game_config_handler))
 
-        // Config
-        .route("/config", get(get_game_config_handler))
         // Planets
         .route("/planets/:id", get(get_planet_handler))
         .route("/planets/:id/upgrade/:type", post(upgrade_mine_handler))
