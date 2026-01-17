@@ -565,11 +565,20 @@ async fn get_planet_handler(
     let energy_prod = (20.0 * updated_model.solar_plant_level as f64 * 1.1f64.powf(updated_model.solar_plant_level as f64) * (1.0 + (updated_model.energy_tech_level as f64 * 0.05))) as i32;
     let energy_cons = (10.0 * updated_model.metal_mine_level as f64 * 1.1f64.powf(updated_model.metal_mine_level as f64)) as i32; // simplifié pour l'exemple
 
+    // 📨 COMPTEUR MESSAGES NON LUS
+    let unread_count = Message::find()
+        .filter(message::Column::ReceiverId.eq(updated_model.owner_id))
+        .filter(message::Column::IsRead.eq(false))
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
     let mut json_response = serde_json::to_value(updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
         obj.insert("incoming_missions".into(), json!(incoming_raw));
         obj.insert("outgoing_missions".into(), json!(outgoing_detailed));
         obj.insert("energy".into(), json!(energy_prod - energy_cons));
+        obj.insert("unread_messages".into(), json!(unread_count)); // ✅ AJOUTÉ ICI
         // On rajoute les autres champs nécessaires
         let active_queue = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).order_by_asc(construction_queue::Column::EndTime).all(&state.db).await.unwrap_or_default();
         obj.insert("constructions".into(), json!(active_queue));
