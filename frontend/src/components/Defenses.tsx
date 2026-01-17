@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Shield, Zap, Target, Crosshair, Timer, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-
+import { apiUrl } from '@/config/api';
 const DEFENSE_TYPES = [
   { 
     id: 'missile_launcher', 
@@ -55,7 +55,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
 
   const startBuild = async () => {
     try {
-      const res = await fetch(`/planets/${planet.id}/build-fleet/${selected.id}/${qty}`, {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/build-fleet/${selected.id}/${qty}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-
+import { apiUrl } from '@/config/api';
 interface TransportModalProps {
   currentPlanet: any;
   targetPlanet: { id: string; name: string; system?: number };
@@ -50,7 +50,7 @@ export default function TransportModal({ currentPlanet, targetPlanet, onClose, o
 
     setIsSending(true);
     try {
-        const res = await fetch(`/transport?current_planet_id=${currentPlanet.id}`, {
+        const res = await fetch(apiUrl(`/transport?current_planet_id=${currentPlanet.id}`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

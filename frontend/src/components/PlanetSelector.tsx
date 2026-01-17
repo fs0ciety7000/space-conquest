@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
+import { apiUrl } from '@/config/api';
 interface PlanetSummary {
   id: string;
   name: string;
@@ -21,7 +21,7 @@ export default function PlanetSelector({ currentPlanetId, onSwitch }: { currentP
   const [planets, setPlanets] = useState<PlanetSummary[]>([]);
 
   useEffect(() => {
-    fetch(`/my-planets?current_planet_id=${currentPlanetId}`)
+    fetch(apiUrl(`/my-planets?current_planet_id=${currentPlanetId}`))
       .then(res => res.json())
       .then(data => setPlanets(data))
       .catch(console.error);

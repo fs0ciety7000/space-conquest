@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-
+import { apiUrl } from '@/config/api';
 interface CombatLog {
   id: string;
   target_name: string;
@@ -34,12 +34,12 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
   const [view, setView] = useState<'combat' | 'transport'>('combat');
 
   useEffect(() => {
-    fetch(`/planets/${planetId}/reports`)
+    fetch(apiUrl(`/planets/${planetId}/reports`))
       .then(res => res.json())
       .then(setCombatLogs)
       .catch(console.error);
 
-    fetch(`/planets/${planetId}/transport-logs`)
+    fetch(apiUrl(`/planets/${planetId}/transport-logs`))
       .then(res => res.json())
       .then(setTransportLogs)
       .catch(console.error);

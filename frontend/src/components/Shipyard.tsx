@@ -7,7 +7,7 @@ import {
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { checkPrerequisites } from "@/lib/gameRules";
-
+import { apiUrl } from '@/config/api';
 interface ShipyardProps {
   planet: any;
   onUpdate: () => void;
@@ -60,7 +60,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
     if (amount > remainingSpace) { toast.error("Capacité insuffisante !"); return; }
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`/planets/${planet.id}/build-fleet/${type}/${amount}`, {
+        const res = await fetch(apiUrl(`/planets/${planet.id}/build-fleet/${type}/${amount}`), {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });

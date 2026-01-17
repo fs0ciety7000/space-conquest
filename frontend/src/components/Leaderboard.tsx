@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-
+import { apiUrl } from '@/config/api';
 interface RankItem {
     rank: number;
     username: string;
@@ -27,7 +27,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
     const [category, setCategory] = useState<'general' | 'economy' | 'military'>('general');
 
     useEffect(() => {
-        fetch(`/ranking?current_planet_id=${currentPlanetId}&type=${category}`)
+        fetch(apiUrl(`/ranking?current_planet_id=${currentPlanetId}&type=${category}`))
             .then(res => res.json())
             .then(setRanking)
             .catch(console.error);

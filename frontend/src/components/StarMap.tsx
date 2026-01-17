@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Loader2 } from "lucide-react";
-
+import { apiUrl } from '@/config/api';
 interface SystemSummary {
   system: number;
   planet_count: number;
@@ -22,7 +22,7 @@ export default function StarMap({ galaxy, currentSystem, onSystemSelect, current
   
   useEffect(() => {
     setLoading(true);
-    fetch(`/galaxy/${galaxy}/scan?current_planet_id=${currentPlanetId}`)
+    fetch(apiUrl(`/galaxy/${galaxy}/scan?current_planet_id=${currentPlanetId}`))
       .then(res => res.json())
       .then(data => setSystemsData(data))
       .catch(console.error)

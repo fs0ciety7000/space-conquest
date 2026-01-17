@@ -7,7 +7,7 @@ import {
 import { useState, useEffect } from "react";
 import { checkPrerequisites } from "@/lib/gameRules"; // Importation de ta règle
 import { toast } from "sonner";
-
+import { apiUrl } from '@/config/api';
 interface FacilitiesProps {
   planet: any;
   onUpgrade: () => void;
@@ -88,7 +88,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
 
     const token = localStorage.getItem('token');
     try {
-      await fetch(`/planets/${planet.id}/upgrade/${type}`, {
+      await fetch(apiUrl(`/planets/${planet.id}/upgrade/${type}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });

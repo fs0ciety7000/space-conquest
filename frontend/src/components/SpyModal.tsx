@@ -2,7 +2,7 @@ import { X, Eye, ScanEye, Pickaxe, Hexagon, Droplet, Ship, ShieldAlert, Lock, Al
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-
+import { apiUrl } from '@/config/api';
 interface SpyReport {
   success: boolean;
   tech_difference: number;

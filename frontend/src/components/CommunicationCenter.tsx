@@ -3,7 +3,7 @@ import { Mail, Send, Trash2, User, Inbox, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-
+import { apiUrl } from '@/config/api';
 export default function CommunicationCenter({ userId }: { userId: string }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
@@ -19,7 +19,7 @@ export default function CommunicationCenter({ userId }: { userId: string }) {
     const fetchMessages = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/messages/list/${userId}`);
+        const res = await fetch(apiUrl(`/messages/list/${userId}`));
         if (res.ok) {
           const data = await res.json();
           setMessages(data);
@@ -42,7 +42,7 @@ export default function CommunicationCenter({ userId }: { userId: string }) {
 
     if (!msg.is_read) {
       try {
-        const res = await fetch(`/messages/read/${msg.id}`, { 
+        const res = await fetch(apiUrl(`/messages/read/${msg.id}`), { 
           method: 'POST' 
         });
         
@@ -61,7 +61,7 @@ export default function CommunicationCenter({ userId }: { userId: string }) {
   // 3. Supprimer un message (Route: /messages/delete/:id)
   const handleDeleteMessage = async (id: string) => {
     try {
-      const res = await fetch(`/messages/delete/${id}`, {
+      const res = await fetch(apiUrl(`/messages/delete/${id}`), {
         method: 'DELETE',
       });
 

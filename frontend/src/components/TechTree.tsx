@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Zap, Target, Atom, Microscope, Cpu, ArrowUpCircle, Sparkles, Eye, ScanLine, Lock, Loader2, AlertTriangle, ChevronRight, Box, Gem, Droplets, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
+import { apiUrl } from '@/config/api';
 // --- CONFIGURATION VISUELLE (Design Riche) ---
 const getTechConfig = (id: string, level: number) => {
   const tier = Math.floor(level / 5) + 1; 
@@ -50,7 +50,7 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
 
   const handleResearch = async (type: string) => {
     try {
-      const res = await fetch(`/planets/${planet.id}/upgrade/${type}`, { 
+      const res = await fetch(apiUrl(`/planets/${planet.id}/upgrade/${type}`), { 
           method: 'POST',
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });

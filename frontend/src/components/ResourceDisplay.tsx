@@ -5,7 +5,7 @@ import {
   Box, TrendingUp, Activity, ChevronRight
 } from "lucide-react";
 import { useState, useEffect } from "react";
-
+import { apiUrl } from '@/config/api';
 interface ResourceDisplayProps {
   planet: any;
   onUpgrade: () => void;
@@ -35,7 +35,7 @@ export default function ResourceDisplay({ planet, onUpgrade }: ResourceDisplayPr
   const handleUpgrade = async (type: string) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`/planets/${planet.id}/upgrade/${type}`, {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/upgrade/${type}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });

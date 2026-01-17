@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { apiUrl } from '@/config/api';
 import { 
   Zap, 
   Stone, 
@@ -17,6 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+
+
+
 
 interface EmpireBarProps {
   planet: any;
@@ -46,7 +50,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
 
         try {
             // On passe l'ID actuel pour que le backend sache qui est le owner
-            const res = await fetch(`/my-planets?current_planet_id=${planet.id}`, {
+            const res = await fetch(apiUrl(`/my-planets?current_planet_id=${planet.id}`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {

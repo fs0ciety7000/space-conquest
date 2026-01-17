@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-
+import { apiUrl } from '@/config/api';
 // --- Dictionnaire de noms ---
 const getLabel = (id: string | null) => {
     if (!id) return "Inconnu";
@@ -60,7 +60,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const cancelOperation = async (queueId: string) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`/planets/${planet.id}/cancel-construction/${queueId}`, {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/cancel-construction/${queueId}`), {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

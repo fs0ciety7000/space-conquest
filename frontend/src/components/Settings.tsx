@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-
+import { apiUrl } from '@/config/api';
 interface SettingsProps {
   planet: any;
   onUpdate: () => void;
@@ -25,7 +25,7 @@ export default function Settings({ planet, onUpdate, onLogout }: SettingsProps) 
     if (!planetName.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`/planets/${planet.id}/rename`, {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/rename`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ new_name: planetName }),
