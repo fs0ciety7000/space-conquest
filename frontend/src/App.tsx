@@ -17,7 +17,7 @@ import Settings from './components/Settings';
 import MessagesView from './components/MessagesView';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
-
+import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
 import { 
   LogOut, LayoutDashboard, Pickaxe, Hammer, 
