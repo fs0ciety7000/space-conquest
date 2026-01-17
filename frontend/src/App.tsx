@@ -386,6 +386,7 @@ export default function App() {
         setPlanetId(p); 
         setUserId(u);
         setUsername(user);
+        console.log('👤 Utilisateur connecté:', user); // DEBUG
     }} />;
   }
 
@@ -393,6 +394,7 @@ export default function App() {
 
   // Vérifier si l'utilisateur est admin
   const isAdmin = username === 'phantomhex';
+  console.log('🔑 Admin check:', { username, isAdmin }); // DEBUG
 
   const MENU_ITEMS = [
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
@@ -412,6 +414,8 @@ export default function App() {
     { id: 'settings', label: 'Paramètres', icon: SettingsIcon, category: 'SYSTÈME' },
     ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin Panel', icon: Database, category: 'SYSTÈME' }] : []),
   ];
+
+  console.log('📝 Menu items:', MENU_ITEMS.map(i => i.id)); // DEBUG
 
   return (
     <div className="h-screen w-full bg-slate-950 text-white font-sans overflow-hidden flex flex-col relative">
