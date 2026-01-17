@@ -18,14 +18,15 @@ import MessagesView from './components/MessagesView';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { useSoundEffects } from './hooks/useSoundEffects';
+import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
+import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
+import { BuildQueue } from './components/BuildQueue';
 import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
 import { 
   LogOut, LayoutDashboard, Pickaxe, Hammer, 
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Keyboard
 } from "lucide-react";
 
 interface CombatReport {
@@ -48,6 +49,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [speedFactor, setSpeedFactor] = useState<number>(1);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   
   const [messageRecipient, setMessageRecipient] = useState<string | null>(null);
 
@@ -69,19 +71,57 @@ export default function App() {
     return saved ? JSON.parse(saved) : false;
   });
 
+  const [musicVolume, setMusicVolume] = useState(() => {
+    const saved = localStorage.getItem('musicVolume');
+    return saved ? parseFloat(saved) : 0.3;
+  });
+
+  const [sfxVolume, setSfxVolume] = useState(() => {
+    const saved = localStorage.getItem('sfxVolume');
+    return saved ? parseFloat(saved) : 0.5;
+  });
+
   // Animations flottantes de ressources
   const { gains, handleAnimationEnd } = useResourceGainAnimation(planet);
 
   // Raccourcis clavier
-  useKeyboardShortcuts(handleTabChange);
+  useKeyboardShortcuts(handleTabChange, true);
+  useShortcutFeedback();
 
   // Effets sonores
-  const { playSound } = useSoundEffects(soundEnabled);
+  const { playSound, startMusic } = useSoundEffects({
+    enabled: soundEnabled,
+    musicVolume,
+    sfxVolume
+  });
+
+  // Listener pour afficher l'aide raccourcis
+  useEffect(() => {
+    const handleShowHelp = () => setShowShortcutsHelp(true);
+    window.addEventListener('show-shortcuts-help', handleShowHelp);
+    return () => window.removeEventListener('show-shortcuts-help', handleShowHelp);
+  }, []);
 
   const handleToggleSound = (enabled: boolean) => {
     setSoundEnabled(enabled);
     localStorage.setItem('soundEnabled', JSON.stringify(enabled));
-    toast.info(enabled ? "Audio activé" : "Audio désactivé");
+    if (enabled) {
+      toast.success("🔊 Audio activé", {
+        description: "Musique d'ambiance spatiale lancée"
+      });
+    } else {
+      toast.info("🔇 Audio désactivé");
+    }
+  };
+
+  const handleVolumeChange = (type: 'music' | 'sfx', value: number) => {
+    if (type === 'music') {
+      setMusicVolume(value);
+      localStorage.setItem('musicVolume', value.toString());
+    } else {
+      setSfxVolume(value);
+      localStorage.setItem('sfxVolume', value.toString());
+    }
   };
 
   const handleStartTutorial = () => {
@@ -101,6 +141,7 @@ export default function App() {
   const switchPlanet = (newId: string) => {
     setPlanetId(newId);
     localStorage.setItem('planet_id', newId);
+    playSound('click');
   };
 
   const handleOpenMessage = (username: string) => {
@@ -112,6 +153,7 @@ export default function App() {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSidebarOpen(false);
+    playSound('click');
   };
 
   const fetchPlanet = useCallback(async () => {
@@ -132,6 +174,7 @@ export default function App() {
                 action: { label: "Lire", onClick: () => setActiveTab('messages') },
                 duration: 5000,
             });
+            playSound('notification');
         }
         setUnreadMessagesCount(newUnreadCount);
         prevUnreadCountRef.current = newUnreadCount;
@@ -151,9 +194,9 @@ export default function App() {
                     const isVictory = reportData.winner === 'defender'; 
                     if(!isVictory && reportData.is_defense) {
                          toast.error("ALERTE : Base Attaquée !", { description: "Consultez le rapport." });
-                         playSound('error');
+                         playSound('combat');
                     } else {
-                         playSound('success');
+                         playSound(isVictory ? 'success' : 'combat');
                     }
                     
                     setCombatReport({
@@ -172,12 +215,20 @@ export default function App() {
         }
         
         if (prevPlanetRef.current?.construction_end && !data.construction_end) {
-            toast.info("Bâtiment terminé");
+            toast.success("🏭 Bâtiment terminé !", {
+                description: "Nouvelle infrastructure opérationnelle"
+            });
             playSound('build');
+            
+            // Déclencher event pour auto-sounds
+            window.dispatchEvent(new Event('build-complete'));
         }
         if (prevPlanetRef.current?.shipyard_construction_end && !data.shipyard_construction_end) {
-            toast.info("Flotte assemblée");
+            toast.success("🚀 Flotte assemblée !", {
+                description: "Nouveaux vaisseaux prêts au combat"
+            });
             playSound('build');
+            window.dispatchEvent(new Event('build-complete'));
         }
 
         setPlanet(data);
@@ -185,7 +236,10 @@ export default function App() {
       } else if (res.status === 401) {
         handleLogout();
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error(e);
+        playSound('error');
+    }
   }, [planetId, token, playSound]);
 
   const launchExpedition = async () => {
@@ -200,22 +254,29 @@ export default function App() {
         setPlanet(data.planet); 
         setCombatReport(data.report);
         setShowCombatModal(true);
-        playSound('attack');
+        playSound('expedition');
+        window.dispatchEvent(new Event('attack-launched'));
       } else {
         const err = await res.json();
         toast.error(err.error || "Erreur expédition");
         playSound('error');
+        window.dispatchEvent(new Event('error-occurred'));
       }
     } catch (e) { 
         toast.error("Erreur réseau"); 
         playSound('error');
+        window.dispatchEvent(new Event('error-occurred'));
     }
   };
 
-  const handlePrepareAttack = (id: string, name: string) => setTargetPlanet({id, name});
+  const handlePrepareAttack = (id: string, name: string) => {
+    setTargetPlanet({id, name});
+    playSound('click');
+  };
 
   const handlePrepareTransport = (id: string, name: string, system: number) => {
       setTransportTarget({id, name, system});
+      playSound('click');
   };
 
   const handleSpy = async (targetId: string) => {
@@ -229,6 +290,7 @@ export default function App() {
         if(res.ok) {
           setSpyReport(data.report);
           fetchPlanet();
+          playSound('success');
       } else { 
           toast.error(data.error || "Échec de l'espionnage"); 
           playSound('error');
@@ -259,22 +321,46 @@ export default function App() {
         const data = await res.json();
 
         if (res.ok) {
-            toast.success("ORDRE D'ATTAQUE CONFIRMÉ", {
+            toast.success("⚔️ ORDRE D'ATTAQUE CONFIRMÉ", {
                 description: `Votre flotte atteindra la cible vers ${new Date(data.arrival).toLocaleTimeString()}`,
                 icon: <Rocket className="text-red-500" />
             });
             playSound('attack');
+            window.dispatchEvent(new Event('attack-launched'));
             setTargetPlanet(null);
             fetchPlanet();
         } else {
             toast.error(data.error || "Le haut commandement a annulé l'opération");
             playSound('error');
+            window.dispatchEvent(new Event('error-occurred'));
         }
     } catch (e) {
         toast.error("Échec de la liaison avec la flotte");
         playSound('error');
+        window.dispatchEvent(new Event('error-occurred'));
     }
   };
+
+  // Générer la file de construction
+  const buildQueueItems = [];
+  if (planet?.construction_end) {
+    buildQueueItems.push({
+      id: 'construction',
+      type: 'building' as const,
+      name: planet.construction_type || 'Bâtiment',
+      endTime: new Date(planet.construction_end).getTime(),
+      level: planet.construction_level || 1,
+    });
+  }
+  if (planet?.shipyard_construction_end) {
+    buildQueueItems.push({
+      id: 'shipyard',
+      type: 'ship' as const,
+      name: planet.shipyard_construction_type || 'Vaisseau',
+      endTime: new Date(planet.shipyard_construction_end).getTime(),
+      quantity: planet.shipyard_construction_count || 1,
+    });
+  }
 
   useEffect(() => {
     fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor))
@@ -325,6 +411,7 @@ export default function App() {
       {/* Animations flottantes de ressources */}
       <FloatingResourceGain gains={gains} onAnimationEnd={handleAnimationEnd} />
 
+      {/* Modals */}
       <div className="relative z-50">
         {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
         {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
@@ -347,7 +434,14 @@ export default function App() {
               onClose={() => setSpyReport(null)} 
           />
         )}
+
+        {showShortcutsHelp && (
+          <ShortcutsHelpModal onClose={() => setShowShortcutsHelp(false)} />
+        )}
       </div>
+
+      {/* Prompt audio unlock si bloqué */}
+      <AudioUnlockPrompt onUnlock={startMusic} />
 
       <div className="absolute top-0 left-0 w-full z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-md shadow-lg">
           <EmpireBar 
@@ -384,7 +478,18 @@ export default function App() {
                     </div>
                 ))}
             </div>
-             <div className="mt-auto p-4 border-t border-white/5">
+
+             {/* Bouton aide raccourcis */}
+             <div className="px-4 pb-3">
+                <button 
+                  onClick={() => setShowShortcutsHelp(true)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-indigo-950/30 text-indigo-400 hover:bg-indigo-900/40 hover:text-indigo-300 transition-colors text-xs font-bold uppercase border border-indigo-900/30"
+                >
+                  <Keyboard size={16}/> Raccourcis (?)
+                </button>
+             </div>
+
+             <div className="p-4 border-t border-white/5">
                  <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors text-xs font-bold uppercase border border-red-900/20">
                      <LogOut size={16}/> Déconnexion
                  </button>
@@ -432,7 +537,13 @@ export default function App() {
                 ))}
               </div>
 
-              <div className="mt-auto p-4 border-t border-white/5">
+              <div className="mt-auto p-4 space-y-3 border-t border-white/5">
+                 <button 
+                   onClick={() => { setShowShortcutsHelp(true); setSidebarOpen(false); }}
+                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-950/30 text-indigo-400 hover:bg-indigo-900/40 transition-colors text-sm font-bold uppercase border border-indigo-900/30"
+                 >
+                   <Keyboard size={18}/> Raccourcis
+                 </button>
                  <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors text-sm font-bold uppercase border border-red-900/20">
                      <LogOut size={18}/> Déconnexion
                  </button>
@@ -442,6 +553,13 @@ export default function App() {
         )}
 
         <main className="flex-1 overflow-y-auto p-3 md:p-4 lg:p-8 scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent">
+            {/* BuildQueue en haut si actif */}
+            {buildQueueItems.length > 0 && (
+              <div className="max-w-7xl mx-auto mb-6">
+                <BuildQueue items={buildQueueItems} />
+              </div>
+            )}
+
             <div className="max-w-7xl mx-auto pb-4 md:pb-0 min-h-full">
                 <div className="animate-in fade-in zoom-in-95 duration-300">
                     {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
@@ -466,6 +584,9 @@ export default function App() {
                             soundEnabled={soundEnabled}
                             onToggleSound={handleToggleSound}
                             onStartTutorial={handleStartTutorial}
+                            musicVolume={musicVolume}
+                            sfxVolume={sfxVolume}
+                            onVolumeChange={handleVolumeChange}
                         />
                     )}
                 </div>
