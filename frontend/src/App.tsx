@@ -17,6 +17,7 @@ import Settings from './components/Settings';
 import MessagesView from './components/MessagesView';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
+import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
 import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
 import { 
@@ -58,7 +59,10 @@ export default function App() {
   const processingReportRef = useRef(false);
 
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
-  const prevUnreadCountRef = useRef<number | null>(null); 
+  const prevUnreadCountRef = useRef<number | null>(null);
+
+  // Animations flottantes de ressources
+  const { gains, handleAnimationEnd } = useResourceGainAnimation(planet);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -270,6 +274,9 @@ export default function App() {
        <div className="absolute inset-0 z-0 bg-cover bg-center opacity-30 pointer-events-none" style={{ backgroundImage: "url('/assets/background.png')" }}></div>
        <div className="absolute inset-0 z-0 bg-gradient-to-b from-slate-950/80 to-slate-900/80 pointer-events-none"></div>
 
+      {/* Animations flottantes de ressources */}
+      <FloatingResourceGain gains={gains} onAnimationEnd={handleAnimationEnd} />
+
       <div className="relative z-50">
         {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
         {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
@@ -301,6 +308,7 @@ export default function App() {
             unreadMessages={unreadMessagesCount} 
             onOpenMessages={() => { setActiveTab('messages'); setSidebarOpen(false); }}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+            onNavigateToGalaxy={() => { setActiveTab('galaxy'); setSidebarOpen(false); }}
           />
       </div>
 
