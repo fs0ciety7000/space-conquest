@@ -2,7 +2,8 @@ use serde::Serialize;
 use rand::Rng;
 use crate::entities::planet;
 
-pub const SPEED_FACTOR: f64 = 1.0; // Vitesse du jeu
+// ⚡ VITESSE DU JEU (200 = x2, 500 = x5)
+pub const SPEED_FACTOR: f64 = 200.0;
 
 #[derive(Serialize, Clone)]
 pub struct Cost {
@@ -42,61 +43,107 @@ pub struct UnitStats {
     pub hull: f64,
 }
 
+// 📊 DIVISEUR DE COÛT BASÉ SUR VITESSE
+fn cost_scaling() -> f64 {
+    (SPEED_FACTOR / 100.0).max(1.0)
+}
+
 // --- COÛTS DE BASE DES UNITÉS ---
 pub fn get_unit_cost(unit_type: &str) -> (f64, f64) {
-    match unit_type {
-        "light_hunter" => (3000.0, 1000.0),
-        "cruiser" => (20000.0, 7000.0),
-        "transporter" => (4000.0, 2000.0),
-        "colony_ship" => (10000.0, 20000.0),
-        "recycler" => (10000.0, 6000.0),
-        "spy_probe" => (0.0, 1000.0),
-        "missile_launcher" => (2000.0, 0.0),
-        "plasma_turret" => (50000.0, 50000.0),
+    let base = match unit_type {
+        // 🚀 Vaisseaux de guerre
+        "light_hunter" => (3000.0, 1000.0),      // Chasseur léger (rapide, fragile)
+        "cruiser" => (20000.0, 7000.0),          // Croiseur (équilibré)
+        
+        // 🛠️ Vaisseaux utilitaires
+        "transporter" => (4000.0, 4000.0),       // Transporteur (capacité)
+        "recycler" => (10000.0, 6000.0),         // Recycleur (débris)
+        "spy_probe" => (1000.0, 0.0),            // Sonde (reconnaissance)
+        "colony_ship" => (10000.0, 20000.0),     // Vaisseau de colonisation
+        
+        // 🛡️ Défenses
+        "missile_launcher" => (2000.0, 0.0),     // Lance-missiles (bon marché)
+        "plasma_turret" => (50000.0, 50000.0),   // Tourelle plasma (puissante)
+        
         _ => (0.0, 0.0),
-    }
+    };
+    
+    let divider = cost_scaling();
+    (base.0 / divider, base.1 / divider)
 }
 
-// --- VERIFICATION DES PREREQUIS ---
+// --- VÉRIFICATION DES PRÉREQUIS ---
 pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<(), String> {
     match item_type {
+        // 🔬 Technologies
         "energy_tech" => {
-            if planet.research_lab_level < 1 { return Err("Laboratoire de Recherche niveau 1 requis".to_string()); }
-            Ok(())
+            if planet.research_lab_level < 1 { 
+                return Err("Laboratoire de Recherche niveau 1 requis".to_string()); 
+            }
         },
         "laser" => {
-            if planet.research_lab_level < 1 { return Err("Laboratoire de Recherche niveau 1 requis".to_string()); }
-            if planet.energy_tech_level < 2 { return Err("Technologie Énergie niveau 2 requise".to_string()); }
-            Ok(())
+            if planet.research_lab_level < 1 { 
+                return Err("Laboratoire de Recherche niveau 1 requis".to_string()); 
+            }
+            if planet.energy_tech_level < 2 { 
+                return Err("Technologie Énergie niveau 2 requise".to_string()); 
+            }
         },
         "espionage" => {
-            if planet.research_lab_level < 3 { return Err("Laboratoire de Recherche niveau 3 requis".to_string()); }
-            Ok(())
+            if planet.research_lab_level < 3 { 
+                return Err("Laboratoire de Recherche niveau 3 requis".to_string()); 
+            }
         },
         "armour" => {
-            if planet.research_lab_level < 2 { return Err("Laboratoire de Recherche niveau 2 requis".to_string()); }
-            Ok(())
+            if planet.research_lab_level < 2 { 
+                return Err("Laboratoire de Recherche niveau 2 requis".to_string()); 
+            }
         },
+        
+        // 🚀 Vaisseaux
         "light_hunter" => {
-            if planet.shipyard_level < 1 { return Err("Chantier Spatial niveau 1 requis".to_string()); }
-            Ok(())
+            if planet.shipyard_level < 1 { 
+                return Err("Chantier Spatial niveau 1 requis".to_string()); 
+            }
         },
         "cruiser" => {
-            if planet.shipyard_level < 5 { return Err("Chantier Spatial niveau 5 requis".to_string()); }
-            if planet.energy_tech_level < 4 { return Err("Technologie Énergie niveau 4 requise".to_string()); }
-            Ok(())
+            if planet.shipyard_level < 5 { 
+                return Err("Chantier Spatial niveau 5 requis".to_string()); 
+            }
+            if planet.energy_tech_level < 3 { 
+                return Err("Technologie Énergie niveau 3 requise".to_string()); 
+            }
         },
+        "colony_ship" => {
+            if planet.shipyard_level < 4 { 
+                return Err("Chantier Spatial niveau 4 requis".to_string()); 
+            }
+        },
+        "recycler" => {
+            if planet.shipyard_level < 4 { 
+                return Err("Chantier Spatial niveau 4 requis".to_string()); 
+            }
+        },
+        
+        // 🛡️ Défenses
         "plasma_turret" => {
-            if planet.shipyard_level < 6 { return Err("Chantier Spatial niveau 6 requis".to_string()); }
-            if planet.energy_tech_level < 6 { return Err("Technologie Énergie niveau 6 requise".to_string()); }
-            if planet.laser_battery_level < 3 { return Err("Technologie Laser niveau 3 requise".to_string()); }
-            Ok(())
+            if planet.shipyard_level < 8 { 
+                return Err("Chantier Spatial niveau 8 requis".to_string()); 
+            }
+            if planet.energy_tech_level < 6 { 
+                return Err("Technologie Énergie niveau 6 requise".to_string()); 
+            }
+            if planet.laser_battery_level < 5 { 
+                return Err("Technologie Laser niveau 5 requise".to_string()); 
+            }
         },
-        _ => Ok(()), 
+        
+        _ => {},
     }
+    Ok(())
 }
 
-// --- CALCULS RESSOURCES ---
+// --- CALCULS RESSOURCES (Ratio 3:2:1) ---
 pub enum ResourceType { Metal, Crystal, Deuterium }
 
 pub fn calculate_resources(
@@ -108,46 +155,125 @@ pub fn calculate_resources(
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
     let duration = now.signed_duration_since(last_update).num_seconds() as f64;
-    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.05);
-
+    
+    // 💡 Bonus technologie énergie (+1% par niveau)
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.01);
+    
+    // 📊 Production de base (ratio 3:2:1)
     let base_production = match res_type {
-        ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),
-        ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),
-        ResourceType::Deuterium => 10.0 * (level as f64) * 1.1f64.powi(level),
+        ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),      // Base x3
+        ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),    // Base x2
+        ResourceType::Deuterium => 10.0 * (level as f64) * 1.05f64.powi(level), // Base x1 (plus rare)
     };
-
-    let production_per_sec = (base_production * tech_bonus / 3600.0) * SPEED_FACTOR;
+    
+    let production_per_sec = (base_production * tech_bonus / 3600.0) * (SPEED_FACTOR / 100.0);
     current_amount + (production_per_sec * duration)
 }
 
-// --- COÛTS & STATS ---
+// --- COÛTS DES BÂTIMENTS (Exponentiel) ---
 pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
-    let factor_mines = 1.5f64.powi(level - 1); 
-    let factor_tech = 2.0f64.powi(level - 1);  
-    match building_type {
-        "metal" => Cost { metal: 60.0 * factor_mines, crystal: 15.0 * factor_mines, deuterium: 0.0 },
-        "crystal" => Cost { metal: 48.0 * 1.6f64.powi(level - 1), crystal: 24.0 * 1.6f64.powi(level - 1), deuterium: 0.0 },
-        "shipyard" => Cost { metal: 400.0 * factor_tech, crystal: 200.0 * factor_tech, deuterium: 100.0 * factor_tech },
-        "energy_tech" => Cost { metal: 0.0, crystal: 800.0 * factor_tech, deuterium: 400.0 * factor_tech },
-        "armour" => Cost { metal: 1000.0 * factor_tech, crystal: 0.0, deuterium: 0.0 },
+    let base_cost = match building_type {
+        // 🏭 MINES (multiplicateur 1.5)
+        "metal" => Cost {
+            metal: 60.0 * 1.5f64.powi(level - 1),
+            crystal: 15.0 * 1.5f64.powi(level - 1),
+            deuterium: 0.0,
+        },
+        "crystal" => Cost {
+            metal: 48.0 * 1.6f64.powi(level - 1),
+            crystal: 24.0 * 1.6f64.powi(level - 1),
+            deuterium: 0.0,
+        },
+        "deuterium" => Cost {
+            metal: 225.0 * 1.5f64.powi(level - 1),
+            crystal: 75.0 * 1.5f64.powi(level - 1),
+            deuterium: 0.0,
+        },
+        
+        // ⚡ ÉNERGIE (multiplicateur 1.5)
+        "solar_plant" => Cost {
+            metal: 75.0 * 1.5f64.powi(level - 1),
+            crystal: 30.0 * 1.5f64.powi(level - 1),
+            deuterium: 0.0,
+        },
+        
+        // 🏗️ INFRASTRUCTURES (multiplicateur 2.0)
+        "shipyard" => Cost {
+            metal: 400.0 * 2.0f64.powi(level - 1),
+            crystal: 200.0 * 2.0f64.powi(level - 1),
+            deuterium: 100.0 * 2.0f64.powi(level - 1),
+        },
+        "research" => Cost {
+            metal: 200.0 * 2.0f64.powi(level - 1),
+            crystal: 400.0 * 2.0f64.powi(level - 1),
+            deuterium: 200.0 * 2.0f64.powi(level - 1),
+        },
+        "hangar" => Cost {
+            metal: 400.0 * 2.0f64.powi(level - 1),
+            crystal: 200.0 * 2.0f64.powi(level - 1),
+            deuterium: 100.0 * 2.0f64.powi(level - 1),
+        },
+        
+        // 🔬 TECHNOLOGIES (multiplicateur 2.0)
+        "energy_tech" => Cost {
+            metal: 0.0,
+            crystal: 800.0 * 2.0f64.powi(level - 1),
+            deuterium: 400.0 * 2.0f64.powi(level - 1),
+        },
+        "laser" => Cost {
+            metal: 200.0 * 2.0f64.powi(level - 1),
+            crystal: 100.0 * 2.0f64.powi(level - 1),
+            deuterium: 0.0,
+        },
+        "espionage" => Cost {
+            metal: 200.0 * 2.0f64.powi(level - 1),
+            crystal: 1000.0 * 2.0f64.powi(level - 1),
+            deuterium: 200.0 * 2.0f64.powi(level - 1),
+        },
+        "armour" => Cost {
+            metal: 1000.0 * 2.0f64.powi(level - 1),
+            crystal: 0.0,
+            deuterium: 0.0,
+        },
+        
         _ => Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 },
+    };
+    
+    // ✅ Applique le scaling de vitesse
+    let divider = cost_scaling();
+    Cost {
+        metal: base_cost.metal / divider,
+        crystal: base_cost.crystal / divider,
+        deuterium: base_cost.deuterium / divider,
     }
 }
 
+// ⏱️ TEMPS DE CONSTRUCTION PROGRESSIF
 pub fn get_build_time(metal_cost: f64, crystal_cost: f64, facility_level: i32) -> i64 {
-    let reduction_factor = 1.0 + (facility_level as f64);
-    let seconds = ((metal_cost + crystal_cost) / 2500.0) / (SPEED_FACTOR * reduction_factor) * 3600.0;
-    std::cmp::max(2, seconds as i64)
+    let total_resources = metal_cost + crystal_cost;
+    let base_time = (total_resources / 2500.0 * 3600.0) as i64; // En secondes
+    
+    // 🏗️ Réduction selon niveau du chantier (max -50%)
+    let time_reduction = 1.0 - (facility_level as f64 * 0.05).min(0.5);
+    let final_time = (base_time as f64 * time_reduction) as i64;
+    
+    // ⚡ Ajusté au SPEED_FACTOR
+    std::cmp::max(10, final_time / (SPEED_FACTOR / 100.0) as i64)
 }
 
 pub fn get_ship_production_time(qty: i32) -> i64 {
-    std::cmp::max(1, (20.0 / SPEED_FACTOR * qty as f64) as i64)
+    let base_time = 30 * qty; // 30 secondes par unité
+    std::cmp::max(5, (base_time as f64 / (SPEED_FACTOR / 100.0)) as i64)
 }
 
-pub fn get_light_hunter_stats() -> (f64, f64) { get_unit_cost("light_hunter") }
-pub fn get_fleet_capacity(hangar_level: i32) -> i32 { 500 + (hangar_level * 500) }
+// 📦 CAPACITÉS
+pub fn get_fleet_capacity(hangar_level: i32) -> i32 { 
+    500 + (hangar_level * 500) 
+}
 pub const TRANSPORTER_CAPACITY: f64 = 10000.0;
 
+// Helper functions
+pub fn get_light_hunter_stats() -> (f64, f64) { get_unit_cost("light_hunter") }
 pub fn get_spy_probe_stats() -> (f64, f64) { get_unit_cost("spy_probe") }
 pub fn get_missile_launcher_stats() -> (f64, f64) { get_unit_cost("missile_launcher") }
 pub fn get_plasma_turret_stats() -> (f64, f64) { get_unit_cost("plasma_turret") }
@@ -155,7 +281,6 @@ pub fn get_colony_ship_stats() -> (f64, f64) { get_unit_cost("colony_ship") }
 pub fn get_transporter_stats() -> (f64, f64) { get_unit_cost("transporter") }
 
 // --- MOTEUR DE COMBAT ---
-
 pub fn get_unit_base_stats(unit_type: &str) -> UnitStats {
     match unit_type {
         "light_hunter" => UnitStats { attack: 50.0, shield: 10.0, hull: 400.0 },
@@ -170,6 +295,7 @@ pub fn get_rapid_fire(attacker: &str, target: &str) -> i32 {
     match (attacker, target) {
         ("cruiser", "light_hunter") => 6,
         ("cruiser", "missile_launcher") => 10,
+        ("plasma_turret", "light_hunter") => 5,
         ("plasma_turret", "cruiser") => 3,
         _ => 0,
     }
@@ -216,7 +342,7 @@ pub fn resolve_pvp(
         ("plasma_turret", def_plasmas, apply_techs(get_unit_base_stats("plasma_turret"), &def_techs)),
     ];
 
-    log.push("--- Début de l'engagement orbital ---".to_string());
+    log.push("⚔️ Début de l'engagement orbital".to_string());
 
     for round in 1..=6 {
         let mut att_dmg = 0.0;
@@ -256,7 +382,7 @@ pub fn resolve_pvp(
 
         apply_losses(&mut defender_fleet, att_dmg);
         apply_losses(&mut attacker_fleet, def_dmg);
-        log.push(format!("Round {}: Dégâts infligés A: {:.0} | D: {:.0}", round, att_dmg, def_dmg));
+        log.push(format!("Round {}: Dégâts A: {:.0} | D: {:.0}", round, att_dmg, def_dmg));
         if attacker_fleet.iter().all(|f| f.1 <= 0) || defender_fleet.iter().all(|f| f.1 <= 0) { break; }
     }
 
@@ -271,11 +397,16 @@ pub fn resolve_pvp(
                  else if f_att_h+f_att_c <= 0 { "defender".into() } 
                  else { "draw".into() };
 
+    // 💰 BUTIN (50% des ressources)
     let loot = if winner == "attacker" {
-        Cost { metal: def_resources.metal * 0.5, crystal: def_resources.crystal * 0.5, deuterium: def_resources.deuterium * 0.5 }
+        Cost { 
+            metal: (def_resources.metal * 0.5).min(50000.0 * cost_scaling()), 
+            crystal: (def_resources.crystal * 0.5).min(50000.0 * cost_scaling()), 
+            deuterium: (def_resources.deuterium * 0.5).min(50000.0 * cost_scaling()) 
+        }
     } else { Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 } };
 
-    // --- CALCUL DU CHAMP DE DÉBRIS (CDR) ---
+    // 🛠️ CHAMP DE DÉBRIS (30% des pertes)
     let att_h_lost = att_hunters - f_att_h;
     let att_c_lost = att_cruisers - f_att_c;
     let def_h_lost = def_hunters - f_def_h;
@@ -291,7 +422,7 @@ pub fn resolve_pvp(
     let debris_c = total_crystal_lost * 0.3;
 
     if debris_m > 0.0 {
-        log.push(format!("Champ de débris généré : {:.0} Métal, {:.0} Cristal.", debris_m, debris_c));
+        log.push(format!("🛠️ Débris : {:.0}M / {:.0}C", debris_m, debris_c));
     }
 
     PvpReport {
@@ -318,7 +449,6 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
 }
 
 // --- NAVIGATION GALACTIQUE ---
-
 pub fn calculate_distance(start: (i32, i32, i32), end: (i32, i32, i32)) -> f64 {
     let (g1, s1, p1) = start;
     let (g2, s2, p2) = end;
@@ -336,8 +466,7 @@ pub fn calculate_distance(start: (i32, i32, i32), end: (i32, i32, i32)) -> f64 {
 }
 
 pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
-    // Formule adaptée pour un Speed Game : plus c'est loin, plus c'est long, mais bridé par le facteur vitesse
     let base_time = 10.0 + (dist.sqrt() / 2.0);
     let seconds = (base_time * 100.0) / speed_factor;
-    seconds.max(5.0) as i64 // Minimum 5 secondes de vol
+    seconds.max(5.0) as i64
 }
