@@ -80,10 +80,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     }
   };
 
-  // --- CALCULS PRODUCTION ---
+  // --- CALCULS PRODUCTION (FIX: Ajouter Math.floor) ---
   const calculateProduction = (level: number, baseFactor: number) => {
     const baseProd = baseFactor * level * Math.pow(1.1, level);
-    return baseProd * speedFactor;
+    return Math.floor(baseProd * speedFactor); // ✅ FIX ICI
   };
 
   const prodMetal = calculateProduction(planet.metal_mine_level, 30);
