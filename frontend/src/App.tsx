@@ -18,6 +18,8 @@ import MessagesView from './components/MessagesView';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useSoundEffects } from './hooks/useSoundEffects';
 import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
 import { 
@@ -61,8 +63,32 @@ export default function App() {
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const prevUnreadCountRef = useRef<number | null>(null);
 
+  // État audio
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    const saved = localStorage.getItem('soundEnabled');
+    return saved ? JSON.parse(saved) : false;
+  });
+
   // Animations flottantes de ressources
   const { gains, handleAnimationEnd } = useResourceGainAnimation(planet);
+
+  // Raccourcis clavier
+  useKeyboardShortcuts(handleTabChange);
+
+  // Effets sonores
+  const { playSound } = useSoundEffects(soundEnabled);
+
+  const handleToggleSound = (enabled: boolean) => {
+    setSoundEnabled(enabled);
+    localStorage.setItem('soundEnabled', JSON.stringify(enabled));
+    toast.info(enabled ? "Audio activé" : "Audio désactivé");
+  };
+
+  const handleStartTutorial = () => {
+    toast.info("🎓 Tutoriel", { 
+      description: "Le mode tutoriel interactif sera disponible prochainement."
+    });
+  };
 
   const handleLogout = () => {
     localStorage.clear();
@@ -120,10 +146,14 @@ export default function App() {
                         description: `Livraison: M:${Math.floor(reportData.metal)} C:${Math.floor(reportData.crystal)} D:${Math.floor(reportData.deuterium)}`,
                         icon: <Truck className="h-5 w-5 text-green-500" />,
                     });
+                    playSound('success');
                 } else {
                     const isVictory = reportData.winner === 'defender'; 
                     if(!isVictory && reportData.is_defense) {
                          toast.error("ALERTE : Base Attaquée !", { description: "Consultez le rapport." });
+                         playSound('error');
+                    } else {
+                         playSound('success');
                     }
                     
                     setCombatReport({
@@ -141,8 +171,14 @@ export default function App() {
             finally { processingReportRef.current = false; }
         }
         
-        if (prevPlanetRef.current?.construction_end && !data.construction_end) toast.info("Bâtiment terminé");
-        if (prevPlanetRef.current?.shipyard_construction_end && !data.shipyard_construction_end) toast.info("Flotte assemblée");
+        if (prevPlanetRef.current?.construction_end && !data.construction_end) {
+            toast.info("Bâtiment terminé");
+            playSound('build');
+        }
+        if (prevPlanetRef.current?.shipyard_construction_end && !data.shipyard_construction_end) {
+            toast.info("Flotte assemblée");
+            playSound('build');
+        }
 
         setPlanet(data);
         prevPlanetRef.current = data;
@@ -150,7 +186,7 @@ export default function App() {
         handleLogout();
       }
     } catch (e) { console.error(e); }
-  }, [planetId, token]);
+  }, [planetId, token, playSound]);
 
   const launchExpedition = async () => {
     if (!planetId || !token) return;
@@ -164,11 +200,16 @@ export default function App() {
         setPlanet(data.planet); 
         setCombatReport(data.report);
         setShowCombatModal(true);
+        playSound('attack');
       } else {
         const err = await res.json();
         toast.error(err.error || "Erreur expédition");
+        playSound('error');
       }
-    } catch (e) { toast.error("Erreur réseau"); }
+    } catch (e) { 
+        toast.error("Erreur réseau"); 
+        playSound('error');
+    }
   };
 
   const handlePrepareAttack = (id: string, name: string) => setTargetPlanet({id, name});
@@ -190,8 +231,12 @@ export default function App() {
           fetchPlanet();
       } else { 
           toast.error(data.error || "Échec de l'espionnage"); 
+          playSound('error');
       }
-    } catch(e) { toast.error("Erreur réseau"); }
+    } catch(e) { 
+        toast.error("Erreur réseau"); 
+        playSound('error');
+    }
   };
 
   const handleConfirmAttack = async (hunters: number, cruisers: number) => {
@@ -218,13 +263,16 @@ export default function App() {
                 description: `Votre flotte atteindra la cible vers ${new Date(data.arrival).toLocaleTimeString()}`,
                 icon: <Rocket className="text-red-500" />
             });
+            playSound('attack');
             setTargetPlanet(null);
             fetchPlanet();
         } else {
             toast.error(data.error || "Le haut commandement a annulé l'opération");
+            playSound('error');
         }
     } catch (e) {
         toast.error("Échec de la liaison avec la flotte");
+        playSound('error');
     }
   };
 
@@ -410,7 +458,16 @@ export default function App() {
                     {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}
                     
                     {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
-                    {activeTab === 'settings' && <Settings planet={planet} onUpdate={fetchPlanet} onLogout={handleLogout} />}
+                    {activeTab === 'settings' && (
+                        <Settings 
+                            planet={planet} 
+                            onUpdate={fetchPlanet} 
+                            onLogout={handleLogout} 
+                            soundEnabled={soundEnabled}
+                            onToggleSound={handleToggleSound}
+                            onStartTutorial={handleStartTutorial}
+                        />
+                    )}
                 </div>
             </div>
         </main>
