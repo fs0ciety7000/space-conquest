@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, to_string};
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{CorsLayer, Any}; 
 use http::header::{AUTHORIZATION, CONTENT_TYPE, ACCEPT};
 use http::{HeaderValue, Method};
 use uuid::Uuid;
@@ -167,17 +167,15 @@ async fn main() {
 ];
 
     // Configuration CORS avec l'URL du frontend
-let cors = CorsLayer::new()
-    .allow_origin(frontend_urls.iter().map(|u| u.parse::<HeaderValue>().unwrap()).collect::<Vec<_>>())
-    .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
-    .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])
-    .allow_credentials(true);
-
+// let cors = CorsLayer::new()
+//     .allow_origin(frontend_urls.iter().map(|u| u.parse::<HeaderValue>().unwrap()).collect::<Vec<_>>())
+//     .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+//     .allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])
+//     .allow_credentials(true);
+let cors = CorsLayer::permissive();
     let app = Router::new()
         .route("/register", post(auth::register_handler))
 .route("/login", post(auth::login_handler))
-.route("/register", options(|_| async { StatusCode::OK }))  // ✅ Preflight
-.route("/login", options(|_| async { StatusCode::OK }))     // ✅ Preflight
 .route("/config", get(get_game_config_handler))
 
         // Planets
