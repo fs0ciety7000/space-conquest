@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { GalaxyMiniMap } from "./GalaxyMiniMap";
 
 interface EmpireBarProps {
   planet: any;
@@ -26,6 +27,7 @@ interface EmpireBarProps {
   unreadMessages?: number;
   onOpenMessages?: () => void;
   onToggleSidebar?: () => void;
+  onNavigateToGalaxy?: () => void;
 }
 
 interface PlanetSummary {
@@ -37,7 +39,7 @@ interface PlanetSummary {
   is_current: boolean;
 }
 
-export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar }: EmpireBarProps) {
+export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar, onNavigateToGalaxy }: EmpireBarProps) {
   
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
 
@@ -66,7 +68,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const energyAvailable = planet.energy ?? 0;
 
   return (
-    <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-slate-950/90 backdrop-blur-xl border-b border-white/10 min-h-[60px] md:h-[72px] w-full shadow-2xl z-50">
+    <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-slate-950/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-white/10 min-h-[60px] md:h-[72px] w-full shadow-2xl z-50">
       
       {/* Partie Gauche : Menu mobile + Logo + Planète */}
       <div className="flex items-center gap-2 md:gap-6 shrink-0">
@@ -129,6 +131,16 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
              )}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Mini-map Galaxie (Desktop uniquement) */}
+        <div className="hidden xl:block">
+          <GalaxyMiniMap 
+            galaxy={planet.galaxy}
+            system={planet.system}
+            position={planet.position}
+            onClick={onNavigateToGalaxy}
+          />
+        </div>
       </div>
 
       {/* Partie Droite : Ressources + Messagerie */}
