@@ -21,7 +21,6 @@ export function useKeyboardShortcuts(onNavigate: (tab: TabType) => void) {
         'm': 'messages',
         's': 'settings',
         'h': 'overview',    // H pour Home
-        'o': 'overview',    // O pour Overview
         'p': 'reports',     // P pour raPports
       };
       
