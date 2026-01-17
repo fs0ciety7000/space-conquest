@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { Save, User, Globe, Shield, Terminal, LogOut, Mail, Fingerprint } from "lucide-react";
+import { Save, User, Globe, Shield, Terminal, LogOut, Mail, Fingerprint, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
+import { useTheme } from "next-themes";
+import { PlayerRankBadge } from "./PlayerRank";
+
 interface SettingsProps {
   planet: any;
   onUpdate: () => void;
@@ -14,12 +17,16 @@ interface SettingsProps {
 export default function Settings({ planet, onUpdate, onLogout }: SettingsProps) {
   const [planetName, setPlanetName] = useState(planet.name);
   const [loading, setLoading] = useState(false);
+  const { theme, setTheme } = useTheme();
   
   const username = localStorage.getItem('username') || "Commandant";
   const email = localStorage.getItem('email') || "Non renseigné";
   
-  // Génération d'un avatar stylé basé sur le pseudo
+  // Avatar personnalisé
   const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+
+  // Points du joueur (total_points du planet)
+  const playerPoints = planet.total_points || 0;
 
   const handleRename = async () => {
     if (!planetName.trim()) return;
@@ -49,21 +56,30 @@ export default function Settings({ planet, onUpdate, onLogout }: SettingsProps) 
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 max-w-4xl mx-auto">
       
       {/* --- PROFIL COMMANDANT --- */}
-      <Card className="bg-slate-950 border-white/10 overflow-hidden">
+      <Card className="bg-slate-950 dark:bg-slate-900 border-white/10 overflow-hidden">
         <div className="h-24 bg-gradient-to-r from-indigo-900 to-purple-900 opacity-50"></div>
         <CardContent className="relative pt-0">
             <div className="flex flex-col md:flex-row items-center md:items-end gap-6 -mt-12 mb-6">
                 <div className="w-32 h-32 rounded-2xl bg-slate-900 border-4 border-slate-950 shadow-2xl overflow-hidden">
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 </div>
-                <div className="pb-2 text-center md:text-left">
-                    <h2 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+                <div className="pb-2 text-center md:text-left space-y-2">
+                    <h2 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3 justify-center md:justify-start">
                         {username} <Shield size={20} className="text-indigo-400" />
                     </h2>
                     <p className="text-slate-400 font-mono text-xs flex items-center gap-2 justify-center md:justify-start">
                         <Fingerprint size={12} /> ID-CORE: {planet.owner_id.substring(0, 8)}...
                     </p>
+                    {/* Badge de rang */}
+                    <div className="flex justify-center md:justify-start">
+                      <PlayerRankBadge points={playerPoints} size="md" />
+                    </div>
                 </div>
+            </div>
+
+            {/* Progression vers prochain rang */}
+            <div className="mb-6">
+              <PlayerRankBadge points={playerPoints} showProgress size="md" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-white/5 pt-6">
@@ -120,15 +136,40 @@ export default function Settings({ planet, onUpdate, onLogout }: SettingsProps) 
             </CardContent>
         </Card>
 
-        {/* --- ACTIONS COMPTE --- */}
+        {/* --- APPARENCE & ACTIONS --- */}
         <Card className="bg-slate-900/50 border-white/10 text-white backdrop-blur-md">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-red-400">
-                    <Terminal size={16} /> Sécurité & Terminal
+                <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-purple-400">
+                    <Terminal size={16} /> Interface & Sécurité
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="space-y-3">
+                {/* Toggle thème */}
+                <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Mode d'affichage</label>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setTheme('light')}
+                            className={`flex-1 ${theme === 'light' ? 'bg-white/20 border-white/30' : 'bg-white/5 border-white/10'}`}
+                        >
+                            <Sun size={16} className="mr-2" />
+                            Clair
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setTheme('dark')}
+                            className={`flex-1 ${theme === 'dark' ? 'bg-white/20 border-white/30' : 'bg-white/5 border-white/10'}`}
+                        >
+                            <Moon size={16} className="mr-2" />
+                            Sombre
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t border-white/5">
                     <Button 
                         variant="outline"
                         className="w-full border-white/5 bg-white/5 hover:bg-white/10 text-xs text-slate-300 flex items-center justify-between"
@@ -153,7 +194,6 @@ export default function Settings({ planet, onUpdate, onLogout }: SettingsProps) 
   );
 }
 
-// Petit helper pour l'icône de flèche manquante
 function ArrowRight({ size, className }: { size: number, className?: string }) {
     return (
         <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
