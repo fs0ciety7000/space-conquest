@@ -1,13 +1,12 @@
 {
   "name": "Space Conquest",
   "short_name": "SpaceConq",
-  "description": "Jeu de stratégie spatiale multijoueur en temps réel",
+  "description": "Jeu de stratégie spatiale en temps réel",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#6366f1",
   "orientation": "any",
-  "categories": ["games", "strategy"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -22,20 +21,12 @@
       "purpose": "any maskable"
     }
   ],
-  "shortcuts": [
+  "categories": ["games", "entertainment"],
+  "screenshots": [
     {
-      "name": "Galaxie",
-      "short_name": "Galaxie",
-      "description": "Explorer la galaxie",
-      "url": "/?tab=galaxy",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Flotte",
-      "short_name": "Flotte",
-      "description": "Gérer votre flotte",
-      "url": "/?tab=shipyard",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "src": "/screenshot1.png",
+      "sizes": "1280x720",
+      "type": "image/png"
     }
   ]
 }
