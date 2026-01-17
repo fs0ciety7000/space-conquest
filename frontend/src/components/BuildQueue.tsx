@@ -1,13 +1,12 @@
-import { Clock, Trash2, CheckCircle2, Timer } from 'lucide-react';
+import { Clock, Trash2, Factory, FlaskConical, Rocket } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface QueueItem {
   id: string;
-  type: 'building' | 'tech' | 'ship' | 'defense';
+  type: 'building' | 'tech' | 'ship';
   name: string;
   endTime: number;
   level?: number;
-  quantity?: number;
 }
 
 interface BuildQueueProps {
@@ -15,89 +14,58 @@ interface BuildQueueProps {
 }
 
 export function BuildQueue({ planet }: BuildQueueProps) {
-  const [now, setNow] = useState(Date.now());
-  const [items, setItems] = useState<QueueItem[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [, setNow] = useState(Date.now());
 
+  // Mettre à jour l'heure toutes les secondes
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
+  // Construire la queue depuis les données de la planète
   useEffect(() => {
-    const queue: QueueItem[] = [];
+    const items: QueueItem[] = [];
 
-    // Construction de bâtiment en cours
+    // Construction de bâtiment
     if (planet.construction_end) {
-      const buildingNames: Record<string, string> = {
-        'metal_mine': 'Mine de Métal',
-        'crystal_mine': 'Mine de Cristal',
-        'deuterium_synthesizer': 'Synthétiseur de Deutérium',
-        'solar_plant': 'Centrale Solaire',
-        'robot_factory': 'Usine de Robots',
-        'shipyard': 'Chantier Spatial',
-        'research_lab': 'Laboratoire',
-        'alliance_depot': 'Dépôt d\'Alliance',
-        'missile_silo': 'Silo à Missiles',
-      };
-
-      queue.push({
+      items.push({
         id: 'building',
         type: 'building',
-        name: buildingNames[planet.construction_type] || planet.construction_type,
+        name: planet.construction_type || 'Bâtiment',
         endTime: new Date(planet.construction_end).getTime(),
-        level: planet[planet.construction_type] + 1,
+        level: planet.construction_level,
       });
     }
 
-    // Construction de recherche en cours
-    if (planet.research_end) {
-      const techNames: Record<string, string> = {
-        'energy_tech': 'Technologie Énergétique',
-        'laser_tech': 'Technologie Laser',
-        'ion_tech': 'Technologie Ionique',
-        'hyperspace_tech': 'Technologie Hyperespace',
-        'combustion_drive': 'Réacteur à Combustion',
-        'impulse_drive': 'Réacteur à Impulsion',
-        'hyperspace_drive': 'Propulsion Hyperespace',
-        'espionage_tech': 'Technologie Espionnage',
-        'computer_tech': 'Technologie Informatique',
-        'weapons_tech': 'Technologie Armes',
-        'shielding_tech': 'Technologie Bouclier',
-        'armor_tech': 'Technologie Blindage',
-      };
-
-      queue.push({
-        id: 'research',
-        type: 'tech',
-        name: techNames[planet.research_type] || planet.research_type,
-        endTime: new Date(planet.research_end).getTime(),
-        level: planet[planet.research_type] + 1,
-      });
-    }
-
-    // Construction de vaisseaux en cours
+    // Construction de vaisseau
     if (planet.shipyard_construction_end) {
-      const shipNames: Record<string, string> = {
-        'light_hunter': 'Chasseur Léger',
-        'cruiser': 'Croiseur',
-        'cargo_ship': 'Transporteur',
-        'spy_probe': 'Sonde Espionnage',
-      };
-
-      queue.push({
+      items.push({
         id: 'shipyard',
         type: 'ship',
-        name: shipNames[planet.shipyard_construction_type] || planet.shipyard_construction_type,
+        name: planet.shipyard_construction_type || 'Vaisseau',
         endTime: new Date(planet.shipyard_construction_end).getTime(),
-        quantity: planet.shipyard_construction_quantity || 1,
       });
     }
 
-    setItems(queue);
+    // Recherche technologique
+    if (planet.tech_construction_end) {
+      items.push({
+        id: 'tech',
+        type: 'tech',
+        name: planet.tech_construction_type || 'Technologie',
+        endTime: new Date(planet.tech_construction_end).getTime(),
+        level: planet.tech_construction_level,
+      });
+    }
+
+    // Trier par temps de fin
+    items.sort((a, b) => a.endTime - b.endTime);
+    setQueue(items);
   }, [planet]);
 
   const formatTime = (timestamp: number) => {
-    const remaining = Math.max(0, timestamp - now);
+    const remaining = Math.max(0, timestamp - Date.now());
     const hours = Math.floor(remaining / 3600000);
     const minutes = Math.floor((remaining % 3600000) / 60000);
     const seconds = Math.floor((remaining % 60000) / 1000);
@@ -105,157 +73,114 @@ export function BuildQueue({ planet }: BuildQueueProps) {
     if (hours > 0) {
       return `${hours}h ${minutes}m ${seconds}s`;
     }
-    return `${minutes}m ${seconds}s`;
-  };
-
-  const getProgress = (endTime: number) => {
-    // On ne peut pas calculer le début exact, on estime à partir de la durée restante
-    const remaining = Math.max(0, endTime - now);
-    // Durée totale estimée (arbitraire pour l'affichage)
-    const estimated = remaining * 1.5; 
-    const progress = Math.min(100, ((estimated - remaining) / estimated) * 100);
-    return progress;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const getIcon = (type: string) => {
-    switch(type) {
-      case 'building': return '🏭';
-      case 'tech': return '🔬';
-      case 'ship': return '🚀';
-      case 'defense': return '🛡️';
-      default: return '⚙️';
+    switch (type) {
+      case 'building': return <Factory size={16} className="text-orange-400" />;
+      case 'tech': return <FlaskConical size={16} className="text-cyan-400" />;
+      case 'ship': return <Rocket size={16} className="text-indigo-400" />;
+      default: return <Clock size={16} />;
     }
   };
 
-  if (items.length === 0) {
-    return (
-      <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-6">
-        <h3 className="text-lg font-bold text-slate-400 mb-3 flex items-center gap-2">
-          <Clock size={18} className="text-slate-500" />
-          FILE DE CONSTRUCTION
-        </h3>
-        <div className="text-center py-8">
-          <CheckCircle2 size={48} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-500 text-sm">Aucune construction en cours</p>
-          <p className="text-slate-600 text-xs mt-1">Commencez à développer votre empire !</p>
-        </div>
-      </div>
-    );
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'building': return 'BÂTIMENT';
+      case 'tech': return 'RECHERCHE';
+      case 'ship': return 'CHANTIER';
+      default: return 'CONSTRUCTION';
+    }
+  };
+
+  if (queue.length === 0) {
+    return null; // Ne pas afficher si vide
   }
 
   return (
-    <div className="bg-gradient-to-br from-slate-900/80 to-slate-800/80 border border-indigo-500/20 rounded-lg p-4 shadow-lg">
-      <h3 className="text-lg font-bold text-indigo-400 mb-4 flex items-center gap-2">
-        <Timer size={20} className="animate-pulse" />
+    <div className="bg-slate-900/50 border border-indigo-500/20 rounded-lg p-4">
+      <h3 className="text-lg font-bold text-indigo-400 mb-3 flex items-center gap-2">
+        <Clock size={18} />
         FILE DE CONSTRUCTION
-        <span className="ml-auto text-xs bg-indigo-500/20 px-2 py-1 rounded-full">
-          {items.length} en cours
-        </span>
       </h3>
 
-      <div className="space-y-3">
-        {items.map((item, idx) => {
-          const isActive = idx === 0;
-          const progress = getProgress(item.endTime);
-          
+      <div className="space-y-2">
+        {queue.map((item, idx) => {
+          const progress = Math.max(0, Math.min(100, 
+            ((Date.now() - (item.endTime - 60000)) / 60000) * 100
+          ));
+
           return (
             <div 
               key={item.id}
-              className={`relative overflow-hidden rounded-lg border transition-all ${
-                isActive 
-                  ? 'bg-indigo-950/40 border-indigo-500/40 shadow-lg shadow-indigo-500/10' 
-                  : 'bg-slate-800/40 border-slate-700/40'
+              className={`relative overflow-hidden rounded-lg ${
+                idx === 0 
+                  ? 'bg-indigo-950/40 border-2 border-indigo-500/50' 
+                  : 'bg-slate-800/40 border border-white/5'
               }`}
             >
-              {/* Barre de progression en arrière-plan */}
-              {isActive && (
+              {/* Barre de progression */}
+              {idx === 0 && (
                 <div 
-                  className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent transition-all duration-1000"
+                  className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-indigo-400/20 transition-all duration-1000"
                   style={{ width: `${progress}%` }}
                 />
               )}
 
-              <div className="relative p-4 flex items-center justify-between gap-4">
+              <div className="relative flex items-center justify-between p-3">
                 <div className="flex items-center gap-3 flex-1">
-                  <div className="text-2xl">{getIcon(item.type)}</div>
+                  {getIcon(item.type)}
                   
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-white text-sm truncate">
-                      {item.name}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-sm">
+                        {item.name}
+                      </span>
                       {item.level && (
-                        <span className="text-indigo-400 ml-2 text-xs">
-                          Niveau {item.level}
-                        </span>
-                      )}
-                      {item.quantity && item.quantity > 1 && (
-                        <span className="text-cyan-400 ml-2 text-xs">
-                          x{item.quantity}
+                        <span className="text-xs px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 rounded">
+                          Niv. {item.level}
                         </span>
                       )}
                     </div>
                     
-                    <div className="flex items-center gap-2 mt-1">
-                      {isActive ? (
+                    <div className="text-xs text-slate-400 font-mono mt-1 flex items-center gap-2">
+                      {idx === 0 ? (
                         <>
-                          <span className="inline-flex items-center gap-1 text-xs text-green-400 font-semibold">
-                            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
                             En cours
                           </span>
-                          <span className="text-xs text-slate-500">•</span>
-                          <span className="text-xs text-slate-400">
-                            {progress.toFixed(0)}% complété
-                          </span>
+                          <span className="text-slate-600">|</span>
+                          <span>{getTypeLabel(item.type)}</span>
                         </>
                       ) : (
-                        <span className="text-xs text-slate-500 font-mono">
-                          ⏳ En attente (Position {idx + 1})
-                        </span>
+                        <>
+                          <span>⏳ Position {idx + 1}</span>
+                          <span className="text-slate-600">|</span>
+                          <span>{getTypeLabel(item.type)}</span>
+                        </>
                       )}
                     </div>
                   </div>
                 </div>
                 
-                <div className="text-right shrink-0">
+                <div className="text-right ml-4">
                   <div className={`text-sm font-mono font-bold ${
-                    isActive ? 'text-indigo-300' : 'text-slate-400'
+                    idx === 0 ? 'text-indigo-300' : 'text-slate-400'
                   }`}>
                     {formatTime(item.endTime)}
                   </div>
-                  {!isActive && (
-                    <button 
-                      className="text-red-400 hover:text-red-300 mt-1 text-xs flex items-center gap-1 ml-auto"
-                      title="Annuler"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  )}
                 </div>
               </div>
-
-              {/* Barre de progression visible */}
-              {isActive && (
-                <div className="h-1 bg-slate-800">
-                  <div 
-                    className="h-full bg-gradient-to-r from-indigo-500 to-cyan-500 transition-all duration-1000"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              )}
             </div>
           );
         })}
       </div>
 
-      {/* Légende */}
-      <div className="mt-4 pt-3 border-t border-slate-700/50 flex items-center gap-4 text-xs text-slate-500">
-        <div className="flex items-center gap-1">
-          <span className="w-2 h-2 bg-green-400 rounded-full" />
-          En construction
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="w-2 h-2 bg-slate-600 rounded-full" />
-          En attente
-        </div>
+      {/* Résumé */}
+      <div className="mt-3 pt-3 border-t border-white/5 text-xs text-slate-500 text-center">
+        {queue.length} construction{queue.length > 1 ? 's' : ''} en cours
       </div>
     </div>
   );
