@@ -1,8 +1,7 @@
 // 🎯 Configuration multi-environnements
 const API_URLS = {
   development: 'http://localhost:8080',
-  render: 'https://space-conquest.onrender.com',  // à remplacer après déploiement
-  railway: 'https://space-conquest-production.up.railway.app',
+  render: 'https://space-conquest-u33m.onrender.com',  // à remplacer après déploiement
 } as const;
 
 export const config = {
