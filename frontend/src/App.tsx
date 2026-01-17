@@ -309,6 +309,7 @@ export default function App() {
             onOpenMessages={() => { setActiveTab('messages'); setSidebarOpen(false); }}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             onNavigateToGalaxy={() => { setActiveTab('galaxy'); setSidebarOpen(false); }}
+            onNavigateToOverview={() => { setActiveTab('overview'); setSidebarOpen(false); }}
           />
       </div>
 
