@@ -21,6 +21,7 @@ import { FloatingResourceGain, useResourceGainAnimation } from './components/Flo
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
 import { BuildQueue } from './components/BuildQueue';
+import { Tutorial, useTutorial } from './components/Tutorial';
 import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
 import { 
@@ -102,6 +103,9 @@ export default function App() {
   useKeyboardShortcuts(handleTabChange, true);
   useShortcutFeedback();
 
+  // Tutorial
+  const { showTutorial, startTutorial, completeTutorial } = useTutorial();
+
   // Listener pour afficher l'aide raccourcis
   useEffect(() => {
     const handleShowHelp = () => setShowShortcutsHelp(true);
@@ -132,9 +136,7 @@ export default function App() {
   };
 
   const handleStartTutorial = () => {
-    toast.info("🎓 Tutoriel", { 
-      description: "Le mode tutoriel interactif sera disponible prochainement."
-    });
+    startTutorial();
   };
 
   const handleLogout = () => {
@@ -442,7 +444,7 @@ export default function App() {
       {/* Prompt audio unlock si bloqué */}
       <AudioUnlockPrompt onUnlock={startMusic} />
 
-      <div className="absolute top-0 left-0 w-full z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-md shadow-lg">
+      <div data-tour="empire-bar" className="absolute top-0 left-0 w-full z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-md shadow-lg">
           <EmpireBar 
             planet={planet} 
             onSwitchPlanet={switchPlanet} 
@@ -464,7 +466,8 @@ export default function App() {
                         <div className="space-y-0.5">
                             {MENU_ITEMS.filter(item => item.category === cat).map(item => (
                                 <button 
-                                    key={item.id} 
+                                    key={item.id}
+                                    data-tour={item.id}
                                     onClick={() => handleTabChange(item.id as any)} 
                                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-200 group relative overflow-hidden ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                                 >
@@ -523,7 +526,8 @@ export default function App() {
                         <div className="space-y-1">
                             {MENU_ITEMS.filter(item => item.category === cat).map(item => (
                                 <button 
-                                    key={item.id} 
+                                    key={item.id}
+                                    data-tour={item.id}
                                     onClick={() => handleTabChange(item.id as any)} 
                                     className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-bold transition-all duration-200 ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-300 hover:bg-white/5 hover:text-white active:bg-white/10'}`}
                                 >
@@ -592,6 +596,10 @@ export default function App() {
             </div>
         </main>
       </div>
+
+      {/* Tutorial interactif */}
+      <Tutorial run={showTutorial} onComplete={completeTutorial} />
+
       <Toaster position="top-center" theme="dark" richColors closeButton />
     </div>
   );
