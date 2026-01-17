@@ -2,7 +2,7 @@ use serde::Serialize;
 use rand::Rng;
 use crate::entities::planet;
 
-pub const SPEED_FACTOR: f64 = 100.0; // Vitesse du jeu
+pub const SPEED_FACTOR: f64 = 1.0; // Vitesse du jeu
 
 #[derive(Serialize, Clone)]
 pub struct Cost {
