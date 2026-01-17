@@ -84,16 +84,23 @@ export default function App() {
   // Animations flottantes de ressources
   const { gains, handleAnimationEnd } = useResourceGainAnimation(planet);
 
-  // Raccourcis clavier
-  useKeyboardShortcuts(handleTabChange, true);
-  useShortcutFeedback();
-
   // Effets sonores
   const { playSound, startMusic } = useSoundEffects({
     enabled: soundEnabled,
     musicVolume,
     sfxVolume
   });
+
+  // Fonctions définies AVANT les hooks qui les utilisent
+  const handleTabChange = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+    setSidebarOpen(false);
+    playSound('click');
+  }, [playSound]);
+
+  // Maintenant on peut utiliser les hooks qui dépendent de handleTabChange
+  useKeyboardShortcuts(handleTabChange, true);
+  useShortcutFeedback();
 
   // Listener pour afficher l'aide raccourcis
   useEffect(() => {
@@ -148,12 +155,6 @@ export default function App() {
       setMessageRecipient(username);
       setActiveTab('messages');
       setSidebarOpen(false);
-  };
-
-  const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab);
-    setSidebarOpen(false);
-    playSound('click');
   };
 
   const fetchPlanet = useCallback(async () => {
@@ -219,8 +220,6 @@ export default function App() {
                 description: "Nouvelle infrastructure opérationnelle"
             });
             playSound('build');
-            
-            // Déclencher event pour auto-sounds
             window.dispatchEvent(new Event('build-complete'));
         }
         if (prevPlanetRef.current?.shipyard_construction_end && !data.shipyard_construction_end) {
