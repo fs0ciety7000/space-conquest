@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Save, User, Globe, Shield, Terminal, LogOut, Mail, Fingerprint, Moon, Sun, Volume2, VolumeX, GraduationCap } from "lucide-react";
+import { Save, User, Globe, Shield, Terminal, LogOut, Mail, Fingerprint, Moon, Sun, Volume2, VolumeX, GraduationCap, Music, Speaker } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,9 +15,22 @@ interface SettingsProps {
   soundEnabled: boolean;
   onToggleSound: (enabled: boolean) => void;
   onStartTutorial: () => void;
+  musicVolume?: number;
+  sfxVolume?: number;
+  onVolumeChange?: (type: 'music' | 'sfx', value: number) => void;
 }
 
-export default function Settings({ planet, onUpdate, onLogout, soundEnabled, onToggleSound, onStartTutorial }: SettingsProps) {
+export default function Settings({ 
+  planet, 
+  onUpdate, 
+  onLogout, 
+  soundEnabled, 
+  onToggleSound, 
+  onStartTutorial,
+  musicVolume = 0.3,
+  sfxVolume = 0.5,
+  onVolumeChange
+}: SettingsProps) {
   const [planetName, setPlanetName] = useState(planet.name);
   const [loading, setLoading] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -196,6 +209,49 @@ export default function Settings({ planet, onUpdate, onLogout, soundEnabled, onT
                         </Button>
                     </div>
                 </div>
+
+                {/* Contrôles de volume */}
+                {soundEnabled && onVolumeChange && (
+                  <div className="space-y-4 pt-2 border-t border-white/5">
+                    {/* Volume musique */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                          <Music size={12} /> Musique d'ambiance
+                        </label>
+                        <span className="text-xs text-indigo-400 font-mono">{Math.round(musicVolume * 100)}%</span>
+                      </div>
+                      <input 
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={musicVolume}
+                        onChange={(e) => onVolumeChange('music', parseFloat(e.target.value))}
+                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                    </div>
+
+                    {/* Volume SFX */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                          <Speaker size={12} /> Effets sonores
+                        </label>
+                        <span className="text-xs text-purple-400 font-mono">{Math.round(sfxVolume * 100)}%</span>
+                      </div>
+                      <input 
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={sfxVolume}
+                        onChange={(e) => onVolumeChange('sfx', parseFloat(e.target.value))}
+                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-3 pt-4 border-t border-white/5">
                     <Button 
