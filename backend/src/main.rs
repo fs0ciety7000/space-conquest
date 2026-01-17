@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State, Query},
     http::StatusCode,
     response::{IntoResponse, Json},
-    routing::{get, post, delete},  // ❌ SUPPRIMÉ options
+    routing::{get, post, delete},
     Router,
 };
 use sea_orm::{
@@ -16,15 +16,13 @@ use serde_json::{json, to_string};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use tower_http::{
-    cors::CorsLayer,  // ❌ SUPPRIMÉ Any
+    cors::CorsLayer,
     trace::TraceLayer,
 };
-// ❌ SUPPRIMÉ imports HTTP inutiles
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use rand::Rng;
 
-// Importer le module et le trait APRÈS les autres imports
 use sea_orm_migration::MigratorTrait;
 
 mod auth;
@@ -35,9 +33,11 @@ mod config;
 
 use config::Config;
 
-// --- IMPORT DU PRELUDE ---
-use entities::prelude::*;
-use entities::{planet, user, combat_log, fleet_mission, transport_log, message, construction_queue};
+// ✅ IMPORTS EXPLICITES
+use entities::{
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, Message, ConstructionQueue},
+    planet, user, combat_log, fleet_mission, transport_log, message, construction_queue
+};
 
 #[derive(Clone)]
 struct AppState {
