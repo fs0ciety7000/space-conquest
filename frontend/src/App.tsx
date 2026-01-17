@@ -453,6 +453,7 @@ export default function App() {
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             onNavigateToGalaxy={() => { setActiveTab('galaxy'); setSidebarOpen(false); }}
             onNavigateToOverview={() => { setActiveTab('overview'); setSidebarOpen(false); }}
+            speedFactor={speedFactor}
           />
       </div>
 
@@ -570,7 +571,7 @@ export default function App() {
                     {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
                     {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
                     
-                    {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} />}
+                    {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
                     {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />} 
                     {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
                     
