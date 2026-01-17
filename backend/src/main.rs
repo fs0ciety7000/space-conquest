@@ -15,7 +15,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, to_string};
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use tower_http::cors::{CorsLayer, Any}; 
+use tower_http::{
+    cors::{CorsLayer, Any},
+    trace::TraceLayer,
+};
 use http::header::{AUTHORIZATION, CONTENT_TYPE, ACCEPT};
 use http::{HeaderValue, Method};
 use uuid::Uuid;
@@ -205,7 +208,8 @@ let cors = CorsLayer::permissive();
         .route("/messages/:id", delete(delete_message_handler))
         .route("/messages/:id/read", post(mark_message_read_handler))
         .layer(cors)
-        .with_state(state);
+        .layer(TraceLayer::new_for_http())
+    .with_state(AppState::new(pool).await);
 
     // Utilisation de l'adresse depuis la configuration
     let addr: SocketAddr = config.bind_address()
