@@ -3,7 +3,7 @@ use rand::Rng;
 use crate::entities::planet;
 
 // ⚡ VITESSE DU JEU (200 = x2, 500 = x5)
-pub const SPEED_FACTOR: f64 = 200.0;
+pub const SPEED_FACTOR: f64 = 500.0;
 
 #[derive(Serialize, Clone)]
 pub struct Cost {
