@@ -22,7 +22,7 @@ import { Toaster, toast } from "sonner";
 import { 
   LogOut, LayoutDashboard, Pickaxe, Hammer, 
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket 
+  Settings as SettingsIcon, Mail, Factory, Rocket, X
 } from "lucide-react";
 
 interface CombatReport {
@@ -35,7 +35,6 @@ interface CombatReport {
   };
 }
 
-// CORRECTION ICI : Remplacement de 'fleet' par 'shipyard'
 type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages';
 
 export default function App() {
@@ -45,6 +44,7 @@ export default function App() {
   
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [speedFactor, setSpeedFactor] = useState<number>(1);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const [messageRecipient, setMessageRecipient] = useState<string | null>(null);
 
@@ -53,7 +53,7 @@ export default function App() {
   const [showCombatModal, setShowCombatModal] = useState(false);
   const [targetPlanet, setTargetPlanet] = useState<{id: string, name: string} | null>(null);
   const [transportTarget, setTransportTarget] = useState<{id: string, name: string, system: number} | null>(null);
-const [spyReport, setSpyReport] = useState<any>(null);
+  const [spyReport, setSpyReport] = useState<any>(null);
   const prevPlanetRef = useRef<any>(null);
   const processingReportRef = useRef(false);
 
@@ -76,6 +76,12 @@ const [spyReport, setSpyReport] = useState<any>(null);
   const handleOpenMessage = (username: string) => {
       setMessageRecipient(username);
       setActiveTab('messages');
+      setSidebarOpen(false);
+  };
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setSidebarOpen(false);
   };
 
   const fetchPlanet = useCallback(async () => {
@@ -106,7 +112,6 @@ const [spyReport, setSpyReport] = useState<any>(null);
                 const reportData = JSON.parse(data.unread_report);
                 
                 if (reportData.type === 'transport_arrival') {
-                     // ... (inchangé)
                      toast.success(`Cargaison reçue de : ${reportData.sender_name}`, { 
                         description: `Livraison: M:${Math.floor(reportData.metal)} C:${Math.floor(reportData.crystal)} D:${Math.floor(reportData.deuterium)}`,
                         icon: <Truck className="h-5 w-5 text-green-500" />,
@@ -117,10 +122,8 @@ const [spyReport, setSpyReport] = useState<any>(null);
                          toast.error("ALERTE : Base Attaquée !", { description: "Consultez le rapport." });
                     }
                     
-                    // ON PASSE TOUT L'OBJET reportData
                     setCombatReport({
-                        ...reportData, // <--- C'EST LA LIGNE QUI SAUVE TOUT (transmet is_defense, opponent_name, etc.)
-                        // On garde ce calcul de winner pour compatibilité si le back n'envoie pas 'result'
+                        ...reportData,
                         winner: reportData.winner || (isVictory ? 'player' : 'enemy'), 
                     });
                     
@@ -170,7 +173,6 @@ const [spyReport, setSpyReport] = useState<any>(null);
       setTransportTarget({id, name, system});
   };
 
-
   const handleSpy = async (targetId: string) => {
     try {
         const res = await fetch(apiUrl(`/spy?current_planet_id=${planetId}`), {
@@ -180,7 +182,6 @@ const [spyReport, setSpyReport] = useState<any>(null);
         });
         const data = await res.json();
         if(res.ok) {
-          // MODIFICATION ICI : Au lieu du toast, on set le state
           setSpyReport(data.report);
           fetchPlanet();
       } else { 
@@ -189,14 +190,14 @@ const [spyReport, setSpyReport] = useState<any>(null);
     } catch(e) { toast.error("Erreur réseau"); }
   };
 
-const handleConfirmAttack = async (hunters: number, cruisers: number) => {
+  const handleConfirmAttack = async (hunters: number, cruisers: number) => {
     if (!planetId || !targetPlanet) return;
 
     try {
         const res = await fetch(apiUrl(`/attack?current_planet_id=${planetId}`), {
             method: 'POST',
             headers: { 
-              'Authorization': `Bearer ${token}`, // Ne pas oublier le token pour l'auth
+              'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json' 
             },
             body: JSON.stringify({
@@ -213,8 +214,8 @@ const handleConfirmAttack = async (hunters: number, cruisers: number) => {
                 description: `Votre flotte atteindra la cible vers ${new Date(data.arrival).toLocaleTimeString()}`,
                 icon: <Rocket className="text-red-500" />
             });
-            setTargetPlanet(null); // On ferme la modal en vidant la cible
-            fetchPlanet(); // On rafraîchit pour voir les vaisseaux partir
+            setTargetPlanet(null);
+            fetchPlanet();
         } else {
             toast.error(data.error || "Le haut commandement a annulé l'opération");
         }
@@ -224,9 +225,8 @@ const handleConfirmAttack = async (hunters: number, cruisers: number) => {
   };
 
   useEffect(() => {
-   // ✅ CORRIGÉ :
-fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor))
-.catch(console.error);
+    fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor))
+      .catch(console.error);
     if (token && planetId) {
       fetchPlanet();
       const interval = setInterval(fetchPlanet, 2000);
@@ -256,7 +256,6 @@ fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor
     { id: 'facilities', label: 'Installations', icon: Factory, category: 'DÉVELOPPEMENT' }, 
     { id: 'tech', label: 'Laboratoire', icon: FlaskConical, category: 'DÉVELOPPEMENT' },
     
-    // CORRECTION ICI : ID 'shipyard' au lieu de 'fleet' pour correspondre au TabType
     { id: 'shipyard', label: 'Chantier Spatial', icon: Hammer, category: 'MILITAIRE' },
     { id: 'defenses', label: 'Défense', icon: ShieldCheck, category: 'MILITAIRE' },
     { id: 'expedition', label: 'Expéditions', icon: Telescope, category: 'MILITAIRE' },
@@ -275,7 +274,7 @@ fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor
         {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
         {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
      
-     {transportTarget && (
+        {transportTarget && (
             <TransportModal 
                 currentPlanet={planet} 
                 targetPlanet={transportTarget} 
@@ -285,18 +284,14 @@ fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor
                     setTransportTarget(null);
                 }} 
             />
-
-            
         )}
      
-  {spyReport && (
-    <SpyModal 
-        report={spyReport} 
-        onClose={() => setSpyReport(null)} 
-    />
-)}
-
-
+        {spyReport && (
+          <SpyModal 
+              report={spyReport} 
+              onClose={() => setSpyReport(null)} 
+          />
+        )}
       </div>
 
       <div className="absolute top-0 left-0 w-full z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-md shadow-lg">
@@ -304,12 +299,14 @@ fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor
             planet={planet} 
             onSwitchPlanet={switchPlanet} 
             unreadMessages={unreadMessagesCount} 
-            onOpenMessages={() => setActiveTab('messages')} 
+            onOpenMessages={() => { setActiveTab('messages'); setSidebarOpen(false); }}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           />
       </div>
 
-      <div className="flex flex-1 w-full h-full overflow-hidden relative z-30 pt-[72px]">
-        <aside className="w-64 bg-slate-950/90 backdrop-blur-xl border-r border-white/5 flex flex-col h-full overflow-y-auto hidden md:flex scrollbar-thin scrollbar-thumb-slate-800">
+      <div className="flex flex-1 w-full h-full overflow-hidden relative z-30 pt-[60px] md:pt-[72px]">
+        {/* Sidebar Desktop */}
+        <aside className="w-64 bg-slate-950/90 backdrop-blur-xl border-r border-white/5 flex-col h-full overflow-y-auto hidden md:flex scrollbar-thin scrollbar-thumb-slate-800">
              <div className="p-4 space-y-8 mt-4">
                 {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
                     <div key={cat} className="space-y-2">
@@ -318,7 +315,7 @@ fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor
                             {MENU_ITEMS.filter(item => item.category === cat).map(item => (
                                 <button 
                                     key={item.id} 
-                                    onClick={() => setActiveTab(item.id as any)} 
+                                    onClick={() => handleTabChange(item.id as any)} 
                                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-200 group relative overflow-hidden ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                                 >
                                     <item.icon size={16} className={`transition-transform duration-300 ${activeTab === item.id ? 'scale-110' : 'group-hover:scale-110'}`} /> 
@@ -337,22 +334,69 @@ fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor
              </div>
         </aside>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8 scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent">
-            <div className="max-w-7xl mx-auto pb-20 md:pb-0 min-h-full">
+        {/* Sidebar Mobile */}
+        {sidebarOpen && (
+          <>
+            {/* Overlay */}
+            <div 
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" 
+              onClick={() => setSidebarOpen(false)}
+            />
+            
+            {/* Drawer */}
+            <aside className="fixed top-[60px] left-0 h-[calc(100vh-60px)] w-72 bg-slate-950/95 backdrop-blur-xl border-r border-white/10 flex flex-col overflow-y-auto z-50 md:hidden shadow-2xl animate-in slide-in-from-left duration-300">
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <h2 className="text-sm font-black text-white uppercase tracking-widest">Menu</h2>
+                <button 
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X size={18} className="text-slate-400" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-6 mt-2">
+                {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
+                    <div key={cat} className="space-y-2">
+                        <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
+                        <div className="space-y-1">
+                            {MENU_ITEMS.filter(item => item.category === cat).map(item => (
+                                <button 
+                                    key={item.id} 
+                                    onClick={() => handleTabChange(item.id as any)} 
+                                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-bold transition-all duration-200 ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-300 hover:bg-white/5 hover:text-white active:bg-white/10'}`}
+                                >
+                                    <item.icon size={18} /> 
+                                    <span>{item.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+              </div>
+
+              <div className="mt-auto p-4 border-t border-white/5">
+                 <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors text-sm font-bold uppercase border border-red-900/20">
+                     <LogOut size={18}/> Déconnexion
+                 </button>
+              </div>
+            </aside>
+          </>
+        )}
+
+        <main className="flex-1 overflow-y-auto p-3 md:p-4 lg:p-8 scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent">
+            <div className="max-w-7xl mx-auto pb-4 md:pb-0 min-h-full">
                 <div className="animate-in fade-in zoom-in-95 duration-300">
                     {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
                     {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} onNavigateTransport={handlePrepareTransport} />}
                     {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
                     {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
                     
-                    {/* Zones de Développement */}
                     {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} />}
                     {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />} 
                     {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
                     
-                    {/* Zones Militaires - CORRECTION ICI */}
                     {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
-                    
                     {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
                     {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}
                     
