@@ -45,8 +45,16 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Ne pas cacher les appels API
-  if (url.pathname.startsWith('/api/') || url.origin.includes('railway.app')) {
+  // ⚠️ NE JAMAIS CACHER LES REQUÊTES NON-GET (POST, PUT, DELETE, PATCH)
+  if (request.method !== 'GET') {
+    return; // Laisser passer sans intervention
+  }
+
+  // Ne pas cacher les appels API externes
+  if (url.pathname.startsWith('/api/') || 
+      url.origin.includes('railway.app') || 
+      url.origin.includes('render.com') ||
+      url.origin.includes('production')) {
     return; // Laisser passer les requêtes API sans cache
   }
 
@@ -61,22 +69,26 @@ self.addEventListener('fetch', (event) => {
           return cachedResponse;
         }
         return fetch(request).then((response) => {
-          return caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, response.clone());
-            return response;
-          });
+          // Ne cacher que les réponses réussies
+          if (response && response.status === 200) {
+            return caches.open(RUNTIME_CACHE).then((cache) => {
+              cache.put(request, response.clone());
+              return response;
+            });
+          }
+          return response;
         });
       })
     );
     return;
   }
 
-  // Stratégie Network First pour le reste
+  // Stratégie Network First pour le reste (HTML, etc.)
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Mettre en cache les réponses réussies
-        if (response.status === 200) {
+        // Mettre en cache les réponses réussies (GET uniquement)
+        if (response && response.status === 200 && request.method === 'GET') {
           const responseClone = response.clone();
           caches.open(RUNTIME_CACHE).then((cache) => {
             cache.put(request, responseClone);
