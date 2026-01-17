@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
+
 interface LoginProps {
-  onLogin: (token: string, planetId: string, userId: string) => void;
+  onLogin: (token: string, planetId: string, userId: string, username: string) => void;
 }
 
 interface LoginResponse {
@@ -187,7 +188,7 @@ export default function Login({ onLogin }: LoginProps) {
         }
         
         toast.success(`🚀 Bienvenue, Commandant ${loginData.username} !`);
-        onLogin(loginData.token, loginData.planet_id, loginData.user_id);
+        onLogin(loginData.token, loginData.planet_id, loginData.user_id, loginData.username);
       }
     } catch (err: any) {
       console.error('💥 Erreur lors de la requête:', err);
@@ -217,7 +218,7 @@ export default function Login({ onLogin }: LoginProps) {
   };
 
   // Afficher l'URL de l'API en mode dev
-  const apiUrl = getApiUrl();
+  const apiUrlDisplay = getApiUrl();
   const isDev = import.meta.env.DEV;
 
   return (
@@ -238,7 +239,7 @@ export default function Login({ onLogin }: LoginProps) {
           {/* Afficher l'API URL en mode dev */}
           {isDev && (
             <p className="text-xs text-slate-600 mt-2 font-mono">
-              API: {apiUrl}
+              API: {apiUrlDisplay}
             </p>
           )}
         </div>

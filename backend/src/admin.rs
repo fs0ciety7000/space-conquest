@@ -14,7 +14,7 @@ use chrono::Utc;
 
 use crate::entities::{
     prelude::{Planet, User},
-    planet, user,
+    planet,
 };
 use crate::AppState;
 
@@ -66,7 +66,7 @@ pub struct PlanetUpdate {
 }
 
 // Vérification admin
-fn check_admin(user_id_str: &str, state: &AppState) -> Result<Uuid, StatusCode> {
+fn check_admin(user_id_str: &str, _state: &AppState) -> Result<Uuid, StatusCode> {
     let user_id = Uuid::parse_str(user_id_str).map_err(|_| StatusCode::UNAUTHORIZED)?;
     // En production tu checkeras depuis la DB, ici on suppose que phantomhex a un ID connu
     // Pour l'instant on accepte tout pour simplifier, mais tu peux ajouter une vérif username
