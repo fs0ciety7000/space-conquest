@@ -31,14 +31,14 @@ mod combat;
 mod entities;
 mod config;
 mod admin;
-
+mod messaging;
 use config::Config;
 use backend::AppState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, Message, ConstructionQueue},
-    planet, user, combat_log, fleet_mission, transport_log, message, construction_queue
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, Message, ConstructionQueue, Conversation},
+    planet, user, combat_log, fleet_mission, transport_log, message, construction_queue, conversation
 };
 
 #[derive(Serialize)]
@@ -190,10 +190,11 @@ async fn main() {
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
         .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
         // Messagerie
-        .route("/messages", get(get_messages_handler))
-        .route("/messages/send", post(send_message_handler))
-        .route("/messages/:id", delete(delete_message_handler))
-        .route("/messages/:id/read", post(mark_message_read_handler))
+        .route("/conversations", get(messaging::get_conversations_handler))
+.route("/conversations/:id/messages", get(messaging::get_thread_messages_handler))
+.route("/conversations/send", post(messaging::send_message_v2_handler))
+.route("/conversations/:id/mark-read", post(messaging::mark_conversation_read_handler))
+.route("/conversations/:id", delete(messaging::delete_conversation_handler))
         // Admin
         .route("/admin/players", get(admin::get_all_players_handler))
         .route("/admin/planet/:id", get(admin::get_planet_admin_handler))
