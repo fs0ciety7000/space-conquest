@@ -483,7 +483,8 @@ export default function App() {
         {/* Sidebar Desktop */}
         <aside className="w-64 bg-slate-950/90 backdrop-blur-xl border-r border-white/5 flex-col h-full overflow-y-auto hidden md:flex scrollbar-thin scrollbar-thumb-slate-800">
              <div className="p-4 space-y-8 mt-4">
-                {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
+                {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'ÉCONOMIE', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
+
                     <div key={cat} className="space-y-2">
                         <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
                         <div className="space-y-0.5">
@@ -543,7 +544,8 @@ export default function App() {
               </div>
 
               <div className="p-4 space-y-6 mt-2">
-                {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
+               {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
+
                     <div key={cat} className="space-y-2">
                         <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
                         <div className="space-y-1">
