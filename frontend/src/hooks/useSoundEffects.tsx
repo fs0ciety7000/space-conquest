@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 type SoundType = 'build' | 'attack' | 'success' | 'error' | 'click' | 'notification' | 'combat' | 'expedition';
 
@@ -16,16 +16,16 @@ export function useSoundEffects({
   const ambientMusic = useRef<HTMLAudioElement | null>(null);
   const soundCache = useRef<Map<SoundType, HTMLAudioElement>>(new Map());
 
-  // Sons disponibles (vous devrez ajouter les fichiers dans public/sounds/)
+  // ✅ CORRECTION : Sons avec extensions .wav et .ogg
   const SOUND_FILES: Record<SoundType, string> = {
-    build: '/sounds/build.mp3',
-    attack: '/sounds/laser.mp3',
-    success: '/sounds/success.mp3',
-    error: '/sounds/error.mp3',
-    click: '/sounds/click.mp3',
-    notification: '/sounds/notification.mp3',
-    combat: '/sounds/combat.mp3',
-    expedition: '/sounds/warp.mp3',
+    build: '/sounds/build.ogg',
+    attack: '/sounds/laser.wav',
+    success: '/sounds/success.ogg',
+    error: '/sounds/error.ogg',
+    click: '/sounds/click.wav',
+    notification: '/sounds/alert.wav',
+    combat: '/sounds/combat.ogg',
+    expedition: '/sounds/warp.wav',
   };
 
   // Précharger les sons
@@ -36,6 +36,12 @@ export function useSoundEffects({
       const audio = new Audio(path);
       audio.volume = sfxVolume;
       audio.preload = 'auto';
+      
+      // ✅ Gérer les erreurs de chargement
+      audio.addEventListener('error', () => {
+        console.warn(`Impossible de charger le son: ${path}`);
+      });
+      
       soundCache.current.set(type as SoundType, audio);
     });
 
@@ -51,8 +57,8 @@ export function useSoundEffects({
   // Musique d'ambiance
   useEffect(() => {
     if (enabled) {
-      // Créer l'élément audio pour la musique d'ambiance
-      ambientMusic.current = new Audio('/sounds/ambient-space.mp3');
+      // ✅ CORRECTION : Musique d'ambiance en .ogg
+      ambientMusic.current = new Audio('/sounds/ambient-space.ogg');
       ambientMusic.current.loop = true;
       ambientMusic.current.volume = musicVolume;
       
@@ -200,8 +206,5 @@ export function useAutoSounds(soundEnabled: boolean) {
     };
   }, [soundEnabled, playSound]);
 
-  return { playSound };
+  return { playSound }; 
 }
-
-// Import manquant
-import { useState } from 'react';
