@@ -542,8 +542,8 @@ async fn expedition_handler(
         let combat_res = game_logic::simulate_combat(p.light_hunter_count + p.cruiser_count, p.laser_battery_level);
         if combat_res.victory {
             winner = "player";
-            loot_metal = rng.gen_range(10000.0..100000.0) * (game_logic::SPEED_FACTOR / 100.0);
-            loot_crystal = rng.gen_range(5000.0..50000.0) * (game_logic::SPEED_FACTOR / 100.0);
+            loot_metal = rng.gen_range(100.0..1000.0) * (game_logic::SPEED_FACTOR / 100.0);
+            loot_crystal = rng.gen_range(500.0..5000.0) * (game_logic::SPEED_FACTOR / 100.0);
             logs.push(format!("RESULTAT : {}", combat_res.message));
             logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", loot_metal, loot_crystal));
             lost_hunters = combat_res.ships_lost; 
