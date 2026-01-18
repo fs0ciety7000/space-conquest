@@ -518,7 +518,21 @@ export default function App() {
                      <LogOut size={16}/> Déconnexion
                  </button>
              </div>
-        </aside>
+
+              {/* ✨ Footer */}
+    <div className="mt-auto px-4 pb-4 pt-3 border-t border-white/5">
+      <div className="text-center space-y-1.5">
+        <p className="text-[10px] text-slate-400">
+          Développé avec <span className="text-red-500">❤️</span> par{' '}
+          <span className="font-bold text-white">Nicolas Dessenius</span>
+        </p>
+        <p className="text-[10px] text-slate-500">
+          Propulsé par <span className="font-bold text-orange-400">🦀 Rust</span>
+        </p>
+      </div>
+    </div>
+  </aside>
+       
 
         {/* Sidebar Mobile */}
         {sidebarOpen && (
@@ -639,9 +653,14 @@ export default function App() {
                         />
                     )}
                     {activeTab === 'admin' && isAdmin && <AdminPanel />}
+
+                    
                 </div>
+                
             </div>
         </main>
+
+        
       </div>
 
       {/* Tutorial interactif */}
