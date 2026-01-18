@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State, Query},
     http::StatusCode,
-    response::{IntoResponse, Json},
+    response::{IntoResponse, Json, Response},
     routing::{get, post, delete, patch},
     Router,
 };
@@ -516,8 +516,8 @@ async fn attack_handler(State(state): State<AppState>, axum::extract::Query(para
     (StatusCode::OK, Json(json!({ "status": "success", "message": "Flotte en route", "arrival": arrival }))).into_response()
 }
 
-// ✅ ORDRE CORRIGÉ : Path AVANT State
-async fn expedition_handler(Path(id): Path<Uuid>, State(state): State<AppState>) -> impl IntoResponse {
+// ✅ TYPE RETOUR Response CONCRET (au lieu de impl IntoResponse)
+async fn expedition_handler(Path(id): Path<Uuid>, State(state): State<AppState>) -> Response {
     let p_res = Planet::find_by_id(id).one(&state.db).await;
     let p = match p_res { Ok(Some(found)) => found, _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response() };
 
