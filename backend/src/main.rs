@@ -169,6 +169,9 @@ async fn main() {
         .route("/recycle", post(recycle_handler))
         .route("/transport", post(transport_handler))
         .route("/colonize", post(colonize_handler))
+
+        //UNITS
+        .route("/unit-costs", get(get_unit_costs_handler))
         // Galaxy & Ranking
         .route("/ranking", get(get_ranking_handler))
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
@@ -1335,3 +1338,34 @@ async fn get_user_handler(
     
     Ok(Json(response))
 }
+
+
+// Handler pour récupérer les coûts des défenses/vaisseaux
+async fn get_unit_costs_handler() -> Result<Json<serde_json::Value>, StatusCode> {
+    let units = vec![
+        "light_hunter",
+        "cruiser",
+        "transporter",
+        "recycler",
+        "spy_probe",
+        "colony_ship",
+        "missile_launcher",
+        "plasma_turret",
+    ];
+    
+    let mut costs = serde_json::Map::new();
+    
+    for unit in units {
+        let (metal, crystal) = game_logic::get_unit_cost(unit);
+        costs.insert(
+            unit.to_string(),
+            json!({
+                "metal": metal,
+                "crystal": crystal,
+            })
+        );
+    }
+    
+    Ok(Json(json!(costs)))
+}
+

@@ -62,7 +62,7 @@ pub fn get_unit_cost(unit_type: &str) -> (f64, f64) {
         "colony_ship" => (10000.0, 20000.0),     // Vaisseau de colonisation
         
         // 🛡️ Défenses
-        "missile_launcher" => (2000.0, 0.0),     // Lance-missiles (bon marché)
+        "missile_launcher" => (10000.0, 2500.0),     // Lance-missiles (bon marché)
         "plasma_turret" => (50000.0, 50000.0),   // Tourelle plasma (puissante)
         
         _ => (0.0, 0.0),

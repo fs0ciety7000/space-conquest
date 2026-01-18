@@ -8,6 +8,8 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { checkPrerequisites } from "@/lib/gameRules";
 import { apiUrl } from '@/config/api';
+import { useUnitCosts } from '@/hooks/useUnitCosts';
+
 interface ShipyardProps {
   planet: any;
   onUpdate: () => void;
@@ -26,6 +28,9 @@ const getShipTheme = (type: string) => {
 export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const [now, setNow] = useState(new Date().getTime());
   const [qty, setQty] = useState<Record<string, number>>({});
+  
+  // ✅ AJOUT : Fetch des coûts depuis le backend
+  const { costs, loading } = useUnitCosts();
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
@@ -46,13 +51,62 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const queue = planet.constructions || [];
   const isQueueFull = queue.length >= 3;
 
-  const fleet = [
-    { id: 'light_hunter', name: 'Chasseur Léger', cost: { m: 3000, c: 1000 }, stats: { atk: 50, shd: 10, hull: 400, fret: 50 }, icon: Crosshair, type: 'OFFENSIF', class: 'Intercepteur', desc: "Vaisseau d'attaque rapide." },
-    { id: 'cruiser', name: 'Croiseur', cost: { m: 20000, c: 7000 }, stats: { atk: 400, shd: 50, hull: 2700, fret: 800 }, icon: Shield, type: 'OFFENSIF', class: 'Frégate Lourde', desc: "Blindé, tueur de chasseurs." },
-    { id: 'transporter', name: 'Transporteur', cost: { m: 4000, c: 2000 }, stats: { atk: 5, shd: 5, hull: 800, fret: 5000 }, icon: Truck, type: 'LOGISTIQUE', class: 'Cargo Standard', desc: "Indispensable pour le fret." },
-    { id: 'colony_ship', name: 'Vaisseau Colon', cost: { m: 10000, c: 20000 }, stats: { atk: 50, shd: 100, hull: 3000, fret: 7500 }, icon: Rocket, type: 'LOGISTIQUE', class: 'Module Arche', desc: "Fonde de nouvelles colonies." },
-    { id: 'recycler', name: 'Recycleur', cost: { m: 10000, c: 6000 }, stats: { atk: 1, shd: 10, hull: 1600, fret: 20000 }, icon: Hammer, type: 'UTILITAIRE', class: 'Collecteur', desc: "Récolte les débris spatiaux." },
-    { id: 'spy_probe', name: 'Sonde Espion', cost: { m: 0, c: 1000 }, stats: { atk: 0.1, shd: 0.1, hull: 100, fret: 5 }, icon: Info, type: 'RENSEIGNEMENT', class: 'Drone Furtif', desc: "Scanner longue portée." },
+  // ✅ Configuration des vaisseaux (sans les coûts hardcodés)
+  const fleetConfig = [
+    { 
+      id: 'light_hunter', 
+      name: 'Chasseur Léger', 
+      stats: { atk: 50, shd: 10, hull: 400, fret: 50 }, 
+      icon: Crosshair, 
+      type: 'OFFENSIF', 
+      class: 'Intercepteur', 
+      desc: "Vaisseau d'attaque rapide." 
+    },
+    { 
+      id: 'cruiser', 
+      name: 'Croiseur', 
+      stats: { atk: 400, shd: 50, hull: 2700, fret: 800 }, 
+      icon: Shield, 
+      type: 'OFFENSIF', 
+      class: 'Frégate Lourde', 
+      desc: "Blindé, tueur de chasseurs." 
+    },
+    { 
+      id: 'transporter', 
+      name: 'Transporteur', 
+      stats: { atk: 5, shd: 5, hull: 800, fret: 5000 }, 
+      icon: Truck, 
+      type: 'LOGISTIQUE', 
+      class: 'Cargo Standard', 
+      desc: "Indispensable pour le fret." 
+    },
+    { 
+      id: 'colony_ship', 
+      name: 'Vaisseau Colon', 
+      stats: { atk: 50, shd: 100, hull: 3000, fret: 7500 }, 
+      icon: Rocket, 
+      type: 'LOGISTIQUE', 
+      class: 'Module Arche', 
+      desc: "Fonde de nouvelles colonies." 
+    },
+    { 
+      id: 'recycler', 
+      name: 'Recycleur', 
+      stats: { atk: 1, shd: 10, hull: 1600, fret: 20000 }, 
+      icon: Hammer, 
+      type: 'UTILITAIRE', 
+      class: 'Collecteur', 
+      desc: "Récolte les débris spatiaux." 
+    },
+    { 
+      id: 'spy_probe', 
+      name: 'Sonde Espion', 
+      stats: { atk: 0.1, shd: 0.1, hull: 100, fret: 5 }, 
+      icon: Info, 
+      type: 'RENSEIGNEMENT', 
+      class: 'Drone Furtif', 
+      desc: "Scanner longue portée." 
+    },
   ];
 
   const buildShip = async (type: string) => {
@@ -74,6 +128,15 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
         }
     } catch(e) { console.error(e); }
   };
+
+  // ✅ Afficher un loader pendant le chargement des coûts
+  if (loading || !costs) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -104,7 +167,19 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-      {fleet.map((ship) => {
+      {fleetConfig.map((shipConfig) => {
+        // ✅ Récupérer les coûts dynamiques depuis le backend
+        const shipCost = costs[shipConfig.id as keyof typeof costs];
+        if (!shipCost) return null; // Skip si pas de coût disponible
+
+        const ship = {
+          ...shipConfig,
+          cost: {
+            m: Math.floor(shipCost.metal),
+            c: Math.floor(shipCost.crystal)
+          }
+        };
+
         const { locked, requirements } = checkPrerequisites(planet, ship.id);
         const theme = getShipTheme(ship.type);
         const canAfford = planet.metal_amount >= ship.cost.m && planet.crystal_amount >= ship.cost.c;

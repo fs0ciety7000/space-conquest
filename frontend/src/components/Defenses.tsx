@@ -3,38 +3,44 @@ import { Shield, Zap, Target, Crosshair, Timer, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiUrl } from '@/config/api';
-
-const DEFENSE_TYPES = [
-  { 
-    id: 'missile_launcher', 
-    name: 'Lanceur de Missiles', 
-    tier: 'Défense Légère',
-    desc: 'Batterie sol-air standard. Efficace en grand nombre.',
-    m: 2000, c: 0, time: 10, atk: 80, def: 200,
-    color: 'text-blue-400',
-    border: 'border-blue-500',
-    glow: 'shadow-[0_0_20px_rgba(96,165,250,0.5)]',
-    bg: 'bg-blue-950/20'
-  },
-  { 
-    id: 'plasma_turret', 
-    name: 'Tourelle Plasma', 
-    tier: 'Artillerie Lourde',
-    desc: 'Projection de plasma surchauffé capable de percer les croiseurs.',
-    m: 50000, c: 50000, time: 120, atk: 3000, def: 10000,
-    color: 'text-pink-500',
-    border: 'border-pink-600',
-    glow: 'shadow-[0_0_20px_rgba(236,72,153,0.5)]',
-    bg: 'bg-pink-950/20'
-  }
-];
+import { useUnitCosts } from '@/hooks/useUnitCosts';
 
 export default function Defenses({ planet, onBuild }: { planet: any, onBuild: () => void }) {
-  const [selected, setSelected] = useState(DEFENSE_TYPES[0]);
+  const [selected, setSelected] = useState<string>('missile_launcher');
   const [qty, setQty] = useState(1);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  
+  // ✅ AJOUT : Fetch des coûts depuis le backend
+  const { costs, loading } = useUnitCosts();
 
-  // ✅ CORRECTION : Utiliser la file de construction générique
+  // ✅ Configuration des défenses (sans les coûts hardcodés)
+  const DEFENSE_CONFIG = {
+    missile_launcher: {
+      name: 'Lanceur de Missiles',
+      tier: 'Défense Légère',
+      desc: 'Batterie sol-air standard. Efficace en grand nombre.',
+      time: 10,
+      atk: 80,
+      def: 200,
+      color: 'text-blue-400',
+      border: 'border-blue-500',
+      glow: 'shadow-[0_0_20px_rgba(96,165,250,0.5)]',
+      bg: 'bg-blue-950/20'
+    },
+    plasma_turret: {
+      name: 'Tourelle Plasma',
+      tier: 'Artillerie Lourde',
+      desc: 'Projection de plasma surchauffé capable de percer les croiseurs.',
+      time: 120,
+      atk: 3000,
+      def: 10000,
+      color: 'text-pink-500',
+      border: 'border-pink-600',
+      glow: 'shadow-[0_0_20px_rgba(236,72,153,0.5)]',
+      bg: 'bg-pink-950/20'
+    }
+  };
+
   useEffect(() => {
     const defenseQueue = planet?.constructions?.find(
       (c: any) => c.building_type === 'missile_launcher' || c.building_type === 'plasma_turret'
@@ -60,7 +66,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
 
   const startBuild = async () => {
     try {
-      const res = await fetch(apiUrl(`/planets/${planet.id}/build-fleet/${selected.id}/${qty}`), {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/build-fleet/${selected}/${qty}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
@@ -68,14 +74,23 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
     } catch (e) { console.error(e); }
   };
 
-  const totalM = selected.m * qty;
-  const totalC = selected.c * qty;
-  const canAfford = planet.metal_amount >= totalM && planet.crystal_amount >= totalC;
+  // ✅ Afficher un loader pendant le chargement des coûts
+  if (loading || !costs) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
+
+  const selectedConfig = DEFENSE_CONFIG[selected as keyof typeof DEFENSE_CONFIG];
+  const selectedCost = costs[selected as keyof typeof costs];
   
-  // ✅ CORRECTION : Vérifier si une construction de défense est en cours
+  const totalM = selectedCost.metal * qty;
+  const totalC = selectedCost.crystal * qty;
+  const canAfford = planet.metal_amount >= totalM && planet.crystal_amount >= totalC;
   const isBusy = timeLeft !== null && timeLeft > 0;
 
-  // ✅ AJOUT : Formater le temps restant
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -91,68 +106,77 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
       {/* GAUCHE : SÉLECTEUR & COMMANDE */}
       <div className="lg:col-span-2 space-y-6">
         <div className="grid grid-cols-2 gap-4">
-          {DEFENSE_TYPES.map(d => {
-            const isSelected = selected.id === d.id;
+          {Object.entries(DEFENSE_CONFIG).map(([id, config]) => {
+            const isSelected = selected === id;
+            const cost = costs[id as keyof typeof costs];
+            
             return (
               <button 
-                key={d.id} 
-                onClick={() => setSelected(d)} 
+                key={id} 
+                onClick={() => setSelected(id)} 
                 className={`relative group overflow-hidden rounded-xl border transition-all duration-300 p-4 text-left h-32 flex flex-col justify-between
-                  ${isSelected ? `${d.bg} ${d.border} ${d.glow} scale-105 z-10` : 'bg-black/40 border-white/10 opacity-70 hover:opacity-100'}`}
+                  ${isSelected ? `${config.bg} ${config.border} ${config.glow} scale-105 z-10` : 'bg-black/40 border-white/10 opacity-70 hover:opacity-100'}`}
               >
                  <div className="flex justify-between items-start">
                     <div>
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${d.color}`}>{d.tier}</span>
-                        <h3 className="text-sm font-black uppercase text-white">{d.name}</h3>
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${config.color}`}>{config.tier}</span>
+                        <h3 className="text-sm font-black uppercase text-white">{config.name}</h3>
                     </div>
-                    {d.id === 'plasma_turret' ? <Zap size={20} className={d.color}/> : <Crosshair size={20} className={d.color}/>}
+                    {id === 'plasma_turret' ? <Zap size={20} className={config.color}/> : <Crosshair size={20} className={config.color}/>}
                  </div>
-                 <span className="text-[10px] font-mono text-slate-400">{d.time}s / unité</span>
+                 <div className="space-y-1">
+                   <div className="text-[9px] font-mono text-slate-400">
+                     {Math.floor(cost.metal).toLocaleString()}M {cost.crystal > 0 && `/ ${Math.floor(cost.crystal).toLocaleString()}C`}
+                   </div>
+                   <span className="text-[10px] font-mono text-slate-500">{config.time}s / unité</span>
+                 </div>
               </button>
             );
           })}
         </div>
 
         {/* PANNEAU CENTRAL */}
-        <div className={`relative overflow-hidden rounded-3xl border ${selected.border} bg-black/60 backdrop-blur-md p-8 shadow-2xl`}>
-           {/* Décoration BG */}
+        <div className={`relative overflow-hidden rounded-3xl border ${selectedConfig.border} bg-black/60 backdrop-blur-md p-8 shadow-2xl`}>
            <div className={`absolute -right-10 -bottom-10 opacity-10 ${isBusy ? 'animate-pulse' : ''}`}>
-             <Shield size={250} className={selected.color} />
+             <Shield size={250} className={selectedConfig.color} />
            </div>
 
            <div className="relative z-10 space-y-6">
               <div>
-                  <h2 className="text-3xl font-black uppercase text-white italic">{selected.name}</h2>
-                  <p className="text-xs text-slate-400">{selected.desc}</p>
+                  <h2 className="text-3xl font-black uppercase text-white italic">{selectedConfig.name}</h2>
+                  <p className="text-xs text-slate-400">{selectedConfig.desc}</p>
               </div>
 
               <div className="flex gap-4">
                  <div className="bg-black/40 px-3 py-2 rounded border border-white/5 text-[10px] text-slate-300 font-bold">
-                    ATK: <span className="text-white">{selected.atk}</span>
+                    ATK: <span className="text-white">{selectedConfig.atk}</span>
                  </div>
                  <div className="bg-black/40 px-3 py-2 rounded border border-white/5 text-[10px] text-slate-300 font-bold">
-                    DEF: <span className="text-white">{selected.def}</span>
+                    DEF: <span className="text-white">{selectedConfig.def}</span>
                  </div>
               </div>
 
               {/* Contrôles */}
               <div className="flex items-end gap-6">
-                  <div className="space-y-2">
-                      <label className="text-[10px] uppercase font-bold text-slate-500">Quantité</label>
+                  <div className="space-y-4">
+                      <label className="text-[10px] uppercase font-bold text-slate-500 block">Quantité</label>
                       <input 
                         type="number" min="1" value={qty} 
                         onChange={e => setQty(Math.max(1, Number(e.target.value)))}
-                        className="bg-transparent border-b border-white/20 text-3xl font-mono font-black text-white w-24 focus:outline-none"
+                        className="bg-transparent border-b-2 border-white/20 text-3xl font-mono font-black text-white w-24 focus:outline-none focus:border-white/40 pb-1"
                         disabled={isBusy}
                       />
                   </div>
                   <div className="space-y-1 text-xs font-mono">
-                      <div className={planet.metal_amount >= totalM ? "text-slate-400" : "text-red-500"}>Métal: {totalM.toLocaleString()}</div>
-                      <div className={planet.crystal_amount >= totalC ? "text-slate-400" : "text-red-500"}>Cristal: {totalC.toLocaleString()}</div>
+                      <div className={planet.metal_amount >= totalM ? "text-slate-400" : "text-red-500"}>
+                        Métal: {Math.floor(totalM).toLocaleString()}
+                      </div>
+                      <div className={planet.crystal_amount >= totalC ? "text-slate-400" : "text-red-500"}>
+                        Cristal: {Math.floor(totalC).toLocaleString()}
+                      </div>
                   </div>
               </div>
 
-              {/* ✅ CORRECTION : Bouton avec timer amélioré */}
               <Button 
                 onClick={startBuild}
                 disabled={isBusy || !canAfford}
@@ -161,7 +185,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                     ? 'bg-slate-800 text-slate-400 border border-slate-700' 
                     : !canAfford 
                       ? 'bg-red-900/20 text-red-500 border border-red-500/50' 
-                      : `bg-black hover:bg-slate-900 text-white border ${selected.border} ${selected.glow}`
+                      : `bg-black hover:bg-slate-900 text-white border ${selectedConfig.border} ${selectedConfig.glow}`
                 }`}
               >
                   {isBusy ? (
@@ -201,7 +225,6 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                  <span className="text-xl text-white font-mono font-black">{planet.plasma_turret_count || 0}</span>
               </div>
               
-              {/* ✅ AJOUT : Afficher la construction en cours */}
               {isBusy && (
                 <div className="mt-6 p-4 bg-indigo-950/30 rounded-xl border border-indigo-500/30 animate-pulse">
                   <div className="flex items-center gap-2 mb-2">
