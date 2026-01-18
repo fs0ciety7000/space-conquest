@@ -843,11 +843,15 @@ async fn expedition_handler(
         active.metal_amount = Set(p.metal_amount + loot);
     } else {
         winner = "player"; 
-        loot = 50000.0; 
-        logs.push("SCAN : Secteur calme.".to_string());
-        logs.push(format!("DECOUVERTE : Gisement trouvé (+{:.0} Métal).", loot));
-        active.metal_amount = Set(p.metal_amount + loot);
-    }
+    let mut rng = rand::thread_rng();
+    let loot_metal = rng.gen_range(300.0..=2500.0) * (game_logic::SPEED_FACTOR / 100.0);
+    let loot_crystal = rng.gen_range(150.0..=1000.0) * (game_logic::SPEED_FACTOR / 100.0);
+    loot = loot_metal;
+    logs.push("SCAN : Secteur calme.".to_string());
+    logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", loot_metal, loot_crystal));
+    active.metal_amount = Set(p.metal_amount + loot_metal);
+    active.crystal_amount = Set(p.crystal_amount + loot_crystal);
+}
 
     let duration = std::cmp::max(1, (600.0 / game_logic::SPEED_FACTOR) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));

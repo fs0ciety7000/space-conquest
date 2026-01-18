@@ -34,24 +34,28 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   // Réutilisation de la file de construction du Shipyard (backend logic)
-  useEffect(() => {
-    if (planet?.shipyard_construction_end) {
-      const interval = setInterval(() => {
-        const end = new Date(planet.shipyard_construction_end).getTime();
-        const now = Date.now();
-        const diff = Math.max(0, Math.floor((end - now) / 1000));
-        
-        setTimeLeft(diff);
-        if (diff <= 0) {
-          clearInterval(interval);
-          setTimeout(onBuild, 500); 
-        }
-      }, 1000);
-      return () => clearInterval(interval);
+useEffect(() => {
+    const defenseQueue = planet?.constructions?.find(
+        (c: any) => c.building_type === 'missile_launcher' || c.building_type === 'plasma_turret'
+    );
+    
+    if (defenseQueue) {
+        const interval = setInterval(() => {
+            const end = new Date(defenseQueue.end_time).getTime();
+            const now = Date.now();
+            const diff = Math.max(0, Math.floor((end - now) / 1000));
+            
+            setTimeLeft(diff);
+            if (diff <= 0) {
+                clearInterval(interval);
+                setTimeout(onBuild, 500);
+            }
+        }, 1000);
+        return () => clearInterval(interval);
     } else {
-      setTimeLeft(null);
+        setTimeLeft(null);
     }
-  }, [planet?.shipyard_construction_end, onBuild]);
+}, [planet?.constructions, onBuild]);
 
   const startBuild = async () => {
     try {
