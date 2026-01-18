@@ -818,6 +818,8 @@ async fn expedition_handler(
 
     let mut active: planet::ActiveModel = p.clone().into();
     let mut loot = 0.0;
+    let mut loot_metal = 0.0;
+let mut loot_crystal = 0.0;
     let mut logs: Vec<String> = Vec::new();
     let winner; 
     let mut lost_hunters = 0;
@@ -890,15 +892,22 @@ if combat_triggered {
     };
     let _ = log_exp.insert(&state.db).await;
 
-    let response = json!({
-        "planet": updated_planet,
-        "report": {
-            "winner": winner,
-            "log": logs,
-            "loot": loot,
-            "losses": { "light_hunter": lost_hunters, "cruiser": lost_cruisers }
-        }
-    });
+   let response = json!({
+    "planet": updated_planet,
+    "report": {
+        "winner": winner,
+        "log": logs,
+        "loot": {
+            "metal": loot_metal,
+            "crystal": loot_crystal,
+            "deuterium": 0.0
+        },
+        "attacker_losses": lost_hunters + lost_cruisers,
+        "defender_losses": 0,
+        "lost_missiles": 0,
+        "lost_plasmas": 0
+    }
+});
 
     (StatusCode::OK, Json(response)).into_response()
 }
