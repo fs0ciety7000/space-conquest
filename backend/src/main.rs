@@ -214,6 +214,13 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+
+fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
+    // Token format: "jwt-{uuid}"
+    token.strip_prefix("jwt-")
+        .and_then(|id| Uuid::parse_str(id).ok())
+}
+
 // --- COMBAT RESOLUTION ---
 
 async fn resolve_attack_mission(
@@ -1801,13 +1808,26 @@ async fn create_market_listing_handler(
 async fn cancel_market_listing_handler(
     Path(listing_id): Path<Uuid>,
     State(state): State<AppState>,
-    Query(user_query): Query<HashMap<String, String>>,
+    headers: axum::http::HeaderMap, // ← Ajoutez headers
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let db = &state.db;
 
-    let user_id = user_query.get("user_id")
-        .and_then(|s| Uuid::parse_str(s).ok())
-        .ok_or(StatusCode::BAD_REQUEST)?;
+     // Extraire le token du header Authorization
+    let auth_header = headers
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // Format: "Bearer jwt-{uuid}"
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // Extraire user_id du token
+    let user_id = extract_user_id_from_token(token)
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    println!("🗑️  User {} deleting listing {}", user_id, listing_id);
 
     // Get listing
     let listing = MarketListing::find_by_id(listing_id)

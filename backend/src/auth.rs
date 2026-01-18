@@ -86,6 +86,11 @@ fn create_jwt(user_id: String) -> String {
 }
 
 
+fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
+    // Token format: "jwt-{uuid}"
+    token.strip_prefix("jwt-")
+        .and_then(|id| Uuid::parse_str(id).ok())
+} 
 
 #[debug_handler]
 pub async fn register_handler(

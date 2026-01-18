@@ -32,6 +32,14 @@ pub enum ResourceType {
     Deuterium,
 }
 
+// Ajoutez cette fonction au début du fichier, avant vos handlers
+fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
+    // Token format: "jwt-{uuid}"
+    token.strip_prefix("jwt-")
+        .and_then(|id| Uuid::parse_str(id).ok())
+}
+
+
 impl ResourceType {
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
