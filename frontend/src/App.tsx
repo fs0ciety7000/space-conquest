@@ -545,7 +545,7 @@ export default function App() {
                     <div key={cat} className="space-y-2">
                         <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
                         <div className="space-y-1">
-                            {MENU_ITEMS.filter(item => item.category === 'COMMUNICATION').map(item => (
+                            {MENU_ITEMS.filter(item => item.category === cat).map(item => (
     <button 
         key={item.id}
         data-tour={item.id}
