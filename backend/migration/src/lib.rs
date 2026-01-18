@@ -26,6 +26,7 @@ mod m20260112_060815_create_construction_queue;
 mod m20260112_072815_add_usernames_to_logs;
 mod m20260112_152510_add_armour_tech;
 mod m20260118_000001_create_conversation_system;
+mod m20260118_000002_add_conversation_archived; 
 
 pub struct Migrator;
 
@@ -59,6 +60,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260112_072815_add_usernames_to_logs::Migration),
             Box::new(m20260112_152510_add_armour_tech::Migration),
             Box::new(m20260118_000001_create_conversation_system::Migration),
+            Box::new(m20260118_000002_add_conversation_archived::Migration),
         ]
     }
 }

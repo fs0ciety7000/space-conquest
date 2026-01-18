@@ -172,13 +172,20 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         
+      // ✅ CORRECTION : Détection des nouveaux messages
         const newUnreadCount = data.unread_messages || 0;
+        
+        // Comparer avec la valeur précédente
         if (prevUnreadCountRef.current !== null && newUnreadCount > prevUnreadCountRef.current) {
-            toast.info("Nouvelle transmission reçue !", {
-                description: "Ouvrez la messagerie pour décrypter.",
-                icon: <Mail className="text-indigo-400" />,
-                action: { label: "Lire", onClick: () => setActiveTab('messages') },
-                duration: 5000,
+            const newMessagesCount = newUnreadCount - prevUnreadCountRef.current;
+            toast.info(`📨 ${newMessagesCount} nouveau${newMessagesCount > 1 ? 'x' : ''} message${newMessagesCount > 1 ? 's' : ''} !`, {
+                description: "Cliquez pour ouvrir la messagerie",
+                icon: <Mail className="text-indigo-400 animate-pulse" />,
+                action: { 
+                    label: "Lire", 
+                    onClick: () => setActiveTab('messages') 
+                },
+                duration: 8000,
             });
             playSound('notification');
         }
@@ -538,17 +545,39 @@ export default function App() {
                     <div key={cat} className="space-y-2">
                         <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
                         <div className="space-y-1">
-                            {MENU_ITEMS.filter(item => item.category === cat).map(item => (
-                                <button 
-                                    key={item.id}
-                                    data-tour={item.id}
-                                    onClick={() => handleTabChange(item.id as any)} 
-                                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-bold transition-all duration-200 ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-300 hover:bg-white/5 hover:text-white active:bg-white/10'}`}
-                                >
-                                    <item.icon size={18} /> 
-                                    <span>{item.label}</span>
-                                </button>
-                            ))}
+                            {MENU_ITEMS.filter(item => item.category === 'COMMUNICATION').map(item => (
+    <button 
+        key={item.id}
+        data-tour={item.id}
+        onClick={() => handleTabChange(item.id as any)} 
+        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-200 group relative overflow-hidden ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+    >
+        <div className="relative">
+            <item.icon size={16} className={`transition-transform duration-300 ${activeTab === item.id ? 'scale-110' : 'group-hover:scale-110'}`} />
+            
+            {/* ✅ AJOUT : Badge avec pulse si messages non lus */}
+            {item.id === 'messages' && unreadMessagesCount > 0 && (
+                <>
+                    <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                    </span>
+                </>
+            )}
+        </div>
+        
+        <span className="relative z-10 flex-1 text-left">{item.label}</span>
+        
+        {/* ✅ Badge avec le nombre de messages */}
+        {item.id === 'messages' && unreadMessagesCount > 0 && (
+            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                {unreadMessagesCount}
+            </span>
+        )}
+        
+        {activeTab === item.id && <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-white/10 to-indigo-500/0 opacity-20 animate-shimmer"></div>}
+    </button>
+))}
                         </div>
                     </div>
                 ))}

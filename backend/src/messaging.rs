@@ -27,6 +27,7 @@ pub struct ConversationDisplay {
     last_message_preview: String,
     last_message_at: chrono::NaiveDateTime,
     unread_count: i32,
+    is_archived: bool, // ✅ AJOUT
 }
 
 #[derive(Serialize)]
@@ -47,7 +48,13 @@ pub struct SendMessageV2Payload {
     content: String,
 }
 
-// HANDLER : Liste des conversations
+// ✅ NOUVEAU : Payload pour archivage
+#[derive(Deserialize)]
+pub struct ArchiveConversationPayload {
+    archived: bool,
+}
+
+// HANDLER : Liste des conversations (exclut archivées par défaut)
 pub async fn get_conversations_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -58,12 +65,36 @@ pub async fn get_conversations_handler(
         Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid user"}))).into_response(),
     };
 
-    let convs = Conversation::find()
+    // ✅ Paramètre optionnel pour afficher les conversations archivées
+    let show_archived = params.get("show_archived")
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+
+    let mut convs_query = Conversation::find()
         .filter(
             Condition::any()
                 .add(conversation::Column::User1Id.eq(user_id))
                 .add(conversation::Column::User2Id.eq(user_id))
-        )
+        );
+
+    // ✅ Filtrer les conversations archivées
+    if !show_archived {
+        convs_query = convs_query.filter(
+            Condition::any()
+                .add(
+                    Condition::all()
+                        .add(conversation::Column::User1Id.eq(user_id))
+                        .add(conversation::Column::User1Archived.eq(false))
+                )
+                .add(
+                    Condition::all()
+                        .add(conversation::Column::User2Id.eq(user_id))
+                        .add(conversation::Column::User2Archived.eq(false))
+                )
+        );
+    }
+
+    let convs = convs_query
         .order_by_desc(conversation::Column::LastMessageAt)
         .all(&state.db)
         .await
@@ -72,10 +103,10 @@ pub async fn get_conversations_handler(
     let mut result = Vec::new();
 
     for conv in convs {
-        let (other_id, unread) = if conv.user1_id == user_id {
-            (conv.user2_id, conv.user1_unread_count)
+        let (other_id, unread, is_archived) = if conv.user1_id == user_id {
+            (conv.user2_id, conv.user1_unread_count, conv.user1_archived)
         } else {
-            (conv.user1_id, conv.user2_unread_count)
+            (conv.user1_id, conv.user2_unread_count, conv.user2_archived)
         };
 
         let other_user = User::find_by_id(other_id).one(&state.db).await.ok().flatten();
@@ -104,6 +135,7 @@ pub async fn get_conversations_handler(
             last_message_preview: preview,
             last_message_at: conv.last_message_at,
             unread_count: unread,
+            is_archived, // ✅ AJOUT
         });
     }
 
@@ -150,7 +182,7 @@ pub async fn get_thread_messages_handler(
     Json(thread).into_response()
 }
 
-// HANDLER : Envoi de message (crée conversation si nécessaire)
+// HANDLER : Envoi de message (crée conversation si nécessaire + ✅ désarchive automatiquement)
 pub async fn send_message_v2_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -192,6 +224,10 @@ pub async fn send_message_v2_handler(
         let mut active: conversation::ActiveModel = conv.clone().into();
         active.last_message_at = Set(Utc::now().naive_utc());
         
+        // ✅ Désarchiver automatiquement pour les deux utilisateurs lors d'un nouveau message
+        active.user1_archived = Set(false);
+        active.user2_archived = Set(false);
+        
         if sender_id == conv.user1_id {
             active.user2_unread_count = Set(conv.user2_unread_count + 1);
         } else {
@@ -208,12 +244,13 @@ pub async fn send_message_v2_handler(
             last_message_at: Set(Utc::now().naive_utc()),
             user1_unread_count: Set(if sender_id == u1 { 0 } else { 1 }),
             user2_unread_count: Set(if sender_id == u2 { 0 } else { 1 }),
+            user1_archived: Set(false), // ✅ AJOUT
+            user2_archived: Set(false), // ✅ AJOUT
         };
         let inserted = new_conv.insert(&state.db).await.unwrap();
         inserted.id
     };
 
-    // ✅ Pour ActiveModel avec Option<T>, utiliser Set(Some(value))
     let new_message = message::ActiveModel {
         id: Set(Uuid::new_v4()),
         conversation_id: Set(Some(conv_id)),
@@ -268,6 +305,41 @@ pub async fn mark_conversation_read_handler(
     }
 
     StatusCode::OK.into_response()
+}
+
+// ✅ NOUVEAU HANDLER : Archiver/Désarchiver une conversation
+pub async fn toggle_archive_conversation_handler(
+    Path(conv_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<ArchiveConversationPayload>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
+    let user_id = match Uuid::parse_str(&user_id_str) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid user"}))).into_response(),
+    };
+
+    let conv = Conversation::find_by_id(conv_id).one(&state.db).await.ok().flatten();
+    
+    if let Some(c) = conv {
+        let mut active: conversation::ActiveModel = c.clone().into();
+        
+        // Archiver/désarchiver seulement pour l'utilisateur concerné
+        if c.user1_id == user_id {
+            active.user1_archived = Set(payload.archived);
+        } else if c.user2_id == user_id {
+            active.user2_archived = Set(payload.archived);
+        } else {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your conversation"}))).into_response();
+        }
+        
+        active.update(&state.db).await.unwrap();
+        
+        (StatusCode::OK, Json(json!({"archived": payload.archived}))).into_response()
+    } else {
+        (StatusCode::NOT_FOUND, Json(json!({"error": "Conversation not found"}))).into_response()
+    }
 }
 
 // HANDLER : Supprimer conversation complète

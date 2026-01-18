@@ -262,21 +262,29 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
 
         <div className="h-8 w-px bg-white/10 hidden sm:block"></div>
 
-        {/* Messagerie */}
-        <button 
-            onClick={onOpenMessages}
-            className="relative p-2 md:p-2.5 rounded-full hover:bg-white/10 transition-all group shrink-0"
-            title="Messagerie"
-        >
-            <Mail size={18} className={`transition-colors ${unreadMessages > 0 ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
-            
-            {unreadMessages > 0 && (
-                <span className="absolute top-0 right-0 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-slate-950"></span>
-                </span>
-            )}
-        </button>
+       {/*  - Section Messagerie */}
+<button 
+    onClick={onOpenMessages}
+    className="relative p-2 md:p-2.5 rounded-full hover:bg-white/10 transition-all group shrink-0"
+    title="Messagerie"
+>
+    <Mail size={18} className={`transition-colors ${unreadMessages > 0 ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
+    
+    {/* ✅ Animation pulse - vérifiez que ce code est présent */}
+    {unreadMessages > 0 && (
+        <>
+            <span className="absolute top-0 right-0 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-slate-950"></span>
+            </span>
+            {/* ✅ AJOUT optionnel : Badge avec le nombre */}
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center border-2 border-slate-950">
+                {unreadMessages}
+            </span>
+        </>
+    )}
+</button>
+
 
       </div>
     </div>

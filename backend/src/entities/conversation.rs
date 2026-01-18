@@ -11,6 +11,8 @@ pub struct Model {
     pub last_message_at: DateTime,
     pub user1_unread_count: i32,
     pub user2_unread_count: i32,
+    pub user1_archived: bool, // ✅ AJOUT
+    pub user2_archived: bool, // ✅ AJOUT
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

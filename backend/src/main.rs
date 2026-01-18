@@ -45,8 +45,8 @@ use backend::AppState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, Conversation},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, conversation
 };
 
 #[derive(Serialize)]
@@ -165,11 +165,13 @@ async fn main() {
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
         .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
         // Messagerie V2 (via module)
-        .route("/conversations", get(messaging::get_conversations_handler))
-        .route("/conversations/:id/messages", get(messaging::get_thread_messages_handler))
-        .route("/conversations/send", post(messaging::send_message_v2_handler))
-        .route("/conversations/:id/mark-read", post(messaging::mark_conversation_read_handler))
-        .route("/conversations/:id", delete(messaging::delete_conversation_handler))
+        // Dans la section des routes de messagerie
+.route("/conversations", get(messaging::get_conversations_handler))
+.route("/conversations/:id/messages", get(messaging::get_thread_messages_handler))
+.route("/conversations/:id/read", post(messaging::mark_conversation_read_handler))
+.route("/conversations/:id/archive", post(messaging::toggle_archive_conversation_handler)) // ✅ AJOUT
+.route("/conversations/:id", delete(messaging::delete_conversation_handler))
+.route("/send-message-v2", post(messaging::send_message_v2_handler))
         // Admin
         .route("/admin/players", get(admin::get_all_players_handler))
         .route("/admin/planet/:id", get(admin::get_planet_admin_handler))
@@ -437,13 +439,18 @@ async fn get_planet_handler(
     let energy_prod = (20.0 * updated_model.solar_plant_level as f64 * 1.1f64.powf(updated_model.solar_plant_level as f64) * (1.0 + (updated_model.energy_tech_level as f64 * 0.05))) as i32;
     let energy_cons = (10.0 * updated_model.metal_mine_level as f64 * 1.1f64.powf(updated_model.metal_mine_level as f64)) as i32;
 
+    // ✅ AJOUT : Calculer les messages non lus
+let unread_messages = count_unread_messages(p.owner_id, &state.db).await;
+
     let mut json_response = serde_json::to_value(updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
         obj.insert("incoming_missions".into(), json!(incoming_raw));
         obj.insert("outgoing_missions".into(), json!(outgoing_detailed));
         obj.insert("energy".into(), json!(energy_prod - energy_cons));
+        obj.insert("unread_messages".into(), json!(unread_messages));
         let active_queue = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).order_by_asc(construction_queue::Column::EndTime).all(&state.db).await.unwrap_or_default();
         obj.insert("constructions".into(), json!(active_queue));
+
     }
 
     Ok(Json(json_response))
@@ -1241,3 +1248,32 @@ async fn cancel_construction_handler(
         "refund_metal": refund_m, "refund_crystal": refund_c, "refund_deuterium": refund_d, "ratio": refund_ratio
     })))
 }
+
+// Fonction helper pour compter les messages non lus (à ajouter dans votre code backend)
+async fn count_unread_messages(user_id: Uuid, db: &DatabaseConnection) -> i32 {
+    use crate::entities::prelude::Conversation;
+    use crate::entities::conversation;
+    
+    let convs = Conversation::find()
+        .filter(
+            Condition::any()
+                .add(conversation::Column::User1Id.eq(user_id))
+                .add(conversation::Column::User2Id.eq(user_id))
+        )
+        .all(db)
+        .await
+        .unwrap_or_default();
+    
+    let mut total_unread = 0;
+    for conv in convs {
+        // Ne compter que les conversations non archivées
+        if conv.user1_id == user_id && !conv.user1_archived {
+            total_unread += conv.user1_unread_count;
+        } else if conv.user2_id == user_id && !conv.user2_archived {
+            total_unread += conv.user2_unread_count;
+        }
+    }
+    
+    total_unread
+}
+
