@@ -450,14 +450,43 @@ async fn get_ranking_handler(
         .collect();
 
     let mut ranked_planets: Vec<RankItem> = planets.into_iter().map(|p| {
-        let economy = (p.metal_mine_level + p.crystal_mine_level + p.deuterium_mine_level 
-                     + p.energy_tech_level + p.research_lab_level) * 100;
-        
-        let military = (p.light_hunter_count + p.cruiser_count + p.recycler_count + p.colony_ship_count + p.transporter_count + p.spy_probe_count) * 10
-                     + (p.missile_launcher_count + p.plasma_turret_count) * 20
-                     + (p.laser_battery_level * 50);
+       // Ligne ~423-438 : Remplacer par ce calcul pondéré
+let economy = 
+    // 🏭 MINES (Pondération croissante : Deuterium > Cristal > Métal)
+    (p.metal_mine_level * p.metal_mine_level * 50) +         // Quadratique car exponentiel
+    (p.crystal_mine_level * p.crystal_mine_level * 80) +     // +60% vs métal
+    (p.deuterium_mine_level * p.deuterium_mine_level * 150) + // +200% vs métal (rare)
+    
+    // ⚡ ÉNERGIE (Important mais support)
+    (p.solar_plant_level * p.solar_plant_level * 30) +
+    
+    // 🏗️ INFRASTRUCTURES (Investissement lourd)
+    (p.shipyard_level * p.shipyard_level * 200) +            // Très coûteux
+    (p.research_lab_level * p.research_lab_level * 300) +    // Encore plus cher
+    (p.hangar_level * p.hangar_level * 180);                 // Gros investissement
 
-        let total = economy + military;
+let research = 
+    // 🔬 TECHNOLOGIES (Bonus massif car permanent)
+    (p.energy_tech_level * p.energy_tech_level * 400) +      // Boost production
+    (p.laser_battery_level * p.laser_battery_level * 350) +  // Combat offensif
+    (p.espionage_tech_level * p.espionage_tech_level * 500) + // Stratégique
+    (p.armour_tech_level * p.armour_tech_level * 600);       // Survie critique
+
+let military = 
+    // 🚀 FLOTTE (Valeur par coût de construction)
+    (p.light_hunter_count * 40) +           // Chasseur = 3k métal
+    (p.cruiser_count * 270) +               // Croiseur = 20k métal (6.75x chasseur)
+    (p.recycler_count * 160) +              // Recycleur = 10k métal (utilitaire)
+    (p.transporter_count * 80) +            // Transporteur = 4k métal
+    (p.spy_probe_count * 10) +              // Sonde = 1k métal (consommable)
+    (p.colony_ship_count * 300) +           // Colon = 30k ressources (très cher)
+    
+    // 🛡️ DÉFENSES (Ratio attaque/coût)
+    (p.missile_launcher_count * 20) +       // Missile = 2k métal (basique)
+    (p.plasma_turret_count * 1000);         // Plasma = 100k ressources (forteresse)
+
+let total = economy + research + military;
+
         let username = user_map.get(&p.owner_id).cloned().unwrap_or("Inconnu".to_string());
 
         RankItem {
@@ -686,7 +715,7 @@ async fn build_fleet_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if active_constructions >= 3 { return Err(StatusCode::CONFLICT); }
-    
+
 if !["missile_launcher", "plasma_turret"].contains(&type_ship.as_str()) {
     let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
                            + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
