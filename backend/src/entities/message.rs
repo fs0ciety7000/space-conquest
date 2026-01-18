@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
+    pub conversation_id: Option<Uuid>,
     pub sender_id: Uuid,
     pub receiver_id: Uuid,
     pub subject: String,
