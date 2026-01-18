@@ -7,9 +7,8 @@ use axum::{
 };
 use sea_orm::{
     ActiveModelTrait, Database, DatabaseConnection,
-    EntityTrait, Set, IntoActiveModel, 
-    QueryFilter, QueryOrder, ColumnTrait, QuerySelect, Condition,
-    PaginatorTrait
+    EntityTrait, Set,
+    QueryFilter, QueryOrder, ColumnTrait, Condition,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_string};
@@ -37,8 +36,8 @@ use backend::AppState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, Message, ConstructionQueue, Conversation},
-    planet, user, combat_log, fleet_mission, transport_log, message, construction_queue, conversation
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue
 };
 
 #[derive(Serialize)]
@@ -59,31 +58,6 @@ struct AttackPayload {
     target_planet_id: Uuid,
     hunters: i32,
     cruisers: i32,
-}
-
-#[derive(Deserialize)]
-struct SendMessagePayload {
-    recipient_name: String,
-    subject: String,
-    content: String,
-}
-
-#[derive(Serialize)]
-struct MessageDisplay {
-    id: Uuid,
-    sender_id: Uuid,
-    sender_name: String,
-    subject: String,
-    content: String,
-    is_read: bool,
-    created_at: chrono::NaiveDateTime,
-}
-
-#[derive(Deserialize)]
-struct AdminResPayload {
-    metal: f64,
-    crystal: f64,
-    deuterium: f64,
 }
 
 #[derive(Deserialize)]
@@ -138,29 +112,21 @@ struct SystemSummary {
     has_me: bool,
 }
 
-
-
 #[tokio::main]
 async fn main() {
-    // Charge la configuration depuis les variables d'environnement
     let config = Config::from_env();
     
-    // Connexion à la base de données
     let db = Database::connect(&config.database_url)
         .await
         .expect("Failed to connect to database");
 
-    // Exécution des migrations
     println!("🔄 Exécution des migrations...");
     match migration::Migrator::up(&db, None).await {
         Ok(_) => println!("✅ Migrations réussies !"),
         Err(e) => eprintln!("❌ Erreur migrations : {:?}", e),
     }
 
-    // ✅ DIRECT - pas de .new()
     let state = AppState { db };
-
-    // ✅ CORS permissive (auto OPTIONS)
     let cors = CorsLayer::permissive();
 
     let app = Router::new()
@@ -189,12 +155,12 @@ async fn main() {
         .route("/ranking", get(get_ranking_handler))
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
         .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
-        // Messagerie
+        // Messagerie V2 (via module)
         .route("/conversations", get(messaging::get_conversations_handler))
-.route("/conversations/:id/messages", get(messaging::get_thread_messages_handler))
-.route("/conversations/send", post(messaging::send_message_v2_handler))
-.route("/conversations/:id/mark-read", post(messaging::mark_conversation_read_handler))
-.route("/conversations/:id", delete(messaging::delete_conversation_handler))
+        .route("/conversations/:id/messages", get(messaging::get_thread_messages_handler))
+        .route("/conversations/send", post(messaging::send_message_v2_handler))
+        .route("/conversations/:id/mark-read", post(messaging::mark_conversation_read_handler))
+        .route("/conversations/:id", delete(messaging::delete_conversation_handler))
         // Admin
         .route("/admin/players", get(admin::get_all_players_handler))
         .route("/admin/planet/:id", get(admin::get_planet_admin_handler))
@@ -203,7 +169,6 @@ async fn main() {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
     
-   // Utilisation de l'adresse depuis la configuration
     let addr: SocketAddr = config.bind_address()
         .parse()
         .expect("Invalid bind address");
@@ -213,7 +178,7 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-// --- HANDLERS MESSAGERIE ---
+// --- COMBAT RESOLUTION ---
 
 async fn resolve_attack_mission(
     db: &DatabaseConnection,
@@ -221,19 +186,16 @@ async fn resolve_attack_mission(
 ) -> Result<(), StatusCode> {
     let now = Utc::now().naive_utc();
     
-    // 1. Récupération des entités
     let att_planet = Planet::find_by_id(mission.source_planet_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
     let att_user = User::find_by_id(att_planet.owner_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
     let def_planet_raw = Planet::find_by_id(mission.target_planet_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
     let def_user = User::find_by_id(def_planet_raw.owner_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
 
-    // 2. Calcul production défenseur
     let mut def_planet = def_planet_raw.clone();
     def_planet.metal_amount = game_logic::calculate_resources(game_logic::ResourceType::Metal, def_planet_raw.metal_mine_level, def_planet_raw.metal_amount, def_planet_raw.last_update, def_planet_raw.energy_tech_level);
     def_planet.crystal_amount = game_logic::calculate_resources(game_logic::ResourceType::Crystal, def_planet_raw.crystal_mine_level, def_planet_raw.crystal_amount, def_planet_raw.last_update, def_planet_raw.energy_tech_level);
     def_planet.deuterium_amount = game_logic::calculate_resources(game_logic::ResourceType::Deuterium, def_planet_raw.deuterium_mine_level, def_planet_raw.deuterium_amount, def_planet_raw.last_update, def_planet_raw.energy_tech_level);
 
-    // 3. Préparation Combat (Variables renommées pour correspondre à la suite)
     let att_hunters = mission.metal as i32; 
     let att_cruisers = mission.crystal as i32;
 
@@ -244,7 +206,6 @@ async fn resolve_attack_mission(
         laser: def_planet.laser_battery_level, energy: def_planet.energy_tech_level, armour: def_planet.armour_tech_level 
     };
 
-    // 4. Appel moteur
     let result = game_logic::resolve_pvp(
         att_hunters, att_cruisers, att_techs,
         def_planet.light_hunter_count, def_planet.cruiser_count, 0, 
@@ -253,7 +214,6 @@ async fn resolve_attack_mission(
         game_logic::Cost { metal: def_planet.metal_amount, crystal: def_planet.crystal_amount, deuterium: def_planet.deuterium_amount }
     );
 
-    // 5. MISE À JOUR DÉFENSEUR
     let mut def_active: planet::ActiveModel = def_planet_raw.into();
     if result.winner == "attacker" {
         def_active.metal_amount = Set((def_planet.metal_amount - result.loot.metal).max(0.0));
@@ -276,7 +236,6 @@ async fn resolve_attack_mission(
     def_active.unread_report = Set(Some(to_string(&def_rep_json).unwrap()));
     def_active.update(db).await.unwrap();
 
-    // 6. MISE À JOUR ATTAQUANT (Butin + Survivants + Rapport)
     let mut att_active: planet::ActiveModel = att_planet.clone().into();
     if result.winner == "attacker" {
         att_active.metal_amount = Set(att_planet.metal_amount + result.loot.metal);
@@ -298,7 +257,6 @@ async fn resolve_attack_mission(
     att_active.unread_report = Set(Some(to_string(&att_rep_json).unwrap()));
     att_active.update(db).await.unwrap();
 
-    // 7. Logs Historiques
     let _ = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()), planet_id: Set(mission.target_planet_id), target_name: Set(att_planet.name.clone()),
         opponent_username: Set(Some(att_user.username.clone())), mission_type: Set("defense".into()),
@@ -313,123 +271,11 @@ async fn resolve_attack_mission(
         loot_metal: Set(result.loot.metal), loot_crystal: Set(result.loot.crystal), ships_lost: Set(result.attacker_losses), date: Set(now),
     }.insert(db).await;
 
-    // 8. Suppression mission
     FleetMission::delete_by_id(mission.id).exec(db).await.unwrap();
     Ok(())
 }
 
-async fn get_messages_handler(
-    State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
-) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
-    let user_id = match Uuid::parse_str(&user_id_str) {
-        Ok(id) => id,
-        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "User ID invalide"}))).into_response(),
-    };
-
-    let messages = Message::find()
-        .filter(message::Column::ReceiverId.eq(user_id))
-        .order_by_desc(message::Column::CreatedAt)
-        .all(&state.db)
-        .await
-        .unwrap_or_default();
-
-    let sender_ids: Vec<Uuid> = messages.iter().map(|m| m.sender_id).collect();
-    
-    if sender_ids.is_empty() {
-        return Json(Vec::<MessageDisplay>::new()).into_response();
-    }
-
-    let senders = User::find()
-        .filter(user::Column::Id.is_in(sender_ids))
-        .all(&state.db)
-        .await
-        .unwrap_or_default();
-
-    let sender_map: HashMap<Uuid, String> = senders.into_iter().map(|u| (u.id, u.username)).collect();
-
-    let display_list: Vec<MessageDisplay> = messages.into_iter().map(|m| {
-        let sender_name = sender_map.get(&m.sender_id).cloned().unwrap_or("Inconnu".to_string());
-        MessageDisplay {
-            id: m.id,
-            sender_id: m.sender_id,
-            sender_name,
-            subject: m.subject,
-            content: m.content,
-            is_read: m.is_read,
-            created_at: m.created_at,
-        }
-    }).collect();
-
-    Json(display_list).into_response()
-}
-
-async fn send_message_handler(
-    State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
-    Json(payload): Json<SendMessagePayload>,
-) -> impl IntoResponse {
-    
-    let user_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
-    let _sender_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
-
-    let sender_id = match Uuid::parse_str(&user_id_str) {
-        Ok(id) => id,
-        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Expéditeur invalide"}))).into_response(),
-    };
-
-    let recipient = User::find()
-        .filter(user::Column::Username.eq(&payload.recipient_name))
-        .one(&state.db)
-        .await
-        .unwrap_or(None);
-
-    let recipient_id = match recipient {
-        Some(u) => u.id,
-        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Commandant introuvable"}))).into_response(),
-    };
-
-    let new_message = message::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        sender_id: Set(sender_id),
-        receiver_id: Set(recipient_id),
-        subject: Set(payload.subject),
-        content: Set(payload.content),
-        created_at: Set(Utc::now().naive_utc()),
-        is_read: Set(false),
-    };
-
-    if let Err(e) = new_message.insert(&state.db).await {
-        println!("Erreur envoi message: {:?}", e);
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur envoi"}))).into_response();
-    }
-
-    StatusCode::OK.into_response()
-}
-
-async fn mark_message_read_handler(
-    Path(message_id): Path<Uuid>,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    let msg = Message::find_by_id(message_id).one(&state.db).await.unwrap_or(None);
-    if let Some(m) = msg {
-        let mut active = m.into_active_model();
-        active.is_read = Set(true);
-        let _ = active.update(&state.db).await;
-    }
-    StatusCode::OK.into_response()
-}
-
-async fn delete_message_handler(
-    Path(message_id): Path<Uuid>,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    let _ = Message::delete_by_id(message_id).exec(&state.db).await;
-    StatusCode::OK.into_response()
-}
-
-// --- HANDLERS JEU ---
+// --- GAME HANDLERS ---
 
 async fn get_game_config_handler() -> impl IntoResponse {
     Json(json!({ "speed_factor": game_logic::SPEED_FACTOR }))
@@ -451,43 +297,32 @@ async fn get_ranking_handler(
         .collect();
 
     let mut ranked_planets: Vec<RankItem> = planets.into_iter().map(|p| {
-       // Ligne ~423-438 : Remplacer par ce calcul pondéré
-let economy = 
-    // 🏭 MINES (Pondération croissante : Deuterium > Cristal > Métal)
-    (p.metal_mine_level * p.metal_mine_level * 50) +         // Quadratique car exponentiel
-    (p.crystal_mine_level * p.crystal_mine_level * 80) +     // +60% vs métal
-    (p.deuterium_mine_level * p.deuterium_mine_level * 150) + // +200% vs métal (rare)
-    
-    // ⚡ ÉNERGIE (Important mais support)
-    (p.solar_plant_level * p.solar_plant_level * 30) +
-    
-    // 🏗️ INFRASTRUCTURES (Investissement lourd)
-    (p.shipyard_level * p.shipyard_level * 200) +            // Très coûteux
-    (p.research_lab_level * p.research_lab_level * 300) +    // Encore plus cher
-    (p.hangar_level * p.hangar_level * 180);                 // Gros investissement
+        let economy = 
+            (p.metal_mine_level * p.metal_mine_level * 50) +
+            (p.crystal_mine_level * p.crystal_mine_level * 80) +
+            (p.deuterium_mine_level * p.deuterium_mine_level * 150) +
+            (p.solar_plant_level * p.solar_plant_level * 30) +
+            (p.shipyard_level * p.shipyard_level * 200) +
+            (p.research_lab_level * p.research_lab_level * 300) +
+            (p.hangar_level * p.hangar_level * 180);
 
-let research = 
-    // 🔬 TECHNOLOGIES (Bonus massif car permanent)
-    (p.energy_tech_level * p.energy_tech_level * 400) +      // Boost production
-    (p.laser_battery_level * p.laser_battery_level * 350) +  // Combat offensif
-    (p.espionage_tech_level * p.espionage_tech_level * 500) + // Stratégique
-    (p.armour_tech_level * p.armour_tech_level * 600);       // Survie critique
+        let research = 
+            (p.energy_tech_level * p.energy_tech_level * 400) +
+            (p.laser_battery_level * p.laser_battery_level * 350) +
+            (p.espionage_tech_level * p.espionage_tech_level * 500) +
+            (p.armour_tech_level * p.armour_tech_level * 600);
 
-let military = 
-    // 🚀 FLOTTE (Valeur par coût de construction)
-    (p.light_hunter_count * 40) +           // Chasseur = 3k métal
-    (p.cruiser_count * 270) +               // Croiseur = 20k métal (6.75x chasseur)
-    (p.recycler_count * 160) +              // Recycleur = 10k métal (utilitaire)
-    (p.transporter_count * 80) +            // Transporteur = 4k métal
-    (p.spy_probe_count * 10) +              // Sonde = 1k métal (consommable)
-    (p.colony_ship_count * 300) +           // Colon = 30k ressources (très cher)
-    
-    // 🛡️ DÉFENSES (Ratio attaque/coût)
-    (p.missile_launcher_count * 20) +       // Missile = 2k métal (basique)
-    (p.plasma_turret_count * 1000);         // Plasma = 100k ressources (forteresse)
+        let military = 
+            (p.light_hunter_count * 40) +
+            (p.cruiser_count * 270) +
+            (p.recycler_count * 160) +
+            (p.transporter_count * 80) +
+            (p.spy_probe_count * 10) +
+            (p.colony_ship_count * 300) +
+            (p.missile_launcher_count * 20) +
+            (p.plasma_turret_count * 1000);
 
-let total = economy + research + military;
-
+        let total = economy + research + military;
         let username = user_map.get(&p.owner_id).cloned().unwrap_or("Inconnu".to_string());
 
         RankItem {
@@ -521,7 +356,6 @@ async fn get_planet_handler(
     let now = Utc::now().naive_utc();
     let mut active: planet::ActiveModel = p.clone().into();
 
-    // 1. Ressources
     let elapsed = now.signed_duration_since(p.last_update).num_seconds();
     if elapsed > 0 {
         active.metal_amount = Set(game_logic::calculate_resources(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update, p.energy_tech_level));
@@ -530,7 +364,6 @@ async fn get_planet_handler(
         active.last_update = Set(now);
     }
 
-    // 2. Queue de construction (Complétée avec tous tes types)
     let finished = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).filter(construction_queue::Column::EndTime.lte(now)).all(&state.db).await.unwrap_or_default();
     for item in finished {
         match item.building_type.as_str() {
@@ -550,16 +383,14 @@ async fn get_planet_handler(
             "missile_launcher" => active.missile_launcher_count = Set(active.missile_launcher_count.unwrap() + item.level),
             "plasma_turret" => active.plasma_turret_count = Set(active.plasma_turret_count.unwrap() + item.level),
             "spy_probe" => active.spy_probe_count = Set(active.spy_probe_count.unwrap() + item.level),
-"transporter" => active.transporter_count = Set(active.transporter_count.unwrap() + item.level),
-"colony_ship" => active.colony_ship_count = Set(active.colony_ship_count.unwrap() + item.level),
-"recycler" => active.recycler_count = Set(active.recycler_count.unwrap() + item.level),
-
+            "transporter" => active.transporter_count = Set(active.transporter_count.unwrap() + item.level),
+            "colony_ship" => active.colony_ship_count = Set(active.colony_ship_count.unwrap() + item.level),
+            "recycler" => active.recycler_count = Set(active.recycler_count.unwrap() + item.level),
             _ => {}
         }
         let _ = ConstructionQueue::delete_by_id(item.id).exec(&state.db).await;
     }
 
-    // 3. Traitement des missions arrivées
     let arrived = FleetMission::find()
         .filter(Condition::any().add(fleet_mission::Column::TargetPlanetId.eq(id)).add(fleet_mission::Column::SourcePlanetId.eq(id)))
         .filter(fleet_mission::Column::ArrivalTime.lte(now))
@@ -576,7 +407,6 @@ async fn get_planet_handler(
         }
     }
 
-    // 4. Préparation des données pour le RADAR (Détails des cibles)
     let incoming_raw = FleetMission::find().filter(fleet_mission::Column::TargetPlanetId.eq(id)).all(&state.db).await.unwrap_or_default();
     let outgoing_raw = FleetMission::find().filter(fleet_mission::Column::SourcePlanetId.eq(id)).all(&state.db).await.unwrap_or_default();
 
@@ -593,26 +423,22 @@ async fn get_planet_handler(
         outgoing_detailed.push(val);
     }
 
-    // 5. Sauvegarde et réponse enrichie
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
-    // Calcul énergie pour le front
     let energy_prod = (20.0 * updated_model.solar_plant_level as f64 * 1.1f64.powf(updated_model.solar_plant_level as f64) * (1.0 + (updated_model.energy_tech_level as f64 * 0.05))) as i32;
-    let energy_cons = (10.0 * updated_model.metal_mine_level as f64 * 1.1f64.powf(updated_model.metal_mine_level as f64)) as i32; // simplifié pour l'exemple
+    let energy_cons = (10.0 * updated_model.metal_mine_level as f64 * 1.1f64.powf(updated_model.metal_mine_level as f64)) as i32;
 
     let mut json_response = serde_json::to_value(updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
         obj.insert("incoming_missions".into(), json!(incoming_raw));
         obj.insert("outgoing_missions".into(), json!(outgoing_detailed));
         obj.insert("energy".into(), json!(energy_prod - energy_cons));
-        // On rajoute les autres champs nécessaires
         let active_queue = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).order_by_asc(construction_queue::Column::EndTime).all(&state.db).await.unwrap_or_default();
         obj.insert("constructions".into(), json!(active_queue));
     }
 
     Ok(Json(json_response))
 }
-
 
 async fn clear_report_handler(
     Path(id): Path<Uuid>,
@@ -661,7 +487,7 @@ async fn upgrade_mine_handler(
         "shipyard" => p.shipyard_level,
         "laser" => p.laser_battery_level,
         "espionage" => p.espionage_tech_level,
-        "armour" => p.armour_tech_level, // <-- AJOUTÉ
+        "armour" => p.armour_tech_level,
         "hangar" => p.hangar_level,
         _ => return Err(StatusCode::BAD_REQUEST),
     };
@@ -674,19 +500,17 @@ async fn upgrade_mine_handler(
     }
 
     let facility_level = match type_mine.as_str() {
-        "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level, // <-- AJOUTÉ armour
+        "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level,
         _ => p.shipyard_level,
     };
 
     let build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level);
     
-// DÉBIT DES RESSOURCES
-let mut active: planet::ActiveModel = p.clone().into();
-active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
-active.crystal_amount = Set(active.crystal_amount.unwrap() - cost.crystal);
-active.deuterium_amount = Set(active.deuterium_amount.unwrap() - cost.deuterium);
-active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
+    let mut active: planet::ActiveModel = p.clone().into();
+    active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
+    active.crystal_amount = Set(active.crystal_amount.unwrap() - cost.crystal);
+    active.deuterium_amount = Set(active.deuterium_amount.unwrap() - cost.deuterium);
+    active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let queue_item = construction_queue::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -717,27 +541,27 @@ async fn build_fleet_handler(
 
     if active_constructions >= 3 { return Err(StatusCode::CONFLICT); }
 
-if !["missile_launcher", "plasma_turret"].contains(&type_ship.as_str()) {
-    let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
-                           + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
-    let max_capacity = game_logic::get_fleet_capacity(p.hangar_level);
-    
-    let pending_in_queue: i32 = ConstructionQueue::find()
-        .filter(construction_queue::Column::PlanetId.eq(p.id))
-        .all(&state.db)
-        .await
-        .unwrap_or_default()
-        .iter()
-        .filter(|i| ["light_hunter", "cruiser", "transporter", "colony_ship", "recycler", "spy_probe"].contains(&i.building_type.as_str()))
-        .map(|i| i.level) 
-        .sum();
+    if !["missile_launcher", "plasma_turret"].contains(&type_ship.as_str()) {
+        let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
+                               + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
+        let max_capacity = game_logic::get_fleet_capacity(p.hangar_level);
+        
+        let pending_in_queue: i32 = ConstructionQueue::find()
+            .filter(construction_queue::Column::PlanetId.eq(p.id))
+            .all(&state.db)
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter(|i| ["light_hunter", "cruiser", "transporter", "colony_ship", "recycler", "spy_probe"].contains(&i.building_type.as_str()))
+            .map(|i| i.level) 
+            .sum();
 
-    if (current_fleet_size + pending_in_queue + qty) > max_capacity { 
-        return Err(StatusCode::CONFLICT); 
-    }
+        if (current_fleet_size + pending_in_queue + qty) > max_capacity { 
+            return Err(StatusCode::CONFLICT); 
+        }
     }
     
-    if let Err(_) = game_logic::check_prerequisites(&p, &type_ship) { return Err(StatusCode::FORBIDDEN); }
+    if game_logic::check_prerequisites(&p, &type_ship).is_err() { return Err(StatusCode::FORBIDDEN); }
 
     let (cost_m, cost_c) = match type_ship.as_str() {
         "light_hunter" => game_logic::get_light_hunter_stats(),
@@ -825,7 +649,6 @@ async fn attack_handler(
     };
     new_mission.insert(&state.db).await.unwrap();
 
-    // ICI : On renvoie un succès explicite pour le frontend
     (StatusCode::OK, Json(json!({ 
         "status": "success", 
         "message": "Flotte en route",
@@ -851,9 +674,7 @@ async fn expedition_handler(
     }
 
     let mut active: planet::ActiveModel = p.clone().into();
-    let mut loot = 0.0;
-    let mut loot_metal = 0.0;
-let mut loot_crystal = 0.0;
+    let loot = 0.0;
     let mut logs: Vec<String> = Vec::new();
     let winner; 
     let mut lost_hunters = 0;
@@ -861,52 +682,53 @@ let mut loot_crystal = 0.0;
 
     let combat_triggered = rand::thread_rng().gen_bool(0.3);
 
-// Ligne ~762-792 : Remplacer tout le bloc combat par :
-if combat_triggered {
-    logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
-    let combat_res = game_logic::simulate_combat(p.light_hunter_count + p.cruiser_count, p.laser_battery_level);
+    let (loot_metal, loot_crystal) = if combat_triggered {
+        logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
+        let combat_res = game_logic::simulate_combat(p.light_hunter_count + p.cruiser_count, p.laser_battery_level);
 
-    if combat_res.victory {
-        winner = "player";
-        let mut rng = rand::thread_rng();
-        let loot_metal = rng.gen_range(30.0..=250.0) * (game_logic::SPEED_FACTOR / 100.0);
-        let loot_crystal = rng.gen_range(15.0..=100.0) * (game_logic::SPEED_FACTOR / 100.0);
-        
-        logs.push(format!("RESULTAT : {}", combat_res.message));
-        logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", loot_metal, loot_crystal));
-        
-        lost_hunters = combat_res.ships_lost; 
-        if lost_hunters > p.light_hunter_count { lost_hunters = p.light_hunter_count; }
-        
-        active.metal_amount = Set(p.metal_amount + loot_metal);
-        active.crystal_amount = Set(p.crystal_amount + loot_crystal);
+        if combat_res.victory {
+            winner = "player";
+            let mut rng = rand::thread_rng();
+            let metal = rng.gen_range(30.0..=250.0) * (game_logic::SPEED_FACTOR / 100.0);
+            let crystal = rng.gen_range(15.0..=100.0) * (game_logic::SPEED_FACTOR / 100.0);
+            
+            logs.push(format!("RESULTAT : {}", combat_res.message));
+            logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
+            
+            lost_hunters = combat_res.ships_lost; 
+            if lost_hunters > p.light_hunter_count { lost_hunters = p.light_hunter_count; }
+            
+            active.metal_amount = Set(p.metal_amount + metal);
+            active.crystal_amount = Set(p.crystal_amount + crystal);
+            (metal, crystal)
+        } else {
+            winner = "pirates";
+            logs.push(format!("RESULTAT : {}", combat_res.message));
+            lost_hunters = (p.light_hunter_count as f64 * 0.5) as i32; 
+            lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;
+            (0.0, 0.0)
+        }
     } else {
-        winner = "pirates";
-        logs.push(format!("RESULTAT : {}", combat_res.message));
-        lost_hunters = (p.light_hunter_count as f64 * 0.5) as i32; 
-        lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;
-    }
+        winner = "player"; 
+        let mut rng = rand::thread_rng();
+        let metal = rng.gen_range(30.0..=250.0) * (game_logic::SPEED_FACTOR / 100.0);
+        let crystal = rng.gen_range(15.0..=100.0) * (game_logic::SPEED_FACTOR / 100.0);
+        
+        logs.push("SCAN : Secteur calme.".to_string());
+        logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", metal, crystal));
+        
+        active.metal_amount = Set(p.metal_amount + metal);
+        active.crystal_amount = Set(p.crystal_amount + crystal);
+        (metal, crystal)
+    };
     
     active.light_hunter_count = Set(p.light_hunter_count - lost_hunters);
     active.cruiser_count = Set(p.cruiser_count - lost_cruisers);
-} else {
-    winner = "player"; 
-    let mut rng = rand::thread_rng();
-    let loot_metal = rng.gen_range(30.0..=250.0) * (game_logic::SPEED_FACTOR / 100.0);
-    let loot_crystal = rng.gen_range(15.0..=100.0) * (game_logic::SPEED_FACTOR / 100.0);
-    
-    logs.push("SCAN : Secteur calme.".to_string());
-    logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", loot_metal, loot_crystal));
-    
-    active.metal_amount = Set(p.metal_amount + loot_metal);
-    active.crystal_amount = Set(p.crystal_amount + loot_crystal);
-}
-
 
     let duration = std::cmp::max(1, (600.0 / game_logic::SPEED_FACTOR) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
     
-    if let Err(_) = active.update(&state.db).await {
+    if active.update(&state.db).await.is_err() {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB Update Error"}))).into_response();
     }
     
@@ -1000,7 +822,6 @@ async fn get_transport_logs_handler(
     Json(logs_json)
 }
 
-
 fn calculate_flight_time(source_sys: i32, target_sys: i32, speed_factor: f64) -> i64 {
     let distance = (source_sys - target_sys).abs() as f64;
     let base_time = 30.0 + (distance * 10.0); 
@@ -1075,8 +896,6 @@ async fn spy_handler(
     }))).into_response()
 }
 
-
-
 async fn recycle_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -1140,7 +959,6 @@ async fn recycle_handler(
     }))).into_response()
 }
 
-
 async fn get_galaxy_handler(
     Path((galaxy_id, system_id)): Path<(i32, i32)>,
     State(state): State<AppState>,
@@ -1181,8 +999,6 @@ async fn get_galaxy_handler(
     }
     Json(slots)
 }
-
-
 
 async fn get_galaxy_scan_handler(
     Path(galaxy_id): Path<i32>,
@@ -1290,8 +1106,6 @@ async fn get_my_planets_handler(
     (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète introuvable"}))).into_response()
 }
 
-
-
 async fn transport_handler(
     State(state): State<AppState>, Query(params): Query<HashMap<String, String>>, Json(payload): Json<TransportPayload>,
 ) -> impl IntoResponse {
@@ -1347,8 +1161,6 @@ async fn transport_handler(
 
     (StatusCode::OK, Json(json!({ "status": "success", "message": format!("Flotte lancée ! Arrivée dans {}s", flight_duration) }))).into_response()
 }
-
-
 
 async fn rename_planet_handler(Path(id): Path<Uuid>, State(state): State<AppState>, Json(payload): Json<RenamePlanetPayload>) -> impl IntoResponse {
     let p_opt = Planet::find_by_id(id).one(&state.db).await.unwrap();
