@@ -213,10 +213,10 @@ pub async fn send_message_v2_handler(
         inserted.id
     };
 
-    // ✅ FIX: conversation_id est déjà Option<Uuid>, donc pas de Some()
+    // ✅ Pour ActiveModel avec Option<T>, utiliser Set(Some(value))
     let new_message = message::ActiveModel {
         id: Set(Uuid::new_v4()),
-        conversation_id: Set(conv_id),
+        conversation_id: Set(Some(conv_id)),
         sender_id: Set(sender_id),
         receiver_id: Set(recipient_id),
         subject: Set(payload.subject.unwrap_or_default()),
