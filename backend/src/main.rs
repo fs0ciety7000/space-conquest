@@ -517,7 +517,10 @@ async fn attack_handler(State(state): State<AppState>, axum::extract::Query(para
 }
 
 // ✅ TYPE RETOUR Response CONCRET (au lieu de impl IntoResponse)
-async fn expedition_handler(Path(id): Path<Uuid>, State(state): State<AppState>) -> Response {
+async fn expedition_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>
+) -> impl IntoResponse {
     let p_res = Planet::find_by_id(id).one(&state.db).await;
     let p = match p_res { Ok(Some(found)) => found, _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response() };
 
