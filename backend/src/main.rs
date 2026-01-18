@@ -801,9 +801,9 @@ async fn attack_handler(
 }
 
 async fn expedition_handler(
-    Path(id): Path<Uuid>,
     State(state): State<AppState>,
-) -> Response { 
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
     
     let p_res = Planet::find_by_id(id).one(&state.db).await;
     let p = match p_res {
