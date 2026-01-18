@@ -260,16 +260,20 @@ export default function App() {
     }
   }, [planetId, token, playSound]);
 
-  const launchExpedition = async () => {
+  const launchExpedition = async (shipCount: number) => {
     if (!planetId || !token) return;
     try {
       const res = await fetch(apiUrl(`/planets/${planetId}/expedition`), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ship_count: shipCount })
       });
       if (res.ok) {
         const data = await res.json();
-        setPlanet(data.planet); 
+        setPlanet(data.planet);
         setCombatReport(data.report);
         setShowCombatModal(true);
         playSound('expedition');
@@ -280,8 +284,8 @@ export default function App() {
         playSound('error');
         window.dispatchEvent(new Event('error-occurred'));
       }
-    } catch (e) { 
-        toast.error("Erreur réseau"); 
+    } catch (e) {
+        toast.error("Erreur réseau");
         playSound('error');
         window.dispatchEvent(new Event('error-occurred'));
     }

@@ -78,6 +78,11 @@ struct ColonizePayload {
 }
 
 #[derive(Deserialize)]
+struct ExpeditionPayload {
+    ship_count: i32,
+}
+
+#[derive(Deserialize)]
 struct TransportPayload {
     target_planet_id: Uuid,
     transporters: i32,
@@ -159,6 +164,7 @@ async fn main() {
         .route("/planets/:id/cancel-construction/:queue_id", delete(cancel_construction_handler))
         .route("/planets/:id/build-fleet/:type/:qty", post(build_fleet_handler))
         .route("/planets/:id/expedition", post(expedition_handler))
+        .route("/planets/:id/expedition/scout", post(scout_expedition_handler))
         .route("/planets/:id/clear-report", post(clear_report_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
         .route("/planets/:id/transport-logs", get(get_transport_logs_handler))
@@ -706,8 +712,9 @@ async fn attack_handler(
 async fn expedition_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
-) -> impl IntoResponse { 
-    
+    Json(payload): Json<ExpeditionPayload>,
+) -> impl IntoResponse {
+
     let p_res = Planet::find_by_id(id).one(&state.db).await;
     let p = match p_res {
         Ok(Some(found)) => found,
@@ -720,10 +727,19 @@ async fn expedition_handler(
         }
     }
 
+    // Validation du nombre de vaisseaux
+    let ship_count = payload.ship_count;
+    if ship_count <= 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
+    }
+    if ship_count > p.light_hunter_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de vaisseaux"}))).into_response();
+    }
+
     let mut active: planet::ActiveModel = p.clone().into();
     let loot = 0.0;
     let mut logs: Vec<String> = Vec::new();
-    let winner; 
+    let winner;
     let mut lost_hunters = 0;
     let mut lost_cruisers = 0;
 
@@ -731,7 +747,7 @@ async fn expedition_handler(
 
     let (loot_metal, loot_crystal) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
-        let combat_res = game_logic::simulate_combat(p.light_hunter_count + p.cruiser_count, p.laser_battery_level);
+        let combat_res = game_logic::simulate_combat(ship_count + p.cruiser_count, p.laser_battery_level);
 
         if combat_res.victory {
             winner = "player";
@@ -741,17 +757,17 @@ async fn expedition_handler(
             
             logs.push(format!("RESULTAT : {}", combat_res.message));
             logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
-            
-            lost_hunters = combat_res.ships_lost; 
-            if lost_hunters > p.light_hunter_count { lost_hunters = p.light_hunter_count; }
-            
+
+            lost_hunters = combat_res.ships_lost;
+            if lost_hunters > ship_count { lost_hunters = ship_count; }
+
             active.metal_amount = Set(p.metal_amount + metal);
             active.crystal_amount = Set(p.crystal_amount + crystal);
             (metal, crystal)
         } else {
             winner = "pirates";
             logs.push(format!("RESULTAT : {}", combat_res.message));
-            lost_hunters = (p.light_hunter_count as f64 * 0.5) as i32; 
+            lost_hunters = (ship_count as f64 * 0.5) as i32;
             lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;
             (0.0, 0.0)
         }
@@ -813,6 +829,66 @@ async fn expedition_handler(
 });
 
     (StatusCode::OK, Json(response)).into_response()
+}
+
+async fn scout_expedition_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<ExpeditionPayload>,
+) -> impl IntoResponse {
+    let p_res = Planet::find_by_id(id).one(&state.db).await;
+    let p = match p_res {
+        Ok(Some(found)) => found,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+    };
+
+    let ship_count = payload.ship_count;
+    if ship_count <= 0 || ship_count > p.light_hunter_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
+    }
+
+    // Simulation du scan (aléatoire mais basé sur la force de la flotte)
+    let mut rng = rand::thread_rng();
+    let base_danger = rng.gen_range(0..100);
+
+    let (danger_level, color, probability, recommendation) = if base_danger < 30 {
+        (
+            "FAIBLE",
+            "green",
+            rng.gen_range(85..95),
+            "Secteur relativement sûr. Expédition recommandée."
+        )
+    } else if base_danger < 70 {
+        (
+            "MOYEN",
+            "orange",
+            rng.gen_range(60..85),
+            "Présence hostile possible. Envoyez une flotte suffisante."
+        )
+    } else {
+        (
+            "ÉLEVÉ",
+            "red",
+            rng.gen_range(30..60),
+            "ATTENTION : Zone très hostile détectée. Risque élevé de pertes."
+        )
+    };
+
+    // Ajustement de la probabilité en fonction du nombre de vaisseaux
+    let adjusted_probability = if ship_count >= 10 {
+        std::cmp::min(95, probability + 10)
+    } else if ship_count >= 5 {
+        probability
+    } else {
+        std::cmp::max(20, probability - 10)
+    };
+
+    Json(json!({
+        "danger": danger_level,
+        "color": color,
+        "probability": adjusted_probability,
+        "recommendation": recommendation
+    })).into_response()
 }
 
 async fn get_reports_handler(
