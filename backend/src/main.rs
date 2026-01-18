@@ -121,6 +121,15 @@ struct SystemSummary {
     has_me: bool,
 }
 
+#[derive(Serialize)]
+pub struct UserResponse {
+    id: Uuid,
+    username: String,
+    email: String,
+    
+}
+
+
 #[tokio::main]
 async fn main() {
     let config = Config::from_env();
@@ -172,6 +181,8 @@ async fn main() {
 .route("/conversations/:id/archive", post(messaging::toggle_archive_conversation_handler)) // ✅ AJOUT
 .route("/conversations/:id", delete(messaging::delete_conversation_handler))
 .route("/send-message-v2", post(messaging::send_message_v2_handler))
+
+.route("/users/:id", get(get_user_handler))
         // Admin
         .route("/admin/players", get(admin::get_all_players_handler))
         .route("/admin/planet/:id", get(admin::get_planet_admin_handler))
@@ -1277,3 +1288,50 @@ async fn count_unread_messages(user_id: Uuid, db: &DatabaseConnection) -> i32 {
     total_unread
 }
 
+// Handler pour récupérer un utilisateur par ID
+pub async fn get_user_by_id(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let user = User::find_by_id(user_id)
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    match user {
+        Some(u) => {
+            let response = UserResponse {
+                id: u.id,
+                username: u.username,
+                email: u.email,
+               
+            };
+            (StatusCode::OK, Json(response)).into_response()
+        }
+        None => {
+            (StatusCode::NOT_FOUND, Json(json!({"error": "User not found"}))).into_response()
+        }
+    }
+}
+
+// Handler pour récupérer les infos utilisateur
+async fn get_user_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let user = User::find_by_id(user_id)
+        .one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    
+    // Ne pas exposer le mot de passe
+    let response = json!({
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+    });
+    
+    Ok(Json(response))
+}

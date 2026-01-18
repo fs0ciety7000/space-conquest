@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 
 interface LoginProps {
-  onLogin: (token: string, planetId: string, userId: string, username: string) => void;
+  onLogin: (token: string, planetId: string, userId: string, username: string, email: string) => void;
 }
 
 interface LoginResponse {
@@ -15,6 +15,7 @@ interface LoginResponse {
   planet_id: string;
   user_id: string;
   username: string;
+  email:  string;
 }
 
 interface RegisterResponse {
@@ -188,7 +189,7 @@ export default function Login({ onLogin }: LoginProps) {
         }
         
         toast.success(`🚀 Bienvenue, Commandant ${loginData.username} !`);
-        onLogin(loginData.token, loginData.planet_id, loginData.user_id, loginData.username);
+        onLogin(loginData.token, loginData.planet_id, loginData.user_id, loginData.username, loginData.email);
       }
     } catch (err: any) {
       console.error('💥 Erreur lors de la requête:', err);
