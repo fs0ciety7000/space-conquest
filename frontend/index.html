@@ -24,7 +24,7 @@
     
     <!-- Service Worker Registration -->
     <script>
-      if ('serviceWorker' in navigator) {
+      if ('serviceWorker' in navigator && import.meta.env.PROD) {  // ✅ Seulement en production
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
             .then((registration) => {

@@ -13,11 +13,14 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-
     server: {
       host: true,
       port: 5173,
-      // Proxy pour le dev (optionnel mais pratique)
+      hmr: {
+        protocol: 'ws',
+        host: 'localhost',
+        clientPort: 5173,
+      },
       proxy: mode === 'development' ? {
         '/api': {
           target: env.VITE_API_URL || 'http://localhost:8080',
@@ -26,7 +29,6 @@ export default defineConfig(({ mode }) => {
         }
       } : undefined
     },
-    
     preview: {
       host: true,
       port: 3000,
