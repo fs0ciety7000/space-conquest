@@ -1091,7 +1091,7 @@ async fn recycle_handler(
         "status": "success",
         "message": format!("Recyclage terminé. +{:.0} Métal, +{:.0} Cristal", harvested_m, harvested_c),
         "harvested": { "metal": harvested_m, "crystal": harvested_c }
-    }))).into_response();
+    }))).into_response()
 }
 
 
