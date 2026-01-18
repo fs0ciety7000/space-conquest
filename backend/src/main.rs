@@ -803,6 +803,7 @@ async fn attack_handler(
 async fn expedition_handler(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    
 ) -> impl IntoResponse {
     
     let p_res = Planet::find_by_id(id).one(&state.db).await;
