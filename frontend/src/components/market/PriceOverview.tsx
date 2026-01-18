@@ -1,68 +1,88 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Gem, Droplet, Box } from "lucide-react";
+import { TrendingUp, TrendingDown, Activity, Stone, Gem, Droplets } from "lucide-react";
 
 interface PriceOverviewProps {
   stats: any;
 }
 
-const resourceIcons: Record<string, any> = {
-  metal: Box,
-  crystal: Gem,
-  deuterium: Droplet,
-};
-
-const resourceColors: Record<string, string> = {
-  metal: "text-gray-400",
-  crystal: "text-cyan-400",
-  deuterium: "text-green-400",
-};
-
 export default function PriceOverview({ stats }: PriceOverviewProps) {
-  if (!stats || !stats.npc_prices) return null;
+  const resources = [
+    { 
+      name: "Métal", 
+      key: "metal",
+      icon: Stone,
+      color: "text-slate-400",
+      border: "border-slate-500/50",
+      bg: "bg-slate-500/10",
+      gradient: "from-slate-950 to-slate-900/20"
+    },
+    { 
+      name: "Cristal", 
+      key: "crystal",
+      icon: Gem,
+      color: "text-cyan-400",
+      border: "border-cyan-500/50",
+      bg: "bg-cyan-500/10",
+      gradient: "from-slate-950 to-cyan-950/20"
+    },
+    { 
+      name: "Deutérium", 
+      key: "deuterium",
+      icon: Droplets,
+      color: "text-emerald-400",
+      border: "border-emerald-500/50",
+      bg: "bg-emerald-500/10",
+      gradient: "from-slate-950 to-emerald-950/20"
+    }
+  ];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {stats.npc_prices.map((price: any) => {
-        const Icon = resourceIcons[price.resource_type];
-        const color = resourceColors[price.resource_type];
-
+      {resources.map(resource => {
+        const price = stats?.prices?.[resource.key] || { buy: 1.0, sell: 1.0, market: 1.0 };
+        const ResourceIcon = resource.icon;
+        
         return (
-          <Card key={price.resource_type} className="bg-slate-900 border border-white/10">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className={`p-2 rounded-lg border border-white/10 ${color}`}>
-                  <Icon size={20} />
+          <div 
+            key={resource.key} 
+            className={`relative overflow-hidden border-t-4 ${resource.border} bg-gradient-to-b ${resource.gradient} shadow-2xl group rounded-lg`}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
+            <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
+              <Activity size={120} className={resource.color} />
+            </div>
+
+            <div className="p-5 relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg border ${resource.border} bg-black/20 ${resource.color}`}>
+                    <ResourceIcon size={20} />
+                  </div>
+                  <span className="font-black uppercase tracking-wider text-white text-sm">{resource.name}</span>
                 </div>
-                <div>
-                  <h3 className="text-white font-semibold capitalize">
-                    {price.resource_type}
-                  </h3>
-                  <p className="text-xs text-gray-500">Prix NPC</p>
-                </div>
+                <span className={`text-xl font-black font-mono ${resource.color} opacity-80`}>
+                  {price.market.toFixed(2)}
+                </span>
               </div>
 
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Achète à:</span>
-                  <span className="text-red-400 font-mono">
-                    {price.npc_buy_price.toFixed(2)}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-2 bg-black/30 rounded border border-white/5">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                    <TrendingDown size={12} className="text-green-400" />
+                    Achat PNJ
                   </span>
+                  <span className="text-xs font-mono text-green-400 font-bold">{price.buy.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Vend à:</span>
-                  <span className="text-green-400 font-mono">
-                    {price.npc_sell_price.toFixed(2)}
+
+                <div className="flex items-center justify-between p-2 bg-black/30 rounded border border-white/5">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                    <TrendingUp size={12} className="text-red-400" />
+                    Vente PNJ
                   </span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-white/10">
-                  <span className="text-gray-400">Prix marché:</span>
-                  <span className="text-white font-mono">
-                    {price.market_price.toFixed(2)}
-                  </span>
+                  <span className="text-xs font-mono text-red-400 font-bold">{price.sell.toFixed(2)}</span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         );
       })}
     </div>
