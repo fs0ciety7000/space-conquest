@@ -4,8 +4,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    ActiveModelTrait, DatabaseConnection,
-    EntityTrait, Set, IntoActiveModel, 
+    ActiveModelTrait, EntityTrait, Set, 
     QueryFilter, QueryOrder, ColumnTrait, Condition,
 };
 use serde::{Deserialize, Serialize};
