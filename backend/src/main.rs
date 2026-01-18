@@ -6,9 +6,18 @@ use axum::{
     Router,
 };
 use sea_orm::{
-    ActiveModelTrait, Database, DatabaseConnection,
-    EntityTrait, Set,
-    QueryFilter, QueryOrder, ColumnTrait, Condition,
+    ActiveModelTrait, 
+    DatabaseConnection,
+    Database,
+    EntityTrait, 
+    Set, 
+    IntoActiveModel,     // ✅ Ajoute celui-ci
+    QueryFilter, 
+    QueryOrder, 
+    QuerySelect,         // ✅ Ajoute celui-ci
+    ColumnTrait, 
+    Condition,
+    PaginatorTrait,      // ✅ Ajoute celui-ci
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_string};
