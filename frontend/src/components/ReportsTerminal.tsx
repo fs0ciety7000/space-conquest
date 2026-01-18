@@ -88,7 +88,41 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                 combatLogs.map(log => {
                     const isVictory = log.result === 'victory';
                     const isDefense = log.mission_type === 'defense';
+                    const isSpy = log.mission_type === 'spy_defense';
+                    const isExpedition = log.mission_type === 'expedition';
 
+                    // Rapport d'espionnage
+                    if (isSpy) {
+                        return (
+                            <div key={log.id} className="bg-purple-950/10 border border-purple-500/30 p-3 rounded-lg flex items-center justify-between group hover:bg-purple-950/20 transition-colors">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
+                                        <ShieldAlert size={16} />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-black uppercase text-purple-400">
+                                                ESPIONNAGE DÉTECTÉ
+                                            </span>
+                                            <span className="text-[10px] text-slate-500 font-mono">
+                                                par {log.opponent_username || "Inconnu"}
+                                            </span>
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 mt-0.5">
+                                            {formatDate(log.date)}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[10px] text-purple-300 font-mono">
+                                        Source: {log.target_name}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
+
+                    // Rapports de combat normaux
                     return (
                         <div key={log.id} className="bg-black/20 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors">
                             <div className="flex items-center gap-4">
@@ -102,8 +136,8 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                                         </span>
                                         {/* NOM DE PLANÈTE + USERNAME */}
                                         <span className="text-[10px] text-slate-500 font-mono">
-                                            vs {log.target_name} 
-                                            {log.opponent_username && <span className="text-slate-400 ml-1">(Cdt. {log.opponent_username})</span>}
+                                            {isExpedition ? 'Expédition' : `vs ${log.target_name}`}
+                                            {log.opponent_username && !isExpedition && <span className="text-slate-400 ml-1">(Cdt. {log.opponent_username})</span>}
                                         </span>
                                     </div>
                                     <div className="text-[10px] text-slate-400 mt-0.5">
@@ -114,7 +148,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
 
                             <div className="text-right">
                                 <div className="text-xs font-mono text-white">
-                                    <span className="text-yellow-500">+{Math.floor(log.loot_metal).toLocaleString()}</span> M / 
+                                    <span className="text-yellow-500">+{Math.floor(log.loot_metal).toLocaleString()}</span> M /
                                     <span className="text-cyan-500"> +{Math.floor(log.loot_crystal).toLocaleString()}</span> C
                                 </div>
                                 <div className="text-[10px] text-red-400/70 font-mono">

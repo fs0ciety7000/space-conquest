@@ -50,17 +50,25 @@ use entities::{
     planet, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history
 };
 
+#[derive(Serialize, Clone)]
+struct PlanetInfo {
+    id: Uuid,
+    name: String,
+    total_score: i32,
+    economy_score: i32,
+    military_score: i32,
+}
+
 #[derive(Serialize)]
 struct RankItem {
-   rank: usize,
+    rank: usize,
     username: String,
-    planet_name: String,
     total_score: i32,
     economy_score: i32,
     military_score: i32,
     is_me: bool,
-    id: Uuid,
     owner_id: Uuid,
+    planets: Vec<PlanetInfo>,
 }
 
 #[derive(Deserialize)]
@@ -334,51 +342,81 @@ async fn get_ranking_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    
+
     let current_planet_id = params.get("current_planet_id")
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or_default();
-    
+
     let sort_type = params.get("type").map(|s| s.as_str()).unwrap_or("general");
 
     let planets = Planet::find().all(&state.db).await.unwrap_or_default();
     let users = User::find().all(&state.db).await.unwrap_or_default();
-    
-    let user_map: HashMap<Uuid, String> = users.into_iter()
-        .map(|u| (u.id, u.username))
+
+    // Créer un map utilisateur -> nom
+    let user_map: HashMap<Uuid, String> = users.iter()
+        .map(|u| (u.id, u.username.clone()))
         .collect();
 
-    // ✅ Utiliser la fonction partagée calculate_planet_points
-    let mut ranked_planets: Vec<RankItem> = planets.into_iter().map(|p| {
-        let (total, economy, military) = game_logic::calculate_planet_points(&p);
-        let username = user_map.get(&p.owner_id).cloned().unwrap_or("Inconnu".to_string());
+    // Trouver l'owner_id de la planète actuelle pour "is_me"
+    let current_owner_id = planets.iter()
+        .find(|p| p.id == current_planet_id)
+        .map(|p| p.owner_id);
+
+    // Grouper les planètes par propriétaire
+    let mut user_planets: HashMap<Uuid, Vec<planet::Model>> = HashMap::new();
+    for planet in planets {
+        user_planets.entry(planet.owner_id).or_insert_with(Vec::new).push(planet);
+    }
+
+    // Créer les RankItems (un par joueur)
+    let mut ranked_users: Vec<RankItem> = user_planets.into_iter().map(|(owner_id, planets)| {
+        let mut total_score = 0;
+        let mut total_economy = 0;
+        let mut total_military = 0;
+
+        let planet_infos: Vec<PlanetInfo> = planets.iter().map(|p| {
+            let (total, economy, military) = game_logic::calculate_planet_points(p);
+            total_score += total;
+            total_economy += economy;
+            total_military += military;
+
+            PlanetInfo {
+                id: p.id,
+                name: p.name.clone(),
+                total_score: total,
+                economy_score: economy,
+                military_score: military,
+            }
+        }).collect();
+
+        let username = user_map.get(&owner_id).cloned().unwrap_or("Inconnu".to_string());
+        let is_me = current_owner_id.map(|id| id == owner_id).unwrap_or(false);
 
         RankItem {
-            rank: 0, 
+            rank: 0,
             username,
-            planet_name: p.name,
-            total_score: total,
-            economy_score: economy,
-            military_score: military,
-            is_me: p.id == current_planet_id,
-            id: p.id,
-            owner_id: p.owner_id,
+            total_score,
+            economy_score: total_economy,
+            military_score: total_military,
+            is_me,
+            owner_id,
+            planets: planet_infos,
         }
     }).collect();
 
     // Tri selon le type demandé
     match sort_type {
-        "economy" => ranked_planets.sort_by(|a, b| b.economy_score.cmp(&a.economy_score)),
-        "military" => ranked_planets.sort_by(|a, b| b.military_score.cmp(&a.military_score)),
-        _ => ranked_planets.sort_by(|a, b| b.total_score.cmp(&a.total_score)),
+        "economy" => ranked_users.sort_by(|a, b| b.economy_score.cmp(&a.economy_score)),
+        "military" => ranked_users.sort_by(|a, b| b.military_score.cmp(&a.military_score)),
+        _ => ranked_users.sort_by(|a, b| b.total_score.cmp(&a.total_score)),
     }
 
     // Assigner les rangs
-    for (i, item) in ranked_planets.iter_mut().enumerate() { 
-        item.rank = i + 1; 
+    for (i, item) in ranked_users.iter_mut().enumerate() {
+        item.rank = i + 1;
     }
-    
-    Json(ranked_planets)
+
+    Json(ranked_users)
 }
 
 
@@ -443,9 +481,20 @@ async fn get_planet_handler(
         if m.mission_type == "attack" {
             let _ = resolve_attack_mission(&state.db, m).await;
         } else if m.mission_type == "transport" {
-            active.metal_amount = Set(active.metal_amount.clone().unwrap() + m.metal);
-            active.crystal_amount = Set(active.crystal_amount.clone().unwrap() + m.crystal);
-            active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() + m.deuterium);
+            // Si c'est la planète cible, on crédite les ressources
+            if m.target_planet_id == id {
+                active.metal_amount = Set(active.metal_amount.clone().unwrap() + m.metal);
+                active.crystal_amount = Set(active.crystal_amount.clone().unwrap() + m.crystal);
+                active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() + m.deuterium);
+            }
+
+            // Retourner les transporteurs à la planète source
+            if let Ok(Some(mut source_planet)) = Planet::find_by_id(m.source_planet_id).one(&state.db).await {
+                let mut source_active: planet::ActiveModel = source_planet.into();
+                source_active.transporter_count = Set(source_active.transporter_count.clone().unwrap() + m.ships_count);
+                let _ = source_active.update(&state.db).await;
+            }
+
             let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
         }
     }
@@ -745,16 +794,20 @@ async fn expedition_handler(
 
     let combat_triggered = rand::thread_rng().gen_bool(0.3);
 
+    // Calcul des gains basé sur la taille de la flotte
+    let base_metal_per_ship = 50.0 + rand::thread_rng().gen_range(0.0..=50.0);
+    let base_crystal_per_ship = 20.0 + rand::thread_rng().gen_range(0.0..=30.0);
+
     let (loot_metal, loot_crystal) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
         let combat_res = game_logic::simulate_combat(ship_count + p.cruiser_count, p.laser_battery_level);
 
         if combat_res.victory {
             winner = "player";
-            let mut rng = rand::thread_rng();
-            let metal = rng.gen_range(30.0..=250.0) * (game_logic::SPEED_FACTOR / 100.0);
-            let crystal = rng.gen_range(15.0..=100.0) * (game_logic::SPEED_FACTOR / 100.0);
-            
+            // Gains proportionnels au nombre de vaisseaux
+            let metal = (base_metal_per_ship * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+            let crystal = (base_crystal_per_ship * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+
             logs.push(format!("RESULTAT : {}", combat_res.message));
             logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
 
@@ -772,14 +825,14 @@ async fn expedition_handler(
             (0.0, 0.0)
         }
     } else {
-        winner = "player"; 
-        let mut rng = rand::thread_rng();
-        let metal = rng.gen_range(30.0..=250.0) * (game_logic::SPEED_FACTOR / 100.0);
-        let crystal = rng.gen_range(15.0..=100.0) * (game_logic::SPEED_FACTOR / 100.0);
-        
+        winner = "player";
+        // Gains proportionnels au nombre de vaisseaux (bonus pour secteur calme)
+        let metal = (base_metal_per_ship * ship_count as f64 * 1.2) * (game_logic::SPEED_FACTOR / 100.0);
+        let crystal = (base_crystal_per_ship * ship_count as f64 * 1.2) * (game_logic::SPEED_FACTOR / 100.0);
+
         logs.push("SCAN : Secteur calme.".to_string());
         logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", metal, crystal));
-        
+
         active.metal_amount = Set(p.metal_amount + metal);
         active.crystal_amount = Set(p.crystal_amount + crystal);
         (metal, crystal)
@@ -883,11 +936,25 @@ async fn scout_expedition_handler(
         std::cmp::max(20, probability - 10)
     };
 
+    // Calcul des gains estimés (basé sur le même calcul que l'expédition réelle)
+    let base_metal_per_ship = 75.0; // Moyenne de 50-100
+    let base_crystal_per_ship = 35.0; // Moyenne de 20-50
+    let estimated_metal_min = (base_metal_per_ship * 0.7 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+    let estimated_metal_max = (base_metal_per_ship * 1.5 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+    let estimated_crystal_min = (base_crystal_per_ship * 0.7 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+    let estimated_crystal_max = (base_crystal_per_ship * 1.5 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+
     Json(json!({
         "danger": danger_level,
         "color": color,
         "probability": adjusted_probability,
-        "recommendation": recommendation
+        "recommendation": recommendation,
+        "estimated_loot": {
+            "metal_min": estimated_metal_min as i32,
+            "metal_max": estimated_metal_max as i32,
+            "crystal_min": estimated_crystal_min as i32,
+            "crystal_max": estimated_crystal_max as i32
+        }
     })).into_response()
 }
 
@@ -1007,12 +1074,30 @@ async fn spy_handler(
     }
 
     // Notify the defender that they were spied on
-    let mut def_active: planet::ActiveModel = def_planet.into();
+    let mut def_active: planet::ActiveModel = def_planet.clone().into();
     def_active.unread_report = Set(Some(json!({
         "type": "spy_alert",
         "message": "Votre planète a été espionnée !"
     }).to_string()));
     let _ = def_active.update(&state.db).await;
+
+    // Create a spy report in combat_log for the defender
+    let att_user = User::find_by_id(att_planet.owner_id).one(&state.db).await.unwrap();
+    let attacker_username = att_user.map(|u| u.username).unwrap_or("Inconnu".to_string());
+
+    let spy_log = combat_log::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(def_planet.id),
+        target_name: Set(att_planet.name.clone()),
+        opponent_username: Set(Some(attacker_username)),
+        mission_type: Set("spy_defense".to_string()),
+        result: Set("alert".to_string()),
+        loot_metal: Set(0.0),
+        loot_crystal: Set(0.0),
+        ships_lost: Set(0),
+        date: Set(Utc::now().naive_utc()),
+    };
+    let _ = spy_log.insert(&state.db).await;
 
     (StatusCode::OK, Json(json!({
         "status": "success",

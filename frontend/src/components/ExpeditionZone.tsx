@@ -11,7 +11,18 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
   const [isLaunching, setIsLaunching] = useState(false);
   const [shipCount, setShipCount] = useState(1);
   const [scouting, setScouting] = useState(false);
-  const [scoutResult, setScoutResult] = useState<{ danger: string; probability: number; recommendation: string; color: string } | null>(null);
+  const [scoutResult, setScoutResult] = useState<{
+    danger: string;
+    probability: number;
+    recommendation: string;
+    color: string;
+    estimated_loot?: {
+      metal_min: number;
+      metal_max: number;
+      crystal_min: number;
+      crystal_max: number;
+    }
+  } | null>(null);
 
   // Gestion du compte à rebours visuel (purement UI)
   useEffect(() => {
@@ -235,6 +246,23 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                         <span className="text-slate-400">Chance de succès:</span>
                         <span className="font-bold text-white">{scoutResult.probability}%</span>
                       </div>
+                      {scoutResult.estimated_loot && (
+                        <div className="mt-3 pt-3 border-t border-white/10 space-y-1">
+                          <div className="text-[9px] uppercase font-bold text-cyan-400 mb-2">Gains Estimés</div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Métal:</span>
+                            <span className="font-mono text-white">
+                              {scoutResult.estimated_loot.metal_min.toLocaleString()} - {scoutResult.estimated_loot.metal_max.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Cristal:</span>
+                            <span className="font-mono text-white">
+                              {scoutResult.estimated_loot.crystal_min.toLocaleString()} - {scoutResult.estimated_loot.crystal_max.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       <div className="mt-3 pt-3 border-t border-white/10">
                         <p className="text-slate-300 italic">{scoutResult.recommendation}</p>
                       </div>
