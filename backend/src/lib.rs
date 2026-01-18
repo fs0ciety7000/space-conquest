@@ -4,6 +4,7 @@ pub mod combat;
 pub mod entities;
 pub mod config;
 pub mod admin;
+pub mod messaging;
 
 // Export AppState pour utilisation dans les modules
 use sea_orm::DatabaseConnection;
