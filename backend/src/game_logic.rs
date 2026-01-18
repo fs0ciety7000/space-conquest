@@ -170,6 +170,69 @@ pub fn calculate_resources(
     current_amount + (production_per_sec * duration)
 }
 
+// --- CALCULS ÉNERGIE ---
+
+/// Calcule la production d'énergie totale du solar plant
+pub fn calculate_energy_production(solar_plant_level: i32, energy_tech_level: i32) -> f64 {
+    if solar_plant_level == 0 {
+        return 0.0;
+    }
+
+    let base_production = 20.0 * (solar_plant_level as f64) * 1.1f64.powi(solar_plant_level);
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.05); // +5% par niveau
+    base_production * tech_bonus
+}
+
+/// Calcule la consommation d'énergie totale des mines
+pub fn calculate_energy_consumption(metal_mine_level: i32, crystal_mine_level: i32, deuterium_mine_level: i32) -> f64 {
+    let metal_cons = 10.0 * (metal_mine_level as f64) * 1.1f64.powi(metal_mine_level);
+    let crystal_cons = 10.0 * (crystal_mine_level as f64) * 1.1f64.powi(crystal_mine_level);
+    let deut_cons = 20.0 * (deuterium_mine_level as f64) * 1.1f64.powi(deuterium_mine_level);
+    metal_cons + crystal_cons + deut_cons
+}
+
+/// Calcule le ratio énergétique (production / consommation)
+/// Retourne un ratio entre 0.0 et 1.0 (ou plus si surplus)
+pub fn calculate_energy_ratio(solar_plant_level: i32, energy_tech_level: i32,
+                                metal_mine_level: i32, crystal_mine_level: i32,
+                                deuterium_mine_level: i32) -> f64 {
+    let production = calculate_energy_production(solar_plant_level, energy_tech_level);
+    let consumption = calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level);
+
+    if consumption == 0.0 {
+        return 1.0; // Pas de consommation = 100%
+    }
+
+    (production / consumption).min(1.0) // Max 100%
+}
+
+/// Calcule les ressources avec prise en compte du ratio énergétique
+pub fn calculate_resources_with_energy(
+    res_type: ResourceType,
+    level: i32,
+    current_amount: f64,
+    last_update: chrono::NaiveDateTime,
+    energy_tech_level: i32,
+    energy_ratio: f64 // Entre 0.0 et 1.0
+) -> f64 {
+    let now = chrono::Utc::now().naive_utc();
+    let duration = now.signed_duration_since(last_update).num_seconds() as f64;
+
+    // Bonus technologie énergie (+1% par niveau)
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.01);
+
+    // Production de base (ratio 3:2:1)
+    let base_production = match res_type {
+        ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),
+        ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),
+        ResourceType::Deuterium => 10.0 * (level as f64) * 1.05f64.powi(level),
+    };
+
+    // Application du ratio énergétique
+    let production_per_sec = (base_production * tech_bonus * energy_ratio / 3600.0) * (SPEED_FACTOR / 100.0);
+    current_amount + (production_per_sec * duration)
+}
+
 // --- COÛTS DES BÂTIMENTS (Exponentiel) ---
 pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
     let base_cost = match building_type {

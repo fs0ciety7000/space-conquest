@@ -384,11 +384,20 @@ async fn get_planet_handler(
     let now = Utc::now().naive_utc();
     let mut active: planet::ActiveModel = p.clone().into();
 
+    // Calculate energy ratio
+    let energy_ratio = game_logic::calculate_energy_ratio(
+        p.solar_plant_level,
+        p.energy_tech_level,
+        p.metal_mine_level,
+        p.crystal_mine_level,
+        p.deuterium_mine_level
+    );
+
     let elapsed = now.signed_duration_since(p.last_update).num_seconds();
     if elapsed > 0 {
-        active.metal_amount = Set(game_logic::calculate_resources(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update, p.energy_tech_level));
-        active.crystal_amount = Set(game_logic::calculate_resources(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update, p.energy_tech_level));
-        active.deuterium_amount = Set(game_logic::calculate_resources(game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update, p.energy_tech_level));
+        active.metal_amount = Set(game_logic::calculate_resources_with_energy(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update, p.energy_tech_level, energy_ratio));
+        active.crystal_amount = Set(game_logic::calculate_resources_with_energy(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update, p.energy_tech_level, energy_ratio));
+        active.deuterium_amount = Set(game_logic::calculate_resources_with_energy(game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update, p.energy_tech_level, energy_ratio));
         active.last_update = Set(now);
     }
 
@@ -453,17 +462,22 @@ async fn get_planet_handler(
 
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
-    let energy_prod = (20.0 * updated_model.solar_plant_level as f64 * 1.1f64.powf(updated_model.solar_plant_level as f64) * (1.0 + (updated_model.energy_tech_level as f64 * 0.05))) as i32;
-    let energy_cons = (10.0 * updated_model.metal_mine_level as f64 * 1.1f64.powf(updated_model.metal_mine_level as f64)) as i32;
+    // Calculate energy using new functions
+    let energy_prod = game_logic::calculate_energy_production(updated_model.solar_plant_level, updated_model.energy_tech_level);
+    let energy_cons = game_logic::calculate_energy_consumption(updated_model.metal_mine_level, updated_model.crystal_mine_level, updated_model.deuterium_mine_level);
+    let energy_ratio_percent = (energy_ratio * 100.0) as i32; // Convert to percentage
 
     // ✅ AJOUT : Calculer les messages non lus
-let unread_messages = count_unread_messages(p.owner_id, &state.db).await;
+    let unread_messages = count_unread_messages(p.owner_id, &state.db).await;
 
     let mut json_response = serde_json::to_value(updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
         obj.insert("incoming_missions".into(), json!(incoming_raw));
         obj.insert("outgoing_missions".into(), json!(outgoing_detailed));
-        obj.insert("energy".into(), json!(energy_prod - energy_cons));
+        obj.insert("energy".into(), json!(energy_prod as i32 - energy_cons as i32));
+        obj.insert("energy_production".into(), json!(energy_prod as i32));
+        obj.insert("energy_consumption".into(), json!(energy_cons as i32));
+        obj.insert("energy_ratio".into(), json!(energy_ratio_percent));
         obj.insert("unread_messages".into(), json!(unread_messages));
         let active_queue = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).order_by_asc(construction_queue::Column::EndTime).all(&state.db).await.unwrap_or_default();
         obj.insert("constructions".into(), json!(active_queue));
@@ -2084,12 +2098,11 @@ async fn buy_from_npc_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Calculate what player receives
+    // Calculate what player receives (no tax for NPC trades, only NPC margin)
     let gross_amount = payload.sell_quantity * exchange_rate;
-    let (net_amount, tax_amount) = market::apply_market_tax(gross_amount);
-
     // Apply NPC buy margin (NPC pays 85% of market price)
-    let final_amount = net_amount * market::NPC_BUY_MARGIN;
+    let final_amount = gross_amount * market::NPC_BUY_MARGIN;
+    let tax_amount = 0.0; // No tax for NPC trades
 
     // Execute transaction
     let mut active_planet = planet.clone().into_active_model();

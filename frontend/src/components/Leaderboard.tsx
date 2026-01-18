@@ -81,93 +81,94 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                 </div>
                 
                 {/* Tableau */}
-                <div className="overflow-hidden rounded-lg border border-white/5 bg-slate-950/30">
+                <div className="overflow-x-auto rounded-lg border border-white/5 bg-slate-950/30">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-white/5 text-slate-400 text-[10px] uppercase tracking-wider font-bold">
-                                <th className="p-4 w-16 text-center">Rang</th>
-                                <th className="p-4">Joueur</th>
-                                <th className="p-4">Planète Mère</th>
-                                <th className="p-4 text-right">Points</th>
-                                <th className="p-4 text-center">Actions</th>
+                                <th className="p-2 md:p-4 w-12 md:w-16 text-center">Rang</th>
+                                <th className="p-2 md:p-4">Joueur</th>
+                                <th className="p-2 md:p-4 hidden sm:table-cell">Planète</th>
+                                <th className="p-2 md:p-4 text-right">Points</th>
+                                <th className="p-2 md:p-4 text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="text-sm divide-y divide-white/5">
                             {ranking.map((player) => (
-                                <tr 
-                                    key={player.id} 
+                                <tr
+                                    key={player.id}
                                     className={`transition-all hover:bg-white/5 ${player.is_me ? 'bg-indigo-500/10 hover:bg-indigo-500/20' : ''}`}
                                 >
-                                    <td className="p-4 text-center">
+                                    <td className="p-2 md:p-4 text-center">
                                         <div className="flex justify-center items-center">
                                             {getRankIcon(player.rank)}
                                         </div>
                                     </td>
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-3">
+                                    <td className="p-2 md:p-4">
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                                             <button
                                                 onClick={() => setSelectedPlayer(player.owner_id)}
                                                 className="flex items-center gap-2 group"
                                             >
-                                                <span className={`font-bold text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2`}>
+                                                <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2`}>
                                                     {player.username}
                                                 </span>
                                             </button>
-                                            {player.is_me && <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-bold tracking-wider">VOUS</span>}
+                                            {player.is_me && <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-bold tracking-wider w-fit">VOUS</span>}
+                                            <span className="sm:hidden text-[10px] text-slate-400 font-mono">{player.planet_name}</span>
                                         </div>
                                     </td>
-                                    <td className="p-4 text-slate-400 font-mono text-xs">{player.planet_name}</td>
-                                    <td className="p-4 text-right">
-                                        <span className={`font-mono font-bold text-base ${
-                                            category === 'economy' ? 'text-emerald-400' : 
+                                    <td className="p-2 md:p-4 text-slate-400 font-mono text-xs hidden sm:table-cell">{player.planet_name}</td>
+                                    <td className="p-2 md:p-4 text-right">
+                                        <span className={`font-mono font-bold text-sm md:text-base ${
+                                            category === 'economy' ? 'text-emerald-400' :
                                             category === 'military' ? 'text-red-400' : 'text-yellow-400'
                                         }`}>
-                                            {category === 'general' ? player.total_score.toLocaleString() : 
-                                             category === 'economy' ? player.economy_score.toLocaleString() : 
+                                            {category === 'general' ? player.total_score.toLocaleString() :
+                                             category === 'economy' ? player.economy_score.toLocaleString() :
                                              player.military_score.toLocaleString()}
                                         </span>
                                     </td>
-                                    <td className="p-4">
-                                        <div className="flex justify-center gap-2">
+                                    <td className="p-2 md:p-4">
+                                        <div className="flex justify-center gap-1 md:gap-2 flex-wrap">
                                             {/* ✅ Bouton Profil (visible pour tous) */}
-                                            <Button 
-                                                size="icon" 
-                                                variant="ghost" 
-                                                className="h-8 w-8 hover:bg-purple-500/20 hover:text-purple-400 transition-colors"
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="h-7 w-7 md:h-8 md:w-8 hover:bg-purple-500/20 hover:text-purple-400 transition-colors"
                                                 onClick={() => setSelectedPlayer(player.owner_id)}
                                                 title="Voir le profil"
                                             >
-                                                <UserCircle size={16} />
+                                                <UserCircle size={14} className="md:w-4 md:h-4" />
                                             </Button>
 
                                             {!player.is_me && (
                                                 <>
-                                                    <Button 
-                                                        size="icon" 
-                                                        variant="ghost" 
-                                                        className="h-8 w-8 hover:bg-indigo-500/20 hover:text-indigo-400 transition-colors"
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className="h-7 w-7 md:h-8 md:w-8 hover:bg-indigo-500/20 hover:text-indigo-400 transition-colors"
                                                         onClick={() => onSendMessage(player.username)}
                                                         title="Envoyer un message"
                                                     >
-                                                        <MessageCircle size={16} />
+                                                        <MessageCircle size={14} className="md:w-4 md:h-4" />
                                                     </Button>
-                                                    <Button 
-                                                        size="icon" 
-                                                        variant="ghost" 
-                                                        className="h-8 w-8 hover:bg-blue-500/20 hover:text-blue-400 transition-colors"
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className="h-7 w-7 md:h-8 md:w-8 hover:bg-blue-500/20 hover:text-blue-400 transition-colors"
                                                         onClick={() => onSpy(player.id)}
                                                         title="Espionner"
                                                     >
-                                                        <Eye size={16} />
+                                                        <Eye size={14} className="md:w-4 md:h-4" />
                                                     </Button>
-                                                    <Button 
-                                                        size="icon" 
-                                                        variant="ghost" 
-                                                        className="h-8 w-8 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className="h-7 w-7 md:h-8 md:w-8 hover:bg-red-500/20 hover:text-red-400 transition-colors"
                                                         onClick={() => onAttack(player.id, player.planet_name)}
                                                         title="Attaquer"
                                                     >
-                                                        <Crosshair size={16} />
+                                                        <Crosshair size={14} className="md:w-4 md:h-4" />
                                                     </Button>
                                                 </>
                                             )}
