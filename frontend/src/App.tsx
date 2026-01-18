@@ -22,7 +22,7 @@ import { FloatingResourceGain, useResourceGainAnimation } from './components/Flo
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
 import { BuildQueue } from './components/BuildQueue';
-import { Tutorial, useTutorial } from './components/Tutorial';
+import Tutorial, { useTutorial } from './components/Tutorial';
 import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
 import { 

@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import Joyride, { Step, CallBackProps, STATUS, EVENTS } from 'react-joyride';
 import { toast } from 'sonner';
 
+// ✅ Version du tutoriel - changez uniquement si vous voulez forcer le re-affichage
+const TUTORIAL_VERSION = "1.0.0";
+
 interface TutorialProps {
   run: boolean;
   onComplete: () => void;
@@ -149,7 +152,7 @@ const tutorialSteps: Step[] = [
   },
 ];
 
-export function Tutorial({ run, onComplete }: TutorialProps) {
+export default function Tutorial({ run, onComplete }: TutorialProps) {
   const [stepIndex, setStepIndex] = useState(0);
 
   const handleJoyrideCallback = (data: CallBackProps) => {
@@ -232,14 +235,16 @@ export function Tutorial({ run, onComplete }: TutorialProps) {
   );
 }
 
-// Hook pour gérer l'état du tutoriel
+// ✅ Hook pour gérer l'état du tutoriel avec versioning
 export function useTutorial() {
   const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
-    // Vérifier si c'est la première visite
-    const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
-    if (!hasSeenTutorial) {
+    // ✅ Vérifier la version du tutoriel complété
+    const completedVersion = localStorage.getItem('tutorial_completed');
+    
+    // Afficher si jamais complété OU si version différente
+    if (!completedVersion || completedVersion !== TUTORIAL_VERSION) {
       // Démarrer le tutoriel après un court délai
       const timer = setTimeout(() => setShowTutorial(true), 1500);
       return () => clearTimeout(timer);
@@ -250,7 +255,8 @@ export function useTutorial() {
   
   const completeTutorial = () => {
     setShowTutorial(false);
-    localStorage.setItem('hasSeenTutorial', 'true');
+    // ✅ Sauvegarder avec la version
+    localStorage.setItem('tutorial_completed', TUTORIAL_VERSION);
   };
 
   return { showTutorial, startTutorial, completeTutorial };
