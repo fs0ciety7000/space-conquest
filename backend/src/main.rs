@@ -635,7 +635,7 @@ async fn upgrade_mine_handler(
         "shipyard" => p.shipyard_level,
         "laser" => p.laser_battery_level,
         "espionage" => p.espionage_tech_level,
-        "armour" => p.armour_tech_level, // <-- AJOUTÉ
+        "armour" => p.armour_tech_level,
         "hangar" => p.hangar_level,
         _ => return Err(StatusCode::BAD_REQUEST),
     };
@@ -648,19 +648,17 @@ async fn upgrade_mine_handler(
     }
 
     let facility_level = match type_mine.as_str() {
-        "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level, // <-- AJOUTÉ armour
+        "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level,
         _ => p.shipyard_level,
     };
 
     let build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level);
     
-// DÉBIT DES RESSOURCES
-let mut active: planet::ActiveModel = p.clone().into();
-active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
-active.crystal_amount = Set(active.crystal_amount.unwrap() - cost.crystal);
-active.deuterium_amount = Set(active.deuterium_amount.unwrap() - cost.deuterium);
-active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
+    let mut active: planet::ActiveModel = p.clone().into();
+    active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
+    active.crystal_amount = Set(active.crystal_amount.unwrap() - cost.crystal);
+    active.deuterium_amount = Set(active.deuterium_amount.unwrap() - cost.deuterium);
+    active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let queue_item = construction_queue::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -711,8 +709,8 @@ async fn build_fleet_handler(
 
     let (cost_m, cost_c) = match type_ship.as_str() {
         "light_hunter" => game_logic::get_light_hunter_stats(),
-        "cruiser" => (20000.0, 7000.0),
-        "recycler" => (10000.0, 6000.0),
+        "cruiser" => game_logic::get_unit_cost("cruiser"),
+        "recycler" => game_logic::get_unit_cost("recycler"),
         "spy_probe" => game_logic::get_spy_probe_stats(),
         "missile_launcher" => game_logic::get_missile_launcher_stats(),
         "plasma_turret" => game_logic::get_plasma_turret_stats(),
@@ -795,7 +793,6 @@ async fn attack_handler(
     };
     new_mission.insert(&state.db).await.unwrap();
 
-    // ICI : On renvoie un succès explicite pour le frontend
     (StatusCode::OK, Json(json!({ 
         "status": "success", 
         "message": "Flotte en route",
@@ -821,13 +818,15 @@ async fn expedition_handler(
     }
 
     let mut active: planet::ActiveModel = p.clone().into();
-    let mut loot = 0.0;
+    let mut rng = rand::thread_rng();
+    let mut loot_metal = 0.0;
+    let mut loot_crystal = 0.0;
     let mut logs: Vec<String> = Vec::new();
     let winner; 
     let mut lost_hunters = 0;
     let mut lost_cruisers = 0;
 
-    let combat_triggered = rand::thread_rng().gen_bool(0.3);
+    let combat_triggered = rng.gen_bool(0.3);
 
     if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
@@ -835,9 +834,11 @@ async fn expedition_handler(
 
         if combat_res.victory {
             winner = "player";
-            loot = 5000.0 * (game_logic::SPEED_FACTOR / 100.0);
+            // ✅ BUTIN ALÉATOIRE (Combat gagé)
+            loot_metal = rng.gen_range(10000.0..100000.0) * (game_logic::SPEED_FACTOR / 100.0);
+            loot_crystal = rng.gen_range(5000.0..50000.0) * (game_logic::SPEED_FACTOR / 100.0);
             logs.push(format!("RESULTAT : {}", combat_res.message));
-            logs.push(format!("PILLAGE : +{:.0} Métal récupéré.", loot));
+            logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", loot_metal, loot_crystal));
             lost_hunters = combat_res.ships_lost; 
             if lost_hunters > p.light_hunter_count { lost_hunters = p.light_hunter_count; }
         } else {
@@ -849,14 +850,17 @@ async fn expedition_handler(
         
         active.light_hunter_count = Set(p.light_hunter_count - lost_hunters);
         active.cruiser_count = Set(p.cruiser_count - lost_cruisers);
-        active.metal_amount = Set(p.metal_amount + loot);
     } else {
         winner = "player"; 
-        loot = 50000.0; 
+        // ✅ BUTIN ALÉATOIRE (Découverte pacifique)
+        loot_metal = rng.gen_range(20000.0..150000.0) * (game_logic::SPEED_FACTOR / 100.0);
+        loot_crystal = rng.gen_range(10000.0..75000.0) * (game_logic::SPEED_FACTOR / 100.0);
         logs.push("SCAN : Secteur calme.".to_string());
-        logs.push(format!("DECOUVERTE : Gisement trouvé (+{:.0} Métal).", loot));
-        active.metal_amount = Set(p.metal_amount + loot);
+        logs.push(format!("DECOUVERTE : Gisement trouvé (+{:.0} Métal, +{:.0} Cristal).", loot_metal, loot_crystal));
     }
+
+    active.metal_amount = Set(p.metal_amount + loot_metal);
+    active.crystal_amount = Set(p.crystal_amount + loot_crystal);
 
     let duration = std::cmp::max(1, (600.0 / game_logic::SPEED_FACTOR) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
@@ -874,8 +878,8 @@ async fn expedition_handler(
         opponent_username: Set(None),
         mission_type: Set("expedition".to_string()),
         result: Set(winner.to_string()),
-        loot_metal: Set(loot),
-        loot_crystal: Set(0.0),
+        loot_metal: Set(loot_metal),
+        loot_crystal: Set(loot_crystal),
         ships_lost: Set(lost_hunters + lost_cruisers),
         date: Set(Utc::now().naive_utc()),
     };
@@ -886,7 +890,7 @@ async fn expedition_handler(
         "report": {
             "winner": winner,
             "log": logs,
-            "loot": loot,
+            "loot": { "metal": loot_metal, "crystal": loot_crystal },
             "losses": { "light_hunter": lost_hunters, "cruiser": lost_cruisers }
         }
     });
@@ -971,10 +975,12 @@ async fn spy_handler(
     let att_planet = match att_planet_opt { Some(p) => p, None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Attaquant inconnu"}))).into_response() };
     let def_planet = match def_planet_opt { Some(p) => p, None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible inconnue"}))).into_response() };
 
+    // ✅ VÉRIFICATION AVANT CONSOMMATION
     if att_planet.spy_probe_count < 1 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucune sonde disponible"}))).into_response();
     }
 
+    // ✅ CONSOMMATION SONDE
     let mut att_active: planet::ActiveModel = att_planet.clone().into();
     att_active.spy_probe_count = Set(att_planet.spy_probe_count - 1);
     let _ = att_active.update(&state.db).await;
@@ -1085,7 +1091,7 @@ async fn recycle_handler(
         "status": "success",
         "message": format!("Recyclage terminé. +{:.0} Métal, +{:.0} Cristal", harvested_m, harvested_c),
         "harvested": { "metal": harvested_m, "crystal": harvested_c }
-    }))).into_response()
+    }))).into_response();
 }
 
 
@@ -1322,9 +1328,13 @@ async fn cancel_construction_handler(
         "light_hunter" | "cruiser" | "recycler" | "spy_probe" | "colony_ship" | "transporter" | "missile_launcher" | "plasma_turret" => {
             let (m, c) = match item.building_type.as_str() {
                 "light_hunter" => game_logic::get_light_hunter_stats(),
-                "cruiser" => (20000.0, 7000.0), "recycler" => (10000.0, 6000.0), "spy_probe" => game_logic::get_spy_probe_stats(),
-                "colony_ship" => game_logic::get_colony_ship_stats(), "transporter" => game_logic::get_transporter_stats(),
-                "missile_launcher" => game_logic::get_missile_launcher_stats(), "plasma_turret" => game_logic::get_plasma_turret_stats(),
+                "cruiser" => game_logic::get_unit_cost("cruiser"),
+                "recycler" => game_logic::get_unit_cost("recycler"),
+                "spy_probe" => game_logic::get_spy_probe_stats(),
+                "colony_ship" => game_logic::get_colony_ship_stats(),
+                "transporter" => game_logic::get_transporter_stats(),
+                "missile_launcher" => game_logic::get_missile_launcher_stats(),
+                "plasma_turret" => game_logic::get_plasma_turret_stats(),
                 _ => (0.0, 0.0),
             };
             (m * item.level as f64, c * item.level as f64, 0.0)
