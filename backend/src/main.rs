@@ -1074,12 +1074,30 @@ async fn spy_handler(
     }
 
     // Notify the defender that they were spied on
-    let mut def_active: planet::ActiveModel = def_planet.into();
+    let mut def_active: planet::ActiveModel = def_planet.clone().into();
     def_active.unread_report = Set(Some(json!({
         "type": "spy_alert",
         "message": "Votre planète a été espionnée !"
     }).to_string()));
     let _ = def_active.update(&state.db).await;
+
+    // Create a spy report in combat_log for the defender
+    let att_user = User::find_by_id(att_planet.owner_id).one(&state.db).await.unwrap();
+    let attacker_username = att_user.map(|u| u.username).unwrap_or("Inconnu".to_string());
+
+    let spy_log = combat_log::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(def_planet.id),
+        target_name: Set(att_planet.name.clone()),
+        opponent_username: Set(Some(attacker_username)),
+        mission_type: Set("spy_defense".to_string()),
+        result: Set("alert".to_string()),
+        loot_metal: Set(0.0),
+        loot_crystal: Set(0.0),
+        ships_lost: Set(0),
+        date: Set(Utc::now().naive_utc()),
+    };
+    let _ = spy_log.insert(&state.db).await;
 
     (StatusCode::OK, Json(json!({
         "status": "success",
