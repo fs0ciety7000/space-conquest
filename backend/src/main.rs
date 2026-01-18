@@ -925,10 +925,18 @@ async fn spy_handler(
         fleet = Some(fleet_map);
     }
 
-    if tech_diff >= 2 { 
+    if tech_diff >= 2 {
         detection = "full";
-        defense = Some(def_planet.missile_launcher_count + def_planet.plasma_turret_count); 
+        defense = Some(def_planet.missile_launcher_count + def_planet.plasma_turret_count);
     }
+
+    // Notify the defender that they were spied on
+    let mut def_active: planet::ActiveModel = def_planet.into();
+    def_active.unread_report = Set(Some(json!({
+        "type": "spy_alert",
+        "message": "Votre planète a été espionnée !"
+    }).to_string()));
+    let _ = def_active.update(&state.db).await;
 
     (StatusCode::OK, Json(json!({
         "status": "success",
