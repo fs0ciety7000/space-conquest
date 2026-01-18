@@ -10,3 +10,7 @@ pub mod transport_log ;
 pub mod message ;
 pub mod construction_queue;
 pub mod conversation;
+pub mod market_listing;
+pub mod market_transaction;
+pub mod server_resource_stats;
+pub mod market_price_history;

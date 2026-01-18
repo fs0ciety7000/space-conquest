@@ -40,13 +40,14 @@ mod entities;
 mod config;
 mod admin;
 mod messaging;
+mod market;
 use config::Config;
 use backend::AppState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, Conversation},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, conversation
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory},
+    planet, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history
 };
 
 #[derive(Serialize)]
@@ -187,6 +188,15 @@ async fn main() {
 
 .route("/users/:id", get(get_user_handler))
 .route("/players/:user_id/profile", get(get_player_profile_handler))
+        // Market
+        .route("/market/listings", get(get_market_listings_handler))
+        .route("/market/listings", post(create_market_listing_handler))
+        .route("/market/listings/:id", delete(cancel_market_listing_handler))
+        .route("/market/buy", post(buy_from_listing_handler))
+        .route("/market/npc/buy", post(buy_from_npc_handler))
+        .route("/market/transactions", get(get_market_transactions_handler))
+        .route("/market/stats", get(get_market_stats_handler))
+        .route("/market/prices/history", get(get_price_history_handler))
         // Admin
         .route("/admin/players", get(admin::get_all_players_handler))
         .route("/admin/planet/:id", get(admin::get_planet_admin_handler))
@@ -1566,6 +1576,707 @@ async fn get_player_profile_handler(
             json!(null)
         },
     });
-    
+
     Ok(Json(response))
+}
+
+// ========== MARKET HANDLERS ==========
+
+#[derive(Deserialize)]
+struct CreateListingPayload {
+    planet_id: Uuid,
+    user_id: Uuid,
+    resource_type: String,
+    quantity: f64,
+    price_per_unit: f64,
+    target_resource: String,
+}
+
+#[derive(Deserialize)]
+struct BuyFromListingPayload {
+    listing_id: Uuid,
+    buyer_planet_id: Uuid,
+    buyer_user_id: Uuid,
+    quantity: f64,
+}
+
+#[derive(Deserialize)]
+struct BuyFromNpcPayload {
+    planet_id: Uuid,
+    user_id: Uuid,
+    sell_resource: String,
+    sell_quantity: f64,
+    buy_resource: String,
+}
+
+#[derive(Deserialize)]
+struct MarketListingsQuery {
+    resource_type: Option<String>,
+    target_resource: Option<String>,
+    limit: Option<u64>,
+}
+
+// GET /market/listings - Get all active market listings
+async fn get_market_listings_handler(
+    State(state): State<AppState>,
+    Query(query): Query<MarketListingsQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let db = &state.db;
+    let now = Utc::now().naive_utc();
+
+    // First, expire old listings
+    let expired_listings = MarketListing::find()
+        .filter(market_listing::Column::IsActive.eq(true))
+        .filter(market_listing::Column::ExpiresAt.lte(now))
+        .all(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Return resources for expired listings
+    for listing in expired_listings {
+        // Return resources to seller
+        let planet = Planet::find_by_id(listing.seller_planet_id)
+            .one(db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::NOT_FOUND)?;
+
+        let mut active_planet = planet.clone().into_active_model();
+        match listing.resource_type.as_str() {
+            "metal" => active_planet.metal_amount = Set(planet.metal_amount + listing.quantity),
+            "crystal" => active_planet.crystal_amount = Set(planet.crystal_amount + listing.quantity),
+            "deuterium" => active_planet.deuterium_amount = Set(planet.deuterium_amount + listing.quantity),
+            _ => {}
+        }
+        active_planet.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        // Mark listing as inactive
+        let mut active_listing = listing.into_active_model();
+        active_listing.is_active = Set(false);
+        active_listing.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    // Build query
+    let mut query_builder = MarketListing::find()
+        .filter(market_listing::Column::IsActive.eq(true))
+        .filter(market_listing::Column::ExpiresAt.gt(now))
+        .order_by_asc(market_listing::Column::PricePerUnit);
+
+    if let Some(resource_type) = query.resource_type {
+        query_builder = query_builder.filter(market_listing::Column::ResourceType.eq(resource_type));
+    }
+
+    if let Some(target_resource) = query.target_resource {
+        query_builder = query_builder.filter(market_listing::Column::TargetResource.eq(target_resource));
+    }
+
+    let limit = query.limit.unwrap_or(50);
+    let listings = query_builder
+        .limit(limit)
+        .all(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get seller usernames
+    let mut enriched_listings = Vec::new();
+    for listing in listings {
+        let seller = User::find_by_id(listing.seller_user_id)
+            .one(db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        let seller_username = seller.map(|u| u.username).unwrap_or_else(|| "Unknown".to_string());
+
+        enriched_listings.push(json!({
+            "id": listing.id,
+            "seller_planet_id": listing.seller_planet_id,
+            "seller_user_id": listing.seller_user_id,
+            "seller_username": seller_username,
+            "resource_type": listing.resource_type,
+            "quantity": listing.quantity,
+            "price_per_unit": listing.price_per_unit,
+            "target_resource": listing.target_resource,
+            "created_at": listing.created_at,
+            "expires_at": listing.expires_at,
+        }));
+    }
+
+    Ok(Json(json!({
+        "listings": enriched_listings,
+    })))
+}
+
+// POST /market/listings - Create a new market listing
+async fn create_market_listing_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateListingPayload>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let db = &state.db;
+
+    // Validate resource types
+    if market::ResourceType::from_str(&payload.resource_type).is_none() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if market::ResourceType::from_str(&payload.target_resource).is_none() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if payload.resource_type == payload.target_resource {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Get planet
+    let planet = Planet::find_by_id(payload.planet_id)
+        .one(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Verify ownership
+    if planet.owner_id != payload.user_id {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Check if planet has enough resources
+    let current_amount = match payload.resource_type.as_str() {
+        "metal" => planet.metal_amount,
+        "crystal" => planet.crystal_amount,
+        "deuterium" => planet.deuterium_amount,
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    if current_amount < payload.quantity {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Deduct resources immediately
+    let mut active_planet = planet.clone().into_active_model();
+    match payload.resource_type.as_str() {
+        "metal" => active_planet.metal_amount = Set(planet.metal_amount - payload.quantity),
+        "crystal" => active_planet.crystal_amount = Set(planet.crystal_amount - payload.quantity),
+        "deuterium" => active_planet.deuterium_amount = Set(planet.deuterium_amount - payload.quantity),
+        _ => return Err(StatusCode::BAD_REQUEST),
+    }
+    let updated_planet = active_planet.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Create listing
+    let now = Utc::now().naive_utc();
+    let expires_at = now + Duration::days(7);
+
+    let listing = market_listing::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        seller_planet_id: Set(payload.planet_id),
+        seller_user_id: Set(payload.user_id),
+        resource_type: Set(payload.resource_type.clone()),
+        quantity: Set(payload.quantity),
+        price_per_unit: Set(payload.price_per_unit),
+        target_resource: Set(payload.target_resource.clone()),
+        created_at: Set(now),
+        expires_at: Set(expires_at),
+        is_active: Set(true),
+    };
+
+    let created = listing.insert(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(json!({
+        "listing": {
+            "id": created.id,
+            "seller_planet_id": created.seller_planet_id,
+            "seller_user_id": created.seller_user_id,
+            "resource_type": created.resource_type,
+            "quantity": created.quantity,
+            "price_per_unit": created.price_per_unit,
+            "target_resource": created.target_resource,
+            "created_at": created.created_at,
+            "expires_at": created.expires_at,
+        },
+        "planet": {
+            "metal_amount": updated_planet.metal_amount,
+            "crystal_amount": updated_planet.crystal_amount,
+            "deuterium_amount": updated_planet.deuterium_amount,
+        }
+    })))
+}
+
+// DELETE /market/listings/:id - Cancel a listing
+async fn cancel_market_listing_handler(
+    Path(listing_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(user_query): Query<HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let db = &state.db;
+
+    let user_id = user_query.get("user_id")
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .ok_or(StatusCode::BAD_REQUEST)?;
+
+    // Get listing
+    let listing = MarketListing::find_by_id(listing_id)
+        .one(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Verify ownership
+    if listing.seller_user_id != user_id {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Check if already inactive
+    if !listing.is_active {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Return resources to seller
+    let planet = Planet::find_by_id(listing.seller_planet_id)
+        .one(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let mut active_planet = planet.clone().into_active_model();
+    match listing.resource_type.as_str() {
+        "metal" => active_planet.metal_amount = Set(planet.metal_amount + listing.quantity),
+        "crystal" => active_planet.crystal_amount = Set(planet.crystal_amount + listing.quantity),
+        "deuterium" => active_planet.deuterium_amount = Set(planet.deuterium_amount + listing.quantity),
+        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+    let updated_planet = active_planet.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Mark listing as inactive
+    let mut active_listing = listing.into_active_model();
+    active_listing.is_active = Set(false);
+    active_listing.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(json!({
+        "message": "Listing cancelled",
+        "planet": {
+            "metal_amount": updated_planet.metal_amount,
+            "crystal_amount": updated_planet.crystal_amount,
+            "deuterium_amount": updated_planet.deuterium_amount,
+        }
+    })))
+}
+
+// POST /market/buy - Buy from player listing
+async fn buy_from_listing_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<BuyFromListingPayload>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let db = &state.db;
+
+    // Get listing
+    let listing = MarketListing::find_by_id(payload.listing_id)
+        .one(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Verify listing is active and not expired
+    let now = Utc::now().naive_utc();
+    if !listing.is_active || listing.expires_at < now {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Check quantity available
+    if payload.quantity > listing.quantity {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Get buyer planet
+    let buyer_planet = Planet::find_by_id(payload.buyer_planet_id)
+        .one(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Verify buyer ownership
+    if buyer_planet.owner_id != payload.buyer_user_id {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Cannot buy from yourself
+    if listing.seller_user_id == payload.buyer_user_id {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Calculate cost
+    let total_cost = payload.quantity * listing.price_per_unit;
+
+    // Check if buyer has enough of target resource
+    let buyer_resource_amount = match listing.target_resource.as_str() {
+        "metal" => buyer_planet.metal_amount,
+        "crystal" => buyer_planet.crystal_amount,
+        "deuterium" => buyer_planet.deuterium_amount,
+        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    if buyer_resource_amount < total_cost {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Calculate tax (on what seller receives)
+    let (seller_receives, tax_amount) = market::apply_market_tax(total_cost);
+
+    // Get seller planet
+    let seller_planet = Planet::find_by_id(listing.seller_planet_id)
+        .one(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Execute transaction atomically
+    // 1. Buyer loses target resource
+    let mut active_buyer = buyer_planet.clone().into_active_model();
+    match listing.target_resource.as_str() {
+        "metal" => active_buyer.metal_amount = Set(buyer_planet.metal_amount - total_cost),
+        "crystal" => active_buyer.crystal_amount = Set(buyer_planet.crystal_amount - total_cost),
+        "deuterium" => active_buyer.deuterium_amount = Set(buyer_planet.deuterium_amount - total_cost),
+        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+
+    // 2. Buyer gains sold resource
+    match listing.resource_type.as_str() {
+        "metal" => {
+            let current = match listing.target_resource.as_str() {
+                "metal" => buyer_planet.metal_amount - total_cost,
+                _ => buyer_planet.metal_amount,
+            };
+            active_buyer.metal_amount = Set(current + payload.quantity);
+        },
+        "crystal" => {
+            let current = match listing.target_resource.as_str() {
+                "crystal" => buyer_planet.crystal_amount - total_cost,
+                _ => buyer_planet.crystal_amount,
+            };
+            active_buyer.crystal_amount = Set(current + payload.quantity);
+        },
+        "deuterium" => {
+            let current = match listing.target_resource.as_str() {
+                "deuterium" => buyer_planet.deuterium_amount - total_cost,
+                _ => buyer_planet.deuterium_amount,
+            };
+            active_buyer.deuterium_amount = Set(current + payload.quantity);
+        },
+        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+    let updated_buyer = active_buyer.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 3. Seller gains target resource (minus tax)
+    let mut active_seller = seller_planet.clone().into_active_model();
+    match listing.target_resource.as_str() {
+        "metal" => active_seller.metal_amount = Set(seller_planet.metal_amount + seller_receives),
+        "crystal" => active_seller.crystal_amount = Set(seller_planet.crystal_amount + seller_receives),
+        "deuterium" => active_seller.deuterium_amount = Set(seller_planet.deuterium_amount + seller_receives),
+        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+    let _updated_seller = active_seller.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 4. Update or delete listing
+    if payload.quantity >= listing.quantity {
+        // Full purchase - mark inactive
+        let mut active_listing = listing.clone().into_active_model();
+        active_listing.is_active = Set(false);
+        active_listing.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    } else {
+        // Partial purchase - update quantity
+        let mut active_listing = listing.clone().into_active_model();
+        active_listing.quantity = Set(listing.quantity - payload.quantity);
+        active_listing.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    // 5. Record transaction
+    let transaction = market_transaction::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        seller_planet_id: Set(listing.seller_planet_id),
+        seller_user_id: Set(listing.seller_user_id),
+        buyer_planet_id: Set(payload.buyer_planet_id),
+        buyer_user_id: Set(payload.buyer_user_id),
+        resource_sold: Set(listing.resource_type.clone()),
+        resource_paid: Set(listing.target_resource.clone()),
+        quantity_sold: Set(payload.quantity),
+        quantity_paid: Set(total_cost),
+        price_per_unit: Set(listing.price_per_unit),
+        tax_amount: Set(tax_amount),
+        transaction_type: Set("player".to_string()),
+        created_at: Set(now),
+    };
+    transaction.insert(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 6. Update server stats
+    let totals = market::calculate_server_resource_totals(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    market::update_server_resource_stats(db, &totals).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(json!({
+        "message": "Purchase successful",
+        "buyer_planet": {
+            "metal_amount": updated_buyer.metal_amount,
+            "crystal_amount": updated_buyer.crystal_amount,
+            "deuterium_amount": updated_buyer.deuterium_amount,
+        },
+        "seller_received": seller_receives,
+        "tax_paid": tax_amount,
+    })))
+}
+
+// POST /market/npc/buy - Exchange with NPC
+async fn buy_from_npc_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<BuyFromNpcPayload>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let db = &state.db;
+
+    // Validate resource types
+    let sell_resource = market::ResourceType::from_str(&payload.sell_resource)
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    let buy_resource = market::ResourceType::from_str(&payload.buy_resource)
+        .ok_or(StatusCode::BAD_REQUEST)?;
+
+    if sell_resource == buy_resource {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Get planet
+    let planet = Planet::find_by_id(payload.planet_id)
+        .one(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Verify ownership
+    if planet.owner_id != payload.user_id {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Check if planet has enough to sell
+    let current_amount = match payload.sell_resource.as_str() {
+        "metal" => planet.metal_amount,
+        "crystal" => planet.crystal_amount,
+        "deuterium" => planet.deuterium_amount,
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    if current_amount < payload.sell_quantity {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Calculate exchange rate
+    let exchange_rate = market::calculate_exchange_rate(db, sell_resource.clone(), buy_resource.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Calculate what player receives
+    let gross_amount = payload.sell_quantity * exchange_rate;
+    let (net_amount, tax_amount) = market::apply_market_tax(gross_amount);
+
+    // Apply NPC buy margin (NPC pays 85% of market price)
+    let final_amount = net_amount * market::NPC_BUY_MARGIN;
+
+    // Execute transaction
+    let mut active_planet = planet.clone().into_active_model();
+
+    // Deduct sold resource
+    match payload.sell_resource.as_str() {
+        "metal" => active_planet.metal_amount = Set(planet.metal_amount - payload.sell_quantity),
+        "crystal" => active_planet.crystal_amount = Set(planet.crystal_amount - payload.sell_quantity),
+        "deuterium" => active_planet.deuterium_amount = Set(planet.deuterium_amount - payload.sell_quantity),
+        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+
+    // Add bought resource
+    match payload.buy_resource.as_str() {
+        "metal" => {
+            let current = match payload.sell_resource.as_str() {
+                "metal" => planet.metal_amount - payload.sell_quantity,
+                _ => planet.metal_amount,
+            };
+            active_planet.metal_amount = Set(current + final_amount);
+        },
+        "crystal" => {
+            let current = match payload.sell_resource.as_str() {
+                "crystal" => planet.crystal_amount - payload.sell_quantity,
+                _ => planet.crystal_amount,
+            };
+            active_planet.crystal_amount = Set(current + final_amount);
+        },
+        "deuterium" => {
+            let current = match payload.sell_resource.as_str() {
+                "deuterium" => planet.deuterium_amount - payload.sell_quantity,
+                _ => planet.deuterium_amount,
+            };
+            active_planet.deuterium_amount = Set(current + final_amount);
+        },
+        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+
+    let updated_planet = active_planet.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Record transaction
+    let now = Utc::now().naive_utc();
+    let transaction = market_transaction::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        seller_planet_id: Set(payload.planet_id),
+        seller_user_id: Set(payload.user_id),
+        buyer_planet_id: Set(Uuid::nil()), // NPC
+        buyer_user_id: Set(Uuid::nil()),   // NPC
+        resource_sold: Set(payload.sell_resource.clone()),
+        resource_paid: Set(payload.buy_resource.clone()),
+        quantity_sold: Set(payload.sell_quantity),
+        quantity_paid: Set(final_amount),
+        price_per_unit: Set(exchange_rate),
+        tax_amount: Set(tax_amount),
+        transaction_type: Set("npc".to_string()),
+        created_at: Set(now),
+    };
+    transaction.insert(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Update server stats
+    let totals = market::calculate_server_resource_totals(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    market::update_server_resource_stats(db, &totals).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(json!({
+        "message": "NPC exchange successful",
+        "planet": {
+            "metal_amount": updated_planet.metal_amount,
+            "crystal_amount": updated_planet.crystal_amount,
+            "deuterium_amount": updated_planet.deuterium_amount,
+        },
+        "exchanged": {
+            "sold_resource": payload.sell_resource,
+            "sold_quantity": payload.sell_quantity,
+            "bought_resource": payload.buy_resource,
+            "bought_quantity": final_amount,
+            "exchange_rate": exchange_rate,
+            "tax_paid": tax_amount,
+        }
+    })))
+}
+
+// GET /market/transactions - Get transaction history
+async fn get_market_transactions_handler(
+    State(state): State<AppState>,
+    Query(user_query): Query<HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let db = &state.db;
+
+    let user_id = user_query.get("user_id")
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let mut query_builder = MarketTransaction::find()
+        .order_by_desc(market_transaction::Column::CreatedAt)
+        .limit(100);
+
+    // Filter by user if provided
+    if let Some(uid) = user_id {
+        query_builder = query_builder.filter(
+            Condition::any()
+                .add(market_transaction::Column::SellerUserId.eq(uid))
+                .add(market_transaction::Column::BuyerUserId.eq(uid))
+        );
+    }
+
+    let transactions = query_builder
+        .all(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let result: Vec<_> = transactions.iter().map(|t| json!({
+        "id": t.id,
+        "seller_user_id": t.seller_user_id,
+        "buyer_user_id": t.buyer_user_id,
+        "resource_sold": t.resource_sold,
+        "resource_paid": t.resource_paid,
+        "quantity_sold": t.quantity_sold,
+        "quantity_paid": t.quantity_paid,
+        "price_per_unit": t.price_per_unit,
+        "tax_amount": t.tax_amount,
+        "transaction_type": t.transaction_type,
+        "created_at": t.created_at,
+    })).collect();
+
+    Ok(Json(json!({
+        "transactions": result,
+    })))
+}
+
+// GET /market/stats - Get market statistics
+async fn get_market_stats_handler(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let db = &state.db;
+
+    // Get server resource stats
+    let totals = market::calculate_server_resource_totals(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get NPC prices
+    let npc_prices = market::get_all_npc_prices(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Count active listings
+    let now = Utc::now().naive_utc();
+    let active_listings_count = MarketListing::find()
+        .filter(market_listing::Column::IsActive.eq(true))
+        .filter(market_listing::Column::ExpiresAt.gt(now))
+        .count(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let prices: Vec<_> = npc_prices.iter().map(|p| json!({
+        "resource_type": p.resource_type.to_str(),
+        "market_price": p.market_price,
+        "npc_buy_price": p.buy_price,
+        "npc_sell_price": p.sell_price,
+    })).collect();
+
+    Ok(Json(json!({
+        "server_totals": {
+            "metal": totals.metal_total,
+            "crystal": totals.crystal_total,
+            "deuterium": totals.deuterium_total,
+            "total": totals.total,
+        },
+        "npc_prices": prices,
+        "active_listings_count": active_listings_count,
+    })))
+}
+
+// GET /market/prices/history - Get price history
+async fn get_price_history_handler(
+    State(state): State<AppState>,
+    Query(query): Query<HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let db = &state.db;
+
+    let resource_type = query.get("resource_type").map(|s| s.as_str());
+    let limit: u64 = query.get("limit")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(100);
+
+    let mut query_builder = MarketPriceHistory::find()
+        .order_by_desc(market_price_history::Column::RecordedAt)
+        .limit(limit);
+
+    if let Some(resource) = resource_type {
+        query_builder = query_builder.filter(market_price_history::Column::ResourceType.eq(resource));
+    }
+
+    let history = query_builder
+        .all(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let result: Vec<_> = history.iter().map(|h| json!({
+        "resource_type": h.resource_type,
+        "npc_buy_price": h.npc_buy_price,
+        "npc_sell_price": h.npc_sell_price,
+        "avg_player_price": h.avg_player_price,
+        "player_listings_count": h.player_listings_count,
+        "recorded_at": h.recorded_at,
+    })).collect();
+
+    Ok(Json(json!({
+        "history": result,
+    })))
 }

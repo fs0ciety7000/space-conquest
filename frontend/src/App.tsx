@@ -18,6 +18,7 @@ import MessagesView from './components/MessagesView';
 import AdminPanel from './components/AdminPanel';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
+import Marketplace from './components/Marketplace';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
@@ -25,10 +26,10 @@ import { BuildQueue } from './components/BuildQueue';
 import Tutorial, { useTutorial } from './components/Tutorial';
 import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
-import { 
-  LogOut, LayoutDashboard, Pickaxe, Hammer, 
+import {
+  LogOut, LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Keyboard, Database
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Keyboard, Database, ShoppingCart
 } from "lucide-react";
 
 interface CombatReport {
@@ -41,7 +42,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'admin';
+type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -409,9 +410,10 @@ export default function App() {
     { id: 'messages', label: 'Messagerie', icon: Mail, category: 'COMMUNICATION' },
     
     { id: 'resources', label: 'Ressources', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
-    { id: 'facilities', label: 'Installations', icon: Factory, category: 'DÉVELOPPEMENT' }, 
+    { id: 'facilities', label: 'Installations', icon: Factory, category: 'DÉVELOPPEMENT' },
     { id: 'tech', label: 'Laboratoire', icon: FlaskConical, category: 'DÉVELOPPEMENT' },
-    
+    { id: 'market', label: 'Marché', icon: ShoppingCart, category: 'ÉCONOMIE' },
+
     { id: 'shipyard', label: 'Chantier Spatial', icon: Hammer, category: 'MILITAIRE' },
     { id: 'defenses', label: 'Défense', icon: ShieldCheck, category: 'MILITAIRE' },
     { id: 'expedition', label: 'Expéditions', icon: Telescope, category: 'MILITAIRE' },
@@ -614,9 +616,10 @@ export default function App() {
                     {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
                     
                     {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
-                    {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />} 
+                    {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}
                     {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
-                    
+                    {activeTab === 'market' && <Marketplace planet={planet} userId={userId!} onUpdate={fetchPlanet} />}
+
                     {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
                     {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
                     {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}

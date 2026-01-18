@@ -8,3 +8,7 @@ pub use super :: transport_log :: Entity as TransportLog ;
 pub use super :: message :: Entity as Message ;
 pub use super :: construction_queue :: Entity as ConstructionQueue ;
 pub use super :: conversation :: Entity as Conversation ;
+pub use super :: market_listing :: Entity as MarketListing ;
+pub use super :: market_transaction :: Entity as MarketTransaction ;
+pub use super :: server_resource_stats :: Entity as ServerResourceStats ;
+pub use super :: market_price_history :: Entity as MarketPriceHistory ;
