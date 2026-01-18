@@ -11,6 +11,7 @@ pub struct Model {
     pub password: String,
     #[sea_orm(unique)]
     pub email: String,
+    pub created_at: chrono::NaiveDateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

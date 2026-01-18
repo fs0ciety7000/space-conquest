@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Save, User, Globe, Shield, Terminal, LogOut, Mail, Fingerprint, Moon, Sun, Volume2, VolumeX, GraduationCap, Music, Speaker } from "lucide-react";
+import { Save, User, Globe, Shield, Terminal, LogOut, Mail, Fingerprint, Moon, Sun, Volume2, VolumeX, GraduationCap, Music, Speaker, Calendar, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,19 +34,47 @@ export default function Settings({
   const [planetName, setPlanetName] = useState(planet.name);
   const [loading, setLoading] = useState(false);
   const { theme, setTheme } = useTheme();
+  const [userStats, setUserStats] = useState<any>(null);
 
-  // ✅ CORRECTION : Récupérer directement depuis localStorage
   const username = localStorage.getItem('username') || "Commandant";
   const userId = localStorage.getItem('user_id') || "unknown";
-  
-  // ✅ Si vous avez l'email stocké lors du login, sinon afficher un placeholder
   const email = localStorage.getItem('email') || "commandant@space-conquest.galaxy";
   
   // Avatar personnalisé
   const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
-  
-  // Points du joueur (total_points du planet)
-  const playerPoints = planet.total_points || 0;
+
+  // ✅ Fetch du profil utilisateur au chargement
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      if (userId !== "unknown") {
+        try {
+          const res = await fetch(apiUrl(`/players/${userId}/profile`));
+          if (res.ok) {
+            const data = await res.json();
+            setUserStats(data);
+          }
+        } catch (error) {
+          console.error('Erreur lors du chargement du profil:', error);
+        }
+      }
+    };
+    fetchUserStats();
+  }, [userId]);
+
+  // ✅ Calcul des jours depuis inscription
+  const daysSince = userStats 
+    ? Math.floor((Date.now() - new Date(userStats.created_at).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+
+  // Fonction pour obtenir la couleur du badge
+  const getRankColor = (badge: string) => {
+    if (badge?.includes("Empereur")) return "from-yellow-500 to-orange-600";
+    if (badge?.includes("Seigneur")) return "from-purple-500 to-pink-600";
+    if (badge?.includes("Amiral")) return "from-blue-500 to-indigo-600";
+    if (badge?.includes("Commandant")) return "from-cyan-500 to-blue-600";
+    if (badge?.includes("Capitaine")) return "from-green-500 to-emerald-600";
+    return "from-slate-500 to-slate-600";
+  };
 
   const handleRename = async () => {
     if (!planetName.trim()) return;
@@ -88,17 +116,36 @@ export default function Settings({
               <p className="text-slate-400 font-mono text-xs flex items-center gap-2 justify-center md:justify-start">
                 <Fingerprint size={12} /> ID-CORE: {userId.substring(0, 8)}...
               </p>
-              {/* Badge de rang */}
-              <div className="flex justify-center md:justify-start">
-                <PlayerRankBadge points={playerPoints} size="md" />
-              </div>
+              
+              {/* ✅ Badge de rang dynamique */}
+              {userStats && (
+                <div className="flex justify-center md:justify-start">
+                  <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r ${getRankColor(userStats.rank_badge)} text-white font-bold text-sm shadow-lg`}>
+                    <Award size={16} />
+                    {userStats.rank_badge}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Progression vers prochain rang */}
-          <div className="mb-6">
-            <PlayerRankBadge points={playerPoints} showProgress size="md" />
-          </div>
+          {/* ✅ Statistiques de l'empire */}
+          {userStats && (
+            <div className="mb-6 p-4 bg-gradient-to-br from-indigo-950/30 to-purple-950/30 rounded-xl border border-indigo-500/20">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <StatBox label="Points Totaux" value={userStats.total_points.toLocaleString()} color="text-yellow-400" />
+                <StatBox label="Économie" value={userStats.economy_points.toLocaleString()} color="text-green-400" />
+                <StatBox label="Militaire" value={userStats.military_points.toLocaleString()} color="text-red-400" />
+                <StatBox label="Planètes" value={userStats.planet_count} color="text-blue-400" />
+              </div>
+              
+              {/* ✅ Ancienneté */}
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-400 border-t border-white/5 pt-3">
+                <Calendar size={14} />
+                <span>Commandant depuis {daysSince} jour{daysSince !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-white/5 pt-6">
             <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5">
@@ -284,6 +331,16 @@ export default function Settings({
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+// Composant pour afficher une statistique
+function StatBox({ label, value, color }: { label: string, value: string | number, color: string }) {
+  return (
+    <div className="text-center">
+      <div className={`text-2xl font-black ${color} font-mono`}>{value}</div>
+      <div className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">{label}</div>
     </div>
   );
 }

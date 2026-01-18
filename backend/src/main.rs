@@ -186,6 +186,7 @@ async fn main() {
 .route("/send-message-v2", post(messaging::send_message_v2_handler))
 
 .route("/users/:id", get(get_user_handler))
+.route("/players/:user_id/profile", get(get_player_profile_handler))
         // Admin
         .route("/admin/players", get(admin::get_all_players_handler))
         .route("/admin/planet/:id", get(admin::get_planet_admin_handler))
@@ -311,7 +312,10 @@ async fn get_ranking_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     
-    let current_planet_id = params.get("current_planet_id").and_then(|s| Uuid::parse_str(s).ok()).unwrap_or_default();
+    let current_planet_id = params.get("current_planet_id")
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .unwrap_or_default();
+    
     let sort_type = params.get("type").map(|s| s.as_str()).unwrap_or("general");
 
     let planets = Planet::find().all(&state.db).await.unwrap_or_default();
@@ -321,33 +325,9 @@ async fn get_ranking_handler(
         .map(|u| (u.id, u.username))
         .collect();
 
+    // ✅ Utiliser la fonction partagée calculate_planet_points
     let mut ranked_planets: Vec<RankItem> = planets.into_iter().map(|p| {
-        let economy = 
-            (p.metal_mine_level * p.metal_mine_level * 50) +
-            (p.crystal_mine_level * p.crystal_mine_level * 80) +
-            (p.deuterium_mine_level * p.deuterium_mine_level * 150) +
-            (p.solar_plant_level * p.solar_plant_level * 30) +
-            (p.shipyard_level * p.shipyard_level * 200) +
-            (p.research_lab_level * p.research_lab_level * 300) +
-            (p.hangar_level * p.hangar_level * 180);
-
-        let research = 
-            (p.energy_tech_level * p.energy_tech_level * 400) +
-            (p.laser_battery_level * p.laser_battery_level * 350) +
-            (p.espionage_tech_level * p.espionage_tech_level * 500) +
-            (p.armour_tech_level * p.armour_tech_level * 600);
-
-        let military = 
-            (p.light_hunter_count * 40) +
-            (p.cruiser_count * 270) +
-            (p.recycler_count * 160) +
-            (p.transporter_count * 80) +
-            (p.spy_probe_count * 10) +
-            (p.colony_ship_count * 300) +
-            (p.missile_launcher_count * 20) +
-            (p.plasma_turret_count * 1000);
-
-        let total = economy + research + military;
+        let (total, economy, military) = game_logic::calculate_planet_points(&p);
         let username = user_map.get(&p.owner_id).cloned().unwrap_or("Inconnu".to_string());
 
         RankItem {
@@ -363,15 +343,21 @@ async fn get_ranking_handler(
         }
     }).collect();
 
+    // Tri selon le type demandé
     match sort_type {
         "economy" => ranked_planets.sort_by(|a, b| b.economy_score.cmp(&a.economy_score)),
         "military" => ranked_planets.sort_by(|a, b| b.military_score.cmp(&a.military_score)),
         _ => ranked_planets.sort_by(|a, b| b.total_score.cmp(&a.total_score)),
     }
 
-    for (i, item) in ranked_planets.iter_mut().enumerate() { item.rank = i + 1; }
+    // Assigner les rangs
+    for (i, item) in ranked_planets.iter_mut().enumerate() { 
+        item.rank = i + 1; 
+    }
+    
     Json(ranked_planets)
 }
+
 
 async fn get_planet_handler(
     Path(id): Path<Uuid>,
@@ -1369,3 +1355,116 @@ async fn get_unit_costs_handler() -> Result<Json<serde_json::Value>, StatusCode>
     Ok(Json(json!(costs)))
 }
 
+// Handler pour récupérer le profil public d'un joueur
+async fn get_player_profile_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    use crate::entities::{prelude::*, user, planet, fleet_mission};
+    
+    // Récupérer l'utilisateur
+    let user = User::find_by_id(user_id)
+        .one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    
+    // Récupérer toutes les planètes du joueur
+    let planets = Planet::find()
+        .filter(planet::Column::OwnerId.eq(user_id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+    
+    // ✅ Calculer les points de toutes les planètes
+    let mut total_points = 0;
+    let mut total_economy = 0;
+    let mut total_military = 0;
+    
+    for p in &planets {
+        let (pts, eco, mil) = game_logic::calculate_planet_points(p);
+        total_points += pts;
+        total_economy += eco;
+        total_military += mil;
+    }
+    
+    let planet_count = planets.len();
+    
+    // Flotte totale
+    let total_fleet = planets.iter().fold(0, |acc, p| {
+        acc + p.light_hunter_count + p.cruiser_count + p.transporter_count 
+            + p.colony_ship_count + p.recycler_count + p.spy_probe_count
+    });
+    
+    // Défenses totales
+    let total_defenses = planets.iter().fold(0, |acc, p| {
+        acc + p.missile_launcher_count + p.plasma_turret_count
+    });
+    
+    // Compter missions accomplies
+    let planet_ids: Vec<Uuid> = planets.iter().map(|p| p.id).collect();
+    let completed_missions = if !planet_ids.is_empty() {
+        FleetMission::find()
+            .filter(fleet_mission::Column::SourcePlanetId.is_in(planet_ids))
+            .filter(fleet_mission::Column::ArrivalTime.lt(chrono::Utc::now().naive_utc()))
+            .count(&state.db)
+            .await
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    
+    // ✅ Planète principale (celle avec le plus de points)
+    let main_planet_with_points: Option<(&planet::Model, i32, i32, i32)> = planets.iter()
+        .map(|p| {
+            let (pts, eco, mil) = game_logic::calculate_planet_points(p);
+            (p, pts, eco, mil)
+        })
+        .max_by_key(|(_, pts, _, _)| *pts);
+    
+    // Badge de rang
+    let rank_badge = game_logic::get_rank_badge(total_points);
+    
+    let response = json!({
+        "user_id": user.id,
+        "username": user.username,
+        "created_at": user.created_at, // ✅ Sera ajouté par migration
+        "total_points": total_points,
+        "economy_points": total_economy,
+        "military_points": total_military,
+        "rank_badge": rank_badge,
+        "planet_count": planet_count,
+        "total_fleet": total_fleet,
+        "total_defenses": total_defenses,
+        "completed_missions": completed_missions,
+        "main_planet": main_planet_with_points.map(|(p, points, _, _)| json!({
+            "name": p.name,
+            "galaxy": p.galaxy,
+            "system": p.system,
+            "position": p.position,
+            "points": points,
+        })),
+        "top_buildings": main_planet_with_points.map(|(p, _, _, _)| json!({
+            "metal_mine": p.metal_mine_level,
+            "crystal_mine": p.crystal_mine_level,
+            "shipyard": p.shipyard_level,
+            "research_lab": p.research_lab_level,
+        })),
+        "top_techs": main_planet_with_points.map(|(p, _, _, _)| json!({
+            "energy": p.energy_tech_level,
+            "laser": p.laser_battery_level,
+            "espionage": p.espionage_tech_level,
+            "armour": p.armour_tech_level,
+        })),
+        "planets": planets.iter().map(|p| {
+            let (points, _, _) = game_logic::calculate_planet_points(p);
+            json!({
+                "name": p.name,
+                "coords": format!("[{}:{}:{}]", p.galaxy, p.system, p.position),
+                "points": points,
+            })
+        }).collect::<Vec<_>>(),
+    });
+    
+    Ok(Json(response))
+}

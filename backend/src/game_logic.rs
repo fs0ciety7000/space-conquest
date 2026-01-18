@@ -470,3 +470,56 @@ pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
     let seconds = (base_time * 100.0) / speed_factor;
     seconds.max(5.0) as i64
 }
+
+
+// 📊 CALCUL DES POINTS D'UNE PLANÈTE (utilisé par leaderboard et profil)
+pub fn calculate_planet_points(p: &crate::entities::planet::Model) -> (i32, i32, i32) {
+    // Points économie (bâtiments) - DRASTIQUEMENT réduit
+    let economy = 
+        (p.metal_mine_level * p.metal_mine_level * 10) +      // 50 → 10
+        (p.crystal_mine_level * p.crystal_mine_level * 15) +  // 80 → 15
+        (p.deuterium_mine_level * p.deuterium_mine_level * 25) + // 150 → 25
+        (p.solar_plant_level * p.solar_plant_level * 5) +     // 30 → 5
+        (p.shipyard_level * p.shipyard_level * 40) +          // 200 → 40
+        (p.research_lab_level * p.research_lab_level * 50) +  // 300 → 50
+        (p.hangar_level * p.hangar_level * 35);               // 180 → 35
+
+    // Points recherche (technologies) - DRASTIQUEMENT réduit
+    let research = 
+        (p.energy_tech_level * p.energy_tech_level * 50) +      // 400 → 50
+        (p.laser_battery_level * p.laser_battery_level * 40) +  // 350 → 40
+        (p.espionage_tech_level * p.espionage_tech_level * 60) + // 500 → 60
+        (p.armour_tech_level * p.armour_tech_level * 70);       // 600 → 70
+
+    // Points militaire (flotte + défenses) - DRASTIQUEMENT réduit
+    let military = 
+        (p.light_hunter_count * 5) +            // 40 → 5
+        (p.cruiser_count * 30) +                // 270 → 30
+        (p.recycler_count * 20) +               // 160 → 20
+        (p.transporter_count * 10) +            // 80 → 10
+        (p.spy_probe_count * 1) +               // 10 → 1
+        (p.colony_ship_count * 40) +            // 300 → 40
+        (p.missile_launcher_count * 2) +        // 20 → 2
+        (p.plasma_turret_count * 100);          // 1000 → 100
+
+    let total = economy + research + military;
+    
+    (total, economy, military)
+}
+
+// Fonction pour obtenir le badge de rang - PROGRESSION LENTE
+pub fn get_rank_badge(total_points: i32) -> &'static str {
+    if total_points >= 1000000 { "Empereur Galactique" }       // Objectif ultime
+    else if total_points >= 500000 { "Seigneur de Guerre" }    // Très haut niveau
+    else if total_points >= 250000 { "Grand Amiral" }          // Elite
+    else if total_points >= 100000 { "Amiral" }                // Haut niveau
+    else if total_points >= 50000 { "Vice-Amiral" }            // Niveau avancé
+    else if total_points >= 25000 { "Commandant" }             // Joueur sérieux
+    else if total_points >= 12000 { "Capitaine" }              // Niveau intermédiaire
+    else if total_points >= 6000 { "Lieutenant" }              // Progression solide
+    else if total_points >= 3000 { "Sous-Lieutenant" }         // Débutant avancé
+    else if total_points >= 1500 { "Officier" }                // Early game
+    else if total_points >= 800 { "Sergent" }                  // Tout début
+    else if total_points >= 300 { "Caporal" }                  // Premier rang
+    else { "Recrue" }                                          // Début
+}
