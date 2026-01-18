@@ -344,7 +344,7 @@ async fn get_ranking_handler(State(state): State<AppState>, Query(params): Query
     Json(ranked_planets)
 }
 
-async fn get_planet_handler(Path(id): Path<Uuid>, State(state): State<AppState>) -> Result<Json<serde_json::Value>, StatusCode> {
+async fn get_planet_handler(State(state): State<AppState>),Path(id): Path<Uuid> -> Result<Json<serde_json::Value>, StatusCode> {
     let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     let now = Utc::now().naive_utc();
     let mut active: planet::ActiveModel = p.clone().into();
@@ -418,7 +418,7 @@ async fn get_planet_handler(Path(id): Path<Uuid>, State(state): State<AppState>)
     Ok(Json(json_response))
 }
 
-async fn clear_report_handler(Path(id): Path<Uuid>, State(state): State<AppState>) -> impl IntoResponse {
+async fn clear_report_handler(State(state): State<AppState>),Path(id): Path<Uuid> -> impl IntoResponse {
     let p = match Planet::find_by_id(id).one(&state.db).await { Ok(Some(p)) => p, _ => return StatusCode::NOT_FOUND };
     let mut active: planet::ActiveModel = p.into();
     active.unread_report = Set(None);
@@ -516,10 +516,11 @@ async fn attack_handler(State(state): State<AppState>, axum::extract::Query(para
     (StatusCode::OK, Json(json!({ "status": "success", "message": "Flotte en route", "arrival": arrival }))).into_response()
 }
 
-// ✅ TYPE RETOUR Response CONCRET (au lieu de impl IntoResponse)
+
 async fn expedition_handler(
-    Path(id): Path<Uuid>,
     State(state): State<AppState>
+    Path(id): Path<Uuid>,
+    
 ) -> impl IntoResponse {
     let p_res = Planet::find_by_id(id).one(&state.db).await;
     let p = match p_res { Ok(Some(found)) => found, _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response() };
@@ -577,12 +578,12 @@ async fn expedition_handler(
     (StatusCode::OK, Json(response)).into_response()
 }
 
-async fn get_reports_handler(Path(id): Path<Uuid>, State(state): State<AppState>) -> Json<Vec<combat_log::Model>> {
+async fn get_reports_handler(State(state): State<AppState>),Path(id): Path<Uuid> -> Json<Vec<combat_log::Model>> {
     let logs = CombatLog::find().filter(combat_log::Column::PlanetId.eq(id)).order_by_desc(combat_log::Column::Date).limit(50).all(&state.db).await.unwrap_or_default();
     Json(logs)
 }
 
-async fn get_transport_logs_handler(Path(id): Path<Uuid>, State(state): State<AppState>) -> Json<Vec<serde_json::Value>> {
+async fn get_transport_logs_handler(State(state): State<AppState>),Path(id): Path<Uuid> -> Json<Vec<serde_json::Value>> {
     let logs = TransportLog::find().filter(Condition::any().add(transport_log::Column::TargetPlanetId.eq(id)).add(transport_log::Column::SourcePlanetId.eq(id))).order_by_desc(transport_log::Column::Date).limit(50).all(&state.db).await.unwrap_or_default();
     let logs_json: Vec<serde_json::Value> = logs.into_iter().map(|log| {
         let opponent_username = if log.target_planet_id == id { log.source_owner_name.clone() } else { log.target_owner_name.clone() };
