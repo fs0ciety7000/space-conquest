@@ -1355,12 +1355,34 @@ async fn get_unit_costs_handler() -> Result<Json<serde_json::Value>, StatusCode>
     Ok(Json(json!(costs)))
 }
 
-// Handler pour récupérer le profil public d'un joueur
 async fn get_player_profile_handler(
     Path(user_id): Path<Uuid>,
     State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     use crate::entities::{prelude::*, user, planet, fleet_mission};
+    
+    // ✅ Récupérer l'ID de l'utilisateur qui consulte (viewer)
+    let viewer_id = params.get("viewer_id")
+        .and_then(|s| Uuid::parse_str(s).ok());
+    
+    let is_own_profile = viewer_id.map(|v| v == user_id).unwrap_or(false);
+    
+    // ✅ Calculer le niveau d'espionnage du viewer
+    let espionage_level = if !is_own_profile && viewer_id.is_some() {
+        let viewer_planets = Planet::find()
+            .filter(planet::Column::OwnerId.eq(viewer_id.unwrap()))
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+        
+        viewer_planets.iter()
+            .map(|p| p.espionage_tech_level)
+            .max()
+            .unwrap_or(0)
+    } else {
+        999 // Niveau infini pour son propre profil
+    };
     
     // Récupérer l'utilisateur
     let user = User::find_by_id(user_id)
@@ -1376,7 +1398,7 @@ async fn get_player_profile_handler(
         .await
         .unwrap_or_default();
     
-    // ✅ Calculer les points de toutes les planètes
+    // Calculer les points de toutes les planètes
     let mut total_points = 0;
     let mut total_economy = 0;
     let mut total_military = 0;
@@ -1389,6 +1411,34 @@ async fn get_player_profile_handler(
     }
     
     let planet_count = planets.len();
+    
+    // ✅ Fonctions helper pour masquer les données
+    fn mask_value(value: serde_json::Value, condition: bool) -> serde_json::Value {
+        if condition {
+            value
+        } else {
+            json!("█████")
+        }
+    }
+    
+    fn mask_number(value: i32, condition: bool) -> serde_json::Value {
+        if condition {
+            json!(value)
+        } else {
+            json!("███")
+        }
+    }
+    
+    // ✅ Déterminer ce qui est visible selon le niveau d'espionnage
+    let show_basic = espionage_level >= 0;
+    let show_points = espionage_level >= 3;
+    let show_economy = espionage_level >= 5;
+    let show_military = espionage_level >= 7;
+    let show_fleet = espionage_level >= 10;
+    let show_defenses = espionage_level >= 12;
+    let show_buildings = espionage_level >= 15;
+    let show_techs = espionage_level >= 18;
+    let show_all = is_own_profile;
     
     // Flotte totale
     let total_fleet = planets.iter().fold(0, |acc, p| {
@@ -1409,12 +1459,12 @@ async fn get_player_profile_handler(
             .filter(fleet_mission::Column::ArrivalTime.lt(chrono::Utc::now().naive_utc()))
             .count(&state.db)
             .await
-            .unwrap_or(0)
+            .unwrap_or(0) as i32
     } else {
         0
     };
     
-    // ✅ Planète principale (celle avec le plus de points)
+    // Planète principale
     let main_planet_with_points: Option<(&planet::Model, i32, i32, i32)> = planets.iter()
         .map(|p| {
             let (pts, eco, mil) = game_logic::calculate_planet_points(p);
@@ -1425,45 +1475,96 @@ async fn get_player_profile_handler(
     // Badge de rang
     let rank_badge = game_logic::get_rank_badge(total_points);
     
+    // ✅ Construire la réponse avec masquage progressif
     let response = json!({
         "user_id": user.id,
         "username": user.username,
-        "created_at": user.created_at, // ✅ Sera ajouté par migration
-        "total_points": total_points,
-        "economy_points": total_economy,
-        "military_points": total_military,
-        "rank_badge": rank_badge,
+        "created_at": if show_all { json!(user.created_at) } else { json!(null) },
+        "is_own_profile": is_own_profile,
+        "espionage_level": espionage_level,
+        
+        // Points (selon niveau)
+        "total_points": mask_number(total_points, show_points || show_all),
+        "economy_points": mask_number(total_economy, show_economy || show_all),
+        "military_points": mask_number(total_military, show_military || show_all),
+        "rank_badge": if show_points || show_all { json!(rank_badge) } else { json!("CLASSIFIÉ") },
+        
+        // Statistiques de base
         "planet_count": planet_count,
-        "total_fleet": total_fleet,
-        "total_defenses": total_defenses,
-        "completed_missions": completed_missions,
+        "total_fleet": mask_number(total_fleet, show_fleet || show_all),
+        "total_defenses": mask_number(total_defenses, show_defenses || show_all),
+        "completed_missions": mask_number(completed_missions, show_military || show_all),
+        
+        // Planète principale
         "main_planet": main_planet_with_points.map(|(p, points, _, _)| json!({
             "name": p.name,
             "galaxy": p.galaxy,
             "system": p.system,
             "position": p.position,
-            "points": points,
+            "points": mask_number(points, show_points || show_all),
         })),
-        "top_buildings": main_planet_with_points.map(|(p, _, _, _)| json!({
-            "metal_mine": p.metal_mine_level,
-            "crystal_mine": p.crystal_mine_level,
-            "shipyard": p.shipyard_level,
-            "research_lab": p.research_lab_level,
-        })),
-        "top_techs": main_planet_with_points.map(|(p, _, _, _)| json!({
-            "energy": p.energy_tech_level,
-            "laser": p.laser_battery_level,
-            "espionage": p.espionage_tech_level,
-            "armour": p.armour_tech_level,
-        })),
+        
+        // Bâtiments (niveau 15+)
+        "top_buildings": if show_buildings || show_all {
+            main_planet_with_points.map(|(p, _, _, _)| json!({
+                "metal_mine": p.metal_mine_level,
+                "crystal_mine": p.crystal_mine_level,
+                "shipyard": p.shipyard_level,
+                "research_lab": p.research_lab_level,
+            }))
+        } else {
+            Some(json!({
+                "metal_mine": "███",
+                "crystal_mine": "███",
+                "shipyard": "███",
+                "research_lab": "███",
+            }))
+        },
+        
+        // Technologies (niveau 18+)
+        "top_techs": if show_techs || show_all {
+            main_planet_with_points.map(|(p, _, _, _)| json!({
+                "energy": p.energy_tech_level,
+                "laser": p.laser_battery_level,
+                "espionage": p.espionage_tech_level,
+                "armour": p.armour_tech_level,
+            }))
+        } else {
+            Some(json!({
+                "energy": "███",
+                "laser": "███",
+                "espionage": "███",
+                "armour": "███",
+            }))
+        },
+        
+        // Liste des planètes
         "planets": planets.iter().map(|p| {
             let (points, _, _) = game_logic::calculate_planet_points(p);
             json!({
                 "name": p.name,
                 "coords": format!("[{}:{}:{}]", p.galaxy, p.system, p.position),
-                "points": points,
+                "points": mask_number(points, show_points || show_all),
             })
         }).collect::<Vec<_>>(),
+        
+        // ✅ Message d'information sur le niveau requis
+        "access_info": if !show_all {
+            json!({
+                "message": "Certaines informations sont classifiées. Améliorez votre technologie d'espionnage pour en savoir plus.",
+                "unlocks": {
+                    "level_3": "Points totaux et rang",
+                    "level_5": "Points économie",
+                    "level_7": "Points militaire et missions",
+                    "level_10": "Taille de la flotte",
+                    "level_12": "Défenses",
+                    "level_15": "Détails des bâtiments",
+                    "level_18": "Détails des technologies"
+                }
+            })
+        } else {
+            json!(null)
+        },
     });
     
     Ok(Json(response))
