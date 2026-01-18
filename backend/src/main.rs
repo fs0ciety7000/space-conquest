@@ -734,6 +734,8 @@ if !["missile_launcher", "plasma_turret"].contains(&type_ship.as_str()) {
     if (current_fleet_size + pending_in_queue + qty) > max_capacity { 
         return Err(StatusCode::CONFLICT); 
     }
+    }
+    
     if let Err(_) = game_logic::check_prerequisites(&p, &type_ship) { return Err(StatusCode::FORBIDDEN); }
 
     let (cost_m, cost_c) = match type_ship.as_str() {
