@@ -90,14 +90,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const prodCrystal = calculateProduction(planet.crystal_mine_level, 20);
   const prodDeut = calculateProduction(planet.deuterium_mine_level, 10);
 
-  const solarLevel = planet.solar_plant_level || 0;
-  const energyTechLevel = planet.energy_tech_level || 0;
-  const energyProd = Math.floor((20 * solarLevel * Math.pow(1.1, solarLevel)) * (1 + (energyTechLevel * 0.05)));
-  const energyCons = Math.floor(
-    (10 * planet.metal_mine_level * Math.pow(1.1, planet.metal_mine_level)) +
-    (10 * planet.crystal_mine_level * Math.pow(1.1, planet.crystal_mine_level)) +
-    (20 * planet.deuterium_mine_level * Math.pow(1.1, planet.deuterium_mine_level))
-  );
+  // Energy data from backend
+  const energyProd = planet.energy_production || 0;
+  const energyCons = planet.energy_consumption || 0;
+  const energyRatio = planet.energy_ratio || 100; // percentage
   const energyNet = energyProd - energyCons;
   const energyPercent = energyCons > 0 ? Math.min(100, (energyCons / energyProd) * 100) : 0;
 
@@ -333,26 +329,38 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
         {/* ENERGIE */}
         <Card className="bg-slate-900/80 border border-white/10 backdrop-blur-md flex flex-col justify-between relative overflow-hidden">
-             <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-20 ${energyNet >= 0 ? 'bg-yellow-400' : 'bg-red-500'}`}></div>
+             <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-20 ${energyRatio >= 100 ? 'bg-yellow-400' : energyRatio >= 50 ? 'bg-orange-400' : 'bg-red-500'}`}></div>
             <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                    <Zap size={14} className={energyNet >= 0 ? "text-yellow-400" : "text-red-500"} /> Réseau Électrique
+                    <Zap size={14} className={energyRatio >= 100 ? "text-yellow-400" : energyRatio >= 50 ? "text-orange-400" : "text-red-500 animate-pulse"} /> Réseau Électrique
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="flex items-end justify-between">
-                    <span className={`text-3xl font-mono font-black ${energyNet >= 0 ? 'text-white' : 'text-red-400'}`}>{fmt(energyNet)}</span>
-                    <span className={`text-xs font-bold px-2 py-1 rounded ${energyNet >= 0 ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'}`}>
-                        {energyNet >= 0 ? 'STABLE' : 'CRITIQUE'}
+                    <span className={`text-3xl font-mono font-black ${energyRatio >= 100 ? 'text-emerald-400' : energyRatio >= 50 ? 'text-orange-400' : 'text-red-400'}`}>{energyRatio}%</span>
+                    <span className={`text-xs font-bold px-2 py-1 rounded ${energyRatio >= 100 ? 'bg-emerald-500/10 text-emerald-400' : energyRatio >= 50 ? 'bg-orange-500/10 text-orange-400' : 'bg-red-500/10 text-red-400'}`}>
+                        {energyRatio >= 100 ? 'OPTIMAL' : energyRatio >= 50 ? 'RALENTI' : 'CRITIQUE'}
                     </span>
                 </div>
                 <div className="space-y-1">
                     <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
-                        <span>Charge Système</span>
-                        <span>{Math.floor(energyPercent)}%</span>
+                        <span>Efficacité Mines</span>
+                        <span>{energyRatio}%</span>
                     </div>
-                    <Progress value={energyPercent} className={`h-1.5 ${energyNet < 0 ? "bg-red-900" : "bg-slate-800"}`} />
+                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                            className={`h-full transition-all ${energyRatio < 50 ? 'bg-red-500' : energyRatio < 100 ? 'bg-orange-400' : 'bg-emerald-400'}`}
+                            style={{ width: `${Math.min(energyRatio, 100)}%` }}
+                        ></div>
+                    </div>
                 </div>
+                {energyRatio < 100 && (
+                    <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-2">
+                        <p className="text-[9px] text-orange-400 font-bold uppercase flex items-center gap-1">
+                            <AlertTriangle size={10} /> Production réduite de {100 - energyRatio}%
+                        </p>
+                    </div>
+                )}
                 <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
                     <div className="bg-white/5 p-2 rounded text-center">
                         <span className="block text-slate-500">Prod.</span>
@@ -362,6 +370,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         <span className="block text-slate-500">Conso.</span>
                         <span className="text-red-400">-{fmt(energyCons)}</span>
                     </div>
+                </div>
+                <div className="text-center text-[9px] text-slate-500 font-mono">
+                    Net: {energyNet >= 0 ? '+' : ''}{fmt(energyNet)} unités
                 </div>
             </CardContent>
         </Card>

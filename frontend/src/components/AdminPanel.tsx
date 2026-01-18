@@ -6,12 +6,19 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
 
+interface PlanetInfo {
+  id: string;
+  name: string;
+  galaxy: number;
+  system: number;
+  position: number;
+}
+
 interface Player {
   id: string;
   username: string;
   email: string;
-  planet_id: string;
-  planet_name: string;
+  planets: PlanetInfo[];
   total_points: number;
 }
 
@@ -129,9 +136,9 @@ export default function AdminPanel() {
     }
   };
 
-  const handleSelectPlayer = (player: Player) => {
+  const handleSelectPlayer = (player: Player, planetId: string) => {
     setSelectedPlayer(player);
-    fetchPlanetData(player.planet_id);
+    fetchPlanetData(planetId);
   };
 
   const handleSaveChanges = async () => {
@@ -206,19 +213,35 @@ export default function AdminPanel() {
 
             <div className="space-y-2 max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
               {filteredPlayers.map(player => (
-                <button
-                  key={player.id}
-                  onClick={() => handleSelectPlayer(player)}
-                  className={`w-full text-left p-3 rounded-lg border transition-all ${
-                    selectedPlayer?.id === player.id
-                      ? 'bg-indigo-600/20 border-indigo-500/50'
-                      : 'bg-slate-900/50 border-white/5 hover:bg-white/5'
-                  }`}
-                >
-                  <div className="font-bold text-white text-sm">{player.username}</div>
-                  <div className="text-xs text-slate-500 font-mono">{player.planet_name}</div>
-                  <div className="text-xs text-slate-600 mt-1">{player.total_points.toLocaleString()} pts</div>
-                </button>
+                <div key={player.id} className="bg-slate-900/50 border border-white/5 rounded-lg overflow-hidden">
+                  <div className="p-3 border-b border-white/5">
+                    <div className="font-bold text-white text-sm">{player.username}</div>
+                    <div className="text-xs text-slate-600 mt-1">{player.total_points.toLocaleString()} pts • {player.planets.length} planète(s)</div>
+                  </div>
+                  <div className="divide-y divide-white/5">
+                    {player.planets.length > 0 ? player.planets.map(planet => (
+                      <button
+                        key={planet.id}
+                        onClick={() => handleSelectPlayer(player, planet.id)}
+                        className={`w-full text-left p-2 px-4 transition-all hover:bg-white/5 ${
+                          selectedPlayer?.id === player.id && planetData?.id === planet.id
+                            ? 'bg-indigo-600/20'
+                            : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs text-white font-medium">{planet.name}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">[{planet.galaxy}:{planet.system}:{planet.position}]</div>
+                          </div>
+                          <Edit size={12} className="text-slate-500" />
+                        </div>
+                      </button>
+                    )) : (
+                      <div className="p-2 px-4 text-xs text-slate-600 italic">Aucune planète</div>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           </CardContent>
