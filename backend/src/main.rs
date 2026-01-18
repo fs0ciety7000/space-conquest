@@ -686,7 +686,8 @@ async fn build_fleet_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if active_constructions >= 3 { return Err(StatusCode::CONFLICT); }
-
+    
+if !["missile_launcher", "plasma_turret"].contains(&type_ship.as_str()) {
     let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
                            + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
     let max_capacity = game_logic::get_fleet_capacity(p.hangar_level);
@@ -701,8 +702,9 @@ async fn build_fleet_handler(
         .map(|i| i.level) 
         .sum();
 
-    if (current_fleet_size + pending_in_queue + qty) > max_capacity { return Err(StatusCode::CONFLICT); }
-
+    if (current_fleet_size + pending_in_queue + qty) > max_capacity { 
+        return Err(StatusCode::CONFLICT); 
+    }
     if let Err(_) = game_logic::check_prerequisites(&p, &type_ship) { return Err(StatusCode::FORBIDDEN); }
 
     let (cost_m, cost_c) = match type_ship.as_str() {
