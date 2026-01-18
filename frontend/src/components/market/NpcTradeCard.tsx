@@ -56,6 +56,28 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
     }
   })();
 
+  // Calculate exchange preview
+  const exchangePreview = (() => {
+    if (!buyResource || !npcPrices) return null;
+
+    const sellPrice = npcPrices.npc_buy_price; // What NPC pays for our resource
+    const buyPrice = npcPrices.buy_prices?.[buyResource]; // Price of the resource we want
+
+    if (!buyPrice) return null;
+
+    // Exchange rate: how much of target resource we get per unit of source resource
+    const exchangeRate = sellPrice / buyPrice;
+    // After NPC margin (85%)
+    const finalAmount = sellQuantity * exchangeRate * 0.85;
+
+    return {
+      exchangeRate,
+      finalAmount,
+      sellPrice,
+      buyPrice
+    };
+  })();
+
   const handleNpcTrade = async () => {
     if (!buyResource) {
       toast.error("Sélectionnez la ressource à acheter");
@@ -127,6 +149,24 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
             <Bot size={20} className="text-purple-400" />
           </div>
 
+          {/* NPC Prices Info */}
+          {npcPrices && (
+            <div className="bg-black/30 border border-white/5 rounded-lg p-3 space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 uppercase font-bold">Prix achat NPC:</span>
+                <span className="text-emerald-400 font-mono font-bold">{npcPrices.npc_buy_price?.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 uppercase font-bold">Prix vente NPC:</span>
+                <span className="text-red-400 font-mono font-bold">{npcPrices.npc_sell_price?.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs border-t border-white/5 pt-2">
+                <span className="text-slate-500 uppercase font-bold">Prix marché:</span>
+                <span className="text-yellow-400 font-mono font-bold">{npcPrices.market_price?.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
           {/* Trade Setup */}
           <div className="space-y-3">
             <div>
@@ -154,6 +194,23 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
                 {resource !== 'deuterium' && <option value="deuterium">Deuterium</option>}
               </select>
             </div>
+
+            {/* Exchange Preview */}
+            {exchangePreview && (
+              <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3">
+                <div className="text-[10px] uppercase font-bold text-purple-400 mb-2">Aperçu de l'échange:</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-white font-mono text-sm">{sellQuantity.toLocaleString()} {resource}</span>
+                  <ArrowRight size={16} className="text-purple-400" />
+                  <span className="text-emerald-400 font-mono text-sm font-bold">
+                    {Math.floor(exchangePreview.finalAmount).toLocaleString()} {buyResource}
+                  </span>
+                </div>
+                <div className="text-[9px] text-slate-500 mt-2">
+                  Taux: 1 {resource} = {exchangePreview.exchangeRate.toFixed(3)} {buyResource} (avec marge NPC 85%)
+                </div>
+              </div>
+            )}
 
             <Button
               onClick={handleNpcTrade}

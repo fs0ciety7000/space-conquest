@@ -78,6 +78,11 @@ struct ColonizePayload {
 }
 
 #[derive(Deserialize)]
+struct ExpeditionPayload {
+    ship_count: i32,
+}
+
+#[derive(Deserialize)]
 struct TransportPayload {
     target_planet_id: Uuid,
     transporters: i32,
@@ -159,6 +164,7 @@ async fn main() {
         .route("/planets/:id/cancel-construction/:queue_id", delete(cancel_construction_handler))
         .route("/planets/:id/build-fleet/:type/:qty", post(build_fleet_handler))
         .route("/planets/:id/expedition", post(expedition_handler))
+        .route("/planets/:id/expedition/scout", post(scout_expedition_handler))
         .route("/planets/:id/clear-report", post(clear_report_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
         .route("/planets/:id/transport-logs", get(get_transport_logs_handler))
@@ -384,11 +390,20 @@ async fn get_planet_handler(
     let now = Utc::now().naive_utc();
     let mut active: planet::ActiveModel = p.clone().into();
 
+    // Calculate energy ratio
+    let energy_ratio = game_logic::calculate_energy_ratio(
+        p.solar_plant_level,
+        p.energy_tech_level,
+        p.metal_mine_level,
+        p.crystal_mine_level,
+        p.deuterium_mine_level
+    );
+
     let elapsed = now.signed_duration_since(p.last_update).num_seconds();
     if elapsed > 0 {
-        active.metal_amount = Set(game_logic::calculate_resources(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update, p.energy_tech_level));
-        active.crystal_amount = Set(game_logic::calculate_resources(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update, p.energy_tech_level));
-        active.deuterium_amount = Set(game_logic::calculate_resources(game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update, p.energy_tech_level));
+        active.metal_amount = Set(game_logic::calculate_resources_with_energy(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update, p.energy_tech_level, energy_ratio));
+        active.crystal_amount = Set(game_logic::calculate_resources_with_energy(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update, p.energy_tech_level, energy_ratio));
+        active.deuterium_amount = Set(game_logic::calculate_resources_with_energy(game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update, p.energy_tech_level, energy_ratio));
         active.last_update = Set(now);
     }
 
@@ -453,17 +468,22 @@ async fn get_planet_handler(
 
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
-    let energy_prod = (20.0 * updated_model.solar_plant_level as f64 * 1.1f64.powf(updated_model.solar_plant_level as f64) * (1.0 + (updated_model.energy_tech_level as f64 * 0.05))) as i32;
-    let energy_cons = (10.0 * updated_model.metal_mine_level as f64 * 1.1f64.powf(updated_model.metal_mine_level as f64)) as i32;
+    // Calculate energy using new functions
+    let energy_prod = game_logic::calculate_energy_production(updated_model.solar_plant_level, updated_model.energy_tech_level);
+    let energy_cons = game_logic::calculate_energy_consumption(updated_model.metal_mine_level, updated_model.crystal_mine_level, updated_model.deuterium_mine_level);
+    let energy_ratio_percent = (energy_ratio * 100.0) as i32; // Convert to percentage
 
     // ✅ AJOUT : Calculer les messages non lus
-let unread_messages = count_unread_messages(p.owner_id, &state.db).await;
+    let unread_messages = count_unread_messages(p.owner_id, &state.db).await;
 
     let mut json_response = serde_json::to_value(updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
         obj.insert("incoming_missions".into(), json!(incoming_raw));
         obj.insert("outgoing_missions".into(), json!(outgoing_detailed));
-        obj.insert("energy".into(), json!(energy_prod - energy_cons));
+        obj.insert("energy".into(), json!(energy_prod as i32 - energy_cons as i32));
+        obj.insert("energy_production".into(), json!(energy_prod as i32));
+        obj.insert("energy_consumption".into(), json!(energy_cons as i32));
+        obj.insert("energy_ratio".into(), json!(energy_ratio_percent));
         obj.insert("unread_messages".into(), json!(unread_messages));
         let active_queue = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).order_by_asc(construction_queue::Column::EndTime).all(&state.db).await.unwrap_or_default();
         obj.insert("constructions".into(), json!(active_queue));
@@ -692,8 +712,9 @@ async fn attack_handler(
 async fn expedition_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
-) -> impl IntoResponse { 
-    
+    Json(payload): Json<ExpeditionPayload>,
+) -> impl IntoResponse {
+
     let p_res = Planet::find_by_id(id).one(&state.db).await;
     let p = match p_res {
         Ok(Some(found)) => found,
@@ -706,10 +727,19 @@ async fn expedition_handler(
         }
     }
 
+    // Validation du nombre de vaisseaux
+    let ship_count = payload.ship_count;
+    if ship_count <= 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
+    }
+    if ship_count > p.light_hunter_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de vaisseaux"}))).into_response();
+    }
+
     let mut active: planet::ActiveModel = p.clone().into();
     let loot = 0.0;
     let mut logs: Vec<String> = Vec::new();
-    let winner; 
+    let winner;
     let mut lost_hunters = 0;
     let mut lost_cruisers = 0;
 
@@ -717,7 +747,7 @@ async fn expedition_handler(
 
     let (loot_metal, loot_crystal) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
-        let combat_res = game_logic::simulate_combat(p.light_hunter_count + p.cruiser_count, p.laser_battery_level);
+        let combat_res = game_logic::simulate_combat(ship_count + p.cruiser_count, p.laser_battery_level);
 
         if combat_res.victory {
             winner = "player";
@@ -727,17 +757,17 @@ async fn expedition_handler(
             
             logs.push(format!("RESULTAT : {}", combat_res.message));
             logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
-            
-            lost_hunters = combat_res.ships_lost; 
-            if lost_hunters > p.light_hunter_count { lost_hunters = p.light_hunter_count; }
-            
+
+            lost_hunters = combat_res.ships_lost;
+            if lost_hunters > ship_count { lost_hunters = ship_count; }
+
             active.metal_amount = Set(p.metal_amount + metal);
             active.crystal_amount = Set(p.crystal_amount + crystal);
             (metal, crystal)
         } else {
             winner = "pirates";
             logs.push(format!("RESULTAT : {}", combat_res.message));
-            lost_hunters = (p.light_hunter_count as f64 * 0.5) as i32; 
+            lost_hunters = (ship_count as f64 * 0.5) as i32;
             lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;
             (0.0, 0.0)
         }
@@ -799,6 +829,66 @@ async fn expedition_handler(
 });
 
     (StatusCode::OK, Json(response)).into_response()
+}
+
+async fn scout_expedition_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<ExpeditionPayload>,
+) -> impl IntoResponse {
+    let p_res = Planet::find_by_id(id).one(&state.db).await;
+    let p = match p_res {
+        Ok(Some(found)) => found,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+    };
+
+    let ship_count = payload.ship_count;
+    if ship_count <= 0 || ship_count > p.light_hunter_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
+    }
+
+    // Simulation du scan (aléatoire mais basé sur la force de la flotte)
+    let mut rng = rand::thread_rng();
+    let base_danger = rng.gen_range(0..100);
+
+    let (danger_level, color, probability, recommendation) = if base_danger < 30 {
+        (
+            "FAIBLE",
+            "green",
+            rng.gen_range(85..95),
+            "Secteur relativement sûr. Expédition recommandée."
+        )
+    } else if base_danger < 70 {
+        (
+            "MOYEN",
+            "orange",
+            rng.gen_range(60..85),
+            "Présence hostile possible. Envoyez une flotte suffisante."
+        )
+    } else {
+        (
+            "ÉLEVÉ",
+            "red",
+            rng.gen_range(30..60),
+            "ATTENTION : Zone très hostile détectée. Risque élevé de pertes."
+        )
+    };
+
+    // Ajustement de la probabilité en fonction du nombre de vaisseaux
+    let adjusted_probability = if ship_count >= 10 {
+        std::cmp::min(95, probability + 10)
+    } else if ship_count >= 5 {
+        probability
+    } else {
+        std::cmp::max(20, probability - 10)
+    };
+
+    Json(json!({
+        "danger": danger_level,
+        "color": color,
+        "probability": adjusted_probability,
+        "recommendation": recommendation
+    })).into_response()
 }
 
 async fn get_reports_handler(
@@ -911,10 +1001,18 @@ async fn spy_handler(
         fleet = Some(fleet_map);
     }
 
-    if tech_diff >= 2 { 
+    if tech_diff >= 2 {
         detection = "full";
-        defense = Some(def_planet.missile_launcher_count + def_planet.plasma_turret_count); 
+        defense = Some(def_planet.missile_launcher_count + def_planet.plasma_turret_count);
     }
+
+    // Notify the defender that they were spied on
+    let mut def_active: planet::ActiveModel = def_planet.into();
+    def_active.unread_report = Set(Some(json!({
+        "type": "spy_alert",
+        "message": "Votre planète a été espionnée !"
+    }).to_string()));
+    let _ = def_active.update(&state.db).await;
 
     (StatusCode::OK, Json(json!({
         "status": "success",
@@ -2084,12 +2182,11 @@ async fn buy_from_npc_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Calculate what player receives
+    // Calculate what player receives (no tax for NPC trades, only NPC margin)
     let gross_amount = payload.sell_quantity * exchange_rate;
-    let (net_amount, tax_amount) = market::apply_market_tax(gross_amount);
-
     // Apply NPC buy margin (NPC pays 85% of market price)
-    let final_amount = net_amount * market::NPC_BUY_MARGIN;
+    let final_amount = gross_amount * market::NPC_BUY_MARGIN;
+    let tax_amount = 0.0; // No tax for NPC trades
 
     // Execute transaction
     let mut active_planet = planet.clone().into_active_model();

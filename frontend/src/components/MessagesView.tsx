@@ -204,56 +204,56 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
     const displayedConversations = showArchived ? archivedConversations : activeConversations;
 
     return (
-        <div className="flex h-[calc(100vh-200px)] max-w-7xl mx-auto gap-4">
-            
+        <div className="flex flex-col lg:flex-row h-[calc(100vh-200px)] max-w-7xl mx-auto gap-2 lg:gap-4 px-2 lg:px-0">
+
             {/* SIDEBAR : LISTE DES CONVERSATIONS */}
-            <div className="w-80 flex flex-col bg-slate-900/80 border border-white/10 rounded-xl overflow-hidden">
-                <div className="p-4 border-b border-white/10 bg-slate-950/50">
+            <div className={`${selectedConv || isComposing ? 'hidden lg:flex' : 'flex'} w-full lg:w-80 flex-col bg-slate-900/80 border border-white/10 rounded-xl overflow-hidden`}>
+                <div className="p-3 lg:p-4 border-b border-white/10 bg-slate-950/50">
                     <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-black uppercase tracking-widest text-sm text-white flex items-center gap-2">
-                            <MessageCircle size={18} className="text-indigo-400"/> 
+                        <h3 className="font-black uppercase tracking-widest text-xs lg:text-sm text-white flex items-center gap-2">
+                            <MessageCircle size={16} className="lg:w-[18px] lg:h-[18px] text-indigo-400"/>
                             {showArchived ? "Archivées" : "Boîte de réception"}
                         </h3>
-                        <div className="flex gap-2">
-                            <Button variant="ghost" size="icon" onClick={fetchConversations} className="h-7 w-7">
-                                <RotateCw size={14} className={loading ? "animate-spin" : ""}/>
+                        <div className="flex gap-1 lg:gap-2">
+                            <Button variant="ghost" size="icon" onClick={fetchConversations} className="h-6 w-6 lg:h-7 lg:w-7">
+                                <RotateCw size={12} className={`lg:w-3.5 lg:h-3.5 ${loading ? "animate-spin" : ""}`}/>
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(true)} className="h-7 w-7 text-indigo-400">
-                                <Plus size={16}/>
+                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(true)} className="h-6 w-6 lg:h-7 lg:w-7 text-indigo-400">
+                                <Plus size={14} className="lg:w-4 lg:h-4"/>
                             </Button>
                         </div>
                     </div>
                     
                     {/* ✅ ONGLETS INBOX / ARCHIVÉES */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-1 lg:gap-2">
                         <button
                             onClick={() => setShowArchived(false)}
-                            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all ${
-                                !showArchived 
-                                    ? 'bg-indigo-600 text-white' 
+                            className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all ${
+                                !showArchived
+                                    ? 'bg-indigo-600 text-white'
                                     : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
                             }`}
                         >
-                            <Inbox size={14}/>
-                            <span>Inbox</span>
+                            <Inbox size={12} className="lg:w-3.5 lg:h-3.5"/>
+                            <span className="hidden sm:inline">Inbox</span>
                             {activeConversations.length > 0 && (
-                                <span className="bg-indigo-500 text-white text-[10px] px-1.5 rounded-full">
+                                <span className="bg-indigo-500 text-white text-[9px] lg:text-[10px] px-1 lg:px-1.5 rounded-full">
                                     {activeConversations.length}
                                 </span>
                             )}
                         </button>
                         <button
                             onClick={() => setShowArchived(true)}
-                            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all ${
-                                showArchived 
-                                    ? 'bg-indigo-600 text-white' 
+                            className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all ${
+                                showArchived
+                                    ? 'bg-indigo-600 text-white'
                                     : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
                             }`}
                         >
-                            <Archive size={14}/>
-                            <span>Archivées</span>
+                            <Archive size={12} className="lg:w-3.5 lg:h-3.5"/>
+                            <span className="hidden sm:inline">Archivées</span>
                             {archivedConversations.length > 0 && (
-                                <span className="bg-slate-600 text-white text-[10px] px-1.5 rounded-full">
+                                <span className="bg-slate-600 text-white text-[9px] lg:text-[10px] px-1 lg:px-1.5 rounded-full">
                                     {archivedConversations.length}
                                 </span>
                             )}
@@ -286,10 +286,10 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             >
                                 <button
                                     onClick={() => handleSelectConv(conv)}
-                                    className="w-full p-3 text-left"
+                                    className="w-full p-2 lg:p-3 text-left"
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <span className="font-bold text-sm text-white">{conv.other_user_name}</span>
+                                        <span className="font-bold text-xs lg:text-sm text-white">{conv.other_user_name}</span>
                                         <div className="flex items-center gap-2">
                                             {conv.unread_count > 0 && (
                                                 <span className="bg-indigo-500 text-white text-[10px] px-1.5 rounded-full font-bold">
@@ -330,7 +330,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
             </div>
 
             {/* ZONE PRINCIPALE */}
-            <div className="flex-1 flex flex-col bg-slate-900/40 border border-white/10 rounded-xl overflow-hidden">
+            <div className={`${!selectedConv && !isComposing ? 'hidden lg:flex' : 'flex'} flex-1 flex-col bg-slate-900/40 border border-white/10 rounded-xl overflow-hidden`}>
                 
                 {isComposing ? (
                     // FORMULAIRE NOUVEAU MESSAGE
@@ -372,13 +372,13 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                 ) : selectedConv ? (
                     // VUE THREAD
                     <>
-                        <div className="p-4 border-b border-white/10 bg-slate-950/50 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <Button variant="ghost" size="icon" onClick={() => setSelectedConv(null)} className="lg:hidden">
-                                    <ArrowLeft size={18}/>
+                        <div className="p-3 lg:p-4 border-b border-white/10 bg-slate-950/50 flex items-center justify-between">
+                            <div className="flex items-center gap-2 lg:gap-3">
+                                <Button variant="ghost" size="icon" onClick={() => setSelectedConv(null)} className="h-7 w-7 lg:h-auto lg:w-auto lg:hidden">
+                                    <ArrowLeft size={16} className="lg:w-[18px] lg:h-[18px]"/>
                                 </Button>
-                                <User size={18} className="text-indigo-400"/>
-                                <h3 className="font-bold text-white">{selectedConv.other_user_name}</h3>
+                                <User size={16} className="lg:w-[18px] lg:h-[18px] text-indigo-400"/>
+                                <h3 className="font-bold text-sm lg:text-base text-white">{selectedConv.other_user_name}</h3>
                             </div>
                             
                             {/* ✅ BOUTON ARCHIVAGE DANS LE HEADER */}
@@ -402,16 +402,16 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             </Button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-slate-800">
+                        <div className="flex-1 overflow-y-auto p-2 lg:p-4 space-y-2 lg:space-y-3 scrollbar-thin scrollbar-thumb-slate-800">
                             {thread.map(msg => (
                                 <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[70%] p-3 rounded-xl ${
-                                        msg.is_mine 
-                                            ? 'bg-indigo-600 text-white' 
+                                    <div className={`max-w-[85%] lg:max-w-[70%] p-2 lg:p-3 rounded-xl ${
+                                        msg.is_mine
+                                            ? 'bg-indigo-600 text-white'
                                             : 'bg-slate-800 text-slate-200'
                                     }`}>
-                                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                                        <span className="text-[10px] opacity-60 block mt-1">
+                                        <p className="text-xs lg:text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                        <span className="text-[9px] lg:text-[10px] opacity-60 block mt-1">
                                             {new Date(msg.created_at).toLocaleTimeString('fr-FR', {
                                                 hour: '2-digit',
                                                 minute: '2-digit'
@@ -422,12 +422,12 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             ))}
                         </div>
 
-                        <div className="p-4 border-t border-white/10 flex gap-2">
+                        <div className="p-2 lg:p-4 border-t border-white/10 flex gap-2">
                             <Textarea
                                 placeholder="Répondre..."
                                 value={replyContent}
                                 onChange={e => setReplyContent(e.target.value)}
-                                className="flex-1 bg-slate-950 border-slate-800 resize-none"
+                                className="flex-1 bg-slate-950 border-slate-800 resize-none text-sm"
                                 rows={2}
                                 onKeyDown={e => {
                                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -436,12 +436,12 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                                     }
                                 }}
                             />
-                            <Button 
-                                onClick={handleReply} 
-                                className="bg-indigo-600 hover:bg-indigo-500 px-6"
+                            <Button
+                                onClick={handleReply}
+                                className="bg-indigo-600 hover:bg-indigo-500 px-3 lg:px-6"
                                 disabled={!replyContent.trim()}
                             >
-                                <Send size={16}/>
+                                <Send size={14} className="lg:w-4 lg:h-4"/>
                             </Button>
                         </div>
                     </>

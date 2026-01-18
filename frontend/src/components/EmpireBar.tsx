@@ -74,6 +74,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   }, [planet?.id]);
 
   const energyAvailable = planet.energy ?? 0;
+  const energyProduction = planet.energy_production ?? 0;
+  const energyConsumption = planet.energy_consumption ?? 0;
+  const energyRatio = planet.energy_ratio ?? 100; // percentage
 
   // Calculs production (AJOUT)
   const calculateProduction = (level: number, baseFactor: number) => {
@@ -84,7 +87,6 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const prodMetal = calculateProduction(planet.metal_mine_level || 0, 30);
   const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, 20);
   const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, 10);
-  const prodEnergy = calculateProduction(planet.solar_plant_level || 0, 20);
 
   return (
     <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-slate-950/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-white/10 min-h-[60px] md:h-[72px] w-full shadow-2xl z-50">
@@ -180,19 +182,41 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex items-center gap-3 group bg-black/20 px-3 py-1.5 rounded-full border border-white/5 cursor-help">
-                      <Zap size={18} className={energyAvailable < 0 ? "text-red-500 animate-pulse" : "text-yellow-400"} />
-                      <span className={`font-mono text-sm font-bold min-w-[60px] text-right ${energyAvailable < 0 ? "text-red-400" : "text-white"}`}>
-                          {Math.floor(energyAvailable).toLocaleString()}
-                      </span>
+                  <div className="flex flex-col gap-1 bg-black/20 px-3 py-1.5 rounded-lg border border-white/5 cursor-help min-w-[100px]">
+                      <div className="flex items-center justify-between gap-2">
+                        <Zap size={14} className={energyRatio < 100 ? "text-red-500 animate-pulse" : "text-yellow-400"} />
+                        <span className={`font-mono text-xs font-bold ${energyRatio < 100 ? "text-red-400" : "text-emerald-400"}`}>
+                            {energyRatio}%
+                        </span>
+                      </div>
+                      <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${energyRatio < 50 ? 'bg-red-500' : energyRatio < 100 ? 'bg-orange-400' : 'bg-emerald-400'}`}
+                          style={{ width: `${Math.min(energyRatio, 100)}%` }}
+                        ></div>
+                      </div>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
-                  <div className="text-xs space-y-1">
-                    <p className="text-slate-400">Énergie disponible</p>
-                    <p className="text-yellow-400 font-mono font-bold">
-                      +{formatCompact(prodEnergy)}/h
-                    </p>
+                  <div className="text-xs space-y-2">
+                    <div>
+                      <p className="text-slate-400 mb-1">Production d'énergie</p>
+                      <p className="text-emerald-400 font-mono font-bold">
+                        +{energyProduction.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 mb-1">Consommation</p>
+                      <p className="text-red-400 font-mono font-bold">
+                        -{energyConsumption.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="border-t border-white/10 pt-2">
+                      <p className="text-slate-400 mb-1">Ratio énergétique</p>
+                      <p className={`font-mono font-bold ${energyRatio < 100 ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {energyRatio}% {energyRatio < 100 && '(Mines ralenties)'}
+                      </p>
+                    </div>
                   </div>
                 </TooltipContent>
               </Tooltip>
@@ -244,16 +268,28 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                   <div className="text-[10px] text-green-400">+{formatCompact(prodDeut)}/h</div>
                 </div>
               </div>
-              <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                <div className="flex items-center gap-2">
-                  <Zap size={14} className={energyAvailable < 0 ? "text-red-500" : "text-yellow-400"} />
-                  <span className="text-xs">Énergie</span>
-                </div>
-                <div className="text-right">
-                  <div className={`font-mono text-xs font-bold ${energyAvailable < 0 ? "text-red-400" : "text-white"}`}>
-                    {Math.floor(energyAvailable).toLocaleString()}
+              <div className="pt-2 border-t border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap size={14} className={energyRatio < 100 ? "text-red-500" : "text-yellow-400"} />
+                    <span className="text-xs">Énergie</span>
                   </div>
-                  <div className="text-[10px] text-yellow-400">+{formatCompact(prodEnergy)}/h</div>
+                  <div className="text-right">
+                    <div className={`font-mono text-xs font-bold ${energyRatio < 100 ? "text-red-400" : "text-emerald-400"}`}>
+                      {energyRatio}%
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-between text-[10px] px-2">
+                  <span className="text-emerald-400">+{energyProduction.toLocaleString()}</span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-red-400">-{energyConsumption.toLocaleString()}</span>
+                </div>
+                <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${energyRatio < 50 ? 'bg-red-500' : energyRatio < 100 ? 'bg-orange-400' : 'bg-emerald-400'}`}
+                    style={{ width: `${Math.min(energyRatio, 100)}%` }}
+                  ></div>
                 </div>
               </div>
             </div>

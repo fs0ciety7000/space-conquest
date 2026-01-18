@@ -17,6 +17,17 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
   const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Convert npc_prices array to object indexed by resource
+  const npcPricesMap = stats?.npc_prices?.reduce((acc: any, price: any) => {
+    acc[price.resource_type] = price;
+    // Add buy_prices for other resources to enable exchange preview
+    acc[price.resource_type].buy_prices = stats?.npc_prices?.reduce((buyAcc: any, p: any) => {
+      buyAcc[p.resource_type] = p.npc_sell_price; // The price we'd pay to buy from NPC
+      return buyAcc;
+    }, {});
+    return acc;
+  }, {});
+
   useEffect(() => {
     loadListings();
   }, []);
@@ -94,7 +105,7 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
               <NpcTradeCard
                 key={resource}
                 resource={resource}
-                npcPrices={stats?.prices?.[resource]}
+                npcPrices={npcPricesMap?.[resource]}
                 planet={planet}
                 userId={userId}
                 onUpdate={onUpdate}

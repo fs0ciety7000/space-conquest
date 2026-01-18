@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Compass, Timer, Send, AlertTriangle, Database, Rocket, Map, Radar, ScanLine } from "lucide-react";
+import { Compass, Timer, Send, AlertTriangle, Database, Rocket, Map, Radar, ScanLine, Minus, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { toast } from "sonner";
 
-export default function ExpeditionZone({ planet, onAction }: { planet: any, onAction: () => void }) {
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+export default function ExpeditionZone({ planet, onAction }: { planet: any, onAction: (shipCount: number) => void }) {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [shipCount, setShipCount] = useState(1);
+  const [scouting, setScouting] = useState(false);
+  const [scoutResult, setScoutResult] = useState<{ danger: string; probability: number; recommendation: string; color: string } | null>(null);
 
   // Gestion du compte à rebours visuel (purement UI)
   useEffect(() => {
@@ -31,13 +37,46 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
     }
   }, [planet?.expedition_end]);
 
+  const handleScout = async () => {
+    if (!planet?.id) return;
+    setScouting(true);
+    setScoutResult(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/planets/${planet.id}/expedition/scout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ship_count: shipCount })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setScoutResult(data);
+        toast.success("🔍 Scan terminé", {
+          description: `Niveau de danger: ${data.danger}`
+        });
+      } else {
+        toast.error("Erreur lors du scan");
+      }
+    } catch (err) {
+      toast.error("Erreur de connexion");
+    } finally {
+      setScouting(false);
+    }
+  };
+
   const handleLaunch = () => {
     setIsLaunching(true);
-    onAction(); // On appelle la fonction du parent (App.tsx) qui fait le POST
+    onAction(shipCount); // On passe le nombre de vaisseaux
   };
 
   const isInMission = (timeLeft !== null && timeLeft > 0) || isLaunching;
   const hasShips = (planet.light_hunter_count || 0) > 0;
+  const availableShips = planet.light_hunter_count || 0;
 
   // Thème de couleur pour cette section (Cyan/Exploration)
   const theme = {
@@ -108,6 +147,102 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                 </p>
               </div>
             </div>
+
+            {/* Sélection de vaisseaux */}
+            {!isInMission && hasShips && (
+              <div className="mb-6 space-y-4">
+                <div className="p-4 rounded-xl border border-cyan-500/30 bg-cyan-950/10">
+                  <h4 className="text-[10px] font-black uppercase text-cyan-400 mb-3 flex items-center gap-2">
+                    <Rocket size={12}/> Configuration Flotte
+                  </h4>
+                  <div className="flex items-center gap-4">
+                    <Button
+                      onClick={() => setShipCount(Math.max(1, shipCount - 1))}
+                      disabled={shipCount <= 1}
+                      className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
+                    >
+                      <Minus size={16} />
+                    </Button>
+                    <div className="flex-1 text-center">
+                      <div className="text-3xl font-mono font-black text-white">{shipCount}</div>
+                      <div className="text-[9px] text-slate-500 uppercase">Chasseurs</div>
+                    </div>
+                    <Button
+                      onClick={() => setShipCount(Math.min(availableShips, shipCount + 1))}
+                      disabled={shipCount >= availableShips}
+                      className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
+                    >
+                      <Plus size={16} />
+                    </Button>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      onClick={() => setShipCount(Math.floor(availableShips / 2))}
+                      className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
+                    >
+                      50%
+                    </Button>
+                    <Button
+                      onClick={() => setShipCount(availableShips)}
+                      className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
+                    >
+                      MAX
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Bouton de Sondage */}
+                <Button
+                  onClick={handleScout}
+                  disabled={scouting}
+                  className="w-full h-14 font-bold tracking-wide uppercase bg-purple-950/20 hover:bg-purple-900/30 text-purple-400 border border-purple-500/50"
+                >
+                  {scouting ? (
+                    <span className="flex items-center gap-2 animate-pulse">
+                      <ScanLine size={16} className="animate-spin" /> ANALYSE EN COURS...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Search size={16} /> SONDER L'EXPÉDITION
+                    </span>
+                  )}
+                </Button>
+
+                {/* Résultat du sondage */}
+                {scoutResult && (
+                  <div className={`p-4 rounded-xl border bg-black/40 ${
+                    scoutResult.color === 'green' ? 'border-green-500/50 bg-green-950/10' :
+                    scoutResult.color === 'orange' ? 'border-orange-500/50 bg-orange-950/10' :
+                    'border-red-500/50 bg-red-950/10'
+                  }`}>
+                    <h4 className={`text-[10px] font-black uppercase mb-2 ${
+                      scoutResult.color === 'green' ? 'text-green-400' :
+                      scoutResult.color === 'orange' ? 'text-orange-400' :
+                      'text-red-400'
+                    }`}>
+                      RAPPORT DE SCAN
+                    </h4>
+                    <div className="space-y-2 text-[10px]">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Niveau de danger:</span>
+                        <span className={`font-bold ${
+                          scoutResult.color === 'green' ? 'text-green-400' :
+                          scoutResult.color === 'orange' ? 'text-orange-400' :
+                          'text-red-400'
+                        }`}>{scoutResult.danger}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Chance de succès:</span>
+                        <span className="font-bold text-white">{scoutResult.probability}%</span>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-white/10">
+                        <p className="text-slate-300 italic">{scoutResult.recommendation}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Bouton d'action principal */}
             <Button 

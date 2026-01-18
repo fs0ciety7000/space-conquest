@@ -19,12 +19,20 @@ use crate::entities::{
 use crate::AppState;
 
 #[derive(Serialize)]
+struct PlanetInfo {
+    id: Uuid,
+    name: String,
+    galaxy: i32,
+    system: i32,
+    position: i32,
+}
+
+#[derive(Serialize)]
 struct PlayerListItem {
     id: Uuid,
     username: String,
     email: String,
-    planet_id: Option<Uuid>,
-    planet_name: String,
+    planets: Vec<PlanetInfo>,
     total_points: i32,
 }
 
@@ -87,18 +95,25 @@ pub async fn get_all_players_handler(
     let mut result = Vec::new();
 
     for user in users {
-        let planet = Planet::find()
+        let planets = Planet::find()
             .filter(planet::Column::OwnerId.eq(user.id))
-            .one(&state.db)
+            .all(&state.db)
             .await
-            .unwrap_or(None);
+            .unwrap_or_default();
+
+        let planet_infos: Vec<PlanetInfo> = planets.iter().map(|p| PlanetInfo {
+            id: p.id,
+            name: p.name.clone(),
+            galaxy: p.galaxy,
+            system: p.system,
+            position: p.position,
+        }).collect();
 
         result.push(PlayerListItem {
             id: user.id,
             username: user.username,
             email: user.email,
-            planet_id: planet.as_ref().map(|p| p.id),
-            planet_name: planet.as_ref().map(|p| p.name.clone()).unwrap_or("Aucune".into()),
+            planets: planet_infos,
             total_points: 0, // À calculer plus tard si besoin
         });
     }

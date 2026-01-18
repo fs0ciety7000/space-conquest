@@ -199,11 +199,17 @@ export default function App() {
                 const reportData = JSON.parse(data.unread_report);
                 
                 if (reportData.type === 'transport_arrival') {
-                     toast.success(`Cargaison reçue de : ${reportData.sender_name}`, { 
+                     toast.success(`Cargaison reçue de : ${reportData.sender_name}`, {
                         description: `Livraison: M:${Math.floor(reportData.metal)} C:${Math.floor(reportData.crystal)} D:${Math.floor(reportData.deuterium)}`,
                         icon: <Truck className="h-5 w-5 text-green-500" />,
                     });
                     playSound('success');
+                } else if (reportData.type === 'spy_alert') {
+                     toast.warning("⚠️ ALERTE SÉCURITÉ", {
+                        description: reportData.message || "Votre planète a été espionnée !",
+                        duration: 5000,
+                    });
+                    playSound('error');
                 } else {
                     const isVictory = reportData.winner === 'defender'; 
                     if(!isVictory && reportData.is_defense) {
@@ -254,16 +260,20 @@ export default function App() {
     }
   }, [planetId, token, playSound]);
 
-  const launchExpedition = async () => {
+  const launchExpedition = async (shipCount: number) => {
     if (!planetId || !token) return;
     try {
       const res = await fetch(apiUrl(`/planets/${planetId}/expedition`), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ship_count: shipCount })
       });
       if (res.ok) {
         const data = await res.json();
-        setPlanet(data.planet); 
+        setPlanet(data.planet);
         setCombatReport(data.report);
         setShowCombatModal(true);
         playSound('expedition');
@@ -274,8 +284,8 @@ export default function App() {
         playSound('error');
         window.dispatchEvent(new Event('error-occurred'));
       }
-    } catch (e) { 
-        toast.error("Erreur réseau"); 
+    } catch (e) {
+        toast.error("Erreur réseau");
         playSound('error');
         window.dispatchEvent(new Event('error-occurred'));
     }
@@ -303,6 +313,9 @@ export default function App() {
           setSpyReport(data.report);
           fetchPlanet();
           playSound('success');
+          toast.success("📡 Sonde d'espionnage envoyée", {
+            description: "Les données ont été collectées avec succès"
+          });
       } else { 
           toast.error(data.error || "Échec de l'espionnage"); 
           playSound('error');
