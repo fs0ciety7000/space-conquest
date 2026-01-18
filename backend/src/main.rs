@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State, Query},
     http::StatusCode,
-    response::{IntoResponse, Json},
+    response::{IntoResponse, Json, Response},
     routing::{get, post, delete, patch},
     Router,
 };
@@ -803,7 +803,7 @@ async fn attack_handler(
 async fn expedition_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
-) -> impl IntoResponse { 
+) -> Response { 
     
     let p_res = Planet::find_by_id(id).one(&state.db).await;
     let p = match p_res {
@@ -834,7 +834,7 @@ async fn expedition_handler(
 
         if combat_res.victory {
             winner = "player";
-            // ✅ BUTIN ALÉATOIRE (Combat gagé)
+            // ✅ BUTIN ALÉATOIRE (Combat gagné)
             loot_metal = rng.gen_range(10000.0..100000.0) * (game_logic::SPEED_FACTOR / 100.0);
             loot_crystal = rng.gen_range(5000.0..50000.0) * (game_logic::SPEED_FACTOR / 100.0);
             logs.push(format!("RESULTAT : {}", combat_res.message));
