@@ -3,6 +3,7 @@ import { Shield, Zap, Target, Crosshair, Timer, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiUrl } from '@/config/api';
+
 const DEFENSE_TYPES = [
   { 
     id: 'missile_launcher', 
@@ -33,29 +34,29 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
   const [qty, setQty] = useState(1);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
-  // Réutilisation de la file de construction du Shipyard (backend logic)
-useEffect(() => {
+  // ✅ CORRECTION : Utiliser la file de construction générique
+  useEffect(() => {
     const defenseQueue = planet?.constructions?.find(
-        (c: any) => c.building_type === 'missile_launcher' || c.building_type === 'plasma_turret'
+      (c: any) => c.building_type === 'missile_launcher' || c.building_type === 'plasma_turret'
     );
     
     if (defenseQueue) {
-        const interval = setInterval(() => {
-            const end = new Date(defenseQueue.end_time).getTime();
-            const now = Date.now();
-            const diff = Math.max(0, Math.floor((end - now) / 1000));
-            
-            setTimeLeft(diff);
-            if (diff <= 0) {
-                clearInterval(interval);
-                setTimeout(onBuild, 500);
-            }
-        }, 1000);
-        return () => clearInterval(interval);
+      const interval = setInterval(() => {
+        const end = new Date(defenseQueue.end_time).getTime();
+        const now = Date.now();
+        const diff = Math.max(0, Math.floor((end - now) / 1000));
+        
+        setTimeLeft(diff);
+        if (diff <= 0) {
+          clearInterval(interval);
+          setTimeout(onBuild, 500);
+        }
+      }, 1000);
+      return () => clearInterval(interval);
     } else {
-        setTimeLeft(null);
+      setTimeLeft(null);
     }
-}, [planet?.constructions, onBuild]);
+  }, [planet?.constructions, onBuild]);
 
   const startBuild = async () => {
     try {
@@ -70,7 +71,19 @@ useEffect(() => {
   const totalM = selected.m * qty;
   const totalC = selected.c * qty;
   const canAfford = planet.metal_amount >= totalM && planet.crystal_amount >= totalC;
-  const isBusy = planet.shipyard_construction_end !== null;
+  
+  // ✅ CORRECTION : Vérifier si une construction de défense est en cours
+  const isBusy = timeLeft !== null && timeLeft > 0;
+
+  // ✅ AJOUT : Formater le temps restant
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 animate-in fade-in duration-500">
@@ -130,6 +143,7 @@ useEffect(() => {
                         type="number" min="1" value={qty} 
                         onChange={e => setQty(Math.max(1, Number(e.target.value)))}
                         className="bg-transparent border-b border-white/20 text-3xl font-mono font-black text-white w-24 focus:outline-none"
+                        disabled={isBusy}
                       />
                   </div>
                   <div className="space-y-1 text-xs font-mono">
@@ -138,12 +152,34 @@ useEffect(() => {
                   </div>
               </div>
 
+              {/* ✅ CORRECTION : Bouton avec timer amélioré */}
               <Button 
                 onClick={startBuild}
                 disabled={isBusy || !canAfford}
-                className={`w-full h-14 uppercase font-black tracking-widest transition-all ${isBusy ? 'bg-slate-800 text-slate-500' : !canAfford ? 'bg-red-900/20 text-red-500 border border-red-500/50' : `bg-black hover:bg-slate-900 text-white border ${selected.border}`}`}
+                className={`w-full h-14 uppercase font-black tracking-widest transition-all ${
+                  isBusy 
+                    ? 'bg-slate-800 text-slate-400 border border-slate-700' 
+                    : !canAfford 
+                      ? 'bg-red-900/20 text-red-500 border border-red-500/50' 
+                      : `bg-black hover:bg-slate-900 text-white border ${selected.border} ${selected.glow}`
+                }`}
               >
-                  {isBusy ? <span className="flex items-center gap-2"><Timer className="animate-spin" size={16}/> Occupé ({timeLeft}s)</span> : "Construire Défense"}
+                  {isBusy ? (
+                    <span className="flex items-center gap-3">
+                      <Timer className="animate-spin" size={18}/>
+                      <span className="flex flex-col items-start">
+                        <span className="text-[9px] text-slate-500 font-normal">Construction en cours</span>
+                        <span className="text-lg font-mono">{formatTime(timeLeft!)}</span>
+                      </span>
+                    </span>
+                  ) : !canAfford ? (
+                    "Ressources Insuffisantes"
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <Shield size={18} />
+                      Construire × {qty}
+                    </span>
+                  )}
               </Button>
            </div>
         </div>
@@ -158,12 +194,25 @@ useEffect(() => {
            <div className="space-y-4">
               <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
                  <span className="text-xs font-bold text-blue-400 uppercase">Lanceurs Missiles</span>
-                 <span className="text-xl text-white font-mono font-black">{planet.missile_launcher_count}</span>
+                 <span className="text-xl text-white font-mono font-black">{planet.missile_launcher_count || 0}</span>
               </div>
               <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
                  <span className="text-xs font-bold text-pink-500 uppercase">Tourelles Plasma</span>
-                 <span className="text-xl text-white font-mono font-black">{planet.plasma_turret_count}</span>
+                 <span className="text-xl text-white font-mono font-black">{planet.plasma_turret_count || 0}</span>
               </div>
+              
+              {/* ✅ AJOUT : Afficher la construction en cours */}
+              {isBusy && (
+                <div className="mt-6 p-4 bg-indigo-950/30 rounded-xl border border-indigo-500/30 animate-pulse">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Timer size={12} className="text-indigo-400 animate-spin" />
+                    <span className="text-[9px] uppercase text-indigo-400 font-bold">Construction Active</span>
+                  </div>
+                  <p className="text-xs text-slate-300 font-mono">
+                    Achèvement dans: <span className="text-indigo-400 font-bold">{formatTime(timeLeft!)}</span>
+                  </p>
+                </div>
+              )}
               
               <div className="mt-8 p-4 bg-black/50 rounded-xl border border-white/5">
                   <div className="flex items-center gap-2 mb-2">
