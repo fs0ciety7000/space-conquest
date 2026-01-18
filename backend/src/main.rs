@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State, Query},
     http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    response::{IntoResponse, Json},
     routing::{get, post, delete, patch},
     Router,
 };
@@ -803,7 +803,7 @@ async fn attack_handler(
 async fn expedition_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
-) -> Response { 
+) -> impl IntoResponse { 
     
     let p_res = Planet::find_by_id(id).one(&state.db).await;
     let p = match p_res {
