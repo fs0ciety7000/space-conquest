@@ -235,16 +235,41 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
                  <StatBox icon={Box} label="CAP" value={ship.stats.fret} color="text-amber-400" />
               </div>
 
-              <div className="space-y-2 mb-4">
-                 <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${planet.metal_amount >= ship.cost.m ? 'border-white/5' : 'border-red-900/50'}`}>
-                    <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2"><Box size={10} /> Métal</span>
-                    <span className={`text-xs font-mono font-bold ${planet.metal_amount >= ship.cost.m ? 'text-slate-300' : 'text-red-500'}`}>{ship.cost.m.toLocaleString()}</span>
-                 </div>
-                 <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${planet.crystal_amount >= ship.cost.c ? 'border-white/5' : 'border-red-900/50'}`}>
-                    <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2"><Box size={10} /> Cristal</span>
-                    <span className={`text-xs font-mono font-bold ${planet.crystal_amount >= ship.cost.c ? 'text-slate-300' : 'text-red-500'}`}>{ship.cost.c.toLocaleString()}</span>
-                 </div>
-              </div>
+{/* Coûts dynamiques selon quantité */}
+<div className="space-y-2 mb-4">
+  <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${planet.metal_amount >= ship.cost.m * (qty[ship.id] || 1) ? 'border-white/5' : 'border-red-900/50'}`}>
+     <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
+       <Box size={10} /> Métal
+     </span>
+     <div className="flex flex-col items-end">
+       <span className={`text-sm font-mono font-black ${planet.metal_amount >= ship.cost.m * (qty[ship.id] || 1) ? 'text-white' : 'text-red-500'}`}>
+         {(ship.cost.m * (qty[ship.id] || 1)).toLocaleString()}
+       </span>
+       {(qty[ship.id] || 0) > 1 && (
+         <span className="text-[10px] text-slate-400 font-mono font-bold">
+           {ship.cost.m.toLocaleString()} × {qty[ship.id]}
+         </span>
+       )}
+     </div>
+  </div>
+  <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${planet.crystal_amount >= ship.cost.c * (qty[ship.id] || 1) ? 'border-white/5' : 'border-red-900/50'}`}>
+     <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
+       <Box size={10} /> Cristal
+     </span>
+     <div className="flex flex-col items-end">
+       <span className={`text-sm font-mono font-black ${planet.crystal_amount >= ship.cost.c * (qty[ship.id] || 1) ? 'text-white' : 'text-red-500'}`}>
+         {(ship.cost.c * (qty[ship.id] || 1)).toLocaleString()}
+       </span>
+       {(qty[ship.id] || 0) > 1 && (
+         <span className="text-[10px] text-slate-400 font-mono font-bold">
+           {ship.cost.c.toLocaleString()} × {qty[ship.id]}
+         </span>
+       )}
+     </div>
+  </div>
+</div>
+
+
 
               <div className="mt-auto">
                 <div className="flex justify-between text-[10px] mb-1 px-1">
