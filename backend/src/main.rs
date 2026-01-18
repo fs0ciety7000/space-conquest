@@ -519,6 +519,11 @@ async fn get_planet_handler(
             "cruiser" => active.cruiser_count = Set(active.cruiser_count.unwrap() + item.level),
             "missile_launcher" => active.missile_launcher_count = Set(active.missile_launcher_count.unwrap() + item.level),
             "plasma_turret" => active.plasma_turret_count = Set(active.plasma_turret_count.unwrap() + item.level),
+            "spy_probe" => active.spy_probe_count = Set(active.spy_probe_count.unwrap() + item.level),
+"transporter" => active.transporter_count = Set(active.transporter_count.unwrap() + item.level),
+"colony_ship" => active.colony_ship_count = Set(active.colony_ship_count.unwrap() + item.level),
+"recycler" => active.recycler_count = Set(active.recycler_count.unwrap() + item.level),
+
             _ => {}
         }
         let _ = ConstructionQueue::delete_by_id(item.id).exec(&state.db).await;
@@ -820,38 +825,47 @@ async fn expedition_handler(
 
     let combat_triggered = rand::thread_rng().gen_bool(0.3);
 
-    if combat_triggered {
-        logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
-        let combat_res = game_logic::simulate_combat(p.light_hunter_count + p.cruiser_count, p.laser_battery_level);
+// Ligne ~762-792 : Remplacer tout le bloc combat par :
+if combat_triggered {
+    logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
+    let combat_res = game_logic::simulate_combat(p.light_hunter_count + p.cruiser_count, p.laser_battery_level);
 
-        if combat_res.victory {
-            winner = "player";
-            loot = 5000.0 * (game_logic::SPEED_FACTOR / 100.0);
-            logs.push(format!("RESULTAT : {}", combat_res.message));
-            logs.push(format!("PILLAGE : +{:.0} Métal récupéré.", loot));
-            lost_hunters = combat_res.ships_lost; 
-            if lost_hunters > p.light_hunter_count { lost_hunters = p.light_hunter_count; }
-        } else {
-            winner = "pirates";
-            logs.push(format!("RESULTAT : {}", combat_res.message));
-            lost_hunters = (p.light_hunter_count as f64 * 0.5) as i32; 
-            lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;     
-        }
+    if combat_res.victory {
+        winner = "player";
+        let mut rng = rand::thread_rng();
+        let loot_metal = rng.gen_range(30.0..=250.0) * (game_logic::SPEED_FACTOR / 100.0);
+        let loot_crystal = rng.gen_range(15.0..=100.0) * (game_logic::SPEED_FACTOR / 100.0);
         
-        active.light_hunter_count = Set(p.light_hunter_count - lost_hunters);
-        active.cruiser_count = Set(p.cruiser_count - lost_cruisers);
-        active.metal_amount = Set(p.metal_amount + loot);
+        logs.push(format!("RESULTAT : {}", combat_res.message));
+        logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", loot_metal, loot_crystal));
+        
+        lost_hunters = combat_res.ships_lost; 
+        if lost_hunters > p.light_hunter_count { lost_hunters = p.light_hunter_count; }
+        
+        active.metal_amount = Set(p.metal_amount + loot_metal);
+        active.crystal_amount = Set(p.crystal_amount + loot_crystal);
     } else {
-        winner = "player"; 
+        winner = "pirates";
+        logs.push(format!("RESULTAT : {}", combat_res.message));
+        lost_hunters = (p.light_hunter_count as f64 * 0.5) as i32; 
+        lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;
+    }
+    
+    active.light_hunter_count = Set(p.light_hunter_count - lost_hunters);
+    active.cruiser_count = Set(p.cruiser_count - lost_cruisers);
+} else {
+    winner = "player"; 
     let mut rng = rand::thread_rng();
-    let loot_metal = rng.gen_range(300.0..=2500.0) * (game_logic::SPEED_FACTOR / 100.0);
-    let loot_crystal = rng.gen_range(150.0..=1000.0) * (game_logic::SPEED_FACTOR / 100.0);
-    loot = loot_metal;
+    let loot_metal = rng.gen_range(30.0..=250.0) * (game_logic::SPEED_FACTOR / 100.0);
+    let loot_crystal = rng.gen_range(15.0..=100.0) * (game_logic::SPEED_FACTOR / 100.0);
+    
     logs.push("SCAN : Secteur calme.".to_string());
     logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", loot_metal, loot_crystal));
+    
     active.metal_amount = Set(p.metal_amount + loot_metal);
     active.crystal_amount = Set(p.crystal_amount + loot_crystal);
 }
+
 
     let duration = std::cmp::max(1, (600.0 / game_logic::SPEED_FACTOR) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
