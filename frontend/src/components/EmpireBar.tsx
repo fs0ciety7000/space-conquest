@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
-import { 
-  Zap, 
-  Stone, 
-  Droplets, 
-  Gem, 
+import {
+  Zap,
+  Stone,
+  Droplets,
+  Gem,
   ChevronDown,
   Mail,
   MapPin,
-  Menu
+  Menu,
+  Search
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -48,8 +49,9 @@ interface PlanetSummary {
 }
 
 export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar, onNavigateToGalaxy, onNavigateToOverview, speedFactor = 10 }: EmpireBarProps) {
-  
+
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Récupérer la liste des planètes
   useEffect(() => {
@@ -127,34 +129,103 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                 <div className="flex flex-col items-start">
                     <span className="text-[9px] md:text-[10px] text-slate-400 font-mono tracking-wider hidden sm:inline">COORD [{planet.galaxy}:{planet.system}:{planet.position}]</span>
                     <span className="font-bold text-white flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                        <span className="truncate max-w-[100px] sm:max-w-none">{planet.name}</span> 
+                        <span className="truncate max-w-[100px] sm:max-w-none">{planet.name}</span>
+                        {myPlanets.length > 1 && (
+                          <span className="px-1.5 py-0.5 bg-indigo-600/30 text-indigo-300 rounded text-[10px] font-mono border border-indigo-500/30">
+                            {myPlanets.length}
+                          </span>
+                        )}
                         <ChevronDown size={12} className="text-slate-500"/>
                     </span>
                 </div>
             </Button>
           </DropdownMenuTrigger>
           
-          <DropdownMenuContent className="bg-slate-950 border-slate-800 text-white shadow-2xl min-w-[240px]">
-             <DropdownMenuLabel className="text-xs text-slate-500 uppercase tracking-widest">Vos Colonies</DropdownMenuLabel>
+          <DropdownMenuContent className="bg-slate-950 border-slate-800 text-white shadow-2xl min-w-[280px] max-w-[400px]">
+             <DropdownMenuLabel className="text-xs text-slate-500 uppercase tracking-widest flex items-center justify-between px-4">
+               <span>Vos Colonies</span>
+               <span className="text-indigo-400 font-mono">{myPlanets.length}</span>
+             </DropdownMenuLabel>
              <DropdownMenuSeparator className="bg-white/10" />
-             
-             {myPlanets.length > 0 ? (
-                 myPlanets.map((p) => (
-                    <DropdownMenuItem 
-                        key={p.id} 
-                        onClick={() => onSwitchPlanet(p.id)}
-                        className={`flex justify-between items-center py-2 cursor-pointer focus:bg-white/10 focus:text-white ${p.is_current ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-300'}`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <MapPin size={14} className={p.is_current ? "text-indigo-400" : "text-slate-500"} />
-                            <span className="font-bold text-sm">{p.name}</span>
-                        </div>
-                        <span className="font-mono text-xs opacity-60">[{p.galaxy}:{p.system}:{p.position}]</span>
-                    </DropdownMenuItem>
-                 ))
-             ) : (
-                 <DropdownMenuItem disabled className="text-slate-500 text-xs">Chargement...</DropdownMenuItem>
+
+             {/* Barre de recherche */}
+             {myPlanets.length > 3 && (
+               <div className="px-2 py-2">
+                 <div className="relative">
+                   <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
+                   <input
+                     type="text"
+                     placeholder="Rechercher..."
+                     value={searchQuery}
+                     onChange={(e) => setSearchQuery(e.target.value)}
+                     className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                     onClick={(e) => e.stopPropagation()}
+                   />
+                 </div>
+               </div>
              )}
+
+             {/* Liste des planètes */}
+             <div className="max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+               {myPlanets.length > 0 ? (
+                 (() => {
+                   // Filtrer les planètes selon la recherche
+                   const filtered = myPlanets.filter(p =>
+                     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                     `${p.galaxy}:${p.system}:${p.position}`.includes(searchQuery)
+                   );
+
+                   if (filtered.length === 0) {
+                     return (
+                       <div className="px-4 py-6 text-center text-slate-500 text-xs">
+                         Aucune planète trouvée
+                       </div>
+                     );
+                   }
+
+                   // Grouper par galaxie
+                   const grouped = filtered.reduce((acc, p) => {
+                     if (!acc[p.galaxy]) acc[p.galaxy] = [];
+                     acc[p.galaxy].push(p);
+                     return acc;
+                   }, {} as Record<number, PlanetSummary[]>);
+
+                   const galaxies = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+
+                   return galaxies.map((galaxyNum) => (
+                     <div key={galaxyNum}>
+                       {galaxies.length > 1 && (
+                         <div className="px-4 py-1 text-[10px] text-slate-600 uppercase tracking-widest font-bold sticky top-0 bg-slate-950/95 backdrop-blur-sm border-b border-slate-800">
+                           Galaxie {galaxyNum}
+                         </div>
+                       )}
+                       {grouped[galaxyNum]
+                         .sort((a, b) => a.system - b.system || a.position - b.position)
+                         .map((p) => (
+                           <DropdownMenuItem
+                             key={p.id}
+                             onClick={() => {
+                               onSwitchPlanet(p.id);
+                               setSearchQuery("");
+                             }}
+                             className={`flex justify-between items-center py-2 px-4 cursor-pointer focus:bg-white/10 focus:text-white transition-colors ${
+                               p.is_current ? 'bg-indigo-600/20 text-indigo-300 border-l-2 border-indigo-400' : 'text-slate-300 hover:bg-white/5'
+                             }`}
+                           >
+                             <div className="flex items-center gap-2 flex-1 min-w-0">
+                               <MapPin size={14} className={p.is_current ? "text-indigo-400 shrink-0" : "text-slate-500 shrink-0"} />
+                               <span className="font-bold text-sm truncate">{p.name}</span>
+                             </div>
+                             <span className="font-mono text-xs opacity-60 ml-2 shrink-0">[{p.galaxy}:{p.system}:{p.position}]</span>
+                           </DropdownMenuItem>
+                         ))}
+                     </div>
+                   ));
+                 })()
+               ) : (
+                 <DropdownMenuItem disabled className="text-slate-500 text-xs">Chargement...</DropdownMenuItem>
+               )}
+             </div>
           </DropdownMenuContent>
         </DropdownMenu>
 
