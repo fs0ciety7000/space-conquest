@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap } from 'lucide-react';
+import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -29,30 +29,30 @@ interface PlanetData {
   galaxy: number;
   system: number;
   position: number;
-  
+
   // Ressources
   metal_amount: number;
   crystal_amount: number;
   deuterium_amount: number;
   last_update: string;
-  
+
   // Mines
   metal_mine_level: number;
   crystal_mine_level: number;
   deuterium_mine_level: number;
   solar_plant_level: number;
-  
+
   // Installations
   shipyard_level: number;
   research_level: number;
   hangar_level: number;
-  
+
   // Technologies
   energy_tech_level: number;
   laser_battery_level: number;
   armour_tech_level: number;
   espionage_tech_level: number;
-  
+
   // Flotte
   light_hunter_count: number;
   cruiser_count: number;
@@ -60,19 +60,35 @@ interface PlanetData {
   spy_probe_count: number;
   colony_ship_count: number;
   transporter_count: number;
-  
+
   // Défenses
   missile_launcher_count: number;
   plasma_turret_count: number;
 }
 
+interface ServerStats {
+  total_users: number;
+  total_planets: number;
+  total_metal: number;
+  total_crystal: number;
+  total_deuterium: number;
+  total_ships: number;
+  total_defenses: number;
+  speed_factor: number;
+}
+
+type AdminTab = 'players' | 'stats';
+
 export default function AdminPanel() {
+  const [activeTab, setActiveTab] = useState<AdminTab>('stats');
   const [players, setPlayers] = useState<Player[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [planetData, setPlanetData] = useState<PlanetData | null>(null);
   const [editedData, setEditedData] = useState<Partial<PlanetData>>({});
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<ServerStats | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
 
   const token = localStorage.getItem('token');
   const currentUsername = localStorage.getItem('username');
@@ -98,6 +114,13 @@ export default function AdminPanel() {
     fetchPlayers();
   }, []);
 
+  // Charger les stats quand on passe sur l'onglet stats
+  useEffect(() => {
+    if (activeTab === 'stats') {
+      fetchStats();
+    }
+  }, [activeTab]);
+
   const fetchPlayers = async () => {
     try {
       // ✅ AJOUT user_id dans l'URL
@@ -112,6 +135,25 @@ export default function AdminPanel() {
       }
     } catch (e) {
       console.error('Erreur chargement joueurs', e);
+    }
+  };
+
+  const fetchStats = async () => {
+    setLoadingStats(true);
+    try {
+      const res = await fetch(apiUrl(`/admin/stats?user_id=${userId}`), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      } else {
+        toast.error('Impossible de charger les statistiques');
+      }
+    } catch (e) {
+      toast.error('Erreur réseau');
+    } finally {
+      setLoadingStats(false);
     }
   };
 
@@ -192,6 +234,144 @@ export default function AdminPanel() {
         </CardHeader>
       </Card>
 
+      {/* Tabs */}
+      <div className="flex gap-2">
+        <Button
+          variant={activeTab === 'stats' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('stats')}
+          className={`flex items-center gap-2 ${
+            activeTab === 'stats'
+              ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <BarChart3 size={16} />
+          Statistiques Serveur
+        </Button>
+        <Button
+          variant={activeTab === 'players' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('players')}
+          className={`flex items-center gap-2 ${
+            activeTab === 'players'
+              ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <Users size={16} />
+          Gestion Joueurs
+        </Button>
+      </div>
+
+      {activeTab === 'stats' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {loadingStats ? (
+            <div className="col-span-full text-center py-12 text-slate-500">
+              Chargement des statistiques...
+            </div>
+          ) : stats ? (
+            <>
+              <Card className="bg-gradient-to-br from-blue-950/40 to-blue-900/20 border-blue-500/30">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Joueurs</p>
+                      <p className="text-3xl font-black text-white">{stats.total_users}</p>
+                    </div>
+                    <Users size={32} className="text-blue-500 opacity-30" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-purple-950/40 to-purple-900/20 border-purple-500/30">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-purple-400 mb-1">Planètes</p>
+                      <p className="text-3xl font-black text-white">{stats.total_planets}</p>
+                    </div>
+                    <Database size={32} className="text-purple-500 opacity-30" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-cyan-950/40 to-cyan-900/20 border-cyan-500/30">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-1">Vaisseaux</p>
+                      <p className="text-3xl font-black text-white">{stats.total_ships.toLocaleString()}</p>
+                    </div>
+                    <Zap size={32} className="text-cyan-500 opacity-30" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-red-950/40 to-red-900/20 border-red-500/30">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-red-400 mb-1">Défenses</p>
+                      <p className="text-3xl font-black text-white">{stats.total_defenses.toLocaleString()}</p>
+                    </div>
+                    <AlertTriangle size={32} className="text-red-500 opacity-30" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="col-span-full bg-slate-950 border-white/10">
+                <CardHeader>
+                  <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-400">
+                    Ressources Totales
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-orange-950/20 border border-orange-500/30 rounded-lg p-4">
+                      <p className="text-xs text-orange-400 font-bold mb-1">MÉTAL</p>
+                      <p className="text-2xl font-mono font-black text-white">{Math.floor(stats.total_metal).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-cyan-950/20 border border-cyan-500/30 rounded-lg p-4">
+                      <p className="text-xs text-cyan-400 font-bold mb-1">CRISTAL</p>
+                      <p className="text-2xl font-mono font-black text-white">{Math.floor(stats.total_crystal).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-green-950/20 border border-green-500/30 rounded-lg p-4">
+                      <p className="text-xs text-green-400 font-bold mb-1">DEUTÉRIUM</p>
+                      <p className="text-2xl font-mono font-black text-white">{Math.floor(stats.total_deuterium).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="col-span-full bg-slate-950 border-white/10">
+                <CardHeader>
+                  <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <Settings size={16} />
+                    Paramètres Serveur
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-indigo-400 font-bold mb-1">SPEED FACTOR</p>
+                        <p className="text-sm text-slate-400">Multiplicateur de vitesse du jeu</p>
+                      </div>
+                      <p className="text-3xl font-mono font-black text-white">×{stats.speed_factor / 100}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <div className="col-span-full text-center py-12 text-slate-600">
+              <Database size={48} className="mx-auto mb-4 opacity-20" />
+              <p className="text-sm">Aucune statistique disponible</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'players' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Liste des joueurs */}
         <Card className="lg:col-span-1 bg-slate-950 border-white/10">
@@ -525,6 +705,7 @@ export default function AdminPanel() {
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 }
