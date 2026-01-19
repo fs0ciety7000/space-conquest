@@ -630,24 +630,63 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
       {/* INFRASTRUCTURES & RESSOURCES */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-        <div className="md:col-span-1 space-y-4">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1">Infrastructures</h3>
-            {[
-                { label: "Mine de Métal", level: planet.metal_mine_level, icon: Stone, color: "text-orange-300" },
-                { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400" },
-                { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Droplets, color: "text-green-400" },
-                { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400" },
-                { label: "Hangar Vaisseaux", level: planet.hangar_level || 0, icon: Warehouse, color: "text-orange-400" }, 
-            ].map((mine) => (
-                <div key={mine.label} className="bg-slate-900/50 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover-scale card-depth animate-fade-in">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                        <mine.icon size={16} className={`shrink-0 ${mine.color} group-hover:scale-110 transition-transform duration-300`} />
-                        <span className="text-xs font-bold text-slate-300 truncate">{mine.label}</span>
-                    </div>
-                    <span className="text-sm font-black font-mono text-white shrink-0 px-2 bg-black/40 rounded border border-white/5 group-hover:bg-black/60 transition-colors">{mine.level}</span>
+        {/* INFRASTRUCTURES - Design style Réseau Électrique */}
+        <Card className="md:col-span-1 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 border-indigo-500/30 backdrop-blur-md relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
+            {/* Effets de fond */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-20 bg-indigo-400 animate-pulse"></div>
+                <div className="absolute -left-5 -bottom-5 w-24 h-24 rounded-full blur-2xl opacity-15 bg-purple-400"></div>
+                <div className="absolute inset-0 opacity-5">
+                    <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-400 to-transparent animate-pulse"></div>
                 </div>
-            ))}
-        </div>
+            </div>
+
+            <CardHeader className="pb-2 relative z-10">
+                <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-slate-400">
+                    <div className="relative">
+                        <Hammer size={16} className="text-indigo-400 drop-shadow-[0_0_6px_rgba(99,102,241,0.8)]" />
+                    </div>
+                    Infrastructures
+                </CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-2 relative z-10">
+                {[
+                    { label: "Mine de Métal", level: planet.metal_mine_level, icon: Stone, color: "text-orange-400", border: "border-orange-500/30", bg: "bg-orange-500/10" },
+                    { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400", border: "border-cyan-500/30", bg: "bg-cyan-500/10" },
+                    { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Droplets, color: "text-emerald-400", border: "border-emerald-500/30", bg: "bg-emerald-500/10" },
+                    { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400", border: "border-yellow-500/30", bg: "bg-yellow-500/10" },
+                    { label: "Hangar", level: planet.hangar_level || 0, icon: Warehouse, color: "text-blue-400", border: "border-blue-500/30", bg: "bg-blue-500/10" }, 
+                ].map((mine) => (
+                    <div key={mine.label} className={`bg-black/40 border ${mine.border} p-2.5 rounded-lg flex items-center justify-between group hover:${mine.bg} transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg`}>
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                            <div className={`p-1.5 rounded-md ${mine.bg} border ${mine.border}`}>
+                                <mine.icon size={14} className={`shrink-0 ${mine.color} group-hover:scale-110 transition-transform duration-300`} />
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-300 truncate">{mine.label}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <span className={`text-lg font-black font-mono ${mine.color} drop-shadow-[0_0_8px_currentColor]`}>{mine.level}</span>
+                        </div>
+                    </div>
+                ))}
+
+                {/* Barre de niveau global */}
+                <div className="mt-3 pt-3 border-t border-white/5">
+                    <div className="flex justify-between text-[9px] uppercase font-bold text-slate-500 mb-1">
+                        <span>Niveau d'Industrialisation</span>
+                    </div>
+                    <div className="relative h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-white/10">
+                        <div
+                            className="h-full bg-gradient-to-r from-indigo-600 via-purple-500 to-cyan-400 transition-all duration-500"
+                            style={{ width: `${Math.min(100, ((planet.metal_mine_level + planet.crystal_mine_level + planet.deuterium_mine_level + planet.solar_plant_level) / 80) * 100)}%` }}
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
 
         <div className="md:col-span-3 min-w-0">
             <Card className="bg-gradient-to-br from-slate-900/80 to-green-950/20 border border-green-500/30 hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
@@ -796,50 +835,221 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </div>
       </div>
 
-      {/* STATIONNEMENT FLOTTE & DEFENSES */}
+      {/* STATIONNEMENT FLOTTE & DEFENSES - REDESIGN STYLE RÉSEAU ÉLECTRIQUE */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            <Card className="bg-blue-950/10 border border-blue-500/20 hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
-                <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-blue-400">
-                        <span className="flex items-center gap-2"><Rocket size={14} /> Hangar (Vaisseaux Stationnés)</span>
-                        <span className="bg-blue-500/20 px-2 py-1 rounded text-blue-300">{fmt(totalFleet)} / {fmt(hangarCap)}</span>
+            {/* HANGAR - Design immersif */}
+            <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${totalFleet >= hangarCap ? 'border-orange-500/50' : 'border-blue-500/50'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
+                {/* Effets de fond */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className={`absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 ${totalFleet >= hangarCap ? 'bg-orange-400' : 'bg-blue-400'} animate-pulse`}></div>
+                    <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 bg-cyan-400"></div>
+                    <div className="absolute inset-0 opacity-5">
+                        <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-pulse"></div>
+                        <div className="absolute top-2/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse" style={{ animationDelay: '0.5s' }}></div>
                     </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2">
-                        {[
-                            { label: "Chasseurs Légers", val: planet.light_hunter_count },
-                            { label: "Croiseurs", val: planet.cruiser_count },
-                            { label: "Recycleurs", val: planet.recycler_count },
-                            { label: "Sondes", val: planet.spy_probe_count },
-                            { label: "Vaisseaux Colons", val: planet.colony_ship_count },
-                            { label: "Transporteurs", val: planet.transporter_count },
-                        ].map(item => (
-                            <div key={item.label} className="bg-slate-900/50 p-2 rounded border border-white/5">
-                                <span className="text-[10px] text-slate-500 uppercase block">{item.label}</span>
-                                <span className="text-white font-mono font-bold">{fmt(item.val || 0)}</span>
+                </div>
+
+                <CardHeader className="pb-2 relative z-10">
+                    <CardTitle className="flex items-center justify-between">
+                        <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                            <div className="relative">
+                                <Rocket size={18} className="text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                                {totalFleet > 0 && <Rocket size={18} className="absolute inset-0 text-blue-400 animate-ping opacity-30" />}
                             </div>
-                        ))}
+                            Baie de Stationnement
+                        </span>
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${totalFleet >= hangarCap ? 'bg-orange-500/20 text-orange-400 border-orange-500/50 animate-pulse' : 'bg-blue-500/20 text-blue-400 border-blue-500/50'}`}>
+                            {totalFleet >= hangarCap ? '⚠️ PLEIN' : '✓ DISPONIBLE'}
+                        </span>
+                    </CardTitle>
+                </CardHeader>
+
+                <CardContent className="space-y-4 relative z-10">
+                    {/* Indicateur de capacité principal */}
+                    <div className="text-center py-2">
+                        <div className={`text-4xl font-black font-mono tracking-tighter ${totalFleet >= hangarCap ? 'text-orange-400 animate-pulse' : 'text-blue-400'} drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]`}>
+                            {fmt(totalFleet)} <span className="text-xl text-slate-500">/ {fmt(hangarCap)}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Capacité Hangar Niv.{planet.hangar_level || 0}</div>
+                    </div>
+
+                    {/* Jauge de capacité style électrique */}
+                    <div className="space-y-2">
+                        <div className="relative h-4 w-full bg-slate-900 rounded-full overflow-hidden border border-white/10">
+                            <div className="absolute inset-0 flex justify-between px-1 items-center">
+                                {[...Array(10)].map((_, i) => (
+                                    <div key={i} className="w-px h-2 bg-white/20"></div>
+                                ))}
+                            </div>
+                            <div
+                                className={`h-full transition-all duration-500 relative ${
+                                    totalFleet >= hangarCap
+                                        ? 'bg-gradient-to-r from-orange-600 via-orange-400 to-red-400'
+                                        : totalFleet >= hangarCap * 0.8
+                                            ? 'bg-gradient-to-r from-yellow-600 via-yellow-400 to-orange-400'
+                                            : 'bg-gradient-to-r from-blue-600 via-blue-400 to-cyan-400'
+                                }`}
+                                style={{ width: `${Math.min((totalFleet / hangarCap) * 100, 100)}%` }}
+                            >
+                                <div className="absolute inset-0 overflow-hidden">
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
+                                </div>
+                                <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full ${totalFleet >= hangarCap ? 'bg-red-400' : 'bg-cyan-400'} shadow-[0_0_10px_currentColor] animate-pulse`}></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Grille des vaisseaux */}
+                    <div className="bg-black/40 rounded-xl p-3 border border-white/10">
+                        <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold flex items-center gap-2">
+                            <Activity size={10} className="text-blue-400" /> Inventaire Flotte
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { label: "Chasseurs Légers", val: planet.light_hunter_count, icon: "⚔️" },
+                                { label: "Croiseurs", val: planet.cruiser_count, icon: "🚀" },
+                                { label: "Recycleurs", val: planet.recycler_count, icon: "♻️" },
+                                { label: "Sondes", val: planet.spy_probe_count, icon: "📡" },
+                                { label: "Vaisseaux Colons", val: planet.colony_ship_count, icon: "🌍" },
+                                { label: "Transporteurs", val: planet.transporter_count, icon: "📦" },
+                            ].map(item => (
+                                <div key={item.label} className="bg-slate-900/60 p-2.5 rounded-lg border border-white/5 flex items-center justify-between hover:bg-slate-800/60 transition-colors group">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-base group-hover:scale-110 transition-transform">{item.icon}</span>
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{item.label}</span>
+                                    </div>
+                                    <span className={`font-mono font-black text-sm ${(item.val || 0) > 0 ? 'text-blue-400' : 'text-slate-600'}`}>{fmt(item.val || 0)}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </CardContent>
             </Card>
 
-            <Card className="bg-red-950/10 border border-red-500/20 hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
-                <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-red-400">
-                        <span className="flex items-center gap-2"><Shield size={14} /> Défenses Planétaires</span>
-                        <span className="bg-red-500/20 px-2 py-1 rounded text-red-300">{fmt(totalDefense)} Systèmes</span>
+            {/* DÉFENSES PLANÉTAIRES - Design immersif */}
+            <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${totalDefense > 0 ? 'border-red-500/50' : 'border-slate-700/50'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
+                {/* Effets de fond */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className={`absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 ${totalDefense > 0 ? 'bg-red-400 animate-pulse' : 'bg-slate-600'}`}></div>
+                    <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 bg-orange-500"></div>
+                    <div className="absolute inset-0 opacity-5">
+                        <div className="absolute top-1/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-400 to-transparent animate-pulse"></div>
+                        <div className="absolute top-2/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange-400 to-transparent animate-pulse" style={{ animationDelay: '0.7s' }}></div>
+                    </div>
+                </div>
+
+                <CardHeader className="pb-2 relative z-10">
+                    <CardTitle className="flex items-center justify-between">
+                        <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                            <div className="relative">
+                                <Shield size={18} className={`${totalDefense > 0 ? 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]' : 'text-slate-500'}`} />
+                                {totalDefense > 0 && <Shield size={18} className="absolute inset-0 text-red-400 animate-ping opacity-30" />}
+                            </div>
+                            Bouclier Orbital
+                        </span>
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${totalDefense > 0 ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-slate-700/30 text-slate-500 border-slate-600/50'}`}>
+                            {totalDefense > 0 ? '🛡️ ACTIF' : '⚠️ VULNÉRABLE'}
+                        </span>
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-slate-900/50 p-2 rounded border border-white/5">
-                            <span className="text-[10px] text-slate-500 uppercase block">Lanceur de Missiles</span>
-                            <span className="text-white font-mono font-bold">{fmt(planet.missile_launcher_count)}</span>
+
+                <CardContent className="space-y-4 relative z-10">
+                    {/* Indicateur de puissance principal */}
+                    <div className="text-center py-2">
+                        <div className={`text-4xl font-black font-mono tracking-tighter ${totalDefense > 0 ? 'text-red-400 drop-shadow-[0_0_15px_rgba(248,113,113,0.5)]' : 'text-slate-600'}`}>
+                            {fmt(totalDefense)}
                         </div>
-                        <div className="bg-slate-900/50 p-2 rounded border border-white/5">
-                            <span className="text-[10px] text-slate-500 uppercase block">Artillerie Plasma</span>
-                            <span className="text-white font-mono font-bold">{fmt(planet.plasma_turret_count)}</span>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Systèmes de Défense Actifs</div>
+                    </div>
+
+                    {/* Barres comparatives style voltmètre */}
+                    <div className="bg-black/40 rounded-xl p-4 border border-white/10">
+                        <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold flex items-center gap-2">
+                            <Activity size={10} className="text-red-400" /> Puissance Défensive
+                        </div>
+                        <div className="flex items-end justify-center gap-8 h-24">
+                            {/* Barre Missiles */}
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="relative w-10 h-20 bg-slate-900 rounded-lg border border-white/10 overflow-hidden">
+                                    <div className="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-30">
+                                        {[...Array(5)].map((_, i) => (
+                                            <div key={i} className="h-px bg-white/50 w-full"></div>
+                                        ))}
+                                    </div>
+                                    <div
+                                        className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-orange-600 via-orange-400 to-yellow-400 transition-all duration-700 rounded-b-md"
+                                        style={{ height: `${Math.min(100, (planet.missile_launcher_count || 0) * 2)}%` }}
+                                    >
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                                    </div>
+                                    <div className="absolute -inset-1 bg-orange-500/20 blur-md -z-10 rounded-lg"></div>
+                                </div>
+                                <div className="text-center">
+                                    <span className="text-2xl mb-0.5">🚀</span>
+                                    <span className="text-orange-400 font-mono text-sm font-bold block">{fmt(planet.missile_launcher_count || 0)}</span>
+                                    <span className="text-[8px] text-slate-600 uppercase">Missiles</span>
+                                </div>
+                            </div>
+
+                            {/* Indicateur central */}
+                            <div className="flex flex-col items-center justify-center h-20">
+                                <div className={`text-3xl ${totalDefense > 0 ? 'animate-pulse' : ''}`}>🛡️</div>
+                                <div className="text-xs font-mono font-bold text-slate-400 mt-1">
+                                    DEF
+                                </div>
+                            </div>
+
+                            {/* Barre Plasma */}
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="relative w-10 h-20 bg-slate-900 rounded-lg border border-white/10 overflow-hidden">
+                                    <div className="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-30">
+                                        {[...Array(5)].map((_, i) => (
+                                            <div key={i} className="h-px bg-white/50 w-full"></div>
+                                        ))}
+                                    </div>
+                                    <div
+                                        className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-purple-600 via-purple-400 to-pink-400 transition-all duration-700 rounded-b-md"
+                                        style={{ height: `${Math.min(100, (planet.plasma_turret_count || 0) * 5)}%` }}
+                                    >
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                                    </div>
+                                    <div className="absolute -inset-1 bg-purple-500/20 blur-md -z-10 rounded-lg"></div>
+                                </div>
+                                <div className="text-center">
+                                    <span className="text-2xl mb-0.5">⚡</span>
+                                    <span className="text-purple-400 font-mono text-sm font-bold block">{fmt(planet.plasma_turret_count || 0)}</span>
+                                    <span className="text-[8px] text-slate-600 uppercase">Plasma</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Alerte si vulnérable */}
+                    {totalDefense === 0 && (
+                        <div className="rounded-lg p-3 border flex items-center gap-3 bg-yellow-500/10 border-yellow-500/30">
+                            <div className="p-2 rounded-full bg-yellow-500/20">
+                                <AlertTriangle size={16} className="text-yellow-400" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold uppercase text-yellow-400">Planète non protégée</p>
+                                <p className="text-[10px] text-slate-400">Construisez des défenses pour protéger vos ressources</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Stats de puissance en bas */}
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                        <div className="text-center bg-black/30 rounded-lg p-2">
+                            <span className="text-[8px] text-slate-600 uppercase block">Dégâts/Round</span>
+                            <span className="text-red-400 font-mono text-sm font-bold">
+                                {fmt((planet.missile_launcher_count || 0) * 80 + (planet.plasma_turret_count || 0) * 3000)}
+                            </span>
+                        </div>
+                        <div className="text-center bg-black/30 rounded-lg p-2">
+                            <span className="text-[8px] text-slate-600 uppercase block">Points Coque</span>
+                            <span className="text-emerald-400 font-mono text-sm font-bold">
+                                {fmt((planet.missile_launcher_count || 0) * 200 + (planet.plasma_turret_count || 0) * 10000)}
+                            </span>
                         </div>
                     </div>
                 </CardContent>

@@ -555,7 +555,7 @@ export default function App() {
                                     <span className="relative z-10">{item.label}</span>
                                     {activeTab === item.id && (
                                       <>
-                                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-white/10 to-indigo-500/0 opacity-30 animate-shimmer"></div>
+                                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-400/15 to-indigo-500/0 opacity-50 animate-shimmer"></div>
                                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-400 rounded-r shadow-[0_0_10px_rgba(0,245,255,0.8)]"></div>
                                       </>
                                     )}
@@ -668,7 +668,7 @@ export default function App() {
             </span>
         )}
         
-        {activeTab === item.id && <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-white/10 to-indigo-500/0 opacity-20 animate-shimmer"></div>}
+        {activeTab === item.id && <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-400/15 to-indigo-500/0 opacity-30 animate-shimmer"></div>}
     </button>
 ))}
                         </div>
