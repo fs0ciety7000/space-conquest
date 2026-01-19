@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Rocket body -->
+  <path d="M16 4 L20 14 L20 22 L18 26 L14 26 L12 22 L12 14 Z" fill="url(#rb)"/>
+
+  <!-- Nose cone -->
+  <path d="M16 4 L19 11 L13 11 Z" fill="#F59E0B"/>
+
+  <!-- Window -->
+  <circle cx="16" cy="15" r="2.5" fill="#1E1B4B" stroke="#22D3EE" stroke-width="1"/>
+
+  <!-- Fins -->
+  <path d="M12 18 L8 24 L12 22 Z" fill="#4F46E5"/>
+  <path d="M20 18 L24 24 L20 22 Z" fill="#4F46E5"/>
+
+  <!-- Flame -->
+  <path d="M14 26 L16 31 L18 26" fill="#F59E0B"/>
+
+  <defs>
+    <linearGradient id="rb" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E0E7FF"/>
+      <stop offset="100%" stop-color="#6366F1"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -231,9 +231,7 @@ export default function Login({ onLogin }: LoginProps) {
 
       <Card className="w-full max-w-md bg-slate-950/80 border-slate-800 p-8 backdrop-blur-xl shadow-2xl relative z-10 animate-in fade-in zoom-in duration-500">
         <div className="flex flex-col items-center mb-8">
-          <div className="h-16 w-16 bg-indigo-600/20 rounded-full flex items-center justify-center mb-4 border border-indigo-500/50 shadow-[0_0_30px_rgba(79,70,229,0.3)]">
-            <Power size={32} className="text-indigo-400" />
-          </div>
+          <img src="/logo.svg" alt="Space Conquest" className="h-20 w-20 mb-4 drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]" />
           <h1 className="text-3xl font-black text-white tracking-widest uppercase">Space Conquest</h1>
           <p className="text-slate-400 text-sm mt-2 font-mono">Terminal d'accès v3.0</p>
           

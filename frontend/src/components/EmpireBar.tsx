@@ -107,14 +107,12 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         )}
 
         {/* Logo cliquable */}
-        <button 
+        <button
           onClick={onNavigateToOverview}
           className="flex items-center gap-2 md:gap-3 hover:bg-white/5 rounded-lg px-2 py-1 transition-all group"
           title="Retour à l'accueil"
         >
-            <div className="h-8 w-8 md:h-10 md:w-10 bg-indigo-600 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(79,70,229,0.4)] border border-indigo-400/30 group-hover:shadow-[0_0_20px_rgba(79,70,229,0.6)] transition-all">
-                <GlobeIcon />
-            </div>
+            <img src="/logo.svg" alt="Space Conquest" className="h-8 w-8 md:h-10 md:w-10 drop-shadow-[0_0_10px_rgba(99,102,241,0.4)] group-hover:drop-shadow-[0_0_15px_rgba(99,102,241,0.6)] transition-all" />
             <div className="hidden lg:block">
                 <h1 className="text-sm font-black text-white uppercase tracking-widest leading-none group-hover:text-indigo-300 transition-colors">Space Conquest</h1>
                 <span className="text-[10px] text-indigo-400 font-mono tracking-wider">ONLINE</span>
