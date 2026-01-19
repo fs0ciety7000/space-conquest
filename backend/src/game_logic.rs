@@ -521,7 +521,7 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
         // VICTOIRE : Pertes faibles (5-25% avec variation ±20%)
         let base_loss_rate = rng.gen_range(0.05..0.25);
         let variation = rng.gen_range(-0.2..0.2);
-        let loss_rate = (base_loss_rate * (1.0 + variation)).clamp(0.01_f64, 0.4_f64);
+        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.01_f64, 0.4_f64);
 
         let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1 si fleet > 0
         let lost = lost.max(0).min(fleet_size); // Clamp entre 0 et fleet_size
@@ -535,7 +535,7 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
         // DÉFAITE : Pertes lourdes (50-90% avec variation ±20%)
         let base_loss_rate = rng.gen_range(0.5..0.9);
         let variation = rng.gen_range(-0.2..0.2);
-        let loss_rate = (base_loss_rate * (1.0 + variation)).clamp(0.4_f64, 1.0_f64);
+        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.4_f64, 1.0_f64);
 
         let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1
         let lost = lost.max(1).min(fleet_size); // Minimum 1 perte en cas de défaite

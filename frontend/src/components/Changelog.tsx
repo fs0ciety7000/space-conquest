@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FileText, Calendar, Code, Loader2 } from "lucide-react";
-import { Card } from "@/components/ui/dialog";
+import { Card } from "@/components/ui/card";
 import { apiUrl } from '@/config/api';
 
 export default function Changelog() {

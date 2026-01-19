@@ -1,5 +1,95 @@
 # Changelog - Space Conquest
 
+## [1.5.0] - 2026-01-19 - Correction bug timer tourelles plasma
+
+### 🔧 Corrections critiques
+
+#### 🛡️ Correction construction tourelles plasma (timer manquant)
+**Problème**: Le timer de construction ne s'affichait pas pour les tourelles plasma, alors que les missiles fonctionnaient correctement
+
+**Cause identifiée**: Incohérence prérequis frontend ↔ backend
+- **Frontend** (`gameRules.ts`):
+  - Chantier Spatial niveau 6
+  - Tech. Laser niveau 3
+- **Backend** (`game_logic.rs`):
+  - Chantier Spatial niveau 8 ❌
+  - Tech. Laser niveau 5 ❌
+
+**Impact du bug**:
+- Utilisateurs avec Chantier 6-7 ou Laser 3-4 pouvaient cliquer "Construire"
+- Ressources déduites côté client
+- Backend rejetait la requête (403 Forbidden)
+- Absence de gestion d'erreur → aucun feedback utilisateur
+- Pas de construction ajoutée → pas de timer affiché
+
+**Solutions appliquées**:
+
+1. **Alignement des prérequis** (frontend → backend):
+   ```typescript
+   // frontend/src/lib/gameRules.ts
+   case 'plasma_turret':
+     check("Chantier Spatial (8)", ...shipyard_level >= 8);  // 6 → 8
+     check("Tech. Énergie (6)", ...energy_tech_level >= 6);  // ✓ déjà bon
+     check("Tech. Laser (5)", ...laser_battery_level >= 5);  // 3 → 5
+   ```
+
+2. **Gestion d'erreurs complète** dans `Defenses.tsx`:
+   - Import `toast` (notifications Sonner)
+   - Import `checkPrerequisites` (validation frontend)
+   - Codes HTTP traités:
+     - `200 OK` → Succès avec notification
+     - `403 Forbidden` → "Prérequis non satisfaits"
+     - `400 Bad Request` → "Ressources insuffisantes"
+     - `409 Conflict` → "File de construction pleine"
+   - Erreurs réseau → "Erreur de connexion"
+
+3. **Améliorations UX**:
+   - Affichage des prérequis avec statut (✓/✗)
+   - Désactivation du bouton si prérequis manquants
+   - Styles visuels distincts (orange pour prérequis, rouge pour ressources)
+   - Toast de confirmation lors de la construction réussie
+
+4. **Correction compilation Rust** (ambiguïté type):
+   ```rust
+   // backend/src/game_logic.rs (lignes 524, 538)
+   (base_loss_rate * (1.0_f64 + variation)).clamp(0.01_f64, 0.4_f64)
+   ```
+
+**Fichiers modifiés**:
+- `frontend/src/lib/gameRules.ts` (lignes 65-67)
+- `frontend/src/components/Defenses.tsx` (imports + startBuild + UI)
+- `frontend/src/components/Changelog.tsx` (import Card corrigé)
+- `backend/src/game_logic.rs` (types explicites)
+
+---
+
+### 📝 Notes techniques
+
+**Prérequis tourelles plasma (validés)**:
+- Chantier Spatial niveau 8
+- Technologie Énergie niveau 6
+- Technologie Laser niveau 5
+
+**Prérequis lanceurs missiles**:
+- Chantier Spatial niveau 1
+- (Aucun prérequis tech)
+
+**Système de notifications**: Sonner (déjà intégré)
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: Aucune (correction frontend + backend logique)
+
+**Tests recommandés**:
+1. ✅ Vérifier prérequis affichés correctement pour plasma_turret
+2. ✅ Tester construction avec prérequis non satisfaits → toast erreur
+3. ✅ Tester construction avec prérequis OK → timer s'affiche
+4. ✅ Vérifier que missiles fonctionnent toujours (aucune régression)
+
+---
+
 ## [1.4.0] - 2026-01-19 - Rééquilibrage énergétique et améliorations marché
 
 ### 🔧 Corrections critiques

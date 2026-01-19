@@ -62,9 +62,9 @@ export const checkPrerequisites = (planet: any, type: string): { locked: boolean
     check("Laboratoire de Recherche (2)", (planet.research_lab_level || 0) >= 2);
     break;    
         case 'plasma_turret':
-            check("Chantier Spatial (6)", (planet.shipyard_level || 0) >= 6);
+            check("Chantier Spatial (8)", (planet.shipyard_level || 0) >= 8);
             check("Tech. Énergie (6)", (planet.energy_tech_level || 0) >= 6);
-            check("Tech. Laser (3)", (planet.laser_battery_level || 0) >= 3);
+            check("Tech. Laser (5)", (planet.laser_battery_level || 0) >= 5);
             break;
     }
 
