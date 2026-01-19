@@ -47,7 +47,7 @@ use backend::AppState;
 // ✅ IMPORTS EXPLICITES
 use entities::{
     prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory},
-    planet, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history
 };
 
 #[derive(Serialize, Clone)]
@@ -204,6 +204,7 @@ async fn main() {
 .route("/send-message-v2", post(messaging::send_message_v2_handler))
 
 .route("/users/:id", get(get_user_handler))
+.route("/users/:id/username", patch(update_username_handler))
 .route("/players/:user_id/profile", get(get_player_profile_handler))
         // Market
         .route("/market/listings", get(get_market_listings_handler))
@@ -1744,6 +1745,62 @@ async fn get_user_handler(
     Ok(Json(response))
 }
 
+#[derive(Deserialize)]
+struct UpdateUsernamePayload {
+    new_username: String,
+}
+
+// Handler pour mettre à jour le nom d'utilisateur
+async fn update_username_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateUsernamePayload>,
+) -> impl IntoResponse {
+    // Validation : username non vide et longueur raisonnable
+    let new_username = payload.new_username.trim();
+    if new_username.is_empty() || new_username.len() > 50 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Le nom d'utilisateur doit contenir entre 1 et 50 caractères"}))
+        ).into_response();
+    }
+
+    // Vérifier que l'utilisateur existe
+    let user = match User::find_by_id(user_id).one(&state.db).await {
+        Ok(Some(u)) => u,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+    };
+
+    // Vérifier l'unicité du nouveau nom d'utilisateur
+    if let Ok(Some(_)) = User::find()
+        .filter(user::Column::Username.eq(new_username))
+        .filter(user::Column::Id.ne(user_id))
+        .one(&state.db)
+        .await
+    {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"error": "Ce nom d'utilisateur est déjà utilisé"}))
+        ).into_response();
+    }
+
+    // Mettre à jour le nom d'utilisateur
+    let mut active_user: user::ActiveModel = user.into();
+    active_user.username = Set(new_username.to_string());
+
+    match active_user.update(&state.db).await {
+        Ok(updated) => Json(json!({
+            "success": true,
+            "message": "Nom d'utilisateur mis à jour",
+            "username": updated.username
+        })).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Erreur lors de la mise à jour"}))
+        ).into_response(),
+    }
+}
 
 // Handler pour récupérer les coûts des défenses/vaisseaux
 async fn get_unit_costs_handler() -> Result<Json<serde_json::Value>, StatusCode> {
