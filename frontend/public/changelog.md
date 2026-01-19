@@ -1,5 +1,194 @@
 # Changelog - Space Conquest
 
+## [2.0.0] - 2026-01-19 - Refonte graphique Sci-Fi Spatiale complète
+
+### 🎨 Refonte Design System
+
+#### 🚀 Nouveau système de design sci-fi immersif
+**Feature**: Transformation complète de l'interface avec un style spatial dynamique, vibrant et performant
+
+**Framer Motion** - Animations fluides et performantes:
+- Transitions de page animées avec `AnimatePresence`
+- Animations de survol sophistiquées sur les boutons du menu
+- Effets d'entrée progressifs avec stagger sur les éléments
+- Composants `PageTransition`, `SlideWrapper`, `ScaleWrapper`, `HoverGlow`
+
+**Nouveau système CSS** (`index.css`):
+- **Palette de couleurs néon vibrante** : cyan (#00f5ff), magenta (#ff00ff), purple (#a855f7), orange (#ff6b35)
+- **Variables CSS personnalisées** pour les ressources : `--color-metal`, `--color-crystal`, `--color-deuterium`, `--color-energy`
+- **Fond spatial profond** : `--space-void`, `--space-nebula`, `--space-deep`
+- **Effets de glow multiples** : `.glow-cyan`, `.glow-purple`, `.glow-orange`, `.glow-green`, `.glow-red`
+- **Glassmorphism avancé** : `.glass-card`, `.glass-panel`, `.holo-card`
+- **Scrollbar personnalisée** avec dégradé cyan/purple
+
+**Animations avancées** (`animations.css`):
+- **Particules cosmiques** : `particle-float`, `star-drift`
+- **Effets d'énergie** : `energy-flow`, `electric-arc`, `plasma-pulse`
+- **Hologrammes** : `hologram-flicker`, `hologram-glitch`, `scan-line`
+- **Vaisseaux** : `ship-hover`, `ship-warp`, `engine-glow`
+- **Combat** : `laser-fire`, `explosion`, `shield-ripple`
+- **Interface** : `typing-cursor`, `data-flow`, `status-blink`
+- **Notifications** : `notification-pop`, `alert-flash`, `success-shine`
+- **Chargement** : `orbit`, `pulse-ring`, `loading-dots`
+- **Texte** : `text-reveal`, `text-glitch`, `gradient-text`
+
+---
+
+#### ✨ Nouveaux composants d'effets visuels
+
+**SpaceBackground** - Fond spatial animé:
+- **StarField** : Champ d'étoiles scintillantes (100+ étoiles animées)
+- **Nebulae** : 3 nébuleuses colorées (violet, cyan, magenta) avec animations de respiration
+- **FloatingParticles** : Particules flottantes multicolores montantes
+- **ScanLine** : Ligne de scan holographique traversante
+- **TechGrid** : Grille technique subtile en arrière-plan
+- Configuration flexible via props (`showStars`, `showNebulae`, `showParticles`, etc.)
+
+**SpaceLoader** - Indicateur de chargement spatial:
+- Anneaux orbitaux animés
+- Point central pulsant
+- Orbes en orbite avec délais différés
+- Texte de chargement avec effet de respiration
+
+**GlowOrb** - Orbes lumineux décoratifs:
+- Couleur, taille, position personnalisables
+- Animation de pulsation optionnelle
+- Effet de flou configurable
+
+**Motion Wrappers** - Composants d'animation réutilisables:
+- `PageTransition` : Transition de page fluide
+- `FadeWrapper`, `SlideWrapper`, `ScaleWrapper` : Animations d'entrée
+- `StaggerList` : Liste avec animation séquentielle
+- `HoverScale`, `HoverGlow` : Effets au survol
+- `Pulse`, `Floating` : Animations continues
+- `TypingText` : Effet machine à écrire
+- `AnimatedCounter` : Compteur animé
+
+---
+
+#### 🎯 Composants UI améliorés
+
+**Card** - Nouvelles variantes:
+- `glass` : Effet glassmorphism avec blur
+- `holo` : Style holographique avec scan animé
+- `glow` : Effet de lueur au survol
+- `cyber` : Bordure animée cyberpunk
+- Support des couleurs de glow : cyan, purple, orange, green, red, blue
+
+**Button** - Nouvelles variantes sci-fi:
+- `neon` : Bordure cyan lumineuse avec effet de balayage
+- `cyber` : Style purple avec glow au survol
+- `hologram` : Dégradé cyan/purple avec backdrop blur
+- `danger`, `success`, `warning` : Variantes colorées avec glow
+
+**Input** - Styles améliorés:
+- `glass` : Fond transparent avec blur
+- `cyber` : Bordure purple avec effet de focus
+- Glow effect au focus
+
+**Progress** - Barre de progression animée:
+- Variantes : default, gradient, glow, cyber
+- Couleurs : cyan, purple, orange, green, red, blue
+- Effet shimmer animé
+- Point lumineux pulsant au bout
+
+**Badge** - Nouvelles variantes:
+- `neon` : Style cyan lumineux
+- `cyber` : Style purple
+- `glow` : Dégradé animé
+- `pulse` : Animation pulsante rouge
+- Statuts : `online`, `offline`, `busy`
+
+**Tooltip** - Style holographique:
+- Fond glassmorphism sombre
+- Bordure cyan subtile
+- Ligne décorative en haut
+- Ombre avec glow
+
+**Dialog/Modal** - Effets glassmorphism:
+- Fond avec backdrop blur
+- Bordure cyan/purple
+- Coins décoratifs lumineux
+- Ligne décorative en haut
+- Ombre avec glow cyan
+
+---
+
+#### 🖥️ Pages mises à jour
+
+**Page de Login** redesignée:
+- Fond spatial animé avec scan line
+- Carte avec effets holographiques
+- Coins décoratifs lumineux
+- Logo avec effet glow pulsant
+- Inputs avec effets de focus cyan
+- Bouton "neon" avec effet de balayage
+- Badge "SECURE CHANNEL" animé
+
+**App.tsx** - Layout principal:
+- Fond `SpaceBackground` animé remplace l'image statique
+- Transitions de page avec `AnimatePresence` et `motion.div`
+- Sidebar avec ligne lumineuse décorative
+- Boutons du menu avec animations de survol et indicateur actif lumineux
+- Écran de chargement avec `SpaceLoader`
+
+---
+
+### 📦 Dépendances ajoutées
+
+```json
+{
+  "framer-motion": "^11.x"
+}
+```
+
+### 📁 Fichiers créés/modifiés
+
+**Nouveaux fichiers**:
+- `frontend/src/components/ui/space-background.tsx` - Composants d'effets visuels
+- `frontend/src/components/ui/motion-wrappers.tsx` - Wrappers d'animation Framer Motion
+
+**Fichiers modifiés**:
+- `frontend/src/index.css` - Système de design complet refait
+- `frontend/src/styles/animations.css` - 30+ nouvelles animations
+- `frontend/src/components/ui/card.tsx` - Variantes glass, holo, glow, cyber
+- `frontend/src/components/ui/button.tsx` - Variantes neon, cyber, hologram
+- `frontend/src/components/ui/input.tsx` - Variantes glass, cyber
+- `frontend/src/components/ui/progress.tsx` - Animations et couleurs
+- `frontend/src/components/ui/badge.tsx` - Variantes neon, cyber, glow, pulse
+- `frontend/src/components/ui/tooltip.tsx` - Style holographique
+- `frontend/src/components/ui/dialog.tsx` - Glassmorphism et coins décoratifs
+- `frontend/src/components/Login.tsx` - Redesign complet
+- `frontend/src/App.tsx` - Intégration SpaceBackground et transitions
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: Aucune (modifications frontend uniquement)
+
+**Installation**:
+```bash
+cd frontend
+npm install framer-motion
+```
+
+**Tests recommandés**:
+1. ✅ Vérifier le fond spatial animé sur toutes les pages
+2. ✅ Tester les transitions de page fluides
+3. ✅ Vérifier les effets de survol sur les cartes et boutons
+4. ✅ Tester la page de login redesignée
+5. ✅ Vérifier les animations ne causent pas de lag (60fps)
+6. ✅ Tester sur mobile (responsive)
+
+---
+
+### ⚠️ Breaking Changes
+
+Aucun breaking change. Toutes les modifications sont des améliorations visuelles rétrocompatibles.
+
+---
+
 ## [1.10.0] - 2026-01-19 - Refonte design globale et optimisations expéditions
 
 ### 🎯 Nouvelles fonctionnalités
