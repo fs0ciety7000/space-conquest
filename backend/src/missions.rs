@@ -4,18 +4,19 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    ActiveModelTrait, EntityTrait, Set, 
-    QueryFilter, QueryOrder, ColumnTrait, Condition,
+    ActiveModelTrait, EntityTrait, Set,
+    QueryFilter, QueryOrder, ColumnTrait,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{Utc, NaiveDate, Datelike};
+use chrono::{Utc, NaiveDate};
 use rand::seq::SliceRandom;
+use rand::prelude::IteratorRandom;
 
 use crate::entities::{
-    prelude::{DailyMission, UserDailyMission, Achievement, UserAchievement, LoginStreak, Planet, User},
+    prelude::{DailyMission, UserDailyMission, Achievement, UserAchievement, LoginStreak, Planet},
     daily_mission, user_daily_mission, achievement, user_achievement, login_streak, planet
 };
 use crate::AppState;
@@ -564,10 +565,13 @@ pub async fn claim_daily_reward_handler(
     let mut streak_active: login_streak::ActiveModel = streak.into();
     streak_active.daily_reward_claimed = Set(true);
     streak_active.last_reward_date = Set(Some(today));
+
+    // Save current streak before update consumes streak_active
+    let current_streak = streak_active.current_streak.clone().unwrap();
+
     let _ = streak_active.update(&state.db).await;
 
     // Mettre à jour les achievements de streak
-    let current_streak = streak_active.current_streak.clone().unwrap();
     update_achievement_progress(&state, user_id, "login_streak", current_streak).await;
 
     (StatusCode::OK, Json(json!({
@@ -623,15 +627,20 @@ async fn generate_daily_missions(state: &AppState, user_id: Uuid, date: NaiveDat
     let medium: Vec<_> = all_missions.iter().filter(|m| m.difficulty == "medium").collect();
     let hard: Vec<_> = all_missions.iter().filter(|m| m.difficulty == "hard").collect();
 
-    let mut rng = rand::thread_rng();
-    let mut selected = Vec::new();
+    // Sélectionner les missions (dans un bloc pour que RNG soit dropped avant les await)
+    let selected = {
+        let mut rng = rand::thread_rng();
+        let mut selected = Vec::new();
 
-    // Sélectionner 2 easy, 2 medium, 1 hard
-    if let Some(m) = easy.choose(&mut rng) { selected.push(*m); }
-    if let Some(m) = easy.iter().filter(|x| !selected.contains(x)).choose(&mut rng) { selected.push(*m); }
-    if let Some(m) = medium.choose(&mut rng) { selected.push(*m); }
-    if let Some(m) = medium.iter().filter(|x| !selected.contains(x)).choose(&mut rng) { selected.push(*m); }
-    if let Some(m) = hard.choose(&mut rng) { selected.push(*m); }
+        // Sélectionner 2 easy, 2 medium, 1 hard
+        if let Some(m) = easy.choose(&mut rng) { selected.push(*m); }
+        if let Some(m) = easy.iter().filter(|x| !selected.contains(x)).choose(&mut rng) { selected.push(*m); }
+        if let Some(m) = medium.choose(&mut rng) { selected.push(*m); }
+        if let Some(m) = medium.iter().filter(|x| !selected.contains(x)).choose(&mut rng) { selected.push(*m); }
+        if let Some(m) = hard.choose(&mut rng) { selected.push(*m); }
+
+        selected
+    };
 
     // Créer les entrées utilisateur
     for mission in selected {

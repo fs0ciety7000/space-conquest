@@ -2108,6 +2108,9 @@ async fn transport_handler(
         metal: Set(payload.metal), crystal: Set(payload.crystal), deuterium: Set(payload.deuterium), date: Set(Utc::now().naive_utc()),
     };
 
+    // Save owner_id before update consumes source
+    let owner_id = source.owner_id.clone().unwrap();
+
     let _ = source.update(&state.db).await;
     let _ = mission.insert(&state.db).await;
     let _ = log.insert(&state.db).await;
@@ -2115,7 +2118,6 @@ async fn transport_handler(
     // ═══════════════════════════════════════════════════════════════════════════
     // MISE À JOUR MISSIONS QUOTIDIENNES
     // ═══════════════════════════════════════════════════════════════════════════
-    let owner_id = source.owner_id.clone().unwrap();
     let total_resources = (payload.metal + payload.crystal + payload.deuterium) as i32;
     missions::update_mission_progress(&state, owner_id, "transport", "any", total_resources).await;
 
