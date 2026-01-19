@@ -132,18 +132,18 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
             const cost = costs[id as keyof typeof costs];
             
             return (
-              <button 
-                key={id} 
-                onClick={() => setSelected(id)} 
-                className={`relative group overflow-hidden rounded-xl border transition-all duration-300 p-4 text-left h-32 flex flex-col justify-between
-                  ${isSelected ? `${config.bg} ${config.border} ${config.glow} scale-105 z-10` : 'bg-black/40 border-white/10 opacity-70 hover:opacity-100'}`}
+              <button
+                key={id}
+                onClick={() => setSelected(id)}
+                className={`relative group overflow-hidden rounded-xl border transition-all duration-500 p-4 text-left h-32 flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl card-depth animate-fade-in
+                  ${isSelected ? `${config.bg} ${config.border} ${config.glow} scale-105 z-10 animate-glow-pulse` : 'bg-black/40 border-white/10 opacity-70 hover:opacity-100'}`}
               >
                  <div className="flex justify-between items-start">
                     <div>
                         <span className={`text-[9px] font-black uppercase tracking-widest ${config.color}`}>{config.tier}</span>
                         <h3 className="text-sm font-black uppercase text-white">{config.name}</h3>
                     </div>
-                    {id === 'plasma_turret' ? <Zap size={20} className={config.color}/> : <Crosshair size={20} className={config.color}/>}
+                    {id === 'plasma_turret' ? <Zap size={20} className={`${config.color} group-hover:scale-110 transition-transform duration-300`}/> : <Crosshair size={20} className={`${config.color} group-hover:scale-110 transition-transform duration-300`}/>}
                  </div>
                  <div className="space-y-1">
                    <div className="text-[9px] font-mono text-slate-400">
@@ -157,8 +157,8 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
         </div>
 
         {/* PANNEAU CENTRAL */}
-        <div className={`relative overflow-hidden rounded-3xl border ${selectedConfig.border} bg-black/60 backdrop-blur-md p-8 shadow-2xl`}>
-           <div className={`absolute -right-10 -bottom-10 opacity-10 ${isBusy ? 'animate-pulse' : ''}`}>
+        <div className={`relative overflow-hidden rounded-3xl border ${selectedConfig.border} bg-black/60 backdrop-blur-md p-8 shadow-2xl card-depth hover:shadow-3xl transition-all duration-500 animate-slide-up glass-card`}>
+           <div className={`absolute -right-10 -bottom-10 opacity-10 ${isBusy ? 'animate-pulse' : 'group-hover:animate-float'}`}>
              <Shield size={250} className={selectedConfig.color} />
            </div>
 
@@ -249,19 +249,19 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
       </div>
 
       {/* DROITE : ÉTAT DES DÉFENSES */}
-      <Card className="bg-slate-950 border border-white/5 p-6 rounded-3xl relative overflow-hidden">
+      <Card className="bg-slate-950 border border-white/5 p-6 rounded-3xl relative overflow-hidden card-depth hover:shadow-2xl transition-all duration-500 animate-slide-up">
            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-6 flex items-center gap-2">
-             <Shield size={14} /> Périmètre Défensif
+             <Shield size={14} className="animate-bounce-subtle" /> Périmètre Défensif
            </h4>
-           
+
            <div className="space-y-4">
-              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 hover:bg-white/10 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg group glass-card">
                  <span className="text-xs font-bold text-blue-400 uppercase">Lanceurs Missiles</span>
-                 <span className="text-xl text-white font-mono font-black">{planet.missile_launcher_count || 0}</span>
+                 <span className="text-xl text-white font-mono font-black group-hover:scale-110 transition-transform">{planet.missile_launcher_count || 0}</span>
               </div>
-              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+              <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5 hover:bg-white/10 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg group glass-card">
                  <span className="text-xs font-bold text-pink-500 uppercase">Tourelles Plasma</span>
-                 <span className="text-xl text-white font-mono font-black">{planet.plasma_turret_count || 0}</span>
+                 <span className="text-xl text-white font-mono font-black group-hover:scale-110 transition-transform">{planet.plasma_turret_count || 0}</span>
               </div>
               
               {isBusy && (
