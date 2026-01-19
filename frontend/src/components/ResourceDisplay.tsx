@@ -7,8 +7,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Pickaxe, Gem, Droplets, Zap, Timer, ArrowUpCircle,
-  Box, TrendingUp, Activity, ChevronRight, Lock, Unlock, Power, PowerOff, ChevronDown, Layers
+  Box, TrendingUp, Activity, ChevronRight, Lock, Unlock, Power, PowerOff, ChevronDown, Layers, AlertCircle
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
@@ -50,29 +58,31 @@ const getResourceTheme = (type: string) => {
 export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }: ResourceDisplayProps) {
   const [now, setNow] = useState(new Date().getTime());
   const [extraSlots, setExtraSlots] = useState<ResourceSlot[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; slotNumber: number; cost: any } | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
     return () => clearInterval(interval);
   }, []);
 
+  // Fonction pour recharger les slots
+  const reloadSlots = async () => {
+    try {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/resource-slots`), {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setExtraSlots(data.filter((s: ResourceSlot) => s.slot_number >= 5));
+      }
+    } catch (error) {
+      console.error('Erreur chargement slots:', error);
+    }
+  };
+
   // Charger les slots supplémentaires (5-8)
   useEffect(() => {
-    const fetchSlots = async () => {
-      try {
-        const res = await fetch(apiUrl(`/planets/${planet.id}/resource-slots`), {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          // Filtrer uniquement les slots 5-8 (configurables)
-          setExtraSlots(data.filter((s: ResourceSlot) => s.slot_number >= 5));
-        }
-      } catch (error) {
-        console.error('Erreur chargement slots:', error);
-      }
-    };
-    if (planet?.id) fetchSlots();
+    if (planet?.id) reloadSlots();
   }, [planet?.id]);
 
   const handleChangeType = async (slotNumber: number, newType: string) => {
@@ -87,6 +97,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
       });
       if (res.ok) {
         toast.success(`Slot ${slotNumber - 4} modifié`);
+        // Recharger automatiquement les slots et les ressources
+        await reloadSlots();
         onUpgrade();
       } else {
         const data = await res.json();
@@ -98,7 +110,6 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   };
 
   const handleToggleActive = async (slotNumber: number, currentlyActive: boolean) => {
-    // Si on active, montrer le coût
     const slotIndex = slotNumber - 5;
     const cost = {
       metal: 5000 * Math.pow(2, slotIndex),
@@ -107,12 +118,16 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
     };
 
     if (!currentlyActive) {
-      // Confirmation avec le coût
-      if (!confirm(`Activer le slot ${slotNumber - 4} ?\n\nCoût:\n- Métal: ${cost.metal.toLocaleString()}\n- Cristal: ${cost.crystal.toLocaleString()}\n- Deutérium: ${cost.deuterium.toLocaleString()}`)) {
-        return;
-      }
+      // Ouvrir la modale de confirmation pour l'activation
+      setConfirmDialog({ open: true, slotNumber, cost });
+      return;
     }
 
+    // Désactivation directe (pas de coût)
+    await performToggle(slotNumber, currentlyActive, cost);
+  };
+
+  const performToggle = async (slotNumber: number, currentlyActive: boolean, cost: any) => {
     try {
       const res = await fetch(apiUrl(`/planets/${planet.id}/resource-slots/${slotNumber}/toggle`), {
         method: 'POST',
@@ -121,14 +136,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
       const data = await res.json();
       if (res.ok) {
         toast.success(currentlyActive ? 'Slot désactivé' : `Slot activé (-${cost.metal.toLocaleString()} M, -${cost.crystal.toLocaleString()} C, -${cost.deuterium.toLocaleString()} D)`);
-        // Rafraîchir les slots
-        const slotsRes = await fetch(apiUrl(`/planets/${planet.id}/resource-slots`), {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (slotsRes.ok) {
-          const slotsData = await slotsRes.json();
-          setExtraSlots(slotsData.filter((s: ResourceSlot) => s.slot_number >= 5));
-        }
+        // Rafraîchir automatiquement les slots et ressources
+        await reloadSlots();
         onUpgrade();
       } else {
         if (data.cost) {
@@ -139,6 +148,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
       }
     } catch (error) {
       toast.error('Erreur de connexion');
+    } finally {
+      setConfirmDialog(null);
     }
   };
 
@@ -155,14 +166,47 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
     } catch (e) { console.error("Erreur upgrade", e); }
   };
 
-  // --- FORMULES (CORRECTION : utiliser speedFactor au lieu de *10) ---
+  // --- FORMULES AVEC PRISE EN COMPTE DES SLOTS ---
+  const calculateEnergyProd = (level: number) => {
+    const baseProd = 20 * level * Math.pow(1.1, level);
+    const techLevel = planet.energy_tech_level || 0;
+    return Math.floor(baseProd * (1 + (techLevel * 0.05)));
+  };
+
   const calculateProd = (type: string, level: number, base: number) => {
       if (type === 'solar_plant') {
-          const baseProd = 20 * level * Math.pow(1.1, level);
-          const techLevel = planet.energy_tech_level || 0;
-          return Math.floor(baseProd * (1 + (techLevel * 0.05)));
+          return calculateEnergyProd(level);
       }
-      return Math.floor(base * level * Math.pow(1.1, level) * speedFactor); // ✅ CORRECTION ICI
+
+      // Calcul de base
+      let prod = base * level * Math.pow(1.1, level);
+
+      // Bonus technologie énergie (+1% par niveau)
+      const techLevel = planet.energy_tech_level || 0;
+      const techBonus = 1.0 + (techLevel * 0.01);
+      prod *= techBonus;
+
+      // Calculer le ratio énergétique (production/consommation, max 100%)
+      const totalEnergyProd = calculateEnergyProd(planet.solar_plant_level ?? 0);
+      const totalEnergyCons =
+        calculateEnergyCons('metal', planet.metal_mine_level ?? 0) +
+        calculateEnergyCons('crystal', planet.crystal_mine_level ?? 0) +
+        calculateEnergyCons('deuterium', planet.deuterium_mine_level ?? 0);
+      const energyRatio = totalEnergyCons > 0 ? Math.min(1.0, totalEnergyProd / totalEnergyCons) : 1.0;
+      prod *= energyRatio;
+
+      // Compter les slots actifs pour ce type de ressource
+      const resourceKey = type === 'metal' ? 'metal' : type === 'crystal' ? 'crystal' : type === 'deuterium' ? 'deuterium' : null;
+      if (resourceKey) {
+        const activeSlots = extraSlots.filter(s => s.is_active && s.resource_type === resourceKey);
+        const slotBonus = 1.0 + (activeSlots.length * 0.5); // +50% par slot actif
+        prod *= slotBonus;
+      }
+
+      // Appliquer le speed factor
+      prod *= speedFactor;
+
+      return Math.floor(prod);
   };
 
   const calculateEnergyCons = (type: string, level: number) => {
@@ -362,13 +406,19 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
               const slotBorder = resInfo?.border || "border-gray-500/50";
               const slotBg = resInfo?.bg || "bg-gray-500/10";
 
+              const slotCost = {
+                metal: 5000 * Math.pow(2, slot.slot_number - 5),
+                crystal: 2500 * Math.pow(2, slot.slot_number - 5),
+                deuterium: 1250 * Math.pow(2, slot.slot_number - 5),
+              };
+
               return (
                 <Card
                   key={slot.slot_number}
                   className={`relative overflow-hidden transition-all duration-300 ${
                     slot.is_active
                       ? `border ${slotBorder} ${slotBg} shadow-lg`
-                      : 'border border-slate-700/50 bg-slate-900/30 opacity-50'
+                      : 'border border-slate-700/50 bg-slate-900/30 opacity-60 hover:opacity-80'
                   }`}
                 >
                   <CardContent className="p-4">
@@ -392,7 +442,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                         className={`h-8 w-8 p-0 ${
                           slot.is_active ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'
                         }`}
-                        title={slot.is_active ? 'Désactiver (gratuit)' : `Activer (${(5000 * Math.pow(2, slot.slot_number - 5)).toLocaleString()} M)`}
+                        title={slot.is_active ? 'Désactiver (gratuit)' : `Activer`}
                       >
                         {slot.is_active ? <Power size={16} /> : <PowerOff size={16} />}
                       </Button>
@@ -428,11 +478,29 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                       </DropdownMenuContent>
                     </DropdownMenu>
 
-                    {/* Bonus indicator */}
-                    {slot.is_active && (
-                      <div className="mt-3 text-center">
+                    {/* Bonus indicator OR Activation cost */}
+                    {slot.is_active ? (
+                      <div className="mt-3 text-center bg-black/40 p-2 rounded border border-white/5">
                         <span className={`text-lg font-black font-mono ${slotColor}`}>+50%</span>
                         <p className="text-[9px] text-slate-500 uppercase">Bonus {resInfo?.label}</p>
+                      </div>
+                    ) : (
+                      <div className="mt-3 space-y-1">
+                        <div className="text-[9px] text-slate-400 uppercase font-bold mb-1.5 flex items-center gap-1">
+                          <AlertCircle size={10} /> Coût d'activation
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] px-2 py-1 bg-black/40 rounded border border-white/5">
+                          <span className="text-orange-400 flex items-center gap-1"><Pickaxe size={10} /> Métal</span>
+                          <span className="text-white font-mono font-bold">{slotCost.metal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] px-2 py-1 bg-black/40 rounded border border-white/5">
+                          <span className="text-cyan-400 flex items-center gap-1"><Gem size={10} /> Cristal</span>
+                          <span className="text-white font-mono font-bold">{slotCost.crystal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] px-2 py-1 bg-black/40 rounded border border-white/5">
+                          <span className="text-emerald-400 flex items-center gap-1"><Droplets size={10} /> Deuté</span>
+                          <span className="text-white font-mono font-bold">{slotCost.deuterium.toLocaleString()}</span>
+                        </div>
                       </div>
                     )}
                   </CardContent>
@@ -442,6 +510,84 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
           </div>
         </div>
       )}
+
+      {/* Modale de confirmation d'activation */}
+      <Dialog open={confirmDialog?.open || false} onOpenChange={(open) => !open && setConfirmDialog(null)}>
+        <DialogContent className="bg-slate-950 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black uppercase tracking-wide flex items-center gap-2">
+              <Power className="text-yellow-400" size={20} />
+              Activer le Slot {confirmDialog ? confirmDialog.slotNumber - 4 : ''}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              L'activation de ce slot de production augmentera la production de la ressource sélectionnée de 50%.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="text-yellow-400" size={16} />
+                <span className="text-sm font-bold text-yellow-300">Coût d'activation</span>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-orange-400 flex items-center gap-2">
+                    <Pickaxe size={14} /> Métal
+                  </span>
+                  <span className="font-mono font-bold text-white">
+                    {confirmDialog?.cost.metal.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-cyan-400 flex items-center gap-2">
+                    <Gem size={14} /> Cristal
+                  </span>
+                  <span className="font-mono font-bold text-white">
+                    {confirmDialog?.cost.crystal.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-emerald-400 flex items-center gap-2">
+                    <Droplets size={14} /> Deutérium
+                  </span>
+                  <span className="font-mono font-bold text-white">
+                    {confirmDialog?.cost.deuterium.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="text-green-400" size={16} />
+                <span className="text-sm font-bold text-green-300">Bonus de production</span>
+              </div>
+              <p className="text-2xl font-black font-mono text-green-400">+50%</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Pour la ressource sélectionnée dans ce slot
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialog(null)}
+              className="bg-slate-900 border-slate-700 text-white hover:bg-slate-800"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={() => confirmDialog && performToggle(confirmDialog.slotNumber, false, confirmDialog.cost)}
+              className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-white hover:from-yellow-700 hover:to-yellow-600 font-bold"
+            >
+              <Power size={16} className="mr-2" />
+              Activer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
