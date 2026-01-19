@@ -21,9 +21,15 @@ const resourceIcons: Record<string, any> = {
 };
 
 const resourceColors: Record<string, string> = {
-  metal: "text-slate-400",
+  metal: "text-orange-400",
   crystal: "text-cyan-400",
   deuterium: "text-emerald-400",
+};
+
+const resourceLabels: Record<string, string> = {
+  metal: "Métal",
+  crystal: "Cristal",
+  deuterium: "Deutérium",
 };
 
 const resourceBorders: Record<string, string> = {
@@ -170,7 +176,9 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
           {/* Trade Setup */}
           <div className="space-y-3">
             <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Quantité à vendre:</label>
+              <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">
+                Quantité de <span className={color}>{resourceLabels[resource]}</span> à vendre:
+              </label>
               <Input
                 type="number"
                 min={1}
@@ -182,32 +190,59 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
             </div>
 
             <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">J'achète:</label>
+              <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Ressource à acheter:</label>
               <select
                 value={buyResource}
                 onChange={(e) => setBuyResource(e.target.value)}
                 className="w-full p-2 bg-black/30 border border-white/10 rounded text-white text-sm font-mono hover:border-white/20 transition-colors"
               >
                 <option value="">Choisir...</option>
-                {resource !== 'metal' && <option value="metal">Metal</option>}
-                {resource !== 'crystal' && <option value="crystal">Crystal</option>}
-                {resource !== 'deuterium' && <option value="deuterium">Deuterium</option>}
+                {resource !== 'metal' && <option value="metal">Métal</option>}
+                {resource !== 'crystal' && <option value="crystal">Cristal</option>}
+                {resource !== 'deuterium' && <option value="deuterium">Deutérium</option>}
               </select>
             </div>
+
+            {/* Quantité obtenue */}
+            {buyResource && exchangePreview && (
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">
+                  Quantité de <span className={resourceColors[buyResource]}>{resourceLabels[buyResource]}</span> obtenue:
+                </label>
+                <div className="bg-black/30 border border-white/10 rounded p-2 flex items-center gap-2">
+                  {(() => {
+                    const BuyIcon = resourceIcons[buyResource] || Stone;
+                    return <BuyIcon size={16} className={resourceColors[buyResource]} />;
+                  })()}
+                  <span className={`font-mono font-bold text-lg ${resourceColors[buyResource]}`}>
+                    {Math.floor(exchangePreview.finalAmount).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Exchange Preview */}
             {exchangePreview && (
               <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3">
-                <div className="text-[10px] uppercase font-bold text-purple-400 mb-2">Aperçu de l'échange:</div>
+                <div className="text-[10px] uppercase font-bold text-purple-400 mb-2">Récapitulatif:</div>
                 <div className="flex items-center justify-between">
-                  <span className="text-white font-mono text-sm">{sellQuantity.toLocaleString()} {resource}</span>
+                  <div className="flex items-center gap-2">
+                    <Icon size={14} className={color} />
+                    <span className="text-white font-mono text-sm">{sellQuantity.toLocaleString()}</span>
+                  </div>
                   <ArrowRight size={16} className="text-purple-400" />
-                  <span className="text-emerald-400 font-mono text-sm font-bold">
-                    {Math.floor(exchangePreview.finalAmount).toLocaleString()} {buyResource}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const BuyIcon = resourceIcons[buyResource] || Stone;
+                      return <BuyIcon size={14} className={resourceColors[buyResource]} />;
+                    })()}
+                    <span className={`font-mono text-sm font-bold ${resourceColors[buyResource]}`}>
+                      {Math.floor(exchangePreview.finalAmount).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
                 <div className="text-[9px] text-slate-500 mt-2">
-                  Taux: 1 {resource} = {exchangePreview.exchangeRate.toFixed(3)} {buyResource} (avec marge NPC 85%)
+                  Taux: 1 {resourceLabels[resource]} = {exchangePreview.exchangeRate.toFixed(3)} {resourceLabels[buyResource]} (marge NPC 15%)
                 </div>
               </div>
             )}
