@@ -103,6 +103,69 @@ let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.25_f64, 0.70_f6
 
 ---
 
+#### 🎯 Correction affichage victoires + Raffinement logique expéditions
+**Feature**: Correction bug d'affichage des victoires et refonte complète des règles de pertes
+
+**Problème 1 - Victoires non affichées**:
+- Backend stockait "player"/"pirates" mais frontend attendait "victory"/"defeat"
+- Les rapports de victoire n'apparaissaient jamais dans les logs
+- **Solution**: Backend stocke maintenant "victory", "defeat" ou "calm"
+
+**Problème 2 - Logique expéditions incohérente**:
+Refonte complète des règles de pertes avec 3 scénarios distincts
+
+**Nouvelle règle 1 vaisseau** (TOUJOURS perdu):
+```
+Si flotte = 1 vaisseau :
+  ├─ Victoire → 1 perdu (expédition risquée)
+  ├─ Défaite → 1 perdu (destruction complète)
+  └─ Secteur calme → 1 perdu (usure exploration)
+```
+
+**Nouvelles règles plusieurs vaisseaux**:
+
+1. **Victoire** (logique existante conservée):
+   - 3-15% base avec variation ±10%
+   - Max 20% après clamp
+   - Exemple: 30 vaisseaux → 1-6 perdus
+
+2. **Défaite** (logique existante conservée):
+   - 30-60% base avec variation ±15%
+   - Max 70% après clamp
+   - Exemple: 30 vaisseaux → 7-21 perdus
+
+3. **Secteur calme** (NOUVEAU):
+   - **1-5% base** avec variation ±0.5%
+   - **Minimum 1 vaisseau perdu**
+   - Exemple: 30 vaisseaux → 1-2 perdus
+   - Message: "PERTES MINIMES (usure normale)"
+
+**Code**:
+```rust
+// Secteur calme - Pertes minimales (1-5%)
+let base_loss_rate: f64 = rng.gen_range(0.01..0.05);
+let variation: f64 = rng.gen_range(-0.005..0.005);
+let loss_rate = (base_loss_rate + variation).clamp(0.005, 0.06);
+let total_losses = ((total_ships as f64 * loss_rate).ceil() as i32).max(1);
+```
+
+**Impact**:
+- ✅ Rapports de victoire maintenant visibles
+- ✅ Expéditions avec 1 vaisseau = risque maximal (toujours perdu)
+- ✅ Secteur calme n'est plus 100% sûr (équilibrage)
+- ✅ Risk/reward plus cohérent et prévisible
+
+**Types de résultats**:
+- `"victory"` → Combat gagné avec pertes réduites
+- `"defeat"` → Combat perdu avec pertes lourdes
+- `"calm"` → Secteur calme avec pertes minimales
+
+**Fichiers**:
+- `backend/src/main.rs` (lignes 1011, 1060, 1096, 1028-1184)
+- `frontend/src/components/ReportsTerminal.tsx` (ligne 104)
+
+---
+
 #### 🛡️ Correction affichage Combat Modal
 **Problème**: Le contenu des rapports de combat était coupé avec un fond noir, empêchant de voir toute l'information
 
