@@ -17,6 +17,7 @@ use rand::Rng;
 
 use crate::{
     entities::{planet, user, prelude::{Planet, User}},
+    missions,
     AppState
 };
 
@@ -288,6 +289,11 @@ pub async fn login_handler(
     };
 
     let token = create_jwt(user.id.to_string());
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MISE À JOUR DU LOGIN STREAK
+    // ═══════════════════════════════════════════════════════════════════════════
+    missions::update_login_streak(&state, user.id).await;
 
     (
         StatusCode::OK, 

@@ -772,6 +772,20 @@ async fn get_planet_handler(
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // MISE À JOUR MISSIONS QUOTIDIENNES
+        // ═══════════════════════════════════════════════════════════════════════
+        if is_ship_or_defense {
+            // Vaisseau/Défense construit → mission "build"
+            missions::update_mission_progress(&state, p.owner_id, "build", &item.building_type, item.level).await;
+            // Achievement: constructions
+            missions::update_achievement_progress(&state, p.owner_id, "buildings", item.level).await;
+        } else {
+            // Bâtiment/Tech → mission "upgrade"
+            missions::update_mission_progress(&state, p.owner_id, "upgrade", "any", 1).await;
+            missions::update_achievement_progress(&state, p.owner_id, "buildings", 1).await;
+        }
+
         let _ = ConstructionQueue::delete_by_id(item.id).exec(&state.db).await;
     }
 
@@ -1151,10 +1165,15 @@ async fn attack_handler(
     // ═══════════════════════════════════════════════════════════════════════════
     // NOTIFICATION WEBSOCKET - Alerter le défenseur de l'attaque entrante
     // ═══════════════════════════════════════════════════════════════════════════
-    if let Some(ref ws) = state.ws {
-        // Récupérer le nom de l'attaquant
-        if let Ok(Some(attacker_planet)) = Planet::find_by_id(attacker_id).one(&state.db).await {
-            if let Ok(Some(attacker_user)) = User::find_by_id(attacker_planet.owner_id).one(&state.db).await {
+    if let Ok(Some(attacker_planet)) = Planet::find_by_id(attacker_id).one(&state.db).await {
+        let attacker_owner_id = attacker_planet.owner_id;
+        
+        // Mise à jour missions quotidiennes & achievements
+        missions::update_mission_progress(&state, attacker_owner_id, "attack", "any", 1).await;
+        missions::update_achievement_progress(&state, attacker_owner_id, "attacks", 1).await;
+        
+        if let Some(ref ws) = state.ws {
+            if let Ok(Some(attacker_user)) = User::find_by_id(attacker_owner_id).one(&state.db).await {
                 let source_coords = format!(
                     "[{}:{}:{}]",
                     attacker_planet.galaxy, attacker_planet.system, attacker_planet.position
@@ -1466,6 +1485,12 @@ async fn expedition_handler(
     };
     let _ = log_exp.insert(&state.db).await;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MISE À JOUR MISSIONS QUOTIDIENNES & ACHIEVEMENTS
+    // ═══════════════════════════════════════════════════════════════════════════
+    missions::update_mission_progress(&state, p.owner_id, "expedition", "any", 1).await;
+    missions::update_achievement_progress(&state, p.owner_id, "expeditions", 1).await;
+
    let response = json!({
     "planet": updated_planet,
     "report": expedition_report
@@ -1739,6 +1764,12 @@ async fn spy_handler(
     if let Some(ref ws) = state.ws {
         websocket::notify_spy_alert(ws, def_planet.id, &attacker_username);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MISE À JOUR MISSIONS QUOTIDIENNES & ACHIEVEMENTS
+    // ═══════════════════════════════════════════════════════════════════════════
+    missions::update_mission_progress(&state, att_planet.owner_id, "spy", "any", 1).await;
+    missions::update_achievement_progress(&state, att_planet.owner_id, "spy_missions", 1).await;
 
     (StatusCode::OK, Json(json!({
         "status": "success",
@@ -2080,6 +2111,13 @@ async fn transport_handler(
     let _ = source.update(&state.db).await;
     let _ = mission.insert(&state.db).await;
     let _ = log.insert(&state.db).await;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MISE À JOUR MISSIONS QUOTIDIENNES
+    // ═══════════════════════════════════════════════════════════════════════════
+    let owner_id = source.owner_id.clone().unwrap();
+    let total_resources = (payload.metal + payload.crystal + payload.deuterium) as i32;
+    missions::update_mission_progress(&state, owner_id, "transport", "any", total_resources).await;
 
     (StatusCode::OK, Json(json!({ "status": "success", "message": format!("Flotte lancée ! Arrivée dans {}s", flight_duration) }))).into_response()
 }
