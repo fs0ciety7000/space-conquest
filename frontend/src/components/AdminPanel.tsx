@@ -83,7 +83,7 @@ interface ServerConfig {
   mining_speed_multiplier: string;
 }
 
-type AdminTab = 'players' | 'stats';
+type AdminTab = 'players' | 'stats' | 'users';
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState<AdminTab>('stats');
@@ -316,7 +316,19 @@ export default function AdminPanel() {
           }`}
         >
           <Users size={16} />
-          Gestion Joueurs
+          Gestion Planètes
+        </Button>
+        <Button
+          variant={activeTab === 'users' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('users')}
+          className={`flex items-center gap-2 ${
+            activeTab === 'users'
+              ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <Settings size={16} />
+          Gestion Utilisateurs
         </Button>
       </div>
 
@@ -840,6 +852,189 @@ export default function AdminPanel() {
           </CardContent>
         </Card>
       </div>
+      )}
+
+      {/* ONGLET GESTION UTILISATEURS */}
+      {activeTab === 'users' && (
+        <Card className="bg-gradient-to-br from-slate-950 to-indigo-950/20 border-indigo-500/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-3 text-indigo-300">
+              <Settings size={20} />
+              Gestion des Utilisateurs
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Liste des utilisateurs */}
+              <div className="space-y-3">
+                {players.map((player) => (
+                  <div
+                    key={player.id}
+                    className="bg-slate-900/40 border border-white/10 rounded-lg p-4 hover:bg-slate-900/60 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-bold text-white">{player.username}</h3>
+                          <span className="px-2 py-0.5 bg-indigo-600/30 text-indigo-300 rounded text-xs font-mono border border-indigo-500/30">
+                            {player.id.substring(0, 8)}...
+                          </span>
+                        </div>
+                        <div className="text-sm text-slate-400 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">Email:</span>
+                            <span className="font-mono">{player.email}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">Planètes:</span>
+                            <span className="text-cyan-400">{player.planets.length}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+                          onClick={async () => {
+                            const newPassword = prompt('Nouveau mot de passe (min. 6 caractères):');
+                            if (!newPassword || newPassword.length < 6) {
+                              toast.error('Mot de passe invalide (min. 6 caractères)');
+                              return;
+                            }
+
+                            try {
+                              const res = await fetch(apiUrl(`/admin/user/${player.id}/reset-password?user_id=${userId}`), {
+                                method: 'POST',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ new_password: newPassword })
+                              });
+
+                              if (res.ok) {
+                                toast.success('✅ Mot de passe réinitialisé');
+                              } else {
+                                const err = await res.json();
+                                toast.error(err.error || 'Erreur');
+                              }
+                            } catch (e) {
+                              toast.error('Erreur réseau');
+                            }
+                          }}
+                        >
+                          Réinitialiser MDP
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                          onClick={async () => {
+                            const newUsername = prompt('Nouveau nom d\'utilisateur:', player.username);
+                            if (!newUsername || newUsername.trim() === '') {
+                              toast.error('Nom d\'utilisateur invalide');
+                              return;
+                            }
+
+                            try {
+                              const res = await fetch(apiUrl(`/admin/user/${player.id}/username?user_id=${userId}`), {
+                                method: 'PATCH',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ username: newUsername })
+                              });
+
+                              if (res.ok) {
+                                toast.success('✅ Nom d\'utilisateur modifié');
+                                fetchPlayers();
+                              } else {
+                                const err = await res.json();
+                                toast.error(err.error || 'Erreur');
+                              }
+                            } catch (e) {
+                              toast.error('Erreur réseau');
+                            }
+                          }}
+                        >
+                          Modifier nom
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-green-500/30 text-green-400 hover:bg-green-500/10"
+                          onClick={async () => {
+                            const newEmail = prompt('Nouvel email:', player.email);
+                            if (!newEmail || !newEmail.includes('@')) {
+                              toast.error('Email invalide');
+                              return;
+                            }
+
+                            try {
+                              const res = await fetch(apiUrl(`/admin/user/${player.id}/email?user_id=${userId}`), {
+                                method: 'PATCH',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ email: newEmail })
+                              });
+
+                              if (res.ok) {
+                                toast.success('✅ Email modifié');
+                                fetchPlayers();
+                              } else {
+                                const err = await res.json();
+                                toast.error(err.error || 'Erreur');
+                              }
+                            } catch (e) {
+                              toast.error('Erreur réseau');
+                            }
+                          }}
+                        >
+                          Modifier email
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                          onClick={async () => {
+                            if (!confirm(`⚠️ ATTENTION ⚠️\n\nVoulez-vous vraiment supprimer l'utilisateur ${player.username} ?\n\nCette action est IRRÉVERSIBLE et supprimera:\n- Le compte utilisateur\n- Toutes ses planètes\n- Toutes ses données`)) {
+                              return;
+                            }
+
+                            try {
+                              const res = await fetch(apiUrl(`/admin/user/${player.id}?user_id=${userId}`), {
+                                method: 'DELETE',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`
+                                }
+                              });
+
+                              if (res.ok) {
+                                toast.success('✅ Utilisateur supprimé');
+                                fetchPlayers();
+                              } else {
+                                const err = await res.json();
+                                toast.error(err.error || 'Erreur');
+                              }
+                            } catch (e) {
+                              toast.error('Erreur réseau');
+                            }
+                          }}
+                        >
+                          Supprimer
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
