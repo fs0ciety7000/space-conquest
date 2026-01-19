@@ -36,7 +36,7 @@ use sea_orm_migration::MigratorTrait;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin, 
-    messaging, market, websocket, alliance, AppState
+    messaging, market, websocket, alliance, missions, AppState
 };
 use config::Config;
 use websocket::WsState;
@@ -260,6 +260,14 @@ async fn main() {
         .route("/alliances/:id/role/:user_id", patch(alliance::change_role_handler))
         .route("/alliances/:id/transfer/:user_id", post(alliance::transfer_leadership_handler))
         .route("/alliances/invitations/:invitation_id/respond", post(alliance::respond_to_invitation_handler))
+        // Missions & Achievements
+        .route("/missions/daily", get(missions::get_daily_missions_handler))
+        .route("/missions/:id/claim", post(missions::claim_mission_reward_handler))
+        .route("/achievements", get(missions::get_achievements_handler))
+        .route("/achievements/displayed", post(missions::set_displayed_achievements_handler))
+        .route("/users/:id/achievements", get(missions::get_user_displayed_achievements_handler))
+        .route("/streak", get(missions::get_streak_handler))
+        .route("/streak/claim", post(missions::claim_daily_reward_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
