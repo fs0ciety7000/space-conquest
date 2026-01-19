@@ -65,7 +65,7 @@ export default function App() {
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
   const [showCombatModal, setShowCombatModal] = useState(false);
   const [targetPlanet, setTargetPlanet] = useState<{id: string, name: string} | null>(null);
-  const [transportTarget, setTransportTarget] = useState<{id: string, name: string, system: number} | null>(null);
+  const [transportTarget, setTransportTarget] = useState<{id: string, name: string, galaxy: number, system: number, position: number} | null>(null);
   const [spyReport, setSpyReport] = useState<any>(null);
   const prevPlanetRef = useRef<any>(null);
   const processingReportRef = useRef(false);
@@ -322,8 +322,8 @@ export default function App() {
     playSound('click');
   };
 
-  const handlePrepareTransport = (id: string, name: string, system: number) => {
-      setTransportTarget({id, name, system});
+  const handlePrepareTransport = (id: string, name: string, galaxy: number, system: number, position: number) => {
+      setTransportTarget({id, name, galaxy, system, position});
       playSound('click');
   };
 

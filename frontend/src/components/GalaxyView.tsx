@@ -33,7 +33,7 @@ interface GalaxyViewProps {
     planet: any;
     onNavigateAttack: (id: string, name: string) => void;
     onNavigateSpy: (id: string) => void;
-    onNavigateTransport: (id: string, name: string, system: number) => void;
+    onNavigateTransport: (id: string, name: string, galaxy: number, system: number, position: number) => void;
 }
 
 // --- COMPOSANT PRINCIPAL ---
@@ -163,7 +163,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                         slots={slots} 
                         onNavigateAttack={onNavigateAttack} 
                         onNavigateSpy={onNavigateSpy} 
-                        onNavigateTransport={(id: string, name: string) => onNavigateTransport(id, name, system)} 
+                        onNavigateTransport={(id: string, name: string, position: number) => onNavigateTransport(id, name, galaxy, system, position)} 
                         handleColonize={handleColonize} 
                         handleRecycle={handleRecycle} 
                         getPlanetStyle={getPlanetStyle} 
@@ -259,10 +259,10 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                                         <Crosshair className="mr-2" size={16} /> Attaquer
                                                     </Button>
                                                     {/* BOUTON TRANSPORT : STYLE "LOGISTIQUE" (EMERAUDE) */}
-                                                    <Button
-                                                        onClick={() => onNavigateTransport(selectedSlot.planet_id!, selectedSlot.planet_name!, system)}
-                                                        variant="outline"
-                                                        className="col-span-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all card-depth hover:-translate-y-1 hover:shadow-lg duration-300"
+                                                    <Button 
+                                                        onClick={() => onNavigateTransport(selectedSlot.planet_id!, selectedSlot.planet_name!, galaxy, system, selectedSlot.position)} 
+                                                        variant="outline" 
+                                                        className="col-span-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all"
                                                     >
                                                         <Truck className="mr-2" size={16} /> Transport
                                                     </Button>
@@ -296,9 +296,9 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                                     
                                                     {/* Bouton Ravitailler : Style "Logistique" (Solid Emerald) */}
                                                     {!selectedSlot.is_me && (
-                                                        <Button
-                                                            onClick={() => onNavigateTransport(selectedSlot.planet_id!, selectedSlot.planet_name!, system)}
-                                                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-900/20 card-depth hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 hover:scale-105"
+                                                        <Button 
+                                                            onClick={() => onNavigateTransport(selectedSlot.planet_id!, selectedSlot.planet_name!, galaxy, system, selectedSlot.position)} 
+                                                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-900/20"
                                                         >
                                                             <Truck className="mr-2" size={16} /> Ravitailler
                                                         </Button>
@@ -328,7 +328,7 @@ interface ListViewProps {
     slots: GalaxySlot[];
     onNavigateAttack: (id: string, name: string) => void;
     onNavigateSpy: (id: string) => void;
-    onNavigateTransport: (id: string, name: string) => void;
+    onNavigateTransport: (id: string, name: string, position: number) => void;
     handleColonize: (position: number) => void;
     handleRecycle: (id: string) => void;
     getPlanetStyle: (name: string) => string;
@@ -367,7 +367,7 @@ function ListView({ slots, onNavigateAttack, onNavigateSpy, onNavigateTransport,
                                 <>
                                     <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-blue-500/20 hover:text-blue-400 transition-colors" onClick={() => onNavigateSpy(slot.planet_id!)}><Eye size={14}/></Button>
                                     <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-red-500/20 hover:text-red-400 transition-colors" onClick={() => onNavigateAttack(slot.planet_id!, slot.planet_name!)}><Crosshair size={14}/></Button>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors" onClick={() => onNavigateTransport(slot.planet_id!, slot.planet_name!)}><Truck size={14}/></Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors" onClick={() => onNavigateTransport(slot.planet_id!, slot.planet_name!, slot.position)}><Truck size={14}/></Button>
                                 </>
                             )}
                             

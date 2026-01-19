@@ -1,5 +1,50 @@
 # Changelog - Space Conquest
 
+## [2.0.3] - 2026-01-19 - Corrections combat, transport et alertes attaque
+
+### 🔧 Corrections Backend
+
+#### Correction bug de pillage (ressources surévaluées)
+- **resolve_attack_mission** : Utilisation de `calculate_resources_with_energy` au lieu de `calculate_resources`
+  - Le calcul des ressources du défenseur prend maintenant en compte le ratio énergétique
+  - Avant : Les ressources étaient calculées à 100% d'efficacité (sans ratio énergie)
+  - Après : Les ressources sont calculées avec le ratio énergétique réel
+  - Résultat : Le pillage correspond maintenant aux ressources réellement disponibles
+
+#### Amélioration des missions entrantes
+- Les missions entrantes (attaques) contiennent maintenant les infos sur l'attaquant :
+  - Nom de la planète source (`source_name`)
+  - Coordonnées de la source (`source_coords`)
+  - Nom du joueur attaquant (`attacker_name`)
+
+### 🔧 Corrections Frontend
+
+#### Temps de vol Transport
+- **TransportModal.tsx** : Calcul du temps de vol corrigé
+  - Utilisation de la formule identique au backend (distance 3D + SPEED_FACTOR)
+  - Le temps affiché après envoi utilise maintenant le temps réel du backend
+  - Coordonnées complètes (galaxy, system, position) transmises pour le calcul
+
+#### Capacité Transporteur
+- **Shipyard.tsx** : Correction de l'affichage de la capacité cargo
+  - Avant : 5000 (incorrect)
+  - Après : 10000 (+5%/niveau hangar) - correspond au backend
+
+### 🚨 Alertes Attaque
+
+#### Système de notification des attaques entrantes
+- **PlanetOverview.tsx** : Nouveau système d'alertes
+  - Toast d'urgence quand une attaque entrante est détectée
+  - Son d'alerte joué automatiquement (`/sounds/alert.wav`)
+  - Affichage amélioré des missions entrantes :
+    - Nom de l'attaquant
+    - Coordonnées d'origine
+    - Timer avec barre de progression
+    - Style visuel d'urgence (rouge pulsant)
+  - Les alertes ne sont déclenchées qu'une fois par mission
+
+---
+
 ## [2.0.2] - 2026-01-19 - Harmonisation calcul production (tous les slots)
 
 ### 🔧 Corrections
