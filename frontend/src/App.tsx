@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import ResourceDisplay from './components/ResourceDisplay';
 import Facilities from './components/Facilities';
 import Shipyard from './components/Shipyard';
@@ -26,12 +27,13 @@ import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from '.
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
 import { BuildQueue } from './components/BuildQueue';
 import Tutorial, { useTutorial } from './components/Tutorial';
+import { SpaceBackground, SpaceLoader } from './components/ui/space-background';
 import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
 import {
   LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Layers, Activity
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity
 } from "lucide-react";
 
 interface CombatReport {
@@ -435,7 +437,12 @@ export default function App() {
     }} />;
   }
 
-  if (!planet) return <div className="min-h-screen bg-black text-cyan-500 flex items-center justify-center font-mono animate-pulse">CONNEXION AU RÉSEAU NEURAL...</div>;
+  if (!planet) return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <SpaceBackground showParticles={false} starCount={50} />
+      <SpaceLoader size={60} text="CONNEXION AU RÉSEAU NEURAL..." />
+    </div>
+  );
 
   // Vérifier si l'utilisateur est admin
   const isAdmin = username === 'phantomhex';
@@ -465,8 +472,16 @@ export default function App() {
 
   return (
     <div className="h-screen w-full bg-slate-950 text-white font-sans overflow-hidden flex flex-col relative">
-       <div className="absolute inset-0 z-0 bg-cover bg-center opacity-30 pointer-events-none" style={{ backgroundImage: "url('/assets/background.png')" }}></div>
-       <div className="absolute inset-0 z-0 bg-gradient-to-b from-slate-950/80 to-slate-900/80 pointer-events-none"></div>
+       {/* Fond spatial animé */}
+       <SpaceBackground 
+         showStars={true}
+         showNebulae={true}
+         showParticles={true}
+         showScanLine={false}
+         showGrid={true}
+         starCount={100}
+         particleCount={25}
+       />
 
       {/* Animations flottantes de ressources */}
       <FloatingResourceGain gains={gains} onAnimationEnd={handleAnimationEnd} />
@@ -518,7 +533,9 @@ export default function App() {
 
       <div className="flex flex-1 w-full h-full overflow-hidden relative z-30 pt-[60px] md:pt-[72px]">
         {/* Sidebar Desktop */}
-        <aside className="w-64 bg-slate-950/90 backdrop-blur-xl border-r border-white/5 flex-col h-full overflow-y-auto hidden md:flex scrollbar-thin scrollbar-thumb-slate-800">
+        <aside className="w-64 bg-slate-950/80 backdrop-blur-xl border-r border-indigo-500/10 flex-col h-full overflow-y-auto hidden md:flex scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent relative">
+          {/* Ligne lumineuse décorative */}
+          <div className="absolute top-0 right-0 w-px h-full bg-gradient-to-b from-cyan-500/20 via-purple-500/10 to-transparent"></div>
              <div className="p-4 space-y-8 mt-4">
                 {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'ÉCONOMIE', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
 
@@ -526,16 +543,23 @@ export default function App() {
                         <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
                         <div className="space-y-0.5">
                             {MENU_ITEMS.filter(item => item.category === cat).map(item => (
-                                <button 
+                                <motion.button 
                                     key={item.id}
                                     data-tour={item.id}
                                     onClick={() => handleTabChange(item.id as any)} 
-                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-200 group relative overflow-hidden ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-300 group relative overflow-hidden ${activeTab === item.id ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                                    whileHover={{ x: 4 }}
+                                    whileTap={{ scale: 0.98 }}
                                 >
-                                    <item.icon size={16} className={`transition-transform duration-300 ${activeTab === item.id ? 'scale-110' : 'group-hover:scale-110'}`} /> 
+                                    <item.icon size={16} className={`transition-all duration-300 ${activeTab === item.id ? 'scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : 'group-hover:scale-110 group-hover:text-cyan-400'}`} /> 
                                     <span className="relative z-10">{item.label}</span>
-                                    {activeTab === item.id && <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-white/10 to-indigo-500/0 opacity-20 animate-shimmer"></div>}
-                                </button>
+                                    {activeTab === item.id && (
+                                      <>
+                                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-white/10 to-indigo-500/0 opacity-30 animate-shimmer"></div>
+                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-400 rounded-r shadow-[0_0_10px_rgba(0,245,255,0.8)]"></div>
+                                      </>
+                                    )}
+                                </motion.button>
                             ))}
                         </div>
                     </div>
@@ -676,7 +700,14 @@ export default function App() {
             )}
 
             <div className="max-w-7xl mx-auto pb-4 md:pb-0 min-h-full">
-                <div className="animate-in fade-in zoom-in-95 duration-300">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                  >
                     {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
                     {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} onNavigateTransport={handlePrepareTransport} />}
                     {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
@@ -708,10 +739,8 @@ export default function App() {
                         />
                     )}
                     {activeTab === 'admin' && isAdmin && <AdminPanel />}
-
-                    
-                </div>
-                
+                  </motion.div>
+                </AnimatePresence>
             </div>
         </main>
 
