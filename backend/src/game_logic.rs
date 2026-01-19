@@ -178,8 +178,9 @@ pub fn calculate_energy_production(solar_plant_level: i32, energy_tech_level: i3
         return 0.0;
     }
 
-    let base_production = 20.0 * (solar_plant_level as f64) * 1.1f64.powi(solar_plant_level);
-    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.05); // +5% par niveau
+    // Production augmentée x3 pour meilleur équilibre énergétique
+    let base_production = 60.0 * (solar_plant_level as f64) * 1.1f64.powi(solar_plant_level);
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.10); // +10% par niveau (augmenté de 5%)
     base_production * tech_bonus
 }
 
@@ -520,7 +521,7 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
         // VICTOIRE : Pertes faibles (5-25% avec variation ±20%)
         let base_loss_rate = rng.gen_range(0.05..0.25);
         let variation = rng.gen_range(-0.2..0.2);
-        let loss_rate = (base_loss_rate * (1.0 + variation)).clamp(0.01, 0.4);
+        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.01_f64, 0.4_f64);
 
         let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1 si fleet > 0
         let lost = lost.max(0).min(fleet_size); // Clamp entre 0 et fleet_size
@@ -534,7 +535,7 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
         // DÉFAITE : Pertes lourdes (50-90% avec variation ±20%)
         let base_loss_rate = rng.gen_range(0.5..0.9);
         let variation = rng.gen_range(-0.2..0.2);
-        let loss_rate = (base_loss_rate * (1.0 + variation)).clamp(0.4, 1.0);
+        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.4_f64, 1.0_f64);
 
         let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1
         let lost = lost.max(1).min(fleet_size); // Minimum 1 perte en cas de défaite

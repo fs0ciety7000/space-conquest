@@ -214,6 +214,8 @@ async fn main() {
         .route("/market/transactions", get(get_market_transactions_handler))
         .route("/market/stats", get(get_market_stats_handler))
         .route("/market/prices/history", get(get_price_history_handler))
+        // Changelog
+        .route("/changelog", get(get_changelog_handler))
         // Admin
         .route("/admin/players", get(admin::get_all_players_handler))
         .route("/admin/planet/:id", get(admin::get_planet_admin_handler))
@@ -2698,4 +2700,12 @@ async fn get_price_history_handler(
     Ok(Json(json!({
         "history": result,
     })))
+}
+
+// GET /changelog - Récupère le contenu du fichier CHANGELOG.md
+async fn get_changelog_handler() -> Result<impl IntoResponse, StatusCode> {
+    match tokio::fs::read_to_string("../CHANGELOG.md").await {
+        Ok(content) => Ok((StatusCode::OK, content)),
+        Err(_) => Err(StatusCode::NOT_FOUND),
+    }
 }

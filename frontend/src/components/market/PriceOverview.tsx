@@ -5,9 +5,21 @@ interface PriceOverviewProps {
 }
 
 export default function PriceOverview({ stats }: PriceOverviewProps) {
+  // Transformer le tableau npc_prices en objet indexé par resource_type
+  const prices: Record<string, {buy: number, sell: number, market: number}> = {};
+  if (stats?.npc_prices) {
+    for (const npcPrice of stats.npc_prices) {
+      prices[npcPrice.resource_type] = {
+        buy: npcPrice.npc_buy_price,
+        sell: npcPrice.npc_sell_price,
+        market: npcPrice.market_price
+      };
+    }
+  }
+
   const resources = [
-    { 
-      name: "Métal", 
+    {
+      name: "Métal",
       key: "metal",
       icon: Stone,
       color: "text-slate-400",
@@ -15,8 +27,8 @@ export default function PriceOverview({ stats }: PriceOverviewProps) {
       bg: "bg-slate-500/10",
       gradient: "from-slate-950 to-slate-900/20"
     },
-    { 
-      name: "Cristal", 
+    {
+      name: "Cristal",
       key: "crystal",
       icon: Gem,
       color: "text-cyan-400",
@@ -24,8 +36,8 @@ export default function PriceOverview({ stats }: PriceOverviewProps) {
       bg: "bg-cyan-500/10",
       gradient: "from-slate-950 to-cyan-950/20"
     },
-    { 
-      name: "Deutérium", 
+    {
+      name: "Deutérium",
       key: "deuterium",
       icon: Droplets,
       color: "text-emerald-400",
@@ -38,7 +50,7 @@ export default function PriceOverview({ stats }: PriceOverviewProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {resources.map(resource => {
-        const price = stats?.prices?.[resource.key] || { buy: 1.0, sell: 1.0, market: 1.0 };
+        const price = prices[resource.key] || { buy: 1.0, sell: 1.0, market: 1.0 };
         const ResourceIcon = resource.icon;
         
         return (

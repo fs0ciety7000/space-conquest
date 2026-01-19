@@ -1,5 +1,4 @@
 use sea_orm::entity::prelude::*;
-use serde::{Deserialize, Serialize};
 use chrono::NaiveDateTime;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "server_resource_stats")]

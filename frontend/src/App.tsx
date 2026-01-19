@@ -16,6 +16,7 @@ import GalaxyView from './components/GalaxyView';
 import Settings from './components/Settings';
 import MessagesView from './components/MessagesView';
 import AdminPanel from './components/AdminPanel';
+import Changelog from './components/Changelog';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
 import Marketplace from './components/Marketplace';
@@ -42,7 +43,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin';
+type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -454,6 +455,7 @@ export default function App() {
     
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
     { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
+    { id: 'changelog', label: 'Changelog', icon: FileText, category: 'SYSTÈME' },
     { id: 'settings', label: 'Paramètres', icon: SettingsIcon, category: 'SYSTÈME' },
     ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin Panel', icon: Database, category: 'SYSTÈME' }] : []),
   ];
@@ -688,6 +690,7 @@ export default function App() {
                     {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}
                     
                     {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
+                    {activeTab === 'changelog' && <Changelog />}
                     {activeTab === 'settings' && (
                         <Settings 
                             planet={planet} 

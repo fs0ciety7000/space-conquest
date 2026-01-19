@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiUrl } from '@/config/api';
 import { useUnitCosts } from '@/hooks/useUnitCosts';
+import { toast } from "sonner";
+import { checkPrerequisites } from "@/lib/gameRules";
 
 export default function Defenses({ planet, onBuild }: { planet: any, onBuild: () => void }) {
   const [selected, setSelected] = useState<string>('missile_launcher');
@@ -70,8 +72,23 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      if (res.ok) onBuild();
-    } catch (e) { console.error(e); }
+
+      if (res.ok) {
+        toast.success(`Construction lancée : ${qty}x ${selectedConfig.name}`);
+        onBuild();
+      } else if (res.status === 403) {
+        toast.error("Prérequis non satisfaits");
+      } else if (res.status === 400) {
+        toast.error("Ressources insuffisantes");
+      } else if (res.status === 409) {
+        toast.error("File de construction pleine");
+      } else {
+        toast.error("Erreur lors de la construction");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erreur de connexion");
+    }
   };
 
   // ✅ Afficher un loader pendant le chargement des coûts
@@ -85,11 +102,15 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
 
   const selectedConfig = DEFENSE_CONFIG[selected as keyof typeof DEFENSE_CONFIG];
   const selectedCost = costs[selected as keyof typeof costs];
-  
+
   const totalM = selectedCost.metal * qty;
   const totalC = selectedCost.crystal * qty;
   const canAfford = planet.metal_amount >= totalM && planet.crystal_amount >= totalC;
   const isBusy = timeLeft !== null && timeLeft > 0;
+
+  // Check prerequisites
+  const { locked: isLocked, requirements } = checkPrerequisites(planet, selected);
+  const canBuild = !isBusy && canAfford && !isLocked;
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -156,6 +177,20 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                  </div>
               </div>
 
+              {/* Prerequisites */}
+              {requirements.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-bold text-slate-500">Prérequis</label>
+                  <div className="space-y-1">
+                    {requirements.map((req, idx) => (
+                      <div key={idx} className={`text-[11px] font-mono ${req.met ? 'text-green-500' : 'text-red-500'}`}>
+                        {req.met ? '✓' : '✗'} {req.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Contrôles */}
               <div className="flex items-end gap-6">
                   <div className="space-y-4">
@@ -177,14 +212,16 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                   </div>
               </div>
 
-              <Button 
+              <Button
                 onClick={startBuild}
-                disabled={isBusy || !canAfford}
+                disabled={!canBuild}
                 className={`w-full h-14 uppercase font-black tracking-widest transition-all ${
-                  isBusy 
-                    ? 'bg-slate-800 text-slate-400 border border-slate-700' 
-                    : !canAfford 
-                      ? 'bg-red-900/20 text-red-500 border border-red-500/50' 
+                  isBusy
+                    ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                    : isLocked
+                      ? 'bg-orange-900/20 text-orange-500 border border-orange-500/50'
+                    : !canAfford
+                      ? 'bg-red-900/20 text-red-500 border border-red-500/50'
                       : `bg-black hover:bg-slate-900 text-white border ${selectedConfig.border} ${selectedConfig.glow}`
                 }`}
               >
@@ -196,6 +233,8 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                         <span className="text-lg font-mono">{formatTime(timeLeft!)}</span>
                       </span>
                     </span>
+                  ) : isLocked ? (
+                    "Prérequis Non Satisfaits"
                   ) : !canAfford ? (
                     "Ressources Insuffisantes"
                   ) : (
