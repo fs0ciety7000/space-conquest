@@ -160,67 +160,51 @@ impl MigrationTrait for Migration {
             .await?;
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // SEED: Missions quotidiennes de base
+        // SEED: Missions quotidiennes de base (using raw SQL for UUID support)
         // ═══════════════════════════════════════════════════════════════════════════
-        let insert_missions = Query::insert()
-            .into_table(DailyMission::Table)
-            .columns([
-                DailyMission::Id, DailyMission::MissionKey, DailyMission::Name, DailyMission::Description,
-                DailyMission::MissionType, DailyMission::Target, DailyMission::RequiredAmount,
-                DailyMission::Difficulty, DailyMission::RewardMetal, DailyMission::RewardCrystal,
-                DailyMission::RewardDeuterium, DailyMission::RewardXp, DailyMission::IsActive
-            ])
-            // Easy missions
-            .values_panic(["a0000001-0000-0000-0000-000000000001".into(), "build_hunters_5".into(), "Escadron de chasse".into(), "Construisez 5 chasseurs légers".into(), "build".into(), "light_hunter".into(), 5.into(), "easy".into(), 1000.0.into(), 500.0.into(), 0.0.into(), 10.into(), true.into()])
-            .values_panic(["a0000001-0000-0000-0000-000000000002".into(), "collect_metal_10k".into(), "Mineur assidu".into(), "Collectez 10 000 de métal".into(), "collect".into(), "metal".into(), 10000.into(), "easy".into(), 2000.0.into(), 0.0.into(), 0.0.into(), 10.into(), true.into()])
-            .values_panic(["a0000001-0000-0000-0000-000000000003".into(), "upgrade_building_1".into(), "Constructeur".into(), "Améliorez n'importe quel bâtiment".into(), "upgrade".into(), "any".into(), 1.into(), "easy".into(), 500.0.into(), 500.0.into(), 0.0.into(), 10.into(), true.into()])
-            // Medium missions
-            .values_panic(["a0000001-0000-0000-0000-000000000004".into(), "expedition_2".into(), "Explorateur".into(), "Lancez 2 expéditions".into(), "expedition".into(), "any".into(), 2.into(), "medium".into(), 3000.0.into(), 2000.0.into(), 500.0.into(), 25.into(), true.into()])
-            .values_panic(["a0000001-0000-0000-0000-000000000005".into(), "spy_3".into(), "Agent secret".into(), "Espionnez 3 planètes ennemies".into(), "spy".into(), "any".into(), 3.into(), "medium".into(), 2000.0.into(), 3000.0.into(), 0.0.into(), 25.into(), true.into()])
-            .values_panic(["a0000001-0000-0000-0000-000000000006".into(), "build_cruisers_3".into(), "Flotte de croisière".into(), "Construisez 3 croiseurs".into(), "build".into(), "cruiser".into(), 3.into(), "medium".into(), 5000.0.into(), 3000.0.into(), 1000.0.into(), 25.into(), true.into()])
-            // Hard missions
-            .values_panic(["a0000001-0000-0000-0000-000000000007".into(), "attack_1".into(), "Conquérant".into(), "Attaquez une planète ennemie".into(), "attack".into(), "any".into(), 1.into(), "hard".into(), 10000.0.into(), 5000.0.into(), 2000.0.into(), 50.into(), true.into()])
-            .values_panic(["a0000001-0000-0000-0000-000000000008".into(), "transport_5k".into(), "Logisticien".into(), "Transportez 5 000 ressources au total".into(), "transport".into(), "any".into(), 5000.into(), "hard".into(), 5000.0.into(), 5000.0.into(), 2000.0.into(), 50.into(), true.into()])
-            .to_owned();
-
-        manager.exec_stmt(insert_missions).await?;
+        manager.get_connection().execute_unprepared(
+            r#"
+            INSERT INTO daily_mission (id, mission_key, name, description, mission_type, target, required_amount, difficulty, reward_metal, reward_crystal, reward_deuterium, reward_xp, is_active) VALUES
+            ('a0000001-0000-0000-0000-000000000001'::uuid, 'build_hunters_5', 'Escadron de chasse', 'Construisez 5 chasseurs légers', 'build', 'light_hunter', 5, 'easy', 1000.0, 500.0, 0.0, 10, true),
+            ('a0000001-0000-0000-0000-000000000002'::uuid, 'collect_metal_10k', 'Mineur assidu', 'Collectez 10 000 de métal', 'collect', 'metal', 10000, 'easy', 2000.0, 0.0, 0.0, 10, true),
+            ('a0000001-0000-0000-0000-000000000003'::uuid, 'upgrade_building_1', 'Constructeur', 'Améliorez n''importe quel bâtiment', 'upgrade', 'any', 1, 'easy', 500.0, 500.0, 0.0, 10, true),
+            ('a0000001-0000-0000-0000-000000000004'::uuid, 'expedition_2', 'Explorateur', 'Lancez 2 expéditions', 'expedition', 'any', 2, 'medium', 3000.0, 2000.0, 500.0, 25, true),
+            ('a0000001-0000-0000-0000-000000000005'::uuid, 'spy_3', 'Agent secret', 'Espionnez 3 planètes ennemies', 'spy', 'any', 3, 'medium', 2000.0, 3000.0, 0.0, 25, true),
+            ('a0000001-0000-0000-0000-000000000006'::uuid, 'build_cruisers_3', 'Flotte de croisière', 'Construisez 3 croiseurs', 'build', 'cruiser', 3, 'medium', 5000.0, 3000.0, 1000.0, 25, true),
+            ('a0000001-0000-0000-0000-000000000007'::uuid, 'attack_1', 'Conquérant', 'Attaquez une planète ennemie', 'attack', 'any', 1, 'hard', 10000.0, 5000.0, 2000.0, 50, true),
+            ('a0000001-0000-0000-0000-000000000008'::uuid, 'transport_5k', 'Logisticien', 'Transportez 5 000 ressources au total', 'transport', 'any', 5000, 'hard', 5000.0, 5000.0, 2000.0, 50, true)
+            ON CONFLICT (mission_key) DO NOTHING;
+            "#
+        ).await?;
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // SEED: Achievements de base
+        // SEED: Achievements de base (using raw SQL for UUID support)
         // ═══════════════════════════════════════════════════════════════════════════
-        let insert_achievements = Query::insert()
-            .into_table(Achievement::Table)
-            .columns([
-                Achievement::Id, Achievement::AchievementKey, Achievement::Name, Achievement::Description,
-                Achievement::Category, Achievement::Icon, Achievement::Color, Achievement::ConditionType,
-                Achievement::ConditionTarget, Achievement::ConditionValue, Achievement::Points,
-                Achievement::Rarity, Achievement::DisplayOrder, Achievement::IsActive
-            ])
-            // Combat achievements
-            .values_panic(["b0000001-0000-0000-0000-000000000001".into(), "first_attack".into(), "Premier sang".into(), "Lancez votre première attaque".into(), "combat".into(), "⚔️".into(), "#ef4444".into(), "count".into(), "attacks".into(), 1.into(), 10.into(), "common".into(), 1.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000002".into(), "attacks_10".into(), "Guerrier".into(), "Lancez 10 attaques".into(), "combat".into(), "🗡️".into(), "#f97316".into(), "count".into(), "attacks".into(), 10.into(), 25.into(), "uncommon".into(), 2.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000003".into(), "attacks_50".into(), "Commandant".into(), "Lancez 50 attaques".into(), "combat".into(), "⚡".into(), "#8b5cf6".into(), "count".into(), "attacks".into(), 50.into(), 50.into(), "rare".into(), 3.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000004".into(), "victories_25".into(), "Invincible".into(), "Gagnez 25 combats".into(), "combat".into(), "🏆".into(), "#eab308".into(), "count".into(), "victories".into(), 25.into(), 100.into(), "epic".into(), 4.into(), true.into()])
-            // Economy achievements
-            .values_panic(["b0000001-0000-0000-0000-000000000005".into(), "metal_100k".into(), "Mineur de bronze".into(), "Collectez 100 000 de métal au total".into(), "economy".into(), "🪨".into(), "#78716c".into(), "threshold".into(), "total_metal".into(), 100000.into(), 10.into(), "common".into(), 10.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000006".into(), "metal_1m".into(), "Mineur d'argent".into(), "Collectez 1 000 000 de métal au total".into(), "economy".into(), "⛏️".into(), "#a8a29e".into(), "threshold".into(), "total_metal".into(), 1000000.into(), 50.into(), "rare".into(), 11.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000007".into(), "buildings_10".into(), "Architecte".into(), "Construisez 10 bâtiments".into(), "economy".into(), "🏗️".into(), "#3b82f6".into(), "count".into(), "buildings".into(), 10.into(), 25.into(), "uncommon".into(), 15.into(), true.into()])
-            // Exploration achievements
-            .values_panic(["b0000001-0000-0000-0000-000000000008".into(), "expeditions_10".into(), "Explorateur".into(), "Complétez 10 expéditions".into(), "exploration".into(), "🚀".into(), "#06b6d4".into(), "count".into(), "expeditions".into(), 10.into(), 25.into(), "uncommon".into(), 20.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000009".into(), "expeditions_50".into(), "Pionnier".into(), "Complétez 50 expéditions".into(), "exploration".into(), "🌟".into(), "#8b5cf6".into(), "count".into(), "expeditions".into(), 50.into(), 75.into(), "rare".into(), 21.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000010".into(), "spy_missions_20".into(), "Maître espion".into(), "Réalisez 20 missions d'espionnage".into(), "exploration".into(), "🕵️".into(), "#1e293b".into(), "count".into(), "spy_missions".into(), 20.into(), 50.into(), "rare".into(), 22.into(), true.into()])
-            // Social achievements
-            .values_panic(["b0000001-0000-0000-0000-000000000011".into(), "join_alliance".into(), "Diplomate".into(), "Rejoignez une alliance".into(), "social".into(), "🤝".into(), "#22c55e".into(), "unique".into(), "alliance_join".into(), 1.into(), 15.into(), "common".into(), 30.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000012".into(), "create_alliance".into(), "Fondateur".into(), "Créez votre propre alliance".into(), "social".into(), "👑".into(), "#eab308".into(), "unique".into(), "alliance_create".into(), 1.into(), 50.into(), "rare".into(), 31.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000013".into(), "messages_50".into(), "Communicateur".into(), "Envoyez 50 messages".into(), "social".into(), "💬".into(), "#64748b".into(), "count".into(), "messages".into(), 50.into(), 25.into(), "uncommon".into(), 32.into(), true.into()])
-            // Special achievements
-            .values_panic(["b0000001-0000-0000-0000-000000000014".into(), "streak_7".into(), "Habitué".into(), "Connectez-vous 7 jours consécutifs".into(), "special".into(), "🔥".into(), "#f97316".into(), "threshold".into(), "login_streak".into(), 7.into(), 30.into(), "uncommon".into(), 40.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000015".into(), "streak_30".into(), "Vétéran".into(), "Connectez-vous 30 jours consécutifs".into(), "special".into(), "💎".into(), "#06b6d4".into(), "threshold".into(), "login_streak".into(), 30.into(), 100.into(), "epic".into(), 41.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000016".into(), "fleet_100".into(), "Amiral".into(), "Possédez 100 vaisseaux simultanément".into(), "special".into(), "🛸".into(), "#8b5cf6".into(), "threshold".into(), "total_ships".into(), 100.into(), 75.into(), "rare".into(), 42.into(), true.into()])
-            .values_panic(["b0000001-0000-0000-0000-000000000017".into(), "conquer_planet".into(), "Conquérant suprême".into(), "Conquérez une planète ennemie".into(), "special".into(), "🌍".into(), "#dc2626".into(), "unique".into(), "planet_conquered".into(), 1.into(), 150.into(), "legendary".into(), 50.into(), true.into()])
-            .to_owned();
+        let _ = manager.get_connection().execute_unprepared(
+            r#"
+            INSERT INTO achievement (id, achievement_key, name, description, category, icon, color, condition_type, condition_target, condition_value, points, rarity, display_order, is_active) VALUES
+            ('b0000001-0000-0000-0000-000000000001'::uuid, 'first_attack', 'Premier sang', 'Lancez votre première attaque', 'combat', '⚔️', '#ef4444', 'count', 'attacks', 1, 10, 'common', 1, true),
+            ('b0000001-0000-0000-0000-000000000002'::uuid, 'attacks_10', 'Guerrier', 'Lancez 10 attaques', 'combat', '🗡️', '#f97316', 'count', 'attacks', 10, 25, 'uncommon', 2, true),
+            ('b0000001-0000-0000-0000-000000000003'::uuid, 'attacks_50', 'Commandant', 'Lancez 50 attaques', 'combat', '⚡', '#8b5cf6', 'count', 'attacks', 50, 50, 'rare', 3, true),
+            ('b0000001-0000-0000-0000-000000000004'::uuid, 'victories_25', 'Invincible', 'Gagnez 25 combats', 'combat', '🏆', '#eab308', 'count', 'victories', 25, 100, 'epic', 4, true),
+            ('b0000001-0000-0000-0000-000000000005'::uuid, 'metal_100k', 'Mineur de bronze', 'Collectez 100 000 de métal au total', 'economy', '🪨', '#78716c', 'threshold', 'total_metal', 100000, 10, 'common', 10, true),
+            ('b0000001-0000-0000-0000-000000000006'::uuid, 'metal_1m', 'Mineur d''argent', 'Collectez 1 000 000 de métal au total', 'economy', '⛏️', '#a8a29e', 'threshold', 'total_metal', 1000000, 50, 'rare', 11, true),
+            ('b0000001-0000-0000-0000-000000000007'::uuid, 'buildings_10', 'Architecte', 'Construisez 10 bâtiments', 'economy', '🏗️', '#3b82f6', 'count', 'buildings', 10, 25, 'uncommon', 15, true),
+            ('b0000001-0000-0000-0000-000000000008'::uuid, 'expeditions_10', 'Explorateur', 'Complétez 10 expéditions', 'exploration', '🚀', '#06b6d4', 'count', 'expeditions', 10, 25, 'uncommon', 20, true),
+            ('b0000001-0000-0000-0000-000000000009'::uuid, 'expeditions_50', 'Pionnier', 'Complétez 50 expéditions', 'exploration', '🌟', '#8b5cf6', 'count', 'expeditions', 50, 75, 'rare', 21, true),
+            ('b0000001-0000-0000-0000-000000000010'::uuid, 'spy_missions_20', 'Maître espion', 'Réalisez 20 missions d''espionnage', 'exploration', '🕵️', '#1e293b', 'count', 'spy_missions', 20, 50, 'rare', 22, true),
+            ('b0000001-0000-0000-0000-000000000011'::uuid, 'join_alliance', 'Diplomate', 'Rejoignez une alliance', 'social', '🤝', '#22c55e', 'unique', 'alliance_join', 1, 15, 'common', 30, true),
+            ('b0000001-0000-0000-0000-000000000012'::uuid, 'create_alliance', 'Fondateur', 'Créez votre propre alliance', 'social', '👑', '#eab308', 'unique', 'alliance_create', 1, 50, 'rare', 31, true),
+            ('b0000001-0000-0000-0000-000000000013'::uuid, 'messages_50', 'Communicateur', 'Envoyez 50 messages', 'social', '💬', '#64748b', 'count', 'messages', 50, 25, 'uncommon', 32, true),
+            ('b0000001-0000-0000-0000-000000000014'::uuid, 'streak_7', 'Habitué', 'Connectez-vous 7 jours consécutifs', 'special', '🔥', '#f97316', 'threshold', 'login_streak', 7, 30, 'uncommon', 40, true),
+            ('b0000001-0000-0000-0000-000000000015'::uuid, 'streak_30', 'Vétéran', 'Connectez-vous 30 jours consécutifs', 'special', '💎', '#06b6d4', 'threshold', 'login_streak', 30, 100, 'epic', 41, true),
+            ('b0000001-0000-0000-0000-000000000016'::uuid, 'fleet_100', 'Amiral', 'Possédez 100 vaisseaux simultanément', 'special', '🛸', '#8b5cf6', 'threshold', 'total_ships', 100, 75, 'rare', 42, true),
+            ('b0000001-0000-0000-0000-000000000017'::uuid, 'conquer_planet', 'Conquérant suprême', 'Conquérez une planète ennemie', 'special', '🌍', '#dc2626', 'unique', 'planet_conquered', 1, 150, 'legendary', 50, true)
+            ON CONFLICT (achievement_key) DO NOTHING;
+            "#
+        ).await?;
 
-        manager.exec_stmt(insert_achievements).await
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
