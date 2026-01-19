@@ -20,12 +20,12 @@ interface SettingsProps {
   onVolumeChange?: (type: 'music' | 'sfx', value: number) => void;
 }
 
-export default function Settings({ 
-  planet, 
-  onUpdate, 
-  onLogout, 
-  soundEnabled, 
-  onToggleSound, 
+export default function Settings({
+  planet,
+  onUpdate,
+  onLogout,
+  soundEnabled,
+  onToggleSound,
   onStartTutorial,
   musicVolume = 0.3,
   sfxVolume = 0.5,
@@ -35,6 +35,9 @@ export default function Settings({
   const [loading, setLoading] = useState(false);
   const { theme, setTheme } = useTheme();
   const [userStats, setUserStats] = useState<any>(null);
+
+  const [newUsername, setNewUsername] = useState("");
+  const [loadingUsername, setLoadingUsername] = useState(false);
 
   const username = localStorage.getItem('username') || "Commandant";
   const userId = localStorage.getItem('user_id') || "unknown";
@@ -96,6 +99,40 @@ export default function Settings({
       toast.error("Lien neural rompu avec le serveur");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUsernameChange = async () => {
+    if (!newUsername.trim()) {
+      toast.error("Le nom d'utilisateur ne peut pas être vide");
+      return;
+    }
+    setLoadingUsername(true);
+    try {
+      const res = await fetch(apiUrl(`/users/${userId}/username`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_username: newUsername }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('username', data.username);
+        toast.success("Identité mise à jour", { description: `Nouveau nom : ${data.username}` });
+        setNewUsername("");
+        // Recharger la page pour mettre à jour l'avatar et le nom partout
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        const data = await res.json();
+        if (res.status === 409) {
+          toast.error("Nom déjà utilisé", { description: "Ce nom d'utilisateur est déjà pris" });
+        } else {
+          toast.error("Erreur", { description: data.error });
+        }
+      }
+    } catch (error) {
+      toast.error("Lien neural rompu avec le serveur");
+    } finally {
+      setLoadingUsername(false);
     }
   };
 
@@ -167,6 +204,46 @@ export default function Settings({
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* --- GESTION DU COMPTE --- */}
+        <Card className="bg-slate-900/50 border-white/10 text-white backdrop-blur-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-cyan-400">
+              <User size={16} /> Identité du Commandant
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Nom d'utilisateur actuel</label>
+              <div className="p-3 bg-black/40 border border-white/10 rounded text-white font-mono text-sm">
+                {username}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Nouveau nom d'utilisateur</label>
+              <div className="flex gap-2">
+                <Input
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  placeholder="Entrez un nouveau nom..."
+                  className="bg-black/40 border-white/10 text-white font-mono focus:border-cyan-500"
+                />
+                <Button
+                  onClick={handleUsernameChange}
+                  disabled={loadingUsername || !newUsername.trim()}
+                  className="bg-cyan-600 hover:bg-cyan-500 shadow-lg shadow-cyan-500/20"
+                >
+                  <Save size={16} />
+                </Button>
+              </div>
+            </div>
+            <div className="p-3 bg-cyan-500/5 rounded border border-cyan-500/20">
+              <p className="text-[10px] text-cyan-300 leading-relaxed italic">
+                "Votre identité sera mise à jour dans tous les systèmes de la galaxie. Choisissez avec soin."
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* --- CONFIGURATION PLANÈTE --- */}
         <Card className="bg-slate-900/50 border-white/10 text-white backdrop-blur-md">
           <CardHeader>
@@ -178,13 +255,13 @@ export default function Settings({
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Nom de la colonie</label>
               <div className="flex gap-2">
-                <Input 
-                  value={planetName} 
-                  onChange={(e) => setPlanetName(e.target.value)} 
+                <Input
+                  value={planetName}
+                  onChange={(e) => setPlanetName(e.target.value)}
                   className="bg-black/40 border-white/10 text-white font-mono focus:border-indigo-500"
                 />
-                <Button 
-                  onClick={handleRename} 
+                <Button
+                  onClick={handleRename}
                   disabled={loading || planetName === planet.name}
                   className="bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20"
                 >

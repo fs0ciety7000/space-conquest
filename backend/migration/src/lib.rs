@@ -32,8 +32,8 @@ mod m20260118_200000_create_market_system;
 mod m20260119_000001_add_created_at_to_planets;
 mod m20260119_000002_add_detailed_report_to_combat_log;
 mod m20260119_000003_create_server_config;
+mod m20260119_000004_create_resource_slots;
 mod m20260119_100000_add_role_to_users;
-mod m20260119_110000_add_production_slots;
 
 pub struct Migrator;
 
@@ -73,8 +73,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260119_000001_add_created_at_to_planets::Migration),
             Box::new(m20260119_000002_add_detailed_report_to_combat_log::Migration),
             Box::new(m20260119_000003_create_server_config::Migration),
+            Box::new(m20260119_000004_create_resource_slots::Migration),
             Box::new(m20260119_100000_add_role_to_users::Migration),
-            Box::new(m20260119_110000_add_production_slots::Migration),
         ]
     }
 }

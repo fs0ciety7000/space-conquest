@@ -47,7 +47,7 @@ use backend::AppState;
 // ✅ IMPORTS EXPLICITES
 use entities::{
     prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory},
-    planet, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history
 };
 
 #[derive(Serialize, Clone)]
@@ -180,10 +180,9 @@ async fn main() {
         .route("/combat-reports/:id/detail", get(get_combat_report_detail_handler))
         .route("/planets/:id/transport-logs", get(get_transport_logs_handler))
         .route("/planets/:id/rename", post(rename_planet_handler))
-        // Slots de production
-        .route("/planets/:id/slots/unlock", post(unlock_slot_handler))
-        .route("/planets/:id/slots/assign", post(assign_slot_handler))
-        .route("/planets/:id/slots/deactivate", post(deactivate_slot_handler))
+        .route("/planets/:id/resource-slots", get(get_resource_slots_handler))
+        .route("/planets/:id/resource-slots/:slot_number", patch(update_resource_slot_handler))
+        .route("/planets/:id/resource-slots/:slot_number/toggle", post(toggle_resource_slot_handler))
         .route("/my-planets", get(get_my_planets_handler))
         // Actions
         .route("/attack", post(attack_handler))
@@ -208,6 +207,7 @@ async fn main() {
 .route("/send-message-v2", post(messaging::send_message_v2_handler))
 
 .route("/users/:id", get(get_user_handler))
+.route("/users/:id/username", patch(update_username_handler))
 .route("/players/:user_id/profile", get(get_player_profile_handler))
         // Market
         .route("/market/listings", get(get_market_listings_handler))
@@ -1718,6 +1718,34 @@ async fn colonize_handler(
     let _ = att_planet.update(&state.db).await;
     let _ = new_planet.insert(&state.db).await;
 
+    // Créer les 8 slots de ressources pour la nouvelle planète
+    use entities::{prelude::ResourceSlot, resource_slot};
+
+    // Slots 1-4 : verrouillés avec les ressources de base
+    let slots_init = vec![
+        (1, "metal", 1, true),
+        (2, "crystal", 1, true),
+        (3, "deuterium", 1, true),
+        (4, "energy", 0, true),
+        (5, "metal", 0, false),
+        (6, "metal", 0, false),
+        (7, "metal", 0, false),
+        (8, "metal", 0, false),
+    ];
+
+    for (slot_num, res_type, level, is_locked) in slots_init {
+        let slot = resource_slot::ActiveModel {
+            planet_id: Set(new_id),
+            slot_number: Set(slot_num),
+            resource_type: Set(res_type.to_string()),
+            level: Set(level),
+            is_locked: Set(is_locked),
+            is_active: Set(is_locked), // Les slots locked sont actifs, les autres non
+            ..Default::default()
+        };
+        let _ = slot.insert(&state.db).await;
+    }
+
     (StatusCode::OK, Json(json!({
         "status": "success",
         "message": format!("Colonisation réussie en [{}:{}:{}]", payload.galaxy, payload.system, payload.position),
@@ -1957,6 +1985,62 @@ async fn get_user_handler(
     Ok(Json(response))
 }
 
+#[derive(Deserialize)]
+struct UpdateUsernamePayload {
+    new_username: String,
+}
+
+// Handler pour mettre à jour le nom d'utilisateur
+async fn update_username_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateUsernamePayload>,
+) -> impl IntoResponse {
+    // Validation : username non vide et longueur raisonnable
+    let new_username = payload.new_username.trim();
+    if new_username.is_empty() || new_username.len() > 50 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Le nom d'utilisateur doit contenir entre 1 et 50 caractères"}))
+        ).into_response();
+    }
+
+    // Vérifier que l'utilisateur existe
+    let user = match User::find_by_id(user_id).one(&state.db).await {
+        Ok(Some(u)) => u,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+    };
+
+    // Vérifier l'unicité du nouveau nom d'utilisateur
+    if let Ok(Some(_)) = User::find()
+        .filter(user::Column::Username.eq(new_username))
+        .filter(user::Column::Id.ne(user_id))
+        .one(&state.db)
+        .await
+    {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"error": "Ce nom d'utilisateur est déjà utilisé"}))
+        ).into_response();
+    }
+
+    // Mettre à jour le nom d'utilisateur
+    let mut active_user: user::ActiveModel = user.into();
+    active_user.username = Set(new_username.to_string());
+
+    match active_user.update(&state.db).await {
+        Ok(updated) => Json(json!({
+            "success": true,
+            "message": "Nom d'utilisateur mis à jour",
+            "username": updated.username
+        })).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Erreur lors de la mise à jour"}))
+        ).into_response(),
+    }
+}
 
 // Handler pour récupérer les coûts des défenses/vaisseaux
 async fn get_unit_costs_handler() -> Result<Json<serde_json::Value>, StatusCode> {
@@ -2923,5 +3007,161 @@ async fn get_changelog_handler() -> Result<impl IntoResponse, StatusCode> {
     match tokio::fs::read_to_string("../CHANGELOG.md").await {
         Ok(content) => Ok((StatusCode::OK, content)),
         Err(_) => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+// ===== RESOURCE SLOTS HANDLERS =====
+
+// GET /planets/:id/resource-slots - Récupérer les slots d'une planète
+async fn get_resource_slots_handler(
+    Path(planet_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    use entities::{prelude::ResourceSlot, resource_slot};
+
+    match ResourceSlot::find()
+        .filter(resource_slot::Column::PlanetId.eq(planet_id))
+        .order_by_asc(resource_slot::Column::SlotNumber)
+        .all(&state.db)
+        .await
+    {
+        Ok(slots) => Json(slots).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Erreur lors de la récupération des slots"})),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct UpdateSlotPayload {
+    resource_type: Option<String>,
+    level: Option<i32>,
+}
+
+// PATCH /planets/:id/resource-slots/:slot_number - Modifier un slot
+async fn update_resource_slot_handler(
+    Path((planet_id, slot_number)): Path<(Uuid, i32)>,
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateSlotPayload>,
+) -> impl IntoResponse {
+    use entities::{prelude::ResourceSlot, resource_slot};
+
+    // Récupérer le slot
+    let slot = match ResourceSlot::find()
+        .filter(resource_slot::Column::PlanetId.eq(planet_id))
+        .filter(resource_slot::Column::SlotNumber.eq(slot_number))
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Slot introuvable"})),
+            )
+                .into_response()
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Erreur DB"})),
+            )
+                .into_response()
+        }
+    };
+
+    // Vérifier si le slot est verrouillé et qu'on essaie de changer le type
+    if slot.is_locked && payload.resource_type.is_some() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Ce slot est verrouillé et son type ne peut pas être modifié"})),
+        )
+            .into_response();
+    }
+
+    // Valider le resource_type si fourni
+    if let Some(ref res_type) = payload.resource_type {
+        if !["metal", "crystal", "deuterium", "energy"].contains(&res_type.as_str()) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Type de ressource invalide"})),
+            )
+                .into_response();
+        }
+    }
+
+    // Mettre à jour le slot
+    let mut active: resource_slot::ActiveModel = slot.into();
+    if let Some(res_type) = payload.resource_type {
+        active.resource_type = Set(res_type);
+    }
+    if let Some(level) = payload.level {
+        active.level = Set(level);
+    }
+
+    match active.update(&state.db).await {
+        Ok(updated) => Json(updated).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Erreur lors de la mise à jour"})),
+        )
+            .into_response(),
+    }
+}
+
+// POST /planets/:id/resource-slots/:slot_number/toggle - Activer/désactiver un slot
+async fn toggle_resource_slot_handler(
+    Path((planet_id, slot_number)): Path<(Uuid, i32)>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    use entities::{prelude::ResourceSlot, resource_slot};
+
+    // Récupérer le slot
+    let slot = match ResourceSlot::find()
+        .filter(resource_slot::Column::PlanetId.eq(planet_id))
+        .filter(resource_slot::Column::SlotNumber.eq(slot_number))
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Slot introuvable"})),
+            )
+                .into_response()
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Erreur DB"})),
+            )
+                .into_response()
+        }
+    };
+
+    // Les slots verrouillés sont toujours actifs
+    if slot.is_locked {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Les slots verrouillés ne peuvent pas être désactivés"})),
+        )
+            .into_response();
+    }
+
+    // Toggle l'état
+    let mut active: resource_slot::ActiveModel = slot.into();
+    let new_state = !active.is_active.clone().unwrap();
+    active.is_active = Set(new_state);
+
+    match active.update(&state.db).await {
+        Ok(updated) => Json(updated).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Erreur lors de la mise à jour"})),
+        )
+            .into_response(),
     }
 }
