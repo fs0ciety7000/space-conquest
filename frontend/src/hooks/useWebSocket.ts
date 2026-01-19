@@ -136,6 +136,34 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
   const maxReconnectAttempts = 5;
   const baseReconnectDelay = 1000;
 
+  // Refs pour stocker les callbacks sans causer de re-renders
+  const callbacksRef = useRef({
+    onResourcesUpdate,
+    onConstructionComplete,
+    onShipComplete,
+    onAttackIncoming,
+    onCombatResult,
+    onMessageReceived,
+    onTransportArrived,
+    onSpyAlert,
+    onPlanetStatus,
+  });
+
+  // Mettre à jour les refs quand les callbacks changent
+  useEffect(() => {
+    callbacksRef.current = {
+      onResourcesUpdate,
+      onConstructionComplete,
+      onShipComplete,
+      onAttackIncoming,
+      onCombatResult,
+      onMessageReceived,
+      onTransportArrived,
+      onSpyAlert,
+      onPlanetStatus,
+    };
+  });
+
   // Construire l'URL WebSocket
   const getWsUrl = useCallback(() => {
     const apiUrl = config.apiUrl;
@@ -149,18 +177,19 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
   const handleMessage = useCallback((event: MessageEvent) => {
     try {
       const data = JSON.parse(event.data) as WsEvent;
-      
+      const callbacks = callbacksRef.current;
+
       switch (data.type) {
         case 'resources_update':
           const resourcesData = (data as WsResourcesUpdate).payload;
           setResources(resourcesData);
           setLastUpdate(new Date());
-          onResourcesUpdate?.(resourcesData);
+          callbacks.onResourcesUpdate?.(resourcesData);
           break;
 
         case 'construction_complete':
           const buildData = (data as WsConstructionComplete).payload;
-          onConstructionComplete?.(buildData);
+          callbacks.onConstructionComplete?.(buildData);
           toast.success('🏭 Construction terminée !', {
             description: `${buildData.building_type} niveau ${buildData.level}`,
           });
@@ -170,7 +199,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
 
         case 'ship_complete':
           const shipData = (data as WsShipComplete).payload;
-          onShipComplete?.(shipData);
+          callbacks.onShipComplete?.(shipData);
           toast.success('🚀 Production terminée !', {
             description: `${shipData.quantity}x ${shipData.ship_type}`,
           });
@@ -179,7 +208,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
 
         case 'attack_incoming':
           const attackData = (data as WsAttackIncoming).payload;
-          onAttackIncoming?.(attackData);
+          callbacks.onAttackIncoming?.(attackData);
           toast.error('⚠️ ATTAQUE ENTRANTE !', {
             description: `${attackData.attacker_name} depuis ${attackData.source_coords}`,
             duration: 10000,
@@ -188,7 +217,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
 
         case 'combat_result':
           const combatData = (data as WsCombatResult).payload;
-          onCombatResult?.(combatData);
+          callbacks.onCombatResult?.(combatData);
           if (combatData.result === 'victory') {
             toast.success('🏆 VICTOIRE !', {
               description: `Contre ${combatData.opponent}`,
@@ -202,7 +231,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
 
         case 'message_received':
           const msgData = (data as WsMessageReceived).payload;
-          onMessageReceived?.(msgData);
+          callbacks.onMessageReceived?.(msgData);
           toast.info('📨 Nouveau message', {
             description: `De ${msgData.from}: ${msgData.preview.substring(0, 50)}...`,
           });
@@ -210,7 +239,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
 
         case 'transport_arrived':
           const transportData = (data as WsTransportArrived).payload;
-          onTransportArrived?.(transportData);
+          callbacks.onTransportArrived?.(transportData);
           toast.success('📦 Transport arrivé !', {
             description: `De ${transportData.from_planet}`,
           });
@@ -218,7 +247,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
 
         case 'spy_alert':
           const spyData = (data as WsSpyAlert).payload;
-          onSpyAlert?.(spyData);
+          callbacks.onSpyAlert?.(spyData);
           toast.warning('🕵️ Espionnage détecté !', {
             description: `Depuis ${spyData.from}`,
           });
@@ -226,7 +255,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
 
         case 'planet_status':
           const statusData = (data as WsPlanetStatus).payload;
-          onPlanetStatus?.(statusData);
+          callbacks.onPlanetStatus?.(statusData);
           if (statusData.status === 'conquered') {
             toast.success('🎯 Planète conquise !', {
               description: `${statusData.planet_name} est maintenant vôtre !`,
@@ -256,17 +285,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
     } catch (e) {
       console.error('Error parsing WebSocket message:', e);
     }
-  }, [
-    onResourcesUpdate,
-    onConstructionComplete,
-    onShipComplete,
-    onAttackIncoming,
-    onCombatResult,
-    onMessageReceived,
-    onTransportArrived,
-    onSpyAlert,
-    onPlanetStatus,
-  ]);
+  }, []);
 
   // Connexion WebSocket
   const connect = useCallback(() => {
@@ -348,14 +367,13 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
   useEffect(() => {
     if (enabled && planetId) {
       connect();
-    } else {
-      disconnect();
     }
 
     return () => {
       disconnect();
     };
-  }, [planetId, enabled, connect, disconnect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planetId, enabled]);
 
   // Heartbeat périodique
   useEffect(() => {
