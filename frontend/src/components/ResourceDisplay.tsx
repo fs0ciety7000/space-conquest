@@ -186,13 +186,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
       const techBonus = 1.0 + (techLevel * 0.01);
       prod *= techBonus;
 
-      // Calculer le ratio énergétique (production/consommation, max 100%)
-      const totalEnergyProd = calculateEnergyProd(planet.solar_plant_level ?? 0);
-      const totalEnergyCons =
-        calculateEnergyCons('metal', planet.metal_mine_level ?? 0) +
-        calculateEnergyCons('crystal', planet.crystal_mine_level ?? 0) +
-        calculateEnergyCons('deuterium', planet.deuterium_mine_level ?? 0);
-      const energyRatio = totalEnergyCons > 0 ? Math.min(1.0, totalEnergyProd / totalEnergyCons) : 1.0;
+      // Utiliser le ratio énergétique du backend (cohérent avec EmpireBar et ProductionStats)
+      const energyRatio = (planet.energy_ratio || 100) / 100;
       prod *= energyRatio;
 
       // Compter les slots actifs pour ce type de ressource
@@ -264,7 +259,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
         return (
           <Card key={build.id} className={`relative overflow-hidden border-t-4 ${theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group hover:-translate-y-2 hover:shadow-3xl transition-all duration-500 hover-scale card-depth card-depth-hover animate-slide-up`}>
 
-            <div className="absolute top-0 inset-x-0 h-px bg-white/10 opacity-50 group-hover:bg-white/60 transition-all duration-300 animate-shine"></div>
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent opacity-50 group-hover:opacity-100 transition-all duration-300"></div>
             <div className="absolute -right-8 -top-8 opacity-5 group-hover:opacity-15 transition-all duration-500 pointer-events-none group-hover:animate-float">
                 <Icon size={180} className={theme.color} />
             </div>

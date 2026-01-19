@@ -135,31 +135,31 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-      <div className={`w-full max-w-3xl relative overflow-hidden rounded-3xl border-2 ${theme.border} bg-slate-950 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col max-h-[95vh]`}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-y-auto">
+      <div className={`w-full max-w-3xl relative rounded-3xl border-2 ${theme.border} bg-slate-950 shadow-[0_0_50px_rgba(0,0,0,0.5)] my-4`}>
 
         {/* HEADER TACTIQUE */}
-        <div className={`p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r ${isVictory ? 'from-green-900/40' : 'from-red-900/40'} to-transparent shrink-0`}>
-          <div className="flex items-center gap-6">
-            <div className={`p-4 rounded-2xl bg-black/60 border border-white/10 shadow-2xl ${theme.color}`}>
-                <theme.icon size={40} />
+        <div className={`p-4 sm:p-6 border-b border-white/10 flex justify-between items-start sm:items-center bg-gradient-to-r ${isVictory ? 'from-green-900/40' : isDraw ? 'from-slate-800/40' : 'from-red-900/40'} to-transparent rounded-t-3xl`}>
+          <div className="flex items-center gap-3 sm:gap-6 flex-wrap">
+            <div className={`p-3 sm:p-4 rounded-2xl bg-black/60 border border-white/10 shadow-2xl ${theme.color} shrink-0`}>
+                <theme.icon size={32} className="sm:w-10 sm:h-10" />
             </div>
-            <div>
-                <h2 className="text-5xl font-black uppercase tracking-tighter text-white leading-none">{theme.title}</h2>
-                <div className="flex items-center gap-3 mt-2">
+            <div className="min-w-0">
+                <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter text-white leading-none">{theme.title}</h2>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2">
                     <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded font-mono text-slate-300">
                         {isExpedition ? "ZONE D'EXPÉDITION" : isDefense ? "SECTEUR DÉFENSIF" : "INCURSION OFFENSIVE"}
                     </span>
-                    <span className="text-sm font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-2">
-                        <User size={14} className="text-slate-500"/> {opponentName}
+                    <span className="text-xs sm:text-sm font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                        <User size={14} className="text-slate-500 shrink-0"/> <span className="truncate max-w-[150px] sm:max-w-none">{opponentName}</span>
                     </span>
                 </div>
             </div>
           </div>
-          <button onClick={onClose} className="text-white/20 hover:text-white transition-colors"><X size={32} /></button>
+          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-xl shrink-0"><X size={24} /></button>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-8 flex-1 min-h-0" style={{
+        <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 max-h-[60vh] overflow-y-auto" style={{
           scrollbarWidth: 'thin',
           scrollbarColor: 'rgb(71 85 105) rgb(15 23 42)'
         }}>
@@ -207,11 +207,14 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
                 <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-2">
                     <Activity size={12} className="text-indigo-500"/> Journal de l'IA de Combat
                 </h3>
-                <div className="bg-black border border-white/5 rounded-2xl p-6 font-mono text-[11px] leading-relaxed shadow-inner space-y-2">
+                <div className="bg-black border border-white/5 rounded-2xl p-3 sm:p-6 font-mono text-[10px] sm:text-[11px] leading-relaxed shadow-inner space-y-2 max-h-[200px] overflow-y-auto" style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgb(71 85 105) rgb(15 23 42)'
+                }}>
                     {visibleLogs.map((log, i) => (
-                        <div key={i} className="flex gap-4 group">
+                        <div key={i} className="flex gap-2 sm:gap-4 group">
                             <span className="text-slate-700 font-bold shrink-0">[{i+1}]</span>
-                            <span className={`
+                            <span className={`break-words
                                 ${log.includes("Round") ? "text-indigo-400 font-bold border-b border-indigo-500/20 w-full" : 
                                   log.includes("VICTOIRE") ? "text-green-400 font-black" : 
                                   log.includes("DÉFAITE") ? "text-red-400 font-black" : "text-slate-400"}
@@ -221,8 +224,11 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
                     {visibleLogs.length === 0 && <span className="text-slate-700 italic">Initialisation des données tactiques...</span>}
                 </div>
             </div>
+        </div>
 
-            <Button onClick={onClose} className={`w-full h-16 text-lg font-black uppercase tracking-widest transition-all ${isVictory ? 'bg-green-600 hover:bg-green-500 shadow-green-900/20' : 'bg-red-600 hover:bg-red-500 shadow-red-900/20'} shadow-xl`}>
+        {/* Bouton d'archivage fixe en bas */}
+        <div className="p-4 sm:p-6 border-t border-white/10 bg-slate-950/80 backdrop-blur-sm rounded-b-3xl">
+            <Button onClick={onClose} className={`w-full h-12 sm:h-14 text-sm sm:text-lg font-black uppercase tracking-widest transition-all rounded-xl ${isVictory ? 'bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-500 hover:to-emerald-400 shadow-green-900/30' : isDraw ? 'bg-gradient-to-r from-slate-600 to-slate-500 hover:from-slate-500 hover:to-slate-400' : 'bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400 shadow-red-900/30'} shadow-xl`}>
                 Archiver le rapport
             </Button>
         </div>

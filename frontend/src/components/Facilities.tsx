@@ -133,7 +133,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
         return (
           <Card key={fac.id} className={`relative overflow-hidden border-t-4 ${locked ? 'border-red-900/50 grayscale-[0.5]' : theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group hover:-translate-y-2 hover:shadow-3xl transition-all duration-500 hover-scale card-depth card-depth-hover animate-slide-up`}>
              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
-             <div className="absolute top-0 inset-x-0 h-px bg-white/10 opacity-50 group-hover:bg-white/60 transition-all duration-300 animate-shine"></div>
+             <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent opacity-50 group-hover:opacity-100 transition-all duration-300"></div>
              <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-15 transition-all duration-500 pointer-events-none group-hover:animate-float">
                 <BgIcon size={150} className={theme.color} />
              </div>

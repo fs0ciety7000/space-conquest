@@ -3,10 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, Zap, Activity, Award, Rocket, Shield,
   Pickaxe, Gem, Droplets, Layers, Target, Trophy,
-  Clock, Percent, AlertCircle, CheckCircle2, XCircle
+  Clock, Percent, AlertCircle, CheckCircle2, XCircle, BarChart3
 } from 'lucide-react';
 import { apiUrl } from '@/config/api';
 import { Progress } from '@/components/ui/progress';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, RadarChart,
+  PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
+} from 'recharts';
 
 interface ResourceSlot {
   id: number;
@@ -138,6 +143,28 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
     deuterium: acc.deuterium + (log.loot_deuterium > 0 ? log.loot_deuterium : 0),
   }), { metal: 0, crystal: 0, deuterium: 0 });
 
+  // Données pour les graphiques
+  const productionData = [
+    { name: 'Métal', value: prodMetal.total, base: prodMetal.base, color: '#f97316', fill: 'url(#gradientMetal)' },
+    { name: 'Cristal', value: prodCrystal.total, base: prodCrystal.base, color: '#06b6d4', fill: 'url(#gradientCrystal)' },
+    { name: 'Deutérium', value: prodDeut.total, base: prodDeut.base, color: '#22c55e', fill: 'url(#gradientDeut)' },
+  ];
+
+  const bonusRadarData = [
+    { subject: 'Tech', metal: prodMetal.techBonus, crystal: prodCrystal.techBonus, deut: prodDeut.techBonus, fullMark: 20 },
+    { subject: 'Énergie', metal: Math.round(prodMetal.energyRatio * 100), crystal: Math.round(prodCrystal.energyRatio * 100), deut: Math.round(prodDeut.energyRatio * 100), fullMark: 100 },
+    { subject: 'Slots', metal: Math.round((prodMetal.slotBonus - 1) * 100), crystal: Math.round((prodCrystal.slotBonus - 1) * 100), deut: Math.round((prodDeut.slotBonus - 1) * 100), fullMark: 200 },
+  ];
+
+  const dailyProjection = [
+    { name: '6h', metal: prodMetal.total * 6, crystal: prodCrystal.total * 6, deut: prodDeut.total * 6 },
+    { name: '12h', metal: prodMetal.total * 12, crystal: prodCrystal.total * 12, deut: prodDeut.total * 12 },
+    { name: '18h', metal: prodMetal.total * 18, crystal: prodCrystal.total * 18, deut: prodDeut.total * 18 },
+    { name: '24h', metal: prodMetal.total * 24, crystal: prodCrystal.total * 24, deut: prodDeut.total * 24 },
+  ];
+
+  const COLORS = ['#f97316', '#06b6d4', '#22c55e'];
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-20">
@@ -150,8 +177,9 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       {/* En-tête */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30">
-          <Activity className="text-indigo-400" size={28} />
+        <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 relative overflow-hidden">
+          <BarChart3 className="text-indigo-400 relative z-10" size={28} />
+          <div className="absolute inset-0 bg-indigo-500/20 animate-pulse"></div>
         </div>
         <div>
           <h1 className="text-2xl font-black uppercase tracking-wider text-white">
@@ -163,87 +191,213 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
         </div>
       </div>
 
-      {/* Production en temps réel */}
-      <Card className="border-indigo-500/30 bg-gradient-to-br from-slate-950 to-indigo-950/20">
-        <CardHeader>
+      {/* Graphique de production journalière */}
+      <Card className="border-indigo-500/30 bg-gradient-to-br from-slate-950 to-indigo-950/20 overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-transparent to-purple-500/5"></div>
+        <CardHeader className="relative z-10">
           <CardTitle className="flex items-center gap-2 text-indigo-300">
             <TrendingUp size={20} />
-            Production Horaire (avec tous les bonus)
+            Projection de Production sur 24h
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Métal */}
-            <div className="bg-black/40 rounded-lg p-4 border border-orange-500/30">
-              <div className="flex items-center gap-2 mb-3">
-                <Pickaxe className="text-orange-400" size={20} />
-                <span className="text-sm font-bold text-slate-400">Métal</span>
-              </div>
-              <div className="text-3xl font-black font-mono text-orange-400 mb-2">
-                {prodMetal.total.toLocaleString()}
-              </div>
-              <div className="text-xs text-slate-500 space-y-1">
-                <div>Base : {prodMetal.base.toLocaleString()}</div>
-                <div className="flex items-center gap-1">
-                  <Zap size={10} /> Tech +{prodMetal.techBonus}%
-                </div>
-                <div className="flex items-center gap-1">
-                  <Activity size={10} /> Énergie {Math.round(prodMetal.energyRatio * 100)}%
-                </div>
-                <div className="flex items-center gap-1">
-                  <Layers size={10} /> Slots +{Math.round((prodMetal.slotBonus - 1) * 100)}% ({prodMetal.slotsCount} actifs)
-                </div>
-              </div>
-            </div>
-
-            {/* Cristal */}
-            <div className="bg-black/40 rounded-lg p-4 border border-cyan-500/30">
-              <div className="flex items-center gap-2 mb-3">
-                <Gem className="text-cyan-400" size={20} />
-                <span className="text-sm font-bold text-slate-400">Cristal</span>
-              </div>
-              <div className="text-3xl font-black font-mono text-cyan-400 mb-2">
-                {prodCrystal.total.toLocaleString()}
-              </div>
-              <div className="text-xs text-slate-500 space-y-1">
-                <div>Base : {prodCrystal.base.toLocaleString()}</div>
-                <div className="flex items-center gap-1">
-                  <Zap size={10} /> Tech +{prodCrystal.techBonus}%
-                </div>
-                <div className="flex items-center gap-1">
-                  <Activity size={10} /> Énergie {Math.round(prodCrystal.energyRatio * 100)}%
-                </div>
-                <div className="flex items-center gap-1">
-                  <Layers size={10} /> Slots +{Math.round((prodCrystal.slotBonus - 1) * 100)}% ({prodCrystal.slotsCount} actifs)
-                </div>
-              </div>
-            </div>
-
-            {/* Deutérium */}
-            <div className="bg-black/40 rounded-lg p-4 border border-emerald-500/30">
-              <div className="flex items-center gap-2 mb-3">
-                <Droplets className="text-emerald-400" size={20} />
-                <span className="text-sm font-bold text-slate-400">Deutérium</span>
-              </div>
-              <div className="text-3xl font-black font-mono text-emerald-400 mb-2">
-                {prodDeut.total.toLocaleString()}
-              </div>
-              <div className="text-xs text-slate-500 space-y-1">
-                <div>Base : {prodDeut.base.toLocaleString()}</div>
-                <div className="flex items-center gap-1">
-                  <Zap size={10} /> Tech +{prodDeut.techBonus}%
-                </div>
-                <div className="flex items-center gap-1">
-                  <Activity size={10} /> Énergie {Math.round(prodDeut.energyRatio * 100)}%
-                </div>
-                <div className="flex items-center gap-1">
-                  <Layers size={10} /> Slots +{Math.round((prodDeut.slotBonus - 1) * 100)}% ({prodDeut.slotsCount} actifs)
-                </div>
-              </div>
-            </div>
+        <CardContent className="relative z-10">
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={dailyProjection}>
+                <defs>
+                  <linearGradient id="gradientMetal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="gradientCrystal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="gradientDeut" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
+                <YAxis stroke="#64748b" fontSize={10} tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                    borderRadius: '12px',
+                    boxShadow: '0 0 20px rgba(99, 102, 241, 0.2)',
+                  }}
+                  labelStyle={{ color: '#fff', fontWeight: 'bold' }}
+                  formatter={(value: number) => [value.toLocaleString(), '']}
+                />
+                <Area type="monotone" dataKey="metal" name="Métal" stroke="#f97316" strokeWidth={2} fill="url(#gradientMetal)" />
+                <Area type="monotone" dataKey="crystal" name="Cristal" stroke="#06b6d4" strokeWidth={2} fill="url(#gradientCrystal)" />
+                <Area type="monotone" dataKey="deut" name="Deutérium" stroke="#22c55e" strokeWidth={2} fill="url(#gradientDeut)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
+
+      {/* Production en temps réel avec graphiques */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Graphique Pie - Répartition */}
+        <Card className="border-purple-500/30 bg-gradient-to-br from-slate-950 to-purple-950/20 overflow-hidden relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-cyan-500/5"></div>
+          <CardHeader className="relative z-10">
+            <CardTitle className="flex items-center gap-2 text-purple-300 text-sm">
+              <Activity size={16} />
+              Répartition Production /h
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="relative z-10">
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={productionData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={70}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {productionData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index]} stroke="transparent" />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                      border: '1px solid rgba(168, 85, 247, 0.3)',
+                      borderRadius: '12px',
+                    }}
+                    formatter={(value: number) => [value.toLocaleString() + '/h', '']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex justify-center gap-4 mt-2">
+              {productionData.map((item, i) => (
+                <div key={item.name} className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i] }}></div>
+                  <span className="text-[10px] text-slate-400">{item.name}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cards de production détaillées */}
+        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Métal */}
+          <Card className="border-orange-500/30 bg-gradient-to-br from-slate-950 to-orange-950/20 overflow-hidden relative group hover:-translate-y-1 transition-all duration-300">
+            <div className="absolute inset-0 bg-orange-500/5 group-hover:bg-orange-500/10 transition-colors"></div>
+            <CardContent className="p-4 relative z-10">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-2 rounded-lg bg-orange-500/20 border border-orange-500/30">
+                  <Pickaxe className="text-orange-400" size={18} />
+                </div>
+                <span className="text-sm font-bold text-slate-300">Métal</span>
+              </div>
+              <div className="text-3xl font-black font-mono text-orange-400 mb-3 drop-shadow-[0_0_10px_rgba(249,115,22,0.3)]">
+                {prodMetal.total.toLocaleString()}
+                <span className="text-sm text-orange-400/60 ml-1">/h</span>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Base</span>
+                  <span className="text-slate-300 font-mono">{prodMetal.base.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1"><Zap size={10} className="text-yellow-400" /> Tech</span>
+                  <span className="text-yellow-400 font-mono">+{prodMetal.techBonus}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1"><Activity size={10} className="text-cyan-400" /> Énergie</span>
+                  <span className={`font-mono ${prodMetal.energyRatio < 1 ? 'text-red-400' : 'text-cyan-400'}`}>{Math.round(prodMetal.energyRatio * 100)}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1"><Layers size={10} className="text-purple-400" /> Slots</span>
+                  <span className="text-purple-400 font-mono">+{Math.round((prodMetal.slotBonus - 1) * 100)}%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Cristal */}
+          <Card className="border-cyan-500/30 bg-gradient-to-br from-slate-950 to-cyan-950/20 overflow-hidden relative group hover:-translate-y-1 transition-all duration-300">
+            <div className="absolute inset-0 bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-colors"></div>
+            <CardContent className="p-4 relative z-10">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-2 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
+                  <Gem className="text-cyan-400" size={18} />
+                </div>
+                <span className="text-sm font-bold text-slate-300">Cristal</span>
+              </div>
+              <div className="text-3xl font-black font-mono text-cyan-400 mb-3 drop-shadow-[0_0_10px_rgba(6,182,212,0.3)]">
+                {prodCrystal.total.toLocaleString()}
+                <span className="text-sm text-cyan-400/60 ml-1">/h</span>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Base</span>
+                  <span className="text-slate-300 font-mono">{prodCrystal.base.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1"><Zap size={10} className="text-yellow-400" /> Tech</span>
+                  <span className="text-yellow-400 font-mono">+{prodCrystal.techBonus}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1"><Activity size={10} className="text-cyan-400" /> Énergie</span>
+                  <span className={`font-mono ${prodCrystal.energyRatio < 1 ? 'text-red-400' : 'text-cyan-400'}`}>{Math.round(prodCrystal.energyRatio * 100)}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1"><Layers size={10} className="text-purple-400" /> Slots</span>
+                  <span className="text-purple-400 font-mono">+{Math.round((prodCrystal.slotBonus - 1) * 100)}%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Deutérium */}
+          <Card className="border-emerald-500/30 bg-gradient-to-br from-slate-950 to-emerald-950/20 overflow-hidden relative group hover:-translate-y-1 transition-all duration-300">
+            <div className="absolute inset-0 bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors"></div>
+            <CardContent className="p-4 relative z-10">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30">
+                  <Droplets className="text-emerald-400" size={18} />
+                </div>
+                <span className="text-sm font-bold text-slate-300">Deutérium</span>
+              </div>
+              <div className="text-3xl font-black font-mono text-emerald-400 mb-3 drop-shadow-[0_0_10px_rgba(34,197,94,0.3)]">
+                {prodDeut.total.toLocaleString()}
+                <span className="text-sm text-emerald-400/60 ml-1">/h</span>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Base</span>
+                  <span className="text-slate-300 font-mono">{prodDeut.base.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1"><Zap size={10} className="text-yellow-400" /> Tech</span>
+                  <span className="text-yellow-400 font-mono">+{prodDeut.techBonus}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1"><Activity size={10} className="text-cyan-400" /> Énergie</span>
+                  <span className={`font-mono ${prodDeut.energyRatio < 1 ? 'text-red-400' : 'text-cyan-400'}`}>{Math.round(prodDeut.energyRatio * 100)}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1"><Layers size={10} className="text-purple-400" /> Slots</span>
+                  <span className="text-purple-400 font-mono">+{Math.round((prodDeut.slotBonus - 1) * 100)}%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Bonus actifs */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -338,78 +492,135 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
         </Card>
       </div>
 
-      {/* Statistiques de Combat (72h) */}
-      <Card className="border-red-500/30 bg-gradient-to-br from-slate-950 to-red-950/20">
-        <CardHeader>
+      {/* Statistiques de Combat (72h) - Avec graphiques */}
+      <Card className="border-red-500/30 bg-gradient-to-br from-slate-950 to-red-950/20 overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-orange-500/5"></div>
+        <CardHeader className="relative z-10">
           <CardTitle className="flex items-center gap-2 text-red-300">
             <Trophy size={20} />
             Statistiques Combat (72 dernières heures)
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Performances */}
-            <div className="space-y-4">
+        <CardContent className="relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Graphique de performances */}
+            <Card className="border-slate-700/30 bg-black/30">
+              <CardContent className="p-4">
+                <h4 className="text-xs font-bold uppercase text-slate-500 mb-4 flex items-center gap-2">
+                  <Target size={12} /> Taux de Victoire
+                </h4>
+                <div className="h-40 flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Victoires', value: victories, color: '#22c55e' },
+                          { name: 'Défaites', value: defeats, color: '#ef4444' },
+                          { name: 'Autres', value: Math.max(0, totalCombats - victories - defeats), color: '#64748b' },
+                        ].filter(d => d.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={35}
+                        outerRadius={55}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {[
+                          { name: 'Victoires', value: victories, color: '#22c55e' },
+                          { name: 'Défaites', value: defeats, color: '#ef4444' },
+                          { name: 'Autres', value: Math.max(0, totalCombats - victories - defeats), color: '#64748b' },
+                        ].filter(d => d.value > 0).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        contentStyle={{
+                          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          borderRadius: '8px',
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="text-center mt-2">
+                  <div className={`text-3xl font-black font-mono ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                    {winRate.toFixed(1)}%
+                  </div>
+                  <div className="text-[10px] text-slate-500 uppercase">Victoires</div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Stats détaillées */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2">
+                <Activity size={12} /> Performances
+              </h4>
               <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-white/10">
-                <span className="text-sm font-bold text-slate-400">Batailles</span>
+                <span className="text-sm font-bold text-slate-400">Total Batailles</span>
                 <span className="text-xl font-black font-mono text-white">{totalCombats}</span>
               </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-green-950/20 border border-green-500/30">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-green-950/20 border border-green-500/30 group hover:bg-green-950/30 transition-colors">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="text-green-400" size={16} />
                   <span className="text-sm font-bold text-green-300">Victoires</span>
                 </div>
-                <span className="text-xl font-black font-mono text-green-400">{victories}</span>
+                <span className="text-xl font-black font-mono text-green-400 group-hover:drop-shadow-[0_0_10px_rgba(34,197,94,0.5)]">{victories}</span>
               </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-red-950/20 border border-red-500/30">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-red-950/20 border border-red-500/30 group hover:bg-red-950/30 transition-colors">
                 <div className="flex items-center gap-2">
                   <XCircle className="text-red-400" size={16} />
                   <span className="text-sm font-bold text-red-300">Défaites</span>
                 </div>
-                <span className="text-xl font-black font-mono text-red-400">{defeats}</span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-950/20 border border-indigo-500/30">
-                <div className="flex items-center gap-2">
-                  <Percent className="text-indigo-400" size={16} />
-                  <span className="text-sm font-bold text-indigo-300">Taux de Victoire</span>
-                </div>
-                <span className="text-xl font-black font-mono text-indigo-400">
-                  {winRate.toFixed(1)}%
-                </span>
+                <span className="text-xl font-black font-mono text-red-400 group-hover:drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">{defeats}</span>
               </div>
             </div>
 
-            {/* Pillage total */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-bold uppercase text-slate-400 mb-3">Pillage Total</h4>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-orange-500/30">
-                <div className="flex items-center gap-2">
-                  <Pickaxe className="text-orange-400" size={16} />
-                  <span className="text-sm font-bold text-orange-300">Métal</span>
+            {/* Graphique pillage */}
+            <Card className="border-slate-700/30 bg-black/30">
+              <CardContent className="p-4">
+                <h4 className="text-xs font-bold uppercase text-slate-500 mb-4 flex items-center gap-2">
+                  <Award size={12} /> Pillage Total
+                </h4>
+                <div className="h-32">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                      { name: 'M', value: totalLoot.metal, fill: '#f97316' },
+                      { name: 'C', value: totalLoot.crystal, fill: '#06b6d4' },
+                      { name: 'D', value: totalLoot.deuterium, fill: '#22c55e' },
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
+                      <YAxis stroke="#64748b" fontSize={9} tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                      <RechartsTooltip
+                        contentStyle={{
+                          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                          border: '1px solid rgba(99, 102, 241, 0.3)',
+                          borderRadius: '8px',
+                        }}
+                        formatter={(value: number) => [value.toLocaleString(), 'Pillé']}
+                      />
+                      <Bar dataKey="value" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
-                <span className="text-lg font-mono font-bold text-orange-400">
-                  {totalLoot.metal.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-cyan-500/30">
-                <div className="flex items-center gap-2">
-                  <Gem className="text-cyan-400" size={16} />
-                  <span className="text-sm font-bold text-cyan-300">Cristal</span>
+                <div className="grid grid-cols-3 gap-2 mt-3 text-center text-[10px]">
+                  <div>
+                    <div className="text-orange-400 font-mono font-bold">{totalLoot.metal >= 1000000 ? `${(totalLoot.metal/1000000).toFixed(1)}M` : totalLoot.metal >= 1000 ? `${(totalLoot.metal/1000).toFixed(0)}k` : totalLoot.metal}</div>
+                    <div className="text-slate-600">Métal</div>
+                  </div>
+                  <div>
+                    <div className="text-cyan-400 font-mono font-bold">{totalLoot.crystal >= 1000000 ? `${(totalLoot.crystal/1000000).toFixed(1)}M` : totalLoot.crystal >= 1000 ? `${(totalLoot.crystal/1000).toFixed(0)}k` : totalLoot.crystal}</div>
+                    <div className="text-slate-600">Cristal</div>
+                  </div>
+                  <div>
+                    <div className="text-emerald-400 font-mono font-bold">{totalLoot.deuterium >= 1000000 ? `${(totalLoot.deuterium/1000000).toFixed(1)}M` : totalLoot.deuterium >= 1000 ? `${(totalLoot.deuterium/1000).toFixed(0)}k` : totalLoot.deuterium}</div>
+                    <div className="text-slate-600">Deuté</div>
+                  </div>
                 </div>
-                <span className="text-lg font-mono font-bold text-cyan-400">
-                  {totalLoot.crystal.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-emerald-500/30">
-                <div className="flex items-center gap-2">
-                  <Droplets className="text-emerald-400" size={16} />
-                  <span className="text-sm font-bold text-emerald-300">Deutérium</span>
-                </div>
-                <span className="text-lg font-mono font-bold text-emerald-400">
-                  {totalLoot.deuterium.toLocaleString()}
-                </span>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </CardContent>
       </Card>

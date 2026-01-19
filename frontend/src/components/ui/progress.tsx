@@ -72,11 +72,11 @@ const Progress = React.forwardRef<
         )}
         style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
       >
-        {/* Effet de brillance animé */}
+        {/* Effet de brillance animé - couleur adaptée */}
         {animated && (
           <div className="absolute inset-0 overflow-hidden rounded-full">
             <div 
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent"
               style={{
                 animation: 'shimmer 2s ease-in-out infinite',
               }}
