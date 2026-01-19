@@ -20,7 +20,6 @@ import Changelog from './components/Changelog';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
 import Marketplace from './components/Marketplace';
-import ResourceSlots from './components/ResourceSlots';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
@@ -44,7 +43,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'resources' | 'resource-slots' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog';
+type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -446,7 +445,6 @@ export default function App() {
     { id: 'messages', label: 'Messagerie', icon: Mail, category: 'COMMUNICATION' },
     
     { id: 'resources', label: 'Ressources', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
-    { id: 'resource-slots', label: 'Slots de Ressources', icon: Layers, category: 'DÉVELOPPEMENT' },
     { id: 'facilities', label: 'Installations', icon: Factory, category: 'DÉVELOPPEMENT' },
     { id: 'tech', label: 'Laboratoire', icon: FlaskConical, category: 'DÉVELOPPEMENT' },
     { id: 'market', label: 'Marché', icon: ShoppingCart, category: 'ÉCONOMIE' },
@@ -683,7 +681,6 @@ export default function App() {
                     {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
                     
                     {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
-                    {activeTab === 'resource-slots' && <ResourceSlots planetId={planet.id} onUpdate={fetchPlanet} />}
                     {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}
                     {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
                     {activeTab === 'market' && <Marketplace planet={planet} userId={userId!} onUpdate={fetchPlanet} />}

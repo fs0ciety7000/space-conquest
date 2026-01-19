@@ -1,11 +1,35 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  Pickaxe, Gem, Droplets, Zap, Timer, ArrowUpCircle, 
-  Box, TrendingUp, Activity, ChevronRight
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Pickaxe, Gem, Droplets, Zap, Timer, ArrowUpCircle,
+  Box, TrendingUp, Activity, ChevronRight, Lock, Unlock, Power, PowerOff, ChevronDown, Layers
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
+import { toast } from "sonner";
+
+interface ResourceSlot {
+  id: number;
+  planet_id: string;
+  slot_number: number;
+  resource_type: string;
+  level: number;
+  is_locked: boolean;
+  is_active: boolean;
+}
+
+const RESOURCE_TYPES = {
+  metal: { icon: Pickaxe, label: "Métal", color: "text-orange-400", border: "border-orange-500/50", bg: "bg-orange-500/10" },
+  crystal: { icon: Gem, label: "Cristal", color: "text-cyan-400", border: "border-cyan-500/50", bg: "bg-cyan-500/10" },
+  deuterium: { icon: Droplets, label: "Deutérium", color: "text-emerald-400", border: "border-emerald-500/50", bg: "bg-emerald-500/10" },
+  energy: { icon: Zap, label: "Énergie", color: "text-yellow-400", border: "border-yellow-500/50", bg: "bg-yellow-500/10" },
+};
 interface ResourceDisplayProps {
   planet: any;
   onUpgrade: () => void;
@@ -25,11 +49,71 @@ const getResourceTheme = (type: string) => {
 
 export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }: ResourceDisplayProps) {
   const [now, setNow] = useState(new Date().getTime());
+  const [extraSlots, setExtraSlots] = useState<ResourceSlot[]>([]);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Charger les slots supplémentaires (5-8)
+  useEffect(() => {
+    const fetchSlots = async () => {
+      try {
+        const res = await fetch(apiUrl(`/planets/${planet.id}/resource-slots`), {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Filtrer uniquement les slots 5-8 (configurables)
+          setExtraSlots(data.filter((s: ResourceSlot) => s.slot_number >= 5));
+        }
+      } catch (error) {
+        console.error('Erreur chargement slots:', error);
+      }
+    };
+    if (planet?.id) fetchSlots();
+  }, [planet?.id]);
+
+  const handleChangeType = async (slotNumber: number, newType: string) => {
+    try {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/resource-slots/${slotNumber}`), {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ resource_type: newType }),
+      });
+      if (res.ok) {
+        toast.success(`Slot ${slotNumber - 4} modifié`);
+        onUpgrade();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Erreur');
+      }
+    } catch (error) {
+      toast.error('Erreur de connexion');
+    }
+  };
+
+  const handleToggleActive = async (slotNumber: number) => {
+    try {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/resource-slots/${slotNumber}/toggle`), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (res.ok) {
+        toast.success('Slot activé/désactivé');
+        onUpgrade();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Erreur');
+      }
+    } catch (error) {
+      toast.error('Erreur de connexion');
+    }
+  };
 
   if (!planet) return null;
 
@@ -225,6 +309,111 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
           </Card>
         );
       })}
+
+      {/* SLOTS SUPPLÉMENTAIRES (5-8) */}
+      {extraSlots.length > 0 && (
+        <div className="col-span-full mt-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
+              <Layers className="text-indigo-400" size={20} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-widest text-indigo-300">
+                Slots de Production Bonus
+              </h3>
+              <p className="text-[10px] text-slate-500">
+                +50% de production par slot actif
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {extraSlots.map((slot) => {
+              const resInfo = RESOURCE_TYPES[slot.resource_type as keyof typeof RESOURCE_TYPES];
+              const SlotIcon = resInfo?.icon || Pickaxe;
+              const slotColor = resInfo?.color || "text-gray-400";
+              const slotBorder = resInfo?.border || "border-gray-500/50";
+              const slotBg = resInfo?.bg || "bg-gray-500/10";
+
+              return (
+                <Card
+                  key={slot.slot_number}
+                  className={`relative overflow-hidden transition-all duration-300 ${
+                    slot.is_active
+                      ? `border ${slotBorder} ${slotBg} shadow-lg`
+                      : 'border border-slate-700/50 bg-slate-900/30 opacity-50'
+                  }`}
+                >
+                  <CardContent className="p-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${slotBg} border ${slotBorder}`}>
+                          <SlotIcon size={16} className={slotColor} />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white">Slot {slot.slot_number - 4}</div>
+                          <div className={`text-[10px] ${slot.is_active ? 'text-green-400' : 'text-red-400'}`}>
+                            {slot.is_active ? 'Actif' : 'Inactif'}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleToggleActive(slot.slot_number)}
+                        className={`h-8 w-8 p-0 ${
+                          slot.is_active ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'
+                        }`}
+                      >
+                        {slot.is_active ? <Power size={16} /> : <PowerOff size={16} />}
+                      </Button>
+                    </div>
+
+                    {/* Type selector */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-between bg-black/30 border-white/10 text-white hover:bg-black/50 text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <SlotIcon size={14} className={slotColor} />
+                            <span>{resInfo?.label || 'Sélectionner'}</span>
+                          </div>
+                          <ChevronDown size={12} className="opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="bg-slate-950 border-slate-800 text-white">
+                        {Object.entries(RESOURCE_TYPES).map(([type, { icon: TypeIcon, label, color }]) => (
+                          <DropdownMenuItem
+                            key={type}
+                            onClick={() => handleChangeType(slot.slot_number, type)}
+                            className="cursor-pointer hover:bg-white/10 focus:bg-white/10"
+                          >
+                            <div className="flex items-center gap-2">
+                              <TypeIcon size={14} className={color} />
+                              <span>{label}</span>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Bonus indicator */}
+                    {slot.is_active && (
+                      <div className="mt-3 text-center">
+                        <span className={`text-lg font-black font-mono ${slotColor}`}>+50%</span>
+                        <p className="text-[9px] text-slate-500 uppercase">Bonus {resInfo?.label}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
