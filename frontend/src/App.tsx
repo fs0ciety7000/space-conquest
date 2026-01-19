@@ -282,7 +282,7 @@ export default function App() {
     }
   }, [planetId, token, playSound]);
 
-  const launchExpedition = async (shipCount: number) => {
+  const launchExpedition = async (hunters: number, cruisers: number) => {
     if (!planetId || !token) return;
     try {
       const res = await fetch(apiUrl(`/planets/${planetId}/expedition`), {
@@ -291,7 +291,7 @@ export default function App() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ ship_count: shipCount })
+        body: JSON.stringify({ hunters, cruisers })
       });
       if (res.ok) {
         const data = await res.json();
