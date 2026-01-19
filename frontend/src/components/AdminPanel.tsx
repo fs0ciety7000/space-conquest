@@ -412,6 +412,26 @@ export default function AdminPanel() {
                     <div className="text-center py-8 text-slate-500">Chargement...</div>
                   ) : (
                     <div className="space-y-4">
+                      {/* Affichage des valeurs actuelles */}
+                      <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
+                        <h4 className="text-xs font-bold uppercase text-slate-400 mb-3">Valeurs actives actuelles</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-black font-mono text-indigo-400">{config.speed_factor}</div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Speed Factor</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-black font-mono text-purple-400">{config.construction_speed_multiplier}</div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Construction Speed</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-black font-mono text-green-400">{config.mining_speed_multiplier}</div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Mining Speed</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Champs d'édition */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-lg p-4">
                           <label className="text-xs text-indigo-400 font-bold mb-2 block">SPEED FACTOR</label>
