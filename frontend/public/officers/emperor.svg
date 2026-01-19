@@ -1,0 +1,43 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with glow -->
+  <defs>
+    <radialGradient id="emperorGlow">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#1a2332" stop-opacity="1"/>
+    </radialGradient>
+  </defs>
+  <circle cx="100" cy="100" r="90" fill="url(#emperorGlow)" stroke="#fbbf24" stroke-width="4"/>
+
+  <!-- Grand crown -->
+  <g transform="translate(100, 45)">
+    <polygon points="-30,15 -20,-5 -10,15 0,-10 10,15 20,-5 30,15 30,20 -30,20" fill="#fbbf24" stroke="#f59e0b" stroke-width="2"/>
+    <circle cx="-20" cy="10" r="4" fill="#ef4444"/>
+    <circle cx="0" cy="0" r="5" fill="#a855f7"/>
+    <circle cx="20" cy="10" r="4" fill="#3b82f6"/>
+    <line x1="-30" y1="20" x2="30" y2="20" stroke="#f59e0b" stroke-width="3"/>
+  </g>
+
+  <!-- Head -->
+  <circle cx="100" cy="85" r="25" fill="#fcd34d" stroke="#fbbf24" stroke-width="2"/>
+
+  <!-- Imperial robe -->
+  <path d="M 60 110 L 60 170 L 140 170 L 140 110 Q 120 108 100 108 Q 80 108 60 110 Z" fill="#7c3aed" stroke="#a855f7" stroke-width="2"/>
+
+  <!-- Gold trim -->
+  <line x1="60" y1="110" x2="140" y2="110" stroke="#fbbf24" stroke-width="4"/>
+  <line x1="70" y1="120" x2="70" y2="160" stroke="#fbbf24" stroke-width="3"/>
+  <line x1="130" y1="120" x2="130" y2="160" stroke="#fbbf24" stroke-width="3"/>
+
+  <!-- Orb and scepter symbols -->
+  <g transform="translate(85, 140)">
+    <circle r="8" fill="#fbbf24" stroke="#f59e0b" stroke-width="2"/>
+    <circle r="4" fill="#a855f7"/>
+  </g>
+  <g transform="translate(115, 135)">
+    <line y1="-10" y2="15" stroke="#fbbf24" stroke-width="3"/>
+    <polygon points="0,-15 -3,-10 3,-10" fill="#fbbf24"/>
+  </g>
+
+  <!-- Decorative diamonds -->
+  <polygon points="100,130 105,140 100,150 95,140" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
+</svg>

@@ -35,8 +35,8 @@ use sea_orm_migration::MigratorTrait;
 
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
-    auth, game_logic, combat, entities, config, admin, 
-    messaging, market, websocket, alliance, missions, AppState
+    auth, game_logic, combat, entities, config, admin,
+    messaging, market, websocket, alliance, missions, officers, AppState
 };
 use config::Config;
 use websocket::WsState;
@@ -268,6 +268,10 @@ async fn main() {
         .route("/users/:id/achievements", get(missions::get_user_displayed_achievements_handler))
         .route("/streak", get(missions::get_streak_handler))
         .route("/streak/claim", post(missions::claim_daily_reward_handler))
+        // Officers
+        .route("/officers/templates", get(officers::list_officer_templates_handler))
+        .route("/users/:id/officers", get(officers::get_user_officers_handler))
+        .route("/users/:id/officers/recruit", post(officers::recruit_officer_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

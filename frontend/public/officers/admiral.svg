@@ -1,0 +1,36 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="90" fill="#1a2332" stroke="#f59e0b" stroke-width="3"/>
+
+  <!-- Admiral hat -->
+  <path d="M 60 70 L 60 80 Q 60 75 100 75 Q 140 75 140 80 L 140 70 Q 120 65 100 65 Q 80 65 60 70 Z" fill="#1e3a8a" stroke="#f59e0b" stroke-width="2"/>
+  <ellipse cx="100" cy="70" rx="40" ry="8" fill="#1e40af"/>
+
+  <!-- Hat emblem -->
+  <circle cx="100" cy="70" r="8" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.5"/>
+  <polygon points="100,64 102,69 107,69 103,72 105,77 100,74 95,77 97,72 93,69 98,69" fill="#1e3a8a"/>
+
+  <!-- Head -->
+  <circle cx="100" cy="90" r="18" fill="#fbbf24" stroke="#f59e0b" stroke-width="2"/>
+
+  <!-- Uniform -->
+  <path d="M 70 108 L 70 160 L 95 160 L 95 140 L 105 140 L 105 160 L 130 160 L 130 108 Q 115 105 100 105 Q 85 105 70 108 Z" fill="#1e3a8a" stroke="#1e40af" stroke-width="2"/>
+
+  <!-- Medals -->
+  <g transform="translate(80, 125)">
+    <rect x="-3" y="0" width="6" height="2" fill="#f59e0b"/>
+    <circle cy="8" r="4" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
+  </g>
+  <g transform="translate(100, 125)">
+    <rect x="-3" y="0" width="6" height="2" fill="#f59e0b"/>
+    <circle cy="8" r="4" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
+  </g>
+  <g transform="translate(120, 125)">
+    <rect x="-3" y="0" width="6" height="2" fill="#f59e0b"/>
+    <circle cy="8" r="4" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
+  </g>
+
+  <!-- Epaulettes -->
+  <path d="M 70 108 L 65 108 L 65 118 L 70 118" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
+  <path d="M 130 108 L 135 108 L 135 118 L 130 118" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
+</svg>

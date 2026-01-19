@@ -389,11 +389,15 @@ async fn calculate_current_resources(
         planet.deuterium_mine_level,
     );
 
-    let energy_ratio = if energy_consumed > 0.0 {
-        (energy_produced / energy_consumed).min(1.0)
+    // Calculer le ratio énergétique pour l'affichage (en pourcentage 0-100)
+    let energy_ratio_percent = if energy_consumed > 0.0 {
+        (energy_produced / energy_consumed).min(1.0) * 100.0
     } else {
-        1.0
+        100.0
     };
+
+    // Ratio énergétique pour les calculs (en décimal 0.0-1.0)
+    let energy_ratio_decimal = energy_ratio_percent / 100.0;
 
     // Calculer les ressources actuelles avec le speed_factor par défaut
     // TODO: Récupérer le speed_factor depuis server_config
@@ -405,7 +409,7 @@ async fn calculate_current_resources(
         planet.metal_amount,
         planet.last_update,
         planet.energy_tech_level,
-        energy_ratio,
+        energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
         speed_factor,
     );
@@ -416,7 +420,7 @@ async fn calculate_current_resources(
         planet.crystal_amount,
         planet.last_update,
         planet.energy_tech_level,
-        energy_ratio,
+        energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
         speed_factor,
     );
@@ -427,7 +431,7 @@ async fn calculate_current_resources(
         planet.deuterium_amount,
         planet.last_update,
         planet.energy_tech_level,
-        energy_ratio,
+        energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
         speed_factor,
     );
@@ -438,7 +442,7 @@ async fn calculate_current_resources(
         deuterium,
         energy_produced,
         energy_consumed,
-        energy_ratio,
+        energy_ratio: energy_ratio_percent,
     }
 }
 

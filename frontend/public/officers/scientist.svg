@@ -1,0 +1,31 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="90" fill="#1a2332" stroke="#8b5cf6" stroke-width="3"/>
+
+  <!-- Head -->
+  <circle cx="100" cy="80" r="30" fill="#a78bfa" stroke="#8b5cf6" stroke-width="2"/>
+
+  <!-- Lab coat -->
+  <path d="M 70 110 L 70 160 L 130 160 L 130 110 Q 115 105 100 105 Q 85 105 70 110 Z" fill="#e0e7ff" stroke="#8b5cf6" stroke-width="2"/>
+
+  <!-- Atom symbol -->
+  <g transform="translate(100, 80)">
+    <!-- Nucleus -->
+    <circle r="5" fill="#8b5cf6"/>
+    <!-- Electron orbits -->
+    <ellipse rx="20" ry="10" fill="none" stroke="#8b5cf6" stroke-width="1.5"/>
+    <ellipse rx="20" ry="10" fill="none" stroke="#8b5cf6" stroke-width="1.5" transform="rotate(60)"/>
+    <ellipse rx="20" ry="10" fill="none" stroke="#8b5cf6" stroke-width="1.5" transform="rotate(120)"/>
+    <!-- Electrons -->
+    <circle cx="20" cy="0" r="3" fill="#a78bfa"/>
+    <circle cx="-10" cy="17" r="3" fill="#a78bfa"/>
+    <circle cx="-10" cy="-17" r="3" fill="#a78bfa"/>
+  </g>
+
+  <!-- Beaker symbol -->
+  <g transform="translate(100, 140)">
+    <path d="M -10 -10 L -8 10 Q -8 15 0 15 Q 8 15 8 10 L 10 -10 Z" fill="none" stroke="#06b6d4" stroke-width="2"/>
+    <line x1="-10" y1="-10" x2="10" y2="-10" stroke="#06b6d4" stroke-width="2"/>
+    <circle cy="5" r="8" fill="#06b6d4" opacity="0.3"/>
+  </g>
+</svg>

@@ -26,3 +26,7 @@ pub use super :: user_daily_mission :: Entity as UserDailyMission ;
 pub use super :: achievement :: Entity as Achievement ;
 pub use super :: user_achievement :: Entity as UserAchievement ;
 pub use super :: login_streak :: Entity as LoginStreak ;
+
+// Officers system
+pub use super :: officer_template :: Entity as OfficerTemplate ;
+pub use super :: user_officer :: Entity as UserOfficer ;

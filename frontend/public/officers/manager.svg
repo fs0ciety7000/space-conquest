@@ -1,0 +1,21 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="90" fill="#1a2332" stroke="#10b981" stroke-width="3"/>
+
+  <!-- Head -->
+  <circle cx="100" cy="75" r="25" fill="#34d399" stroke="#10b981" stroke-width="2"/>
+
+  <!-- Suit -->
+  <path d="M 70 100 L 70 160 L 95 160 L 95 145 L 105 145 L 105 160 L 130 160 L 130 100 Q 115 98 100 98 Q 85 98 70 100 Z" fill="#064e3b" stroke="#10b981" stroke-width="2"/>
+
+  <!-- Tie -->
+  <path d="M 100 100 L 95 145 L 100 155 L 105 145 Z" fill="#10b981"/>
+
+  <!-- Briefcase symbol -->
+  <g transform="translate(100, 140)">
+    <rect x="-15" y="-10" width="30" height="20" rx="2" fill="#10b981" stroke="#059669" stroke-width="2"/>
+    <rect x="-8" y="-13" width="16" height="5" rx="1" fill="#059669"/>
+    <line x1="-5" y1="-5" x2="-5" y2="5" stroke="#064e3b" stroke-width="1"/>
+    <line x1="5" y1="-5" x2="5" y2="5" stroke="#064e3b" stroke-width="1"/>
+  </g>
+</svg>

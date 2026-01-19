@@ -13,6 +13,7 @@ pub mod websocket;
 pub mod alliance;
 pub mod market;
 pub mod missions;
+pub mod officers;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::ServerConfig, server_config};
