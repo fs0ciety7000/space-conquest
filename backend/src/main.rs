@@ -238,6 +238,10 @@ async fn main() {
         .route("/admin/config", get(admin::get_server_config_handler))
         .route("/admin/config", patch(admin::update_server_config_handler))
         .route("/admin/user/:id/role", patch(admin::update_user_role_handler))
+        .route("/admin/user/:id/username", patch(admin::update_username_handler))
+        .route("/admin/user/:id/email", patch(admin::update_email_handler))
+        .route("/admin/user/:id/reset-password", post(admin::reset_password_handler))
+        .route("/admin/user/:id", delete(admin::delete_user_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);

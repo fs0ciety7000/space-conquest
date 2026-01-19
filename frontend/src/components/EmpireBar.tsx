@@ -48,10 +48,17 @@ interface PlanetSummary {
   is_current: boolean;
 }
 
+interface ResourceSlot {
+  slot_number: number;
+  resource_type: string;
+  is_active: boolean;
+}
+
 export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar, onNavigateToGalaxy, onNavigateToOverview, speedFactor = 10 }: EmpireBarProps) {
 
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [slots, setSlots] = useState<ResourceSlot[]>([]);
 
   // Récupérer la liste des planètes
   useEffect(() => {
@@ -73,6 +80,28 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     };
 
     fetchMyPlanets();
+  }, [planet?.id]);
+
+  // Charger les slots pour calculer la production réelle
+  useEffect(() => {
+    const fetchSlots = async () => {
+      const token = localStorage.getItem('token');
+      if (!planet?.id || !token) return;
+
+      try {
+        const res = await fetch(apiUrl(`/planets/${planet.id}/resource-slots`), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSlots(data);
+        }
+      } catch (e) {
+        console.error("Erreur chargement slots", e);
+      }
+    };
+
+    fetchSlots();
   }, [planet?.id]);
 
   const energyAvailable = planet.energy ?? 0;
@@ -97,9 +126,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     prod *= energyRatioDecimal;
 
     // Bonus slots (+50% par slot actif du même type)
-    // Note: On ne peut pas charger les slots ici facilement, donc on estime à 0
-    // Pour une valeur exacte, il faudrait que le backend envoie la production totale
-    // Ou qu'on charge les slots séparément (mais ça alourdirait les requêtes)
+    const activeSlots = slots.filter(s => s.is_active && s.resource_type === resourceType);
+    const slotBonus = 1.0 + (activeSlots.length * 0.5);
+    prod *= slotBonus;
 
     // Speed factor
     prod *= speedFactor;

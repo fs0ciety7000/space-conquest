@@ -83,7 +83,7 @@ interface ServerConfig {
   mining_speed_multiplier: string;
 }
 
-type AdminTab = 'players' | 'stats';
+type AdminTab = 'players' | 'stats' | 'users';
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState<AdminTab>('stats');
@@ -316,7 +316,19 @@ export default function AdminPanel() {
           }`}
         >
           <Users size={16} />
-          Gestion Joueurs
+          Gestion Planètes
+        </Button>
+        <Button
+          variant={activeTab === 'users' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('users')}
+          className={`flex items-center gap-2 ${
+            activeTab === 'users'
+              ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <Settings size={16} />
+          Gestion Utilisateurs
         </Button>
       </div>
 

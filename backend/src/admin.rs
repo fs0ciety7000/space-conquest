@@ -11,6 +11,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::Utc;
+use bcrypt;
 
 use crate::entities::{
     prelude::{Planet, User, ServerConfig},
@@ -490,6 +491,240 @@ pub async fn update_user_role_handler(
             "new_role": updated.role
         })).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"})))
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UsernameUpdate {
+    pub username: String,
+}
+
+// PATCH /admin/user/:id/username - Modifier le nom d'utilisateur
+pub async fn update_username_handler(
+    Path(target_user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(update): Json<UsernameUpdate>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    // Vérifier que le nouveau username n'est pas vide
+    if update.username.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Le nom d'utilisateur ne peut pas être vide"})))
+            .into_response();
+    }
+
+    // Vérifier que le username n'est pas déjà pris
+    let existing_user = User::find()
+        .filter(user::Column::Username.eq(&update.username))
+        .filter(user::Column::Id.ne(target_user_id))
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if existing_user.is_some() {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Ce nom d'utilisateur est déjà pris"})))
+            .into_response();
+    }
+
+    // Récupérer l'utilisateur cible
+    let target_user = User::find_by_id(target_user_id)
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if target_user.is_none() {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"})))
+            .into_response();
+    }
+
+    let mut active: user::ActiveModel = target_user.unwrap().into();
+    active.username = Set(update.username.clone());
+
+    match active.update(&state.db).await {
+        Ok(updated) => Json(json!({
+            "success": true,
+            "message": format!("Nom d'utilisateur mis à jour: {}", update.username),
+            "user_id": updated.id,
+            "new_username": updated.username
+        })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"})))
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct EmailUpdate {
+    pub email: String,
+}
+
+// PATCH /admin/user/:id/email - Modifier l'email d'un utilisateur
+pub async fn update_email_handler(
+    Path(target_user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(update): Json<EmailUpdate>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    // Vérifier que l'email n'est pas vide et a un format valide (basique)
+    if update.email.trim().is_empty() || !update.email.contains('@') {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Email invalide"})))
+            .into_response();
+    }
+
+    // Vérifier que l'email n'est pas déjà pris
+    let existing_user = User::find()
+        .filter(user::Column::Email.eq(&update.email))
+        .filter(user::Column::Id.ne(target_user_id))
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if existing_user.is_some() {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Cet email est déjà utilisé"})))
+            .into_response();
+    }
+
+    // Récupérer l'utilisateur cible
+    let target_user = User::find_by_id(target_user_id)
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if target_user.is_none() {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"})))
+            .into_response();
+    }
+
+    let mut active: user::ActiveModel = target_user.unwrap().into();
+    active.email = Set(update.email.clone());
+
+    match active.update(&state.db).await {
+        Ok(updated) => Json(json!({
+            "success": true,
+            "message": format!("Email mis à jour: {}", update.email),
+            "user_id": updated.id,
+            "new_email": updated.email
+        })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"})))
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct PasswordReset {
+    pub new_password: String,
+}
+
+// POST /admin/user/:id/reset-password - Réinitialiser le mot de passe
+pub async fn reset_password_handler(
+    Path(target_user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(reset): Json<PasswordReset>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    // Vérifier que le mot de passe n'est pas trop court
+    if reset.new_password.len() < 6 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Le mot de passe doit contenir au moins 6 caractères"})))
+            .into_response();
+    }
+
+    // Récupérer l'utilisateur cible
+    let target_user = User::find_by_id(target_user_id)
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if target_user.is_none() {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"})))
+            .into_response();
+    }
+
+    // Hasher le nouveau mot de passe
+    let hashed = match bcrypt::hash(&reset.new_password, bcrypt::DEFAULT_COST) {
+        Ok(h) => h,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors du hash du mot de passe"})))
+            .into_response(),
+    };
+
+    let mut active: user::ActiveModel = target_user.unwrap().into();
+    active.password = Set(hashed);
+
+    match active.update(&state.db).await {
+        Ok(updated) => Json(json!({
+            "success": true,
+            "message": format!("Mot de passe réinitialisé pour l'utilisateur {}", updated.username),
+            "user_id": updated.id
+        })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"})))
+            .into_response(),
+    }
+}
+
+// DELETE /admin/user/:id - Supprimer un utilisateur et ses données
+pub async fn delete_user_handler(
+    Path(target_user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+
+    // Vérifier que l'admin n'essaie pas de se supprimer lui-même
+    if let Ok(admin_id) = Uuid::parse_str(user_id_str) {
+        if admin_id == target_user_id {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas supprimer votre propre compte"})))
+                .into_response();
+        }
+    }
+
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    // Récupérer l'utilisateur cible pour vérifier qu'il existe
+    let target_user = User::find_by_id(target_user_id)
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if target_user.is_none() {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"})))
+            .into_response();
+    }
+
+    let username = target_user.as_ref().unwrap().username.clone();
+
+    // Supprimer toutes les planètes de l'utilisateur
+    // Note: Les contraintes de clé étrangère CASCADE devraient gérer le reste
+    let _ = Planet::delete_many()
+        .filter(planet::Column::OwnerId.eq(target_user_id))
+        .exec(&state.db)
+        .await;
+
+    // Supprimer l'utilisateur
+    match User::delete_by_id(target_user_id).exec(&state.db).await {
+        Ok(_) => Json(json!({
+            "success": true,
+            "message": format!("Utilisateur {} supprimé avec succès", username)
+        })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la suppression"})))
             .into_response(),
     }
 }
