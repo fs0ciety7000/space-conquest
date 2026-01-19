@@ -453,43 +453,58 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </div>
 
         <div className="md:col-span-3 min-w-0">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 pl-1 mb-4">Rendement Industriel</h3>
             <Card className="bg-green-950/10 border border-green-500/20">
-                <CardContent className="p-0 overflow-x-auto">
-                    <table className="w-full text-left border-collapse font-mono text-xs whitespace-nowrap">
-                        <thead>
-                            <tr className="bg-white/5 text-slate-500 uppercase tracking-wider text-[10px]">
-                                <th className="py-3 pl-4">Ressource</th>
-                                <th className="py-3 text-right">Stock</th>
-                                <th className="py-3 text-right">Capacité</th>
-                                <th className="py-3 text-right text-yellow-500">/ Heure</th>
-                                <th className="py-3 text-right pr-4 text-green-500">/ Jour</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                            <tr className="hover:bg-white/5 transition-colors">
-                                <td className="py-4 pl-4 flex items-center gap-2 font-bold text-orange-300"><Stone size={14} /> MÉTAL</td>
-                                <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.metal_amount)}</td>
-                                <td className="py-4 text-right text-slate-600">Illimité</td>
-                                <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodMetal)}</td>
-                                <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodMetal * 24)}</td>
-                            </tr>
-                            <tr className="hover:bg-white/5 transition-colors">
-                                <td className="py-4 pl-4 flex items-center gap-2 font-bold text-cyan-400"><Gem size={14} /> CRISTAL</td>
-                                <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.crystal_amount)}</td>
-                                <td className="py-4 text-right text-slate-600">Illimité</td>
-                                <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodCrystal)}</td>
-                                <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodCrystal * 24)}</td>
-                            </tr>
-                            <tr className="hover:bg-white/5 transition-colors">
-                                <td className="py-4 pl-4 flex items-center gap-2 font-bold text-green-400"><Droplets size={14} /> DEUTÉRIUM</td>
-                                <td className="py-4 text-right font-bold text-white text-sm">{fmt(planet.deuterium_amount)}</td>
-                                <td className="py-4 text-right text-slate-600">Illimité</td>
-                                <td className="py-4 text-right text-yellow-400 font-bold">+{fmt(prodDeut)}</td>
-                                <td className="py-4 text-right pr-4 text-green-400">+{fmt(prodDeut * 24)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-green-400">
+                        <span className="flex items-center gap-2"><TrendingUp size={14} /> Production Industrielle</span>
+                        <span className="bg-green-500/20 px-2 py-1 rounded text-green-300">
+                            {energyRatio}% efficacité
+                        </span>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    {/* Métal */}
+                    <div className="bg-slate-900/50 p-3 rounded border border-orange-500/20">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="flex items-center gap-2 text-orange-300 font-bold text-xs"><Stone size={12} /> Métal</span>
+                            <span className="text-white font-mono font-bold text-sm">{fmt(planet.metal_amount)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-yellow-400">+{fmt(prodMetal)}/h</span>
+                            <span className="text-green-400">+{fmt(prodMetal * 24)}/j</span>
+                            {planet.slot_bonuses?.metal && planet.slot_bonuses.metal !== "+0%" && (
+                                <span className="text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded">{planet.slot_bonuses.metal} bonus</span>
+                            )}
+                        </div>
+                    </div>
+                    {/* Cristal */}
+                    <div className="bg-slate-900/50 p-3 rounded border border-cyan-500/20">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="flex items-center gap-2 text-cyan-400 font-bold text-xs"><Gem size={12} /> Cristal</span>
+                            <span className="text-white font-mono font-bold text-sm">{fmt(planet.crystal_amount)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-yellow-400">+{fmt(prodCrystal)}/h</span>
+                            <span className="text-green-400">+{fmt(prodCrystal * 24)}/j</span>
+                            {planet.slot_bonuses?.crystal && planet.slot_bonuses.crystal !== "+0%" && (
+                                <span className="text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded">{planet.slot_bonuses.crystal} bonus</span>
+                            )}
+                        </div>
+                    </div>
+                    {/* Deutérium */}
+                    <div className="bg-slate-900/50 p-3 rounded border border-emerald-500/20">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="flex items-center gap-2 text-emerald-400 font-bold text-xs"><Droplets size={12} /> Deutérium</span>
+                            <span className="text-white font-mono font-bold text-sm">{fmt(planet.deuterium_amount)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-yellow-400">+{fmt(prodDeut)}/h</span>
+                            <span className="text-green-400">+{fmt(prodDeut * 24)}/j</span>
+                            {planet.slot_bonuses?.deuterium && planet.slot_bonuses.deuterium !== "+0%" && (
+                                <span className="text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded">{planet.slot_bonuses.deuterium} bonus</span>
+                            )}
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
         </div>

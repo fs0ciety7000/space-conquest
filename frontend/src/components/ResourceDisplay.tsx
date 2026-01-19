@@ -97,18 +97,45 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
     }
   };
 
-  const handleToggleActive = async (slotNumber: number) => {
+  const handleToggleActive = async (slotNumber: number, currentlyActive: boolean) => {
+    // Si on active, montrer le coût
+    const slotIndex = slotNumber - 5;
+    const cost = {
+      metal: 5000 * Math.pow(2, slotIndex),
+      crystal: 2500 * Math.pow(2, slotIndex),
+      deuterium: 1250 * Math.pow(2, slotIndex),
+    };
+
+    if (!currentlyActive) {
+      // Confirmation avec le coût
+      if (!confirm(`Activer le slot ${slotNumber - 4} ?\n\nCoût:\n- Métal: ${cost.metal.toLocaleString()}\n- Cristal: ${cost.crystal.toLocaleString()}\n- Deutérium: ${cost.deuterium.toLocaleString()}`)) {
+        return;
+      }
+    }
+
     try {
       const res = await fetch(apiUrl(`/planets/${planet.id}/resource-slots/${slotNumber}/toggle`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
       });
+      const data = await res.json();
       if (res.ok) {
-        toast.success('Slot activé/désactivé');
+        toast.success(currentlyActive ? 'Slot désactivé' : `Slot activé (-${cost.metal.toLocaleString()} M, -${cost.crystal.toLocaleString()} C, -${cost.deuterium.toLocaleString()} D)`);
+        // Rafraîchir les slots
+        const slotsRes = await fetch(apiUrl(`/planets/${planet.id}/resource-slots`), {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (slotsRes.ok) {
+          const slotsData = await slotsRes.json();
+          setExtraSlots(slotsData.filter((s: ResourceSlot) => s.slot_number >= 5));
+        }
         onUpgrade();
       } else {
-        const data = await res.json();
-        toast.error(data.error || 'Erreur');
+        if (data.cost) {
+          toast.error(`Ressources insuffisantes! Coût: ${data.cost.metal.toLocaleString()} M, ${data.cost.crystal.toLocaleString()} C, ${data.cost.deuterium.toLocaleString()} D`);
+        } else {
+          toast.error(data.error || 'Erreur');
+        }
       }
     } catch (error) {
       toast.error('Erreur de connexion');
@@ -361,10 +388,11 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleToggleActive(slot.slot_number)}
+                        onClick={() => handleToggleActive(slot.slot_number, slot.is_active)}
                         className={`h-8 w-8 p-0 ${
                           slot.is_active ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'
                         }`}
+                        title={slot.is_active ? 'Désactiver (gratuit)' : `Activer (${(5000 * Math.pow(2, slot.slot_number - 5)).toLocaleString()} M)`}
                       >
                         {slot.is_active ? <Power size={16} /> : <PowerOff size={16} />}
                       </Button>

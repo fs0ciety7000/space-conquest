@@ -2896,10 +2896,17 @@ async fn get_price_history_handler(
 
 // GET /changelog - Récupère le contenu du fichier CHANGELOG.md
 async fn get_changelog_handler() -> Result<impl IntoResponse, StatusCode> {
-    match tokio::fs::read_to_string("../CHANGELOG.md").await {
-        Ok(content) => Ok((StatusCode::OK, content)),
-        Err(_) => Err(StatusCode::NOT_FOUND),
+    // Essayer plusieurs chemins possibles
+    let paths = ["../CHANGELOG.md", "CHANGELOG.md", "./CHANGELOG.md", "/app/CHANGELOG.md"];
+
+    for path in paths {
+        if let Ok(content) = tokio::fs::read_to_string(path).await {
+            return Ok((StatusCode::OK, content));
+        }
     }
+
+    // Si aucun chemin ne fonctionne, retourner un message d'erreur
+    Err(StatusCode::NOT_FOUND)
 }
 
 // ===== RESOURCE SLOTS HANDLERS =====
@@ -3010,6 +3017,17 @@ async fn toggle_resource_slot_handler(
 ) -> impl IntoResponse {
     use entities::{prelude::ResourceSlot, resource_slot};
 
+    // Récupérer la planète
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))).into_response()
+        }
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response()
+        }
+    };
+
     // Récupérer le slot
     let slot = match ResourceSlot::find()
         .filter(resource_slot::Column::PlanetId.eq(planet_id))
@@ -3019,41 +3037,68 @@ async fn toggle_resource_slot_handler(
     {
         Ok(Some(s)) => s,
         Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "Slot introuvable"})),
-            )
-                .into_response()
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Slot introuvable"}))).into_response()
         }
         Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Erreur DB"})),
-            )
-                .into_response()
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response()
         }
     };
 
     // Les slots verrouillés sont toujours actifs
     if slot.is_locked {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Les slots verrouillés ne peuvent pas être désactivés"})),
-        )
-            .into_response();
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Les slots verrouillés ne peuvent pas être désactivés"}))).into_response();
     }
 
-    // Toggle l'état
+    let new_state = !slot.is_active;
+
+    // Si on active le slot, il y a un coût (exponentiel par numéro de slot)
+    // Slot 5 = 5000/2500/1250, Slot 6 = 10000/5000/2500, Slot 7 = 20000/10000/5000, Slot 8 = 40000/20000/10000
+    if new_state {
+        let slot_index = slot_number - 5; // 0, 1, 2, 3
+        let base_metal = 5000.0 * (2.0_f64).powi(slot_index);
+        let base_crystal = 2500.0 * (2.0_f64).powi(slot_index);
+        let base_deuterium = 1250.0 * (2.0_f64).powi(slot_index);
+
+        if planet.metal_amount < base_metal || planet.crystal_amount < base_crystal || planet.deuterium_amount < base_deuterium {
+            return (StatusCode::BAD_REQUEST, Json(json!({
+                "error": "Ressources insuffisantes",
+                "cost": {
+                    "metal": base_metal,
+                    "crystal": base_crystal,
+                    "deuterium": base_deuterium
+                }
+            }))).into_response();
+        }
+
+        // Déduire les ressources
+        let mut planet_active: planet::ActiveModel = planet.clone().into();
+        planet_active.metal_amount = Set(planet.metal_amount - base_metal);
+        planet_active.crystal_amount = Set(planet.crystal_amount - base_crystal);
+        planet_active.deuterium_amount = Set(planet.deuterium_amount - base_deuterium);
+        planet_active.last_update = Set(Utc::now().naive_utc());
+
+        if planet_active.update(&state.db).await.is_err() {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la déduction des ressources"}))).into_response();
+        }
+    }
+
+    // Toggle l'état du slot
     let mut active: resource_slot::ActiveModel = slot.into();
-    let new_state = !active.is_active.clone().unwrap();
     active.is_active = Set(new_state);
 
     match active.update(&state.db).await {
-        Ok(updated) => Json(updated).into_response(),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Erreur lors de la mise à jour"})),
-        )
-            .into_response(),
+        Ok(updated) => {
+            // Récupérer la planète mise à jour pour retourner les nouvelles ressources
+            let updated_planet = Planet::find_by_id(planet_id).one(&state.db).await.unwrap().unwrap();
+            Json(json!({
+                "slot": updated,
+                "planet": {
+                    "metal_amount": updated_planet.metal_amount,
+                    "crystal_amount": updated_planet.crystal_amount,
+                    "deuterium_amount": updated_planet.deuterium_amount
+                }
+            })).into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la mise à jour"}))).into_response(),
     }
 }
