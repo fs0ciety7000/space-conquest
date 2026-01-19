@@ -197,9 +197,36 @@ let (system, position) = {
 
     if new_planet.insert(&state.db).await.is_err() {
         return (
-            StatusCode::INTERNAL_SERVER_ERROR, 
+            StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": "Erreur lors de la création de la planète"}))
         );
+    }
+
+    // Créer les 8 slots de ressources pour la nouvelle planète
+    use crate::entities::resource_slot;
+
+    let slots_init = vec![
+        (1, "metal", 1, true),
+        (2, "crystal", 1, true),
+        (3, "deuterium", 1, true),
+        (4, "energy", 1, true),
+        (5, "metal", 0, false),
+        (6, "metal", 0, false),
+        (7, "metal", 0, false),
+        (8, "metal", 0, false),
+    ];
+
+    for (slot_num, res_type, level, is_locked) in slots_init {
+        let slot = resource_slot::ActiveModel {
+            planet_id: Set(planet_id),
+            slot_number: Set(slot_num),
+            resource_type: Set(res_type.to_string()),
+            level: Set(level),
+            is_locked: Set(is_locked),
+            is_active: Set(is_locked), // Les slots locked sont actifs, les autres non
+            ..Default::default()
+        };
+        let _ = slot.insert(&state.db).await;
     }
 
     // Générer JWT

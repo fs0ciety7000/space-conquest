@@ -15,3 +15,4 @@ pub mod market_transaction;
 pub mod server_resource_stats;
 pub mod market_price_history;
 pub mod server_config;
+pub mod resource_slot;
