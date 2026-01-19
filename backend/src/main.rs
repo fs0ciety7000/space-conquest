@@ -87,7 +87,8 @@ struct ColonizePayload {
 
 #[derive(Deserialize)]
 struct ExpeditionPayload {
-    ship_count: i32,
+    hunters: i32,
+    cruisers: i32,
 }
 
 #[derive(Deserialize)]
@@ -271,8 +272,46 @@ async fn resolve_attack_mission(
         game_logic::Cost { metal: def_planet.metal_amount, crystal: def_planet.crystal_amount, deuterium: def_planet.deuterium_amount }
     );
 
-    let mut def_active: planet::ActiveModel = def_planet_raw.into();
+    let mut def_active: planet::ActiveModel = def_planet_raw.clone().into();
+    let mut planet_conquered = false;
+    let mut conquest_notification = String::new();
+
     if result.winner == "attacker" {
+        // Calculer le pourcentage de ressources volées
+        let total_resources_before = def_planet.metal_amount + def_planet.crystal_amount + def_planet.deuterium_amount;
+        let total_loot = result.loot.metal + result.loot.crystal + result.loot.deuterium;
+        let loot_percentage = if total_resources_before > 0.0 {
+            (total_loot / total_resources_before) * 100.0
+        } else {
+            0.0
+        };
+
+        // Vérifier si c'est une conquête de planète (99% des ressources volées)
+        if loot_percentage >= 99.0 {
+            // Vérifier combien de planètes possède le défenseur
+            let defender_planets = Planet::find()
+                .filter(planet::Column::OwnerId.eq(def_user.id))
+                .count(db)
+                .await
+                .unwrap_or(0);
+
+            // On ne peut conquérir que si le défenseur a plus d'une planète
+            if defender_planets > 1 {
+                planet_conquered = true;
+                conquest_notification = format!("🎯 CONQUÊTE ! Vous avez conquis la planète {} !", def_planet.name);
+
+                // Transférer la propriété
+                def_active.owner_id = Set(att_user.id);
+
+                // Notification pour le défenseur
+                let defender_notif = json!({
+                    "type": "planet_lost",
+                    "message": format!("⚠️ ALERTE CRITIQUE ! Votre planète {} a été conquise par {} !", def_planet.name, att_user.username)
+                });
+                // On stocke cette notification dans unread_report
+            }
+        }
+
         def_active.metal_amount = Set((def_planet.metal_amount - result.loot.metal).max(0.0));
         def_active.crystal_amount = Set((def_planet.crystal_amount - result.loot.crystal).max(0.0));
         def_active.deuterium_amount = Set((def_planet.deuterium_amount - result.loot.deuterium).max(0.0));
@@ -285,11 +324,27 @@ async fn resolve_attack_mission(
     def_active.plasma_turret_count = Set((def_planet.plasma_turret_count - result.lost_plasmas).max(0));
     def_active.last_update = Set(now);
 
-    let def_rep_json = json!({
-        "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
-        "losses": { "ships": result.defender_losses, "missiles": result.lost_missiles, "plasmas": result.lost_plasmas },
-        "is_defense": true, "opponent_name": att_user.username
-    });
+    let def_rep_json = if planet_conquered {
+        json!({
+            "type": "planet_lost",
+            "message": format!("⚠️ ALERTE CRITIQUE ! Votre planète {} a été conquise par {} !", def_planet.name, att_user.username),
+            "winner": result.winner,
+            "log": result.log,
+            "loot": result.loot,
+            "debris": result.debris,
+            "losses": { "ships": result.defender_losses, "missiles": result.lost_missiles, "plasmas": result.lost_plasmas },
+            "is_defense": true,
+            "opponent_name": att_user.username,
+            "conquered": true
+        })
+    } else {
+        json!({
+            "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
+            "losses": { "ships": result.defender_losses, "missiles": result.lost_missiles, "plasmas": result.lost_plasmas },
+            "is_defense": true, "opponent_name": att_user.username,
+            "conquered": false
+        })
+    };
     def_active.unread_report = Set(Some(to_string(&def_rep_json).unwrap()));
     def_active.update(db).await.unwrap();
 
@@ -307,25 +362,57 @@ async fn resolve_attack_mission(
     att_active.light_hunter_count = Set(att_planet.light_hunter_count + (att_hunters - lost_h));
     att_active.cruiser_count = Set(att_planet.cruiser_count + (att_cruisers - lost_c));
 
-    let att_rep_json = json!({
-        "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
-        "losses": { "ships": result.attacker_losses }, "is_defense": false, "opponent_name": def_user.username
-    });
+    let att_rep_json = if planet_conquered {
+        json!({
+            "type": "planet_conquered",
+            "message": format!("🎯 CONQUÊTE RÉUSSIE ! Vous avez conquis la planète {} de {} !", def_planet.name, def_user.username),
+            "winner": result.winner,
+            "log": result.log,
+            "loot": result.loot,
+            "debris": result.debris,
+            "losses": { "ships": result.attacker_losses },
+            "is_defense": false,
+            "opponent_name": def_user.username,
+            "conquered": true,
+            "conquered_planet_id": def_planet.id,
+            "conquered_planet_name": def_planet.name.clone()
+        })
+    } else {
+        json!({
+            "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
+            "losses": { "ships": result.attacker_losses }, "is_defense": false, "opponent_name": def_user.username,
+            "conquered": false
+        })
+    };
     att_active.unread_report = Set(Some(to_string(&att_rep_json).unwrap()));
     att_active.update(db).await.unwrap();
 
+    // Combat log pour le défenseur
     let _ = combat_log::ActiveModel {
-        id: Set(Uuid::new_v4()), planet_id: Set(mission.target_planet_id), target_name: Set(att_planet.name.clone()),
-        opponent_username: Set(Some(att_user.username.clone())), mission_type: Set("defense".into()),
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(mission.target_planet_id),
+        target_name: Set(att_planet.name.clone()),
+        opponent_username: Set(Some(att_user.username.clone())),
+        mission_type: Set(if planet_conquered { "planet_lost".into() } else { "defense".into() }),
         result: Set(if result.winner == "defender" { "victory".into() } else { "defeat".into() }),
-        loot_metal: Set(-result.loot.metal), loot_crystal: Set(-result.loot.crystal), ships_lost: Set(result.defender_losses), date: Set(now),
+        loot_metal: Set(-result.loot.metal),
+        loot_crystal: Set(-result.loot.crystal),
+        ships_lost: Set(result.defender_losses),
+        date: Set(now),
     }.insert(db).await;
 
+    // Combat log pour l'attaquant
     let _ = combat_log::ActiveModel {
-        id: Set(Uuid::new_v4()), planet_id: Set(mission.source_planet_id), target_name: Set(def_planet.name.clone()),
-        opponent_username: Set(Some(def_user.username.clone())), mission_type: Set("attack".into()),
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(mission.source_planet_id),
+        target_name: Set(def_planet.name.clone()),
+        opponent_username: Set(Some(def_user.username.clone())),
+        mission_type: Set(if planet_conquered { "planet_conquered".into() } else { "attack".into() }),
         result: Set(if result.winner == "attacker" { "victory".into() } else { "defeat".into() }),
-        loot_metal: Set(result.loot.metal), loot_crystal: Set(result.loot.crystal), ships_lost: Set(result.attacker_losses), date: Set(now),
+        loot_metal: Set(result.loot.metal),
+        loot_crystal: Set(result.loot.crystal),
+        ships_lost: Set(result.attacker_losses),
+        date: Set(now),
     }.insert(db).await;
 
     FleetMission::delete_by_id(mission.id).exec(db).await.unwrap();
@@ -635,15 +722,23 @@ async fn build_fleet_handler(
 
     if qty <= 0 { return Err(StatusCode::BAD_REQUEST); }
 
-    let active_constructions = ConstructionQueue::find()
-        .filter(construction_queue::Column::PlanetId.eq(p.id))
-        .count(&state.db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Vérifier le nombre de constructions actives (max 3 pour vaisseaux, illimité pour défenses)
+    let is_defense = ["missile_launcher", "plasma_turret"].contains(&type_ship.as_str());
 
-    if active_constructions >= 3 { return Err(StatusCode::CONFLICT); }
+    if !is_defense {
+        let active_ship_constructions = ConstructionQueue::find()
+            .filter(construction_queue::Column::PlanetId.eq(p.id))
+            .all(&state.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .iter()
+            .filter(|c| !["missile_launcher", "plasma_turret"].contains(&c.building_type.as_str()))
+            .count();
 
-    if !["missile_launcher", "plasma_turret"].contains(&type_ship.as_str()) {
+        if active_ship_constructions >= 3 { return Err(StatusCode::CONFLICT); }
+    }
+
+    if !is_defense {
         let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
                                + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
         let max_capacity = game_logic::get_fleet_capacity(p.hangar_level);
@@ -667,8 +762,8 @@ async fn build_fleet_handler(
 
     let (cost_m, cost_c) = match type_ship.as_str() {
         "light_hunter" => game_logic::get_light_hunter_stats(),
-        "cruiser" => (20000.0, 7000.0),
-        "recycler" => (10000.0, 6000.0),
+        "cruiser" => game_logic::get_cruiser_stats(),
+        "recycler" => game_logic::get_recycler_stats(),
         "spy_probe" => game_logic::get_spy_probe_stats(),
         "missile_launcher" => game_logic::get_missile_launcher_stats(),
         "plasma_turret" => game_logic::get_plasma_turret_stats(),
@@ -777,16 +872,19 @@ async fn expedition_handler(
     }
 
     // Validation du nombre de vaisseaux
-    let ship_count = payload.ship_count;
-    if ship_count <= 0 {
+    let hunters = payload.hunters;
+    let cruisers = payload.cruisers;
+    if hunters + cruisers <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
     }
-    if ship_count > p.light_hunter_count {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de vaisseaux"}))).into_response();
+    if hunters > p.light_hunter_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de chasseurs"}))).into_response();
+    }
+    if cruisers > p.cruiser_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de croiseurs"}))).into_response();
     }
 
     let mut active: planet::ActiveModel = p.clone().into();
-    let loot = 0.0;
     let mut logs: Vec<String> = Vec::new();
     let winner;
     let mut lost_hunters = 0;
@@ -794,25 +892,37 @@ async fn expedition_handler(
 
     let combat_triggered = rand::thread_rng().gen_bool(0.3);
 
-    // Calcul des gains basé sur la taille de la flotte
-    let base_metal_per_ship = 50.0 + rand::thread_rng().gen_range(0.0..=50.0);
-    let base_crystal_per_ship = 20.0 + rand::thread_rng().gen_range(0.0..=30.0);
+    // Calcul des gains basé sur la taille et type de flotte
+    // Chasseurs: 50-100 métal, 20-50 cristal
+    // Croiseurs: 150-250 métal, 60-100 cristal (3x plus puissants)
+    let base_metal_per_hunter = 50.0 + rand::thread_rng().gen_range(0.0..=50.0);
+    let base_crystal_per_hunter = 20.0 + rand::thread_rng().gen_range(0.0..=30.0);
+    let base_metal_per_cruiser = 150.0 + rand::thread_rng().gen_range(0.0..=100.0);
+    let base_crystal_per_cruiser = 60.0 + rand::thread_rng().gen_range(0.0..=40.0);
+
+    let total_ships = hunters + cruisers;
 
     let (loot_metal, loot_crystal) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
-        let combat_res = game_logic::simulate_combat(ship_count + p.cruiser_count, p.laser_battery_level);
+        let combat_res = game_logic::simulate_combat(total_ships, p.laser_battery_level);
 
         if combat_res.victory {
             winner = "player";
-            // Gains proportionnels au nombre de vaisseaux
-            let metal = (base_metal_per_ship * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
-            let crystal = (base_crystal_per_ship * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+            // Gains proportionnels au nombre et type de vaisseaux
+            let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0);
+            let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0);
 
             logs.push(format!("RESULTAT : {}", combat_res.message));
             logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
 
-            lost_hunters = combat_res.ships_lost;
-            if lost_hunters > ship_count { lost_hunters = ship_count; }
+            // Répartir les pertes entre chasseurs et croiseurs
+            let total_sent = total_ships as f64;
+            let hunter_ratio = hunters as f64 / total_sent;
+            lost_hunters = (combat_res.ships_lost as f64 * hunter_ratio) as i32;
+            lost_cruisers = combat_res.ships_lost - lost_hunters;
+
+            if lost_hunters > hunters { lost_hunters = hunters; }
+            if lost_cruisers > cruisers { lost_cruisers = cruisers; }
 
             active.metal_amount = Set(p.metal_amount + metal);
             active.crystal_amount = Set(p.crystal_amount + crystal);
@@ -820,15 +930,20 @@ async fn expedition_handler(
         } else {
             winner = "pirates";
             logs.push(format!("RESULTAT : {}", combat_res.message));
-            lost_hunters = (ship_count as f64 * 0.5) as i32;
-            lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;
+
+            // Répartir les pertes entre chasseurs et croiseurs (défaite = pertes lourdes)
+            let total_sent = total_ships as f64;
+            let hunter_ratio = hunters as f64 / total_sent;
+            lost_hunters = (combat_res.ships_lost as f64 * hunter_ratio * 1.5).min(hunters as f64) as i32;
+            lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_ratio) * 1.5).min(cruisers as f64) as i32;
+
             (0.0, 0.0)
         }
     } else {
         winner = "player";
-        // Gains proportionnels au nombre de vaisseaux (bonus pour secteur calme)
-        let metal = (base_metal_per_ship * ship_count as f64 * 1.2) * (game_logic::SPEED_FACTOR / 100.0);
-        let crystal = (base_crystal_per_ship * ship_count as f64 * 1.2) * (game_logic::SPEED_FACTOR / 100.0);
+        // Gains proportionnels au nombre et type de vaisseaux (bonus pour secteur calme: x1.2)
+        let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
+        let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
 
         logs.push("SCAN : Secteur calme.".to_string());
         logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", metal, crystal));
@@ -857,8 +972,8 @@ async fn expedition_handler(
         opponent_username: Set(None),
         mission_type: Set("expedition".to_string()),
         result: Set(winner.to_string()),
-        loot_metal: Set(loot),
-        loot_crystal: Set(0.0),
+        loot_metal: Set(loot_metal),
+        loot_crystal: Set(loot_crystal),
         ships_lost: Set(lost_hunters + lost_cruisers),
         date: Set(Utc::now().naive_utc()),
     };
@@ -895,9 +1010,18 @@ async fn scout_expedition_handler(
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
     };
 
-    let ship_count = payload.ship_count;
-    if ship_count <= 0 || ship_count > p.light_hunter_count {
+    let hunters = payload.hunters;
+    let cruisers = payload.cruisers;
+    let total_ships = hunters + cruisers;
+
+    if total_ships <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
+    }
+    if hunters > p.light_hunter_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de chasseurs"}))).into_response();
+    }
+    if cruisers > p.cruiser_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de croiseurs"}))).into_response();
     }
 
     // Simulation du scan (aléatoire mais basé sur la force de la flotte)
@@ -927,22 +1051,31 @@ async fn scout_expedition_handler(
         )
     };
 
-    // Ajustement de la probabilité en fonction du nombre de vaisseaux
-    let adjusted_probability = if ship_count >= 10 {
+    // Ajustement de la probabilité en fonction du nombre total de vaisseaux
+    let adjusted_probability = if total_ships >= 10 {
         std::cmp::min(95, probability + 10)
-    } else if ship_count >= 5 {
+    } else if total_ships >= 5 {
         probability
     } else {
         std::cmp::max(20, probability - 10)
     };
 
     // Calcul des gains estimés (basé sur le même calcul que l'expédition réelle)
-    let base_metal_per_ship = 75.0; // Moyenne de 50-100
-    let base_crystal_per_ship = 35.0; // Moyenne de 20-50
-    let estimated_metal_min = (base_metal_per_ship * 0.7 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
-    let estimated_metal_max = (base_metal_per_ship * 1.5 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
-    let estimated_crystal_min = (base_crystal_per_ship * 0.7 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
-    let estimated_crystal_max = (base_crystal_per_ship * 1.5 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+    // Chasseurs: 50-100 métal (moy 75), 20-50 cristal (moy 35)
+    // Croiseurs: 150-250 métal (moy 200), 60-100 cristal (moy 80)
+    let avg_metal_per_hunter = 75.0;
+    let avg_crystal_per_hunter = 35.0;
+    let avg_metal_per_cruiser = 200.0;
+    let avg_crystal_per_cruiser = 80.0;
+
+    // Min/Max avec variation de ±30%
+    let base_metal = avg_metal_per_hunter * hunters as f64 + avg_metal_per_cruiser * cruisers as f64;
+    let base_crystal = avg_crystal_per_hunter * hunters as f64 + avg_crystal_per_cruiser * cruisers as f64;
+
+    let estimated_metal_min = (base_metal * 0.7) * (game_logic::SPEED_FACTOR / 100.0);
+    let estimated_metal_max = (base_metal * 1.5) * (game_logic::SPEED_FACTOR / 100.0);
+    let estimated_crystal_min = (base_crystal * 0.7) * (game_logic::SPEED_FACTOR / 100.0);
+    let estimated_crystal_max = (base_crystal * 1.5) * (game_logic::SPEED_FACTOR / 100.0);
 
     Json(json!({
         "danger": danger_level,
@@ -1402,9 +1535,13 @@ async fn cancel_construction_handler(
         "light_hunter" | "cruiser" | "recycler" | "spy_probe" | "colony_ship" | "transporter" | "missile_launcher" | "plasma_turret" => {
             let (m, c) = match item.building_type.as_str() {
                 "light_hunter" => game_logic::get_light_hunter_stats(),
-                "cruiser" => (20000.0, 7000.0), "recycler" => (10000.0, 6000.0), "spy_probe" => game_logic::get_spy_probe_stats(),
-                "colony_ship" => game_logic::get_colony_ship_stats(), "transporter" => game_logic::get_transporter_stats(),
-                "missile_launcher" => game_logic::get_missile_launcher_stats(), "plasma_turret" => game_logic::get_plasma_turret_stats(),
+                "cruiser" => game_logic::get_cruiser_stats(),
+                "recycler" => game_logic::get_recycler_stats(),
+                "spy_probe" => game_logic::get_spy_probe_stats(),
+                "colony_ship" => game_logic::get_colony_ship_stats(),
+                "transporter" => game_logic::get_transporter_stats(),
+                "missile_launcher" => game_logic::get_missile_launcher_stats(),
+                "plasma_turret" => game_logic::get_plasma_turret_stats(),
                 _ => (0.0, 0.0),
             };
             (m * item.level as f64, c * item.level as f64, 0.0)

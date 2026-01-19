@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert } from "lucide-react";
+import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert, Trophy } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { apiUrl } from '@/config/api';
@@ -90,6 +90,84 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                     const isDefense = log.mission_type === 'defense';
                     const isSpy = log.mission_type === 'spy_defense';
                     const isExpedition = log.mission_type === 'expedition';
+                    const isPlanetConquered = log.mission_type === 'planet_conquered';
+                    const isPlanetLost = log.mission_type === 'planet_lost';
+
+                    // Rapport de conquête de planète (attaquant)
+                    if (isPlanetConquered) {
+                        return (
+                            <div key={log.id} className="bg-gradient-to-r from-yellow-950/20 to-orange-950/20 border border-yellow-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-yellow-950/30 transition-colors">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-2 rounded-lg bg-yellow-500/20 text-yellow-400">
+                                        <Trophy size={16} />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-black uppercase text-yellow-400">
+                                                🎯 CONQUÊTE RÉUSSIE
+                                            </span>
+                                            <span className="text-[10px] text-slate-500 font-mono">
+                                                {log.target_name}
+                                            </span>
+                                        </div>
+                                        <div className="text-[10px] text-yellow-300 mt-0.5">
+                                            Planète conquise ! Anciennement à {log.opponent_username}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 mt-0.5">
+                                            {formatDate(log.date)}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xs font-mono text-white">
+                                        <span className="text-yellow-500">+{Math.floor(log.loot_metal).toLocaleString()}</span> M /
+                                        <span className="text-cyan-500"> +{Math.floor(log.loot_crystal).toLocaleString()}</span> C
+                                    </div>
+                                    <div className="text-[10px] text-red-400/70 font-mono">
+                                        Pertes: {log.ships_lost} vso.
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
+
+                    // Rapport de perte de planète (défenseur)
+                    if (isPlanetLost) {
+                        return (
+                            <div key={log.id} className="bg-gradient-to-r from-red-950/30 to-orange-950/30 border border-red-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-red-950/40 transition-colors">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-2 rounded-lg bg-red-500/20 text-red-400">
+                                        <ShieldAlert size={16} />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-black uppercase text-red-400">
+                                                🚨 PLANÈTE PERDUE
+                                            </span>
+                                            <span className="text-[10px] text-slate-500 font-mono">
+                                                Conquise par {log.opponent_username}
+                                            </span>
+                                        </div>
+                                        <div className="text-[10px] text-red-300 mt-0.5">
+                                            Votre planète a été conquise suite à une défaite écrasante
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 mt-0.5">
+                                            {formatDate(log.date)}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xs font-mono text-white">
+                                        <span className="text-red-500">-{Math.floor(Math.abs(log.loot_metal)).toLocaleString()}</span> M /
+                                        <span className="text-red-400"> -{Math.floor(Math.abs(log.loot_crystal)).toLocaleString()}</span> C
+                                    </div>
+                                    <div className="text-[10px] text-red-400/70 font-mono">
+                                        Pertes: {log.ships_lost} vso.
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
 
                     // Rapport d'espionnage
                     if (isSpy) {

@@ -337,6 +337,8 @@ pub const TRANSPORTER_CAPACITY: f64 = 10000.0;
 
 // Helper functions
 pub fn get_light_hunter_stats() -> (f64, f64) { get_unit_cost("light_hunter") }
+pub fn get_cruiser_stats() -> (f64, f64) { get_unit_cost("cruiser") }
+pub fn get_recycler_stats() -> (f64, f64) { get_unit_cost("recycler") }
 pub fn get_spy_probe_stats() -> (f64, f64) { get_unit_cost("spy_probe") }
 pub fn get_missile_launcher_stats() -> (f64, f64) { get_unit_cost("missile_launcher") }
 pub fn get_plasma_turret_stats() -> (f64, f64) { get_unit_cost("plasma_turret") }

@@ -6,10 +6,11 @@ import { toast } from "sonner";
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-export default function ExpeditionZone({ planet, onAction }: { planet: any, onAction: (shipCount: number) => void }) {
+export default function ExpeditionZone({ planet, onAction }: { planet: any, onAction: (hunters: number, cruisers: number) => void }) {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
-  const [shipCount, setShipCount] = useState(1);
+  const [hunterCount, setHunterCount] = useState(1);
+  const [cruiserCount, setCruiserCount] = useState(0);
   const [scouting, setScouting] = useState(false);
   const [scoutResult, setScoutResult] = useState<{
     danger: string;
@@ -61,7 +62,7 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ ship_count: shipCount })
+        body: JSON.stringify({ hunters: hunterCount, cruisers: cruiserCount })
       });
 
       if (res.ok) {
@@ -82,12 +83,13 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
 
   const handleLaunch = () => {
     setIsLaunching(true);
-    onAction(shipCount); // On passe le nombre de vaisseaux
+    onAction(hunterCount, cruiserCount); // On passe les deux types de vaisseaux
   };
 
   const isInMission = (timeLeft !== null && timeLeft > 0) || isLaunching;
-  const hasShips = (planet.light_hunter_count || 0) > 0;
-  const availableShips = planet.light_hunter_count || 0;
+  const hasShips = (planet.light_hunter_count || 0) > 0 || (planet.cruiser_count || 0) > 0;
+  const availableHunters = planet.light_hunter_count || 0;
+  const availableCruisers = planet.cruiser_count || 0;
 
   // Thème de couleur pour cette section (Cyan/Exploration)
   const theme = {
@@ -166,40 +168,86 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                   <h4 className="text-[10px] font-black uppercase text-cyan-400 mb-3 flex items-center gap-2">
                     <Rocket size={12}/> Configuration Flotte
                   </h4>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      onClick={() => setShipCount(Math.max(1, shipCount - 1))}
-                      disabled={shipCount <= 1}
-                      className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
-                    >
-                      <Minus size={16} />
-                    </Button>
-                    <div className="flex-1 text-center">
-                      <div className="text-3xl font-mono font-black text-white">{shipCount}</div>
-                      <div className="text-[9px] text-slate-500 uppercase">Chasseurs</div>
+
+                  {/* Chasseurs Légers */}
+                  <div className="mb-4">
+                    <div className="text-[9px] text-slate-400 uppercase mb-2">Chasseurs Légers</div>
+                    <div className="flex items-center gap-4">
+                      <Button
+                        onClick={() => setHunterCount(Math.max(0, hunterCount - 1))}
+                        disabled={hunterCount <= 0}
+                        className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
+                      >
+                        <Minus size={16} />
+                      </Button>
+                      <div className="flex-1 text-center">
+                        <div className="text-3xl font-mono font-black text-white">{hunterCount}</div>
+                        <div className="text-[9px] text-slate-500">/ {availableHunters}</div>
+                      </div>
+                      <Button
+                        onClick={() => setHunterCount(Math.min(availableHunters, hunterCount + 1))}
+                        disabled={hunterCount >= availableHunters}
+                        className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
+                      >
+                        <Plus size={16} />
+                      </Button>
                     </div>
-                    <Button
-                      onClick={() => setShipCount(Math.min(availableShips, shipCount + 1))}
-                      disabled={shipCount >= availableShips}
-                      className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
-                    >
-                      <Plus size={16} />
-                    </Button>
+                    <div className="mt-2 flex gap-2">
+                      <Button
+                        onClick={() => setHunterCount(Math.floor(availableHunters / 2))}
+                        className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
+                      >
+                        50%
+                      </Button>
+                      <Button
+                        onClick={() => setHunterCount(availableHunters)}
+                        className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
+                      >
+                        MAX
+                      </Button>
+                    </div>
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      onClick={() => setShipCount(Math.floor(availableShips / 2))}
-                      className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
-                    >
-                      50%
-                    </Button>
-                    <Button
-                      onClick={() => setShipCount(availableShips)}
-                      className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
-                    >
-                      MAX
-                    </Button>
-                  </div>
+
+                  {/* Croiseurs */}
+                  {availableCruisers > 0 && (
+                    <div>
+                      <div className="text-[9px] text-slate-400 uppercase mb-2">Croiseurs</div>
+                      <div className="flex items-center gap-4">
+                        <Button
+                          onClick={() => setCruiserCount(Math.max(0, cruiserCount - 1))}
+                          disabled={cruiserCount <= 0}
+                          className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
+                        >
+                          <Minus size={16} />
+                        </Button>
+                        <div className="flex-1 text-center">
+                          <div className="text-3xl font-mono font-black text-white">{cruiserCount}</div>
+                          <div className="text-[9px] text-slate-500">/ {availableCruisers}</div>
+                        </div>
+                        <Button
+                          onClick={() => setCruiserCount(Math.min(availableCruisers, cruiserCount + 1))}
+                          disabled={cruiserCount >= availableCruisers}
+                          className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
+                        >
+                          <Plus size={16} />
+                        </Button>
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          onClick={() => setCruiserCount(Math.floor(availableCruisers / 2))}
+                          className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
+                        >
+                          50%
+                        </Button>
+                        <Button
+                          onClick={() => setCruiserCount(availableCruisers)}
+                          className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
+                        >
+                          MAX
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bouton de Sondage */}
