@@ -67,10 +67,11 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
   // Calculate exchange rate
   const getExchangeRate = () => {
     if (!buyResource || !npcPrices) return null;
-    const sellPrice = npcPrices.npc_buy_price;
-    const buyPrice = npcPrices.buy_prices?.[buyResource];
+    const sellPrice = npcPrices.npc_buy_price; // Déjà avec marge NPC (×0.85)
+    const buyPrice = npcPrices.buy_prices?.[buyResource]; // Déjà avec marge NPC (×1.18)
     if (!buyPrice) return null;
-    return (sellPrice / buyPrice) * 0.85; // avec marge NPC
+    // Les prix contiennent déjà la marge NPC, pas besoin de l'appliquer à nouveau
+    return sellPrice / buyPrice;
   };
 
   const exchangeRate = getExchangeRate();

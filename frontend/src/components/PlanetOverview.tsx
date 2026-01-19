@@ -43,13 +43,42 @@ const getItemType = (id: string) => {
     return 'building';
 };
 
+interface ResourceSlot {
+  id: number;
+  planet_id: string;
+  slot_number: number;
+  resource_type: string;
+  level: number;
+  is_locked: boolean;
+  is_active: boolean;
+}
+
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
   const [, setTick] = useState(0);
+  const [slots, setSlots] = useState<ResourceSlot[]>([]);
 
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Charger les slots actifs
+  useEffect(() => {
+    const fetchSlots = async () => {
+      try {
+        const res = await fetch(apiUrl(`/planets/${planet.id}/resource-slots`), {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSlots(data.filter((s: ResourceSlot) => s.slot_number >= 5));
+        }
+      } catch (error) {
+        console.error('Erreur chargement slots:', error);
+      }
+    };
+    if (planet?.id) fetchSlots();
+  }, [planet?.id]);
 
   const getTimeLeft = (endDate: string) => {
     const end = new Date(endDate.endsWith("Z") ? endDate : endDate + "Z").getTime();
@@ -80,15 +109,34 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     }
   };
 
-  // --- CALCULS PRODUCTION (FIX: Ajouter Math.floor) ---
-  const calculateProduction = (level: number, baseFactor: number) => {
-    const baseProd = baseFactor * level * Math.pow(1.1, level);
-    return Math.floor(baseProd * speedFactor); // ✅ FIX ICI
+  // --- CALCULS PRODUCTION (avec slots, tech et énergie) ---
+  const calculateProduction = (resourceType: 'metal' | 'crystal' | 'deuterium', level: number, baseFactor: number) => {
+    // Calcul de base
+    let prod = baseFactor * level * Math.pow(1.1, level);
+
+    // Bonus technologie énergie (+1% par niveau)
+    const techLevel = planet.energy_tech_level || 0;
+    const techBonus = 1.0 + (techLevel * 0.01);
+    prod *= techBonus;
+
+    // Ratio énergétique (récupéré du backend)
+    const energyRatio = (planet.energy_ratio || 100) / 100;
+    prod *= energyRatio;
+
+    // Bonus slots actifs (+50% par slot du même type)
+    const activeSlots = slots.filter(s => s.is_active && s.resource_type === resourceType);
+    const slotBonus = 1.0 + (activeSlots.length * 0.5);
+    prod *= slotBonus;
+
+    // Speed factor
+    prod *= speedFactor;
+
+    return Math.floor(prod);
   };
 
-  const prodMetal = calculateProduction(planet.metal_mine_level, 30);
-  const prodCrystal = calculateProduction(planet.crystal_mine_level, 20);
-  const prodDeut = calculateProduction(planet.deuterium_mine_level, 10);
+  const prodMetal = calculateProduction('metal', planet.metal_mine_level, 30);
+  const prodCrystal = calculateProduction('crystal', planet.crystal_mine_level, 20);
+  const prodDeut = calculateProduction('deuterium', planet.deuterium_mine_level, 10);
 
   // Energy data from backend
   const energyProd = planet.energy_production || 0;
