@@ -46,7 +46,9 @@ const resourceGradients: Record<string, string> = {
 
 export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUpdate, onStatsUpdate }: NpcTradeCardProps) {
   const [sellQuantity, setSellQuantity] = useState(1000);
+  const [buyQuantity, setBuyQuantity] = useState(0);
   const [buyResource, setBuyResource] = useState("");
+  const [lastEdited, setLastEdited] = useState<'sell' | 'buy'>('sell');
 
   const Icon = resourceIcons[resource] || Stone;
   const color = resourceColors[resource] || "text-slate-400";
@@ -62,23 +64,66 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
     }
   })();
 
+  // Calculate exchange rate
+  const getExchangeRate = () => {
+    if (!buyResource || !npcPrices) return null;
+    const sellPrice = npcPrices.npc_buy_price;
+    const buyPrice = npcPrices.buy_prices?.[buyResource];
+    if (!buyPrice) return null;
+    return (sellPrice / buyPrice) * 0.85; // avec marge NPC
+  };
+
+  const exchangeRate = getExchangeRate();
+
+  // Quand on modifie la quantité à vendre
+  const handleSellQuantityChange = (value: number) => {
+    const clamped = Math.max(0, Math.min(availableAmount, value));
+    setSellQuantity(clamped);
+    setLastEdited('sell');
+    if (exchangeRate) {
+      setBuyQuantity(Math.floor(clamped * exchangeRate));
+    }
+  };
+
+  // Quand on modifie la quantité à obtenir
+  const handleBuyQuantityChange = (value: number) => {
+    setBuyQuantity(Math.max(0, value));
+    setLastEdited('buy');
+    if (exchangeRate && exchangeRate > 0) {
+      const requiredSell = Math.ceil(value / exchangeRate);
+      setSellQuantity(Math.min(requiredSell, availableAmount));
+    }
+  };
+
+  // Recalculer quand la ressource à acheter change
+  const handleBuyResourceChange = (newResource: string) => {
+    setBuyResource(newResource);
+    // Recalculer selon le dernier champ édité
+    if (newResource && npcPrices) {
+      const sellPrice = npcPrices.npc_buy_price;
+      const buyPrice = npcPrices.buy_prices?.[newResource];
+      if (buyPrice) {
+        const rate = (sellPrice / buyPrice) * 0.85;
+        if (lastEdited === 'sell') {
+          setBuyQuantity(Math.floor(sellQuantity * rate));
+        } else {
+          const requiredSell = Math.ceil(buyQuantity / rate);
+          setSellQuantity(Math.min(requiredSell, availableAmount));
+        }
+      }
+    }
+  };
+
   // Calculate exchange preview
   const exchangePreview = (() => {
-    if (!buyResource || !npcPrices) return null;
+    if (!buyResource || !npcPrices || !exchangeRate) return null;
 
-    const sellPrice = npcPrices.npc_buy_price; // What NPC pays for our resource
-    const buyPrice = npcPrices.buy_prices?.[buyResource]; // Price of the resource we want
-
-    if (!buyPrice) return null;
-
-    // Exchange rate: how much of target resource we get per unit of source resource
-    const exchangeRate = sellPrice / buyPrice;
-    // After NPC margin (85%)
-    const finalAmount = sellQuantity * exchangeRate * 0.85;
+    const sellPrice = npcPrices.npc_buy_price;
+    const buyPrice = npcPrices.buy_prices?.[buyResource];
 
     return {
-      exchangeRate,
-      finalAmount,
+      exchangeRate: exchangeRate / 0.85, // taux brut avant marge
+      finalAmount: buyQuantity,
       sellPrice,
       buyPrice
     };
@@ -175,25 +220,12 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
 
           {/* Trade Setup */}
           <div className="space-y-3">
-            <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">
-                Quantité de <span className={color}>{resourceLabels[resource]}</span> à vendre:
-              </label>
-              <Input
-                type="number"
-                min={1}
-                max={availableAmount}
-                value={sellQuantity}
-                onChange={(e) => setSellQuantity(Math.max(1, Math.min(availableAmount, parseInt(e.target.value) || 1)))}
-                className="bg-black/30 border-white/10 text-white font-mono hover:border-white/20 transition-colors"
-              />
-            </div>
-
+            {/* Ressource à acheter - en premier */}
             <div>
               <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Ressource à acheter:</label>
               <select
                 value={buyResource}
-                onChange={(e) => setBuyResource(e.target.value)}
+                onChange={(e) => handleBuyResourceChange(e.target.value)}
                 className="w-full p-2 bg-black/30 border border-white/10 rounded text-white text-sm font-mono hover:border-white/20 transition-colors"
               >
                 <option value="">Choisir...</option>
@@ -203,20 +235,49 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
               </select>
             </div>
 
-            {/* Quantité obtenue */}
-            {buyResource && exchangePreview && (
+            {/* Quantité à vendre */}
+            <div>
+              <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">
+                Quantité de <span className={color}>{resourceLabels[resource]}</span> à vendre:
+              </label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  min={0}
+                  max={availableAmount}
+                  value={sellQuantity}
+                  onChange={(e) => handleSellQuantityChange(parseInt(e.target.value) || 0)}
+                  className={`bg-black/30 border-white/10 text-white font-mono hover:border-white/20 transition-colors pr-12 ${lastEdited === 'sell' ? 'border-indigo-500/50' : ''}`}
+                />
+                <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${color}`}>
+                  <Icon size={16} />
+                </div>
+              </div>
+              {sellQuantity > availableAmount && (
+                <p className="text-[9px] text-red-400 mt-1">Ressources insuffisantes!</p>
+              )}
+            </div>
+
+            {/* Quantité à obtenir - éditable */}
+            {buyResource && (
               <div>
                 <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">
-                  Quantité de <span className={resourceColors[buyResource]}>{resourceLabels[buyResource]}</span> obtenue:
+                  Quantité de <span className={resourceColors[buyResource]}>{resourceLabels[buyResource]}</span> à obtenir:
                 </label>
-                <div className="bg-black/30 border border-white/10 rounded p-2 flex items-center gap-2">
-                  {(() => {
-                    const BuyIcon = resourceIcons[buyResource] || Stone;
-                    return <BuyIcon size={16} className={resourceColors[buyResource]} />;
-                  })()}
-                  <span className={`font-mono font-bold text-lg ${resourceColors[buyResource]}`}>
-                    {Math.floor(exchangePreview.finalAmount).toLocaleString()}
-                  </span>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={buyQuantity}
+                    onChange={(e) => handleBuyQuantityChange(parseInt(e.target.value) || 0)}
+                    className={`bg-black/30 border-white/10 text-white font-mono hover:border-white/20 transition-colors pr-12 ${lastEdited === 'buy' ? 'border-indigo-500/50' : ''}`}
+                  />
+                  <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${resourceColors[buyResource]}`}>
+                    {(() => {
+                      const BuyIcon = resourceIcons[buyResource] || Stone;
+                      return <BuyIcon size={16} />;
+                    })()}
+                  </div>
                 </div>
               </div>
             )}
