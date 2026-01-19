@@ -243,15 +243,6 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanets
                 <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 bg-purple-500"></div>
               </div>
 
-              {/* Badge planète actuelle */}
-              {isCurrent && (
-                <div className="absolute top-3 right-3 z-10">
-                  <span className="flex items-center gap-1 px-2 py-1 bg-indigo-500/20 border border-indigo-500/50 rounded-full text-[9px] font-black uppercase text-indigo-300 animate-glow-pulse">
-                    <Crown size={10} /> Actuelle
-                  </span>
-                </div>
-              )}
-
               <CardHeader className="pb-2 relative z-10">
                 <CardTitle className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -266,7 +257,15 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanets
                       )}
                     </div>
                     <div>
-                      <h3 className="text-lg font-black text-white uppercase tracking-wider">{planet.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-black text-white uppercase tracking-wider">{planet.name}</h3>
+                        {/* Badge planète actuelle - intégré au titre */}
+                        {isCurrent && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/50 rounded-full text-[8px] font-black uppercase text-indigo-300 animate-glow-pulse">
+                            <Crown size={8} /> Actuelle
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
                         <MapPin size={10} /> [{planet.galaxy}:{planet.system}:{planet.position}]
                       </p>

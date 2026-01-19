@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 
-type SoundType = 'build' | 'attack' | 'success' | 'error' | 'click' | 'notification' | 'combat' | 'expedition';
+type SoundType = 'build' | 'attack' | 'success' | 'error' | 'click' | 'notification' | 'combat' | 'expedition' | 'alert';
 
 interface UseSoundEffectsOptions {
   enabled: boolean;
@@ -16,9 +16,9 @@ export function useSoundEffects({
   const ambientMusic = useRef<HTMLAudioElement | null>(null);
   const soundCache = useRef<Map<SoundType, HTMLAudioElement>>(new Map());
 
-  // ✅ CORRECTION : Sons avec extensions .wav et .ogg
+  // ✅ CORRECTION : Sons avec extensions .wav et .ogg (utilisant les fichiers existants)
   const SOUND_FILES: Record<SoundType, string> = {
-    build: '/sounds/build.ogg',
+    build: '/sounds/success.ogg',      // Utilise success car build.ogg n'existe pas
     attack: '/sounds/laser.wav',
     success: '/sounds/success.ogg',
     error: '/sounds/error.ogg',
@@ -26,6 +26,7 @@ export function useSoundEffects({
     notification: '/sounds/alert.wav',
     combat: '/sounds/combat.ogg',
     expedition: '/sounds/warp.wav',
+    alert: '/sounds/alert.wav',        // Ajout du type 'alert'
   };
 
   // Précharger les sons

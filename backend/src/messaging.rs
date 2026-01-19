@@ -17,6 +17,7 @@ use crate::entities::{
     prelude::{User, Message, Conversation},
     user, message, conversation
 };
+use crate::websocket::{WsEvent, WsState};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -257,12 +258,40 @@ pub async fn send_message_v2_handler(
         sender_id: Set(sender_id),
         receiver_id: Set(recipient_id),
         subject: Set(payload.subject.unwrap_or_default()),
-        content: Set(payload.content),
+        content: Set(payload.content.clone()),
         created_at: Set(Utc::now().naive_utc()),
         is_read: Set(false),
     };
 
     new_message.insert(&state.db).await.unwrap();
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NOTIFICATION WEBSOCKET - Notifier le destinataire du nouveau message
+    // ═══════════════════════════════════════════════════════════════════════════
+    if let Some(ref ws) = state.ws {
+        // Récupérer le nom de l'expéditeur
+        let sender_name = User::find_by_id(sender_id)
+            .one(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .map(|u| u.username)
+            .unwrap_or_else(|| "Inconnu".to_string());
+
+        // Créer un aperçu du message (max 50 caractères)
+        let preview = if payload.content.len() > 50 {
+            format!("{}...", &payload.content[..50])
+        } else {
+            payload.content
+        };
+
+        // Notifier le destinataire sur toutes ses planètes
+        let event = WsEvent::MessageReceived {
+            from: sender_name,
+            preview,
+        };
+        ws.broadcast_to_user(recipient_id, event).await;
+    }
 
     (StatusCode::OK, Json(json!({"conversation_id": conv_id}))).into_response()
 }
