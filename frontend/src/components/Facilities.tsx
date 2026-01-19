@@ -131,18 +131,20 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
         const BgIcon = theme.bgIcon;
 
         return (
-          <Card key={fac.id} className={`relative overflow-hidden border-t-4 ${locked ? 'border-red-900/50 grayscale-[0.5]' : theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group`}>
+          <Card key={fac.id} className={`relative overflow-hidden border-t-4 ${locked ? 'border-red-900/50 grayscale-[0.5]' : theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group hover:-translate-y-2 hover:shadow-3xl transition-all duration-500 hover-scale card-depth card-depth-hover animate-slide-up`}>
              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
-             <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
+             <div className="absolute top-0 inset-x-0 h-px bg-white/10 opacity-50 group-hover:bg-white/60 transition-all duration-300 animate-shine"></div>
+             <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-15 transition-all duration-500 pointer-events-none group-hover:animate-float">
                 <BgIcon size={150} className={theme.color} />
              </div>
+             <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             
             <CardContent className="p-6 relative z-10 flex flex-col h-full justify-between">
               <div>
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-lg border ${locked ? 'border-red-500/30 bg-red-500/10 text-red-500' : `${theme.border} bg-black/20 ${theme.color}`} group-hover:text-white group-hover:bg-white/10 transition-all`}>
-                            {locked ? <Lock size={24} /> : <Icon size={24} />}
+                        <div className={`p-3 rounded-lg border ${locked ? 'border-red-500/30 bg-red-500/10 text-red-500' : `${theme.border} bg-black/20 ${theme.color}`} group-hover:text-white group-hover:bg-white/10 transition-all group-hover:scale-110 duration-300`}>
+                            {locked ? <Lock size={24} className="animate-pulse" /> : <Icon size={24} />}
                         </div>
                         <div>
                             <h3 className="text-lg font-black uppercase tracking-wider text-white">{fac.name}</h3>
@@ -154,15 +156,15 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
 
                 {/* STATS DYNAMIQUES */}
                 {!locked && (
-                    <div className="mb-4 p-2 bg-black/30 rounded border border-white/5 flex items-center justify-between">
+                    <div className="mb-4 p-2 bg-black/30 rounded border border-white/5 flex items-center justify-between glass-card">
                         <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
-                            <TrendingUp size={12} className={theme.color} />
+                            <TrendingUp size={12} className={`${theme.color} animate-bounce-subtle`} />
                             <span>{stats.label}</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs font-mono">
                             <span className="text-slate-300">{stats.current}</span>
                             <ChevronRight size={12} className="text-slate-600" />
-                            <span className={`${theme.color} font-bold`}>{stats.next}</span>
+                            <span className={`${theme.color} font-bold animate-scale-pulse`}>{stats.next}</span>
                         </div>
                     </div>
                 )}

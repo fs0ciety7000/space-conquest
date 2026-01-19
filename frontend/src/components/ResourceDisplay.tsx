@@ -262,12 +262,13 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
         const isSolar = build.id === 'solar_plant';
 
         return (
-          <Card key={build.id} className={`relative overflow-hidden border-t-4 ${theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group hover:-translate-y-1 transition-all duration-300`}>
-            
-            <div className="absolute top-0 inset-x-0 h-px bg-white/10 opacity-50 group-hover:bg-white/30 transition-all"></div>
-            <div className="absolute -right-8 -top-8 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
+          <Card key={build.id} className={`relative overflow-hidden border-t-4 ${theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group hover:-translate-y-2 hover:shadow-3xl transition-all duration-500 hover-scale card-depth card-depth-hover animate-slide-up`}>
+
+            <div className="absolute top-0 inset-x-0 h-px bg-white/10 opacity-50 group-hover:bg-white/60 transition-all duration-300 animate-shine"></div>
+            <div className="absolute -right-8 -top-8 opacity-5 group-hover:opacity-15 transition-all duration-500 pointer-events-none group-hover:animate-float">
                 <Icon size={180} className={theme.color} />
             </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
             <CardContent className="p-5 relative z-10 flex flex-col h-full justify-between">
               <div>
@@ -304,9 +305,9 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                             <ChevronRight size={12} className="text-slate-600"/>
                             <span className={`${theme.color} font-bold`}>{nextProd.toLocaleString()}</span>
                         </div>
-                        {/* Jauge Prod */}
-                        <div className="h-1 w-full bg-slate-800 rounded-full mt-1 overflow-hidden">
-                            <div className={`h-full ${theme.color.replace('text-', 'bg-')} opacity-80`} style={{ width: '100%' }}></div>
+                        {/* Jauge Prod Animée */}
+                        <div className="h-1 w-full bg-slate-800 rounded-full mt-1 overflow-hidden progress-bar-animated">
+                            <div className={`h-full ${theme.color.replace('text-', 'bg-')} opacity-80 animate-gradient`} style={{ width: '100%' }}></div>
                         </div>
                     </div>
 
@@ -361,8 +362,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                   )}
 
                   {activeItem ? (
-                     <span className="flex items-center gap-2 relative z-10 animate-pulse text-cyan-400">
-                       <Timer size={14} className="animate-spin" /> En cours {timeLeft}s
+                     <span className="flex items-center gap-2 relative z-10 text-cyan-400 animate-glow-pulse">
+                       <Timer size={14} className="animate-spin-slow" /> En cours {timeLeft}s
                      </span>
                   ) : isQueueFull ? (
                     <span className="relative z-10">File Pleine (3/3)</span>
@@ -415,10 +416,10 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
               return (
                 <Card
                   key={slot.slot_number}
-                  className={`relative overflow-hidden transition-all duration-300 ${
+                  className={`relative overflow-hidden transition-all duration-500 hover:-translate-y-1 hover-scale card-depth group/slot animate-fade-in ${
                     slot.is_active
-                      ? `border ${slotBorder} ${slotBg} shadow-lg`
-                      : 'border border-slate-700/50 bg-slate-900/30 opacity-60 hover:opacity-80'
+                      ? `border ${slotBorder} ${slotBg} shadow-lg animate-glow-pulse`
+                      : 'border border-slate-700/50 bg-slate-900/30 opacity-60 hover:opacity-100'
                   }`}
                 >
                   <CardContent className="p-4">
@@ -480,8 +481,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
                     {/* Bonus indicator OR Activation cost */}
                     {slot.is_active ? (
-                      <div className="mt-3 text-center bg-black/40 p-2 rounded border border-white/5">
-                        <span className={`text-lg font-black font-mono ${slotColor}`}>+50%</span>
+                      <div className="mt-3 text-center bg-black/40 p-2 rounded border border-white/5 glass-card">
+                        <span className={`text-lg font-black font-mono ${slotColor} animate-scale-pulse`}>+50%</span>
                         <p className="text-[9px] text-slate-500 uppercase">Bonus {resInfo?.label}</p>
                       </div>
                     ) : (

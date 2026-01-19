@@ -142,8 +142,9 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
       
       {/* Jauge Hangar */}
-      <Card className="bg-slate-950 border border-white/10 relative overflow-hidden">
+      <Card className="bg-slate-950 border border-white/10 relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
          <div className="absolute inset-0 bg-gradient-to-r from-orange-900/10 to-transparent"></div>
+         <div className="absolute top-0 inset-x-0 h-px bg-orange-500/20 opacity-50 hover:opacity-100 transition-all duration-300 animate-shine"></div>
          <CardContent className="p-4 flex items-center justify-between relative z-10">
             <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-lg border ${isFull ? 'border-red-500 bg-red-900/20 text-red-500' : 'border-orange-500/30 bg-orange-900/20 text-orange-400'}`}>
@@ -193,7 +194,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
         const maxBuildable = Math.min(maxMetal, maxCrystal, remainingSpace);
 
         return (
-          <Card key={ship.id} className={`relative overflow-hidden border-t-4 ${locked ? 'border-slate-800 bg-black/60' : `${theme.border} bg-gradient-to-b ${theme.gradient}`} shadow-2xl group transition-all duration-300`}>
+          <Card key={ship.id} className={`relative overflow-hidden border-t-4 ${locked ? 'border-slate-800 bg-black/60' : `${theme.border} bg-gradient-to-b ${theme.gradient}`} shadow-2xl group transition-all duration-500 hover:-translate-y-2 hover:shadow-3xl hover-scale card-depth card-depth-hover animate-slide-up`}>
             {locked && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center p-6 text-center border border-red-900/30">
                     <div className="bg-red-950/30 p-3 rounded-full border border-red-900 mb-4 animate-pulse"><Lock size={24} className="text-red-500" /></div>

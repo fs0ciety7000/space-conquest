@@ -109,10 +109,11 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
           const canAfford = planet.metal_amount >= cost.m && planet.crystal_amount >= cost.c && planet.deuterium_amount >= cost.d;
           
           return (
-            <Card key={t.id} className={`bg-slate-950 border-t-4 ${style.border} group relative overflow-hidden transition-all duration-300 ${!isResearchingThis ? 'hover:-translate-y-1 hover:shadow-2xl' : ''}`}>
-              
+            <Card key={t.id} className={`bg-slate-950 border-t-4 ${style.border} group relative overflow-hidden transition-all duration-500 hover-scale card-depth card-depth-hover animate-slide-up ${!isResearchingThis ? 'hover:-translate-y-2 hover:shadow-3xl' : 'animate-glow-pulse'}`}>
+
               <div className={`absolute inset-0 ${style.bg} opacity-20 group-hover:opacity-30 transition-opacity`}></div>
-              <div className={`absolute top-0 inset-x-0 h-px ${style.glow} ${isResearchingThis ? 'opacity-100 animate-pulse' : 'opacity-60'}`}></div>
+              <div className={`absolute top-0 inset-x-0 h-px ${style.glow} ${isResearchingThis ? 'opacity-100 animate-pulse' : 'opacity-60 group-hover:opacity-100'} transition-all duration-300 animate-shine`}></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
               <CardContent className="pt-6 px-6 pb-6 space-y-6 relative z-10 flex flex-col h-full justify-between">
                 
@@ -125,8 +126,8 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
                             </div>
                             <h3 className="text-lg font-black uppercase text-white italic tracking-wide break-words leading-none">{t.name}</h3>
                         </div>
-                        <div className={`p-3 rounded-xl bg-black/50 border border-white/5 ${style.glow} ${isResearchingThis ? 'animate-pulse' : ''}`}>
-                            <Icon size={24} className={style.color} />
+                        <div className={`p-3 rounded-xl bg-black/50 border border-white/5 ${style.glow} ${isResearchingThis ? 'animate-pulse' : ''} group-hover:scale-110 transition-transform duration-300`}>
+                            <Icon size={24} className={`${style.color} ${isResearchingThis ? 'animate-spin-slow' : ''}`} />
                         </div>
                     </div>
 
@@ -138,20 +139,20 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
                             </span>
                             <span className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">Niveau</span>
                         </div>
-                        <div className="h-1 w-full bg-slate-900 rounded-full overflow-hidden">
-                            <div className={`h-full ${isResearchingThis ? 'w-full animate-progress-indeterminate bg-yellow-500' : 'w-[40%] ' + style.color.replace('text-', 'bg-')} opacity-80`}></div>
+                        <div className="h-1 w-full bg-slate-900 rounded-full overflow-hidden progress-bar-animated">
+                            <div className={`h-full ${isResearchingThis ? 'w-full animate-progress-indeterminate bg-yellow-500 animate-glow-pulse' : 'w-[40%] ' + style.color.replace('text-', 'bg-') + ' animate-gradient'} opacity-80`}></div>
                         </div>
                     </div>
 
                     {/* --- BONUS INFO (Design Riche) --- */}
-                    <div className="bg-black/40 border border-white/5 rounded-lg p-3 mb-4">
+                    <div className="bg-black/40 border border-white/5 rounded-lg p-3 mb-4 glass-card">
                          <div className="flex items-center gap-1 text-[9px] font-bold uppercase text-slate-500 mb-2">
-                            <TrendingUp size={12} className={style.color} /> Effet : {bonus.label}
+                            <TrendingUp size={12} className={`${style.color} animate-bounce-subtle`} /> Effet : {bonus.label}
                          </div>
                          <div className="flex items-center justify-between text-xs font-mono">
                             <span className="text-slate-400">{bonus.current}</span>
                             <ChevronRight size={12} className="text-slate-600" />
-                            <span className="text-green-400 font-bold drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]">{bonus.next}</span>
+                            <span className="text-green-400 font-bold drop-shadow-[0_0_5px_rgba(74,222,128,0.5)] animate-scale-pulse">{bonus.next}</span>
                          </div>
                          <p className="text-[9px] text-slate-500 mt-2 italic leading-tight">{bonus.desc}</p>
                     </div>

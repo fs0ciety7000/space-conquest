@@ -183,7 +183,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
       {(incomingMissions.length > 0 || outgoingMissions.length > 0) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* RADAR DE DÉTECTION (Incoming) */}
-              <Card className={`bg-slate-950 border ${incomingMissions.some((m: any) => m.mission_type === 'attack') ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-blue-500/30'} overflow-hidden relative`}>
+              <Card className={`bg-slate-950 border ${incomingMissions.some((m: any) => m.mission_type === 'attack') ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)] animate-glow-pulse' : 'border-blue-500/30'} overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
                   <div className="absolute top-0 right-0 p-2 opacity-10"><Radar size={80} /></div>
                   <CardHeader className="pb-2 border-b border-white/5">
                       <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-slate-400">
@@ -219,7 +219,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
               </Card>
 
            {/* CENTRE DE COMMANDE (Missions sortantes) */}
-<Card className="bg-slate-950 border border-emerald-500/30 overflow-hidden relative shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+<Card className="bg-slate-950 border border-emerald-500/30 overflow-hidden relative shadow-[0_0_15px_rgba(16,185,129,0.1)] hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
     <div className="absolute top-0 right-0 p-2 opacity-10"><Navigation size={80} /></div>
     <CardHeader className="pb-2 border-b border-white/5 bg-emerald-950/20">
         <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-emerald-400">
@@ -284,7 +284,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* CARTE PLANETE ET FILE */}
-        <Card className="lg:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative group flex flex-col justify-between">
+        <Card className="lg:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative group flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
             <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1614730341194-75c607ae363c?q=80&w=2696&auto=format&fit=crop')] bg-cover bg-center opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent"></div>
             
@@ -376,7 +376,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </Card>
 
         {/* ENERGIE - DESIGN ÉLECTRIQUE */}
-        <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${energyRatio >= 100 ? 'border-yellow-500/50' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50'} backdrop-blur-md flex flex-col relative overflow-hidden`}>
+        <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${energyRatio >= 100 ? 'border-yellow-500/50 animate-glow-pulse' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50 animate-glow-pulse'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
             {/* Effets de fond électriques */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 {/* Lueur principale */}
@@ -567,8 +567,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
       {/* --- SECTION TACTIQUE MILITAIRE --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="bg-slate-900 border border-red-500/20 relative overflow-hidden group">
+          <Card className="bg-slate-900 border border-red-500/20 relative overflow-hidden group hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
               <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors"></div>
+              <div className="absolute top-0 inset-x-0 h-px bg-red-500/20 opacity-50 group-hover:bg-red-500/60 transition-all duration-300 animate-shine"></div>
               <CardHeader className="pb-2 relative z-10">
                   <div className="flex justify-between items-center">
                       <span className="text-[10px] font-black uppercase tracking-widest text-red-400 flex items-center gap-2">
@@ -585,15 +586,18 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                   <div className="mt-4 space-y-3">
                       <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center">
                           <span>Armement (NV.{planet.laser_battery_level})</span>
-                          <span className="text-red-400 font-mono">+{Math.round((atkBonus-1)*100)}% DMG</span>
+                          <span className="text-red-400 font-mono animate-scale-pulse">+{Math.round((atkBonus-1)*100)}% DMG</span>
                       </div>
-                      <Progress value={Math.min(100, planet.laser_battery_level * 8)} className="h-1 bg-slate-800" />
+                      <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
+                        <div className="h-full bg-gradient-to-r from-red-700 via-red-500 to-red-400 rounded-full" style={{ width: `${Math.min(100, planet.laser_battery_level * 8)}%` }}></div>
+                      </div>
                   </div>
               </CardContent>
           </Card>
 
-          <Card className="bg-slate-900 border border-emerald-500/20 relative overflow-hidden group">
+          <Card className="bg-slate-900 border border-emerald-500/20 relative overflow-hidden group hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
               <div className="absolute inset-0 bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors"></div>
+              <div className="absolute top-0 inset-x-0 h-px bg-emerald-500/20 opacity-50 group-hover:bg-emerald-500/60 transition-all duration-300 animate-shine"></div>
               <CardHeader className="pb-2 relative z-10">
                   <div className="flex justify-between items-center">
                       <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
@@ -610,9 +614,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                   <div className="mt-4 space-y-3">
                       <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center">
                           <span>Protection (NV.{planet.armour_tech_level})</span>
-                          <span className="text-emerald-400 font-mono">+{Math.round((hullBonus-1)*100)}% HULL</span>
+                          <span className="text-emerald-400 font-mono animate-scale-pulse">+{Math.round((hullBonus-1)*100)}% HULL</span>
                       </div>
-                      <Progress value={Math.min(100, planet.armour_tech_level * 8)} className="h-1 bg-slate-800 text-emerald-500" />
+                      <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
+                        <div className="h-full bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-400 rounded-full" style={{ width: `${Math.min(100, planet.armour_tech_level * 8)}%` }}></div>
+                      </div>
                   </div>
               </CardContent>
           </Card>
@@ -629,18 +635,18 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400" },
                 { label: "Hangar Vaisseaux", level: planet.hangar_level || 0, icon: Warehouse, color: "text-orange-400" }, 
             ].map((mine) => (
-                <div key={mine.label} className="bg-slate-900/50 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors">
+                <div key={mine.label} className="bg-slate-900/50 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover-scale card-depth animate-fade-in">
                     <div className="flex items-center gap-3 overflow-hidden">
-                        <mine.icon size={16} className={`shrink-0 ${mine.color}`} />
+                        <mine.icon size={16} className={`shrink-0 ${mine.color} group-hover:scale-110 transition-transform duration-300`} />
                         <span className="text-xs font-bold text-slate-300 truncate">{mine.label}</span>
                     </div>
-                    <span className="text-sm font-black font-mono text-white shrink-0 px-2 bg-black/40 rounded border border-white/5">Niv. {mine.level}</span>
+                    <span className="text-sm font-black font-mono text-white shrink-0 px-2 bg-black/40 rounded border border-white/5 group-hover:bg-black/60 transition-colors">{mine.level}</span>
                 </div>
             ))}
         </div>
 
         <div className="md:col-span-3 min-w-0">
-            <Card className="bg-gradient-to-br from-slate-900/80 to-green-950/20 border border-green-500/30">
+            <Card className="bg-gradient-to-br from-slate-900/80 to-green-950/20 border border-green-500/30 hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
                 <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                         <span className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-green-400">
@@ -668,30 +674,30 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 return (
                                     <>
                                         <div className="flex items-center gap-2">
-                                            <Stone size={12} className="text-orange-400 shrink-0" />
-                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden">
+                                            <Stone size={12} className="text-orange-400 shrink-0 animate-bounce-subtle" />
+                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
                                                 <div
-                                                    className="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full transition-all duration-500"
+                                                    className="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full transition-all duration-500 animate-gradient"
                                                     style={{ width: `${(prodMetal / maxProd) * 100}%` }}
                                                 />
                                             </div>
                                             <span className="text-orange-400 font-mono text-xs font-bold w-16 text-right">+{fmt(prodMetal)}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Gem size={12} className="text-cyan-400 shrink-0" />
-                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden">
+                                            <Gem size={12} className="text-cyan-400 shrink-0 animate-bounce-subtle" style={{ animationDelay: '0.3s' }} />
+                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
                                                 <div
-                                                    className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full transition-all duration-500"
+                                                    className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full transition-all duration-500 animate-gradient"
                                                     style={{ width: `${(prodCrystal / maxProd) * 100}%` }}
                                                 />
                                             </div>
                                             <span className="text-cyan-400 font-mono text-xs font-bold w-16 text-right">+{fmt(prodCrystal)}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Droplets size={12} className="text-emerald-400 shrink-0" />
-                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden">
+                                            <Droplets size={12} className="text-emerald-400 shrink-0 animate-bounce-subtle" style={{ animationDelay: '0.6s' }} />
+                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
                                                 <div
-                                                    className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-500"
+                                                    className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-500 animate-gradient"
                                                     style={{ width: `${(prodDeut / maxProd) * 100}%` }}
                                                 />
                                             </div>
@@ -706,7 +712,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     {/* Détails par ressource */}
                     <div className="grid grid-cols-3 gap-2">
                         {/* Métal */}
-                        <div className="bg-gradient-to-b from-orange-950/30 to-slate-900/50 p-3 rounded-lg border border-orange-500/30">
+                        <div className="bg-gradient-to-b from-orange-950/30 to-slate-900/50 p-3 rounded-lg border border-orange-500/30 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth group/res animate-fade-in">
                             <div className="flex items-center gap-1.5 mb-2">
                                 <Stone size={14} className="text-orange-400" />
                                 <span className="text-orange-300 font-bold text-xs uppercase">Métal</span>
@@ -727,7 +733,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             )}
                         </div>
                         {/* Cristal */}
-                        <div className="bg-gradient-to-b from-cyan-950/30 to-slate-900/50 p-3 rounded-lg border border-cyan-500/30">
+                        <div className="bg-gradient-to-b from-cyan-950/30 to-slate-900/50 p-3 rounded-lg border border-cyan-500/30 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth group/res animate-fade-in">
                             <div className="flex items-center gap-1.5 mb-2">
                                 <Gem size={14} className="text-cyan-400" />
                                 <span className="text-cyan-300 font-bold text-xs uppercase">Cristal</span>
@@ -748,7 +754,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             )}
                         </div>
                         {/* Deutérium */}
-                        <div className="bg-gradient-to-b from-emerald-950/30 to-slate-900/50 p-3 rounded-lg border border-emerald-500/30">
+                        <div className="bg-gradient-to-b from-emerald-950/30 to-slate-900/50 p-3 rounded-lg border border-emerald-500/30 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth group/res animate-fade-in">
                             <div className="flex items-center gap-1.5 mb-2">
                                 <Droplets size={14} className="text-emerald-400" />
                                 <span className="text-emerald-300 font-bold text-xs uppercase">Deutérium</span>
@@ -788,7 +794,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
       {/* STATIONNEMENT FLOTTE & DEFENSES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            <Card className="bg-blue-950/10 border border-blue-500/20">
+            <Card className="bg-blue-950/10 border border-blue-500/20 hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
                 <CardHeader className="pb-2">
                     <div className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-blue-400">
                         <span className="flex items-center gap-2"><Rocket size={14} /> Hangar (Vaisseaux Stationnés)</span>
@@ -814,7 +820,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 </CardContent>
             </Card>
 
-            <Card className="bg-red-950/10 border border-red-500/20">
+            <Card className="bg-red-950/10 border border-red-500/20 hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
                 <CardHeader className="pb-2">
                     <CardTitle className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-red-400">
                         <span className="flex items-center gap-2"><Shield size={14} /> Défenses Planétaires</span>
