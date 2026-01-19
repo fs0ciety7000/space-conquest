@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
+import { ConnectionStatus, getConnectionStatusColor, getConnectionStatusText } from '@/hooks/useWebSocket';
 import {
   Zap,
   Stone,
@@ -10,7 +11,9 @@ import {
   Mail,
   MapPin,
   Menu,
-  Search
+  Search,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -38,6 +41,7 @@ interface EmpireBarProps {
   onNavigateToGalaxy?: () => void;
   onNavigateToOverview?: () => void;
   speedFactor?: number;
+  wsStatus?: ConnectionStatus;
 }
 
 interface PlanetSummary {
@@ -55,7 +59,7 @@ interface ResourceSlot {
   is_active: boolean;
 }
 
-export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar, onNavigateToGalaxy, onNavigateToOverview, speedFactor = 10 }: EmpireBarProps) {
+export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar, onNavigateToGalaxy, onNavigateToOverview, speedFactor = 10, wsStatus = 'disconnected' }: EmpireBarProps) {
 
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -169,7 +173,34 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             <img src="/logo.svg" alt="Space Conquest" className="h-8 w-8 md:h-10 md:w-10 drop-shadow-[0_0_10px_rgba(99,102,241,0.4)] group-hover:drop-shadow-[0_0_15px_rgba(99,102,241,0.6)] transition-all" />
             <div className="hidden lg:block">
                 <h1 className="text-sm font-black text-white uppercase tracking-widest leading-none group-hover:text-indigo-300 transition-colors">Space Conquest</h1>
-                <span className="text-[10px] text-indigo-400 font-mono tracking-wider">ONLINE</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-indigo-400 font-mono tracking-wider">ONLINE</span>
+                  {/* Indicateur WebSocket */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1">
+                          {wsStatus === 'connected' ? (
+                            <Wifi size={10} className="text-emerald-400" />
+                          ) : wsStatus === 'connecting' ? (
+                            <Wifi size={10} className="text-yellow-400 animate-pulse" />
+                          ) : (
+                            <WifiOff size={10} className="text-slate-500" />
+                          )}
+                          <span className={`w-1.5 h-1.5 rounded-full ${getConnectionStatusColor(wsStatus)}`} />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
+                        <div className="text-xs">
+                          <span className="text-slate-400">WebSocket: </span>
+                          <span className={wsStatus === 'connected' ? 'text-emerald-400' : wsStatus === 'connecting' ? 'text-yellow-400' : 'text-slate-500'}>
+                            {getConnectionStatusText(wsStatus)}
+                          </span>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
             </div>
         </button>
 

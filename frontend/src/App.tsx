@@ -26,6 +26,7 @@ import ProductionStats from './components/ProductionStats';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
+import { useWebSocket, ConnectionStatus } from './hooks/useWebSocket';
 import { BuildQueue } from './components/BuildQueue';
 import Tutorial, { useTutorial } from './components/Tutorial';
 import { SpaceBackground, SpaceLoader } from './components/ui/space-background';
@@ -98,6 +99,53 @@ export default function App() {
     enabled: soundEnabled,
     musicVolume,
     sfxVolume
+  });
+
+  // WebSocket pour les mises à jour en temps réel
+  const { 
+    status: wsStatus, 
+    isConnected: wsConnected,
+    resources: wsResources 
+  } = useWebSocket(planetId, {
+    enabled: !!token && !!planetId,
+    onResourcesUpdate: (resources) => {
+      // Mettre à jour les ressources de la planète en temps réel
+      if (planet) {
+        setPlanet((prev: any) => ({
+          ...prev,
+          metal_amount: resources.metal,
+          crystal_amount: resources.crystal,
+          deuterium_amount: resources.deuterium,
+          energy_ratio: resources.energy_ratio,
+        }));
+      }
+    },
+    onConstructionComplete: (data) => {
+      playSound('build');
+      // fetchPlanet sera appelé via l'événement 'build-complete'
+    },
+    onShipComplete: (data) => {
+      playSound('build');
+    },
+    onAttackIncoming: (data) => {
+      playSound('alert');
+    },
+    onCombatResult: (data) => {
+      playSound(data.result === 'victory' ? 'success' : 'combat');
+    },
+    onMessageReceived: (data) => {
+      playSound('notification');
+      setUnreadMessagesCount(prev => prev + 1);
+    },
+    onTransportArrived: (data) => {
+      playSound('success');
+    },
+    onSpyAlert: (data) => {
+      playSound('error');
+    },
+    onPlanetStatus: (data) => {
+      playSound(data.status === 'conquered' ? 'success' : 'error');
+    },
   });
 
   // Fonctions définies AVANT les hooks qui les utilisent
@@ -419,10 +467,13 @@ export default function App() {
       .catch(console.error);
     if (token && planetId) {
       fetchPlanet();
-      const interval = setInterval(fetchPlanet, 2000);
+      // Polling réduit si WebSocket connecté (fallback uniquement)
+      // WebSocket = 10s polling, pas de WebSocket = 2s polling
+      const pollingInterval = wsConnected ? 10000 : 2000;
+      const interval = setInterval(fetchPlanet, pollingInterval);
       return () => clearInterval(interval);
     }
-  }, [token, planetId, fetchPlanet]);
+  }, [token, planetId, fetchPlanet, wsConnected]);
   
   if (!token || !planetId || !userId) {
     return <Login onLogin={(t, p, u, user) => { 
@@ -530,6 +581,7 @@ export default function App() {
             onNavigateToGalaxy={() => { setActiveTab('galaxy'); setSidebarOpen(false); }}
             onNavigateToOverview={() => { setActiveTab('overview'); setSidebarOpen(false); }}
             speedFactor={speedFactor}
+            wsStatus={wsStatus}
           />
       </div>
 

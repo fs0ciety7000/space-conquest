@@ -41,8 +41,10 @@ mod config;
 mod admin;
 mod messaging;
 mod market;
+mod websocket;
 use config::Config;
 use backend::AppState;
+use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
@@ -167,9 +169,14 @@ async fn main() {
     let config_cache = backend::ServerConfigCache::load_from_db(&db).await;
     println!("✅ Configuration chargée - Speed Factor: {}", config_cache.speed_factor);
 
+    // Créer l'état WebSocket
+    let ws_state = WsState::new(db.clone());
+    println!("🔌 WebSocket initialisé");
+
     let state = AppState {
         db,
         config: std::sync::Arc::new(std::sync::RwLock::new(config_cache)),
+        ws: Some(ws_state.clone()),
     };
     let cors = CorsLayer::permissive();
 
@@ -245,6 +252,14 @@ async fn main() {
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
+    
+    // Route WebSocket séparée avec WsState
+    let ws_app = Router::new()
+        .route("/ws", get(websocket::websocket_handler))
+        .with_state(ws_state);
+    
+    // Merger les routes
+    let app = app.merge(ws_app);
     
     let addr: SocketAddr = config.bind_address()
         .parse()

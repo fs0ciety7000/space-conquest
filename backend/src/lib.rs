@@ -9,6 +9,7 @@ pub mod combat;
 pub mod entities;
 pub mod config;
 pub mod messaging;
+pub mod websocket;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::ServerConfig, server_config};
@@ -75,6 +76,7 @@ impl ServerConfigCache {
 pub struct AppState {
     pub db: DatabaseConnection,
     pub config: Arc<RwLock<ServerConfigCache>>,
+    pub ws: Option<websocket::WsState>,
 }
 
 // Fonction helper pour recharger la config
