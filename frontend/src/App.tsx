@@ -529,7 +529,7 @@ export default function App() {
 {/* ✨ Bouton Soumettre un bug / Amélioration */}
 <div className="px-4 pb-3">
   <a
-    href="https://github.com/nicolasdessenius/space-conquest/issues/new/choose"
+    href="https://scissue.netlify.app/"
     target="_blank"
     rel="noopener noreferrer"
     className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-purple-950/30 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300 transition-colors text-xs font-bold uppercase border border-purple-900/30"
