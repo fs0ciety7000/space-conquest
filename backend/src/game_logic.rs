@@ -330,10 +330,19 @@ pub fn get_ship_production_time(qty: i32) -> i64 {
 }
 
 // 📦 CAPACITÉS
-pub fn get_fleet_capacity(hangar_level: i32) -> i32 { 
-    500 + (hangar_level * 500) 
+pub fn get_fleet_capacity(hangar_level: i32) -> i32 {
+    500 + (hangar_level * 500)
 }
-pub const TRANSPORTER_CAPACITY: f64 = 10000.0;
+
+// Capacité transporteur évolutive basée sur niveau hangar
+// Base: 10000, +5% par niveau de hangar
+pub fn get_transporter_capacity(hangar_level: i32) -> f64 {
+    let base_capacity = 10000.0;
+    let bonus_per_level = 0.05; // +5% par niveau
+    base_capacity * (1.0 + (hangar_level as f64 * bonus_per_level))
+}
+
+pub const TRANSPORTER_CAPACITY: f64 = 10000.0; // Deprecated: utilisez get_transporter_capacity()
 
 // Helper functions
 pub fn get_light_hunter_stats() -> (f64, f64) { get_unit_cost("light_hunter") }

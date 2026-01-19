@@ -3,6 +3,8 @@ import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert, Tr
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { apiUrl } from '@/config/api';
+import CombatModal from './CombatModal';
+
 interface CombatLog {
   id: string;
   target_name: string;
@@ -32,6 +34,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
   const [combatLogs, setCombatLogs] = useState<CombatLog[]>([]);
   const [transportLogs, setTransportLogs] = useState<TransportLog[]>([]);
   const [view, setView] = useState<'combat' | 'transport'>('combat');
+  const [selectedReport, setSelectedReport] = useState<any>(null);
 
   useEffect(() => {
     fetch(apiUrl(`/planets/${planetId}/reports`))
@@ -49,6 +52,18 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
     if (!dateString) return "";
     const utcDateString = dateString.endsWith("Z") ? dateString : dateString + "Z";
     return formatDistanceToNow(new Date(utcDateString), { addSuffix: true, locale: fr });
+  };
+
+  const handleReportClick = async (reportId: string) => {
+    try {
+      const res = await fetch(apiUrl(`/combat-reports/${reportId}/detail`));
+      if (res.ok) {
+        const detailedReport = await res.json();
+        setSelectedReport(detailedReport);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération du rapport détaillé:", error);
+    }
   };
 
   return (
@@ -96,7 +111,11 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                     // Rapport de conquête de planète (attaquant)
                     if (isPlanetConquered) {
                         return (
-                            <div key={log.id} className="bg-gradient-to-r from-yellow-950/20 to-orange-950/20 border border-yellow-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-yellow-950/30 transition-colors">
+                            <div
+                                key={log.id}
+                                onClick={() => handleReportClick(log.id)}
+                                className="bg-gradient-to-r from-yellow-950/20 to-orange-950/20 border border-yellow-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-yellow-950/30 transition-colors cursor-pointer"
+                            >
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 rounded-lg bg-yellow-500/20 text-yellow-400">
                                         <Trophy size={16} />
@@ -134,7 +153,11 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                     // Rapport de perte de planète (défenseur)
                     if (isPlanetLost) {
                         return (
-                            <div key={log.id} className="bg-gradient-to-r from-red-950/30 to-orange-950/30 border border-red-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-red-950/40 transition-colors">
+                            <div
+                                key={log.id}
+                                onClick={() => handleReportClick(log.id)}
+                                className="bg-gradient-to-r from-red-950/30 to-orange-950/30 border border-red-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-red-950/40 transition-colors cursor-pointer"
+                            >
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 rounded-lg bg-red-500/20 text-red-400">
                                         <ShieldAlert size={16} />
@@ -202,7 +225,11 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
 
                     // Rapports de combat normaux
                     return (
-                        <div key={log.id} className="bg-black/20 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors">
+                        <div
+                            key={log.id}
+                            onClick={() => handleReportClick(log.id)}
+                            className="bg-black/20 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors cursor-pointer"
+                        >
                             <div className="flex items-center gap-4">
                                 <div className={`p-2 rounded-lg ${isVictory ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
                                     {isDefense ? <ShieldAlert size={16} /> : <Swords size={16} />}
@@ -285,6 +312,14 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
         )}
 
       </div>
+
+      {/* Modal de détails de combat */}
+      {selectedReport && (
+        <CombatModal
+          report={selectedReport}
+          onClose={() => setSelectedReport(null)}
+        />
+      )}
     </div>
   );
 }

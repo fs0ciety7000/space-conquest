@@ -177,6 +177,7 @@ async fn main() {
         .route("/planets/:id/expedition/scout", post(scout_expedition_handler))
         .route("/planets/:id/clear-report", post(clear_report_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
+        .route("/combat-reports/:id/detail", get(get_combat_report_detail_handler))
         .route("/planets/:id/transport-logs", get(get_transport_logs_handler))
         .route("/planets/:id/rename", post(rename_planet_handler))
         .route("/my-planets", get(get_my_planets_handler))
@@ -400,6 +401,7 @@ async fn resolve_attack_mission(
         loot_crystal: Set(-result.loot.crystal),
         ships_lost: Set(result.defender_losses),
         date: Set(now),
+        detailed_report: Set(Some(def_rep_json.clone())),
     }.insert(db).await;
 
     // Combat log pour l'attaquant
@@ -414,6 +416,7 @@ async fn resolve_attack_mission(
         loot_crystal: Set(result.loot.crystal),
         ships_lost: Set(result.attacker_losses),
         date: Set(now),
+        detailed_report: Set(Some(att_rep_json.clone())),
     }.insert(db).await;
 
     FleetMission::delete_by_id(mission.id).exec(db).await.unwrap();
@@ -1008,6 +1011,22 @@ async fn expedition_handler(
     
     let updated_planet = Planet::find_by_id(id).one(&state.db).await.unwrap().unwrap();
 
+    // Créer le rapport détaillé pour l'expédition
+    let expedition_report = json!({
+        "winner": winner,
+        "log": logs,
+        "loot": {
+            "metal": loot_metal,
+            "crystal": loot_crystal,
+            "deuterium": 0.0
+        },
+        "attacker_losses": lost_hunters + lost_cruisers,
+        "defender_losses": 0,
+        "lost_missiles": 0,
+        "lost_plasmas": 0,
+        "mission_type": "expedition"
+    });
+
     let log_exp = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(id),
@@ -1019,24 +1038,13 @@ async fn expedition_handler(
         loot_crystal: Set(loot_crystal),
         ships_lost: Set(lost_hunters + lost_cruisers),
         date: Set(Utc::now().naive_utc()),
+        detailed_report: Set(Some(expedition_report.clone())),
     };
     let _ = log_exp.insert(&state.db).await;
 
    let response = json!({
     "planet": updated_planet,
-    "report": {
-        "winner": winner,
-        "log": logs,
-        "loot": {
-            "metal": loot_metal,
-            "crystal": loot_crystal,
-            "deuterium": 0.0
-        },
-        "attacker_losses": lost_hunters + lost_cruisers,
-        "defender_losses": 0,
-        "lost_missiles": 0,
-        "lost_plasmas": 0
-    }
+    "report": expedition_report
 });
 
     (StatusCode::OK, Json(response)).into_response()
@@ -1146,6 +1154,30 @@ async fn get_reports_handler(
         .await
         .unwrap_or_default();
     Json(logs)
+}
+
+// Récupérer le rapport détaillé d'un combat
+async fn get_combat_report_detail_handler(
+    Path(report_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let report = CombatLog::find_by_id(report_id)
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    match report {
+        Some(log) => {
+            if let Some(detailed) = log.detailed_report {
+                (StatusCode::OK, Json(detailed)).into_response()
+            } else {
+                (StatusCode::NOT_FOUND, Json(json!({"error": "Aucun détail disponible pour ce rapport"}))).into_response()
+            }
+        }
+        None => {
+            (StatusCode::NOT_FOUND, Json(json!({"error": "Rapport introuvable"}))).into_response()
+        }
+    }
 }
 
 async fn get_transport_logs_handler(
@@ -1265,6 +1297,7 @@ async fn spy_handler(
         loot_crystal: Set(0.0),
         ships_lost: Set(0),
         date: Set(Utc::now().naive_utc()),
+        detailed_report: Set(None), // Pas de détails de combat pour l'espionnage
     };
     let _ = spy_log.insert(&state.db).await;
 
@@ -1516,10 +1549,12 @@ async fn transport_handler(
 
     if payload.transporters > source_model.transporter_count || payload.transporters <= 0 { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Transporteurs insuffisants"}))).into_response(); }
     if payload.metal > source_model.metal_amount || payload.crystal > source_model.crystal_amount || payload.deuterium > source_model.deuterium_amount { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ressources insuffisantes"}))).into_response(); }
-    
+
     let total_load = payload.metal + payload.crystal + payload.deuterium;
-    let capacity = payload.transporters as f64 * game_logic::TRANSPORTER_CAPACITY;
-    if total_load > capacity { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Surcharge !"}))).into_response(); }
+    // Capacité évolutive: +5% par niveau de hangar
+    let transporter_capacity = game_logic::get_transporter_capacity(source_model.hangar_level);
+    let capacity = payload.transporters as f64 * transporter_capacity;
+    if total_load > capacity { return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Surcharge ! Capacité max: {:.0}", capacity)}))).into_response(); }
 
     // Calcul du temps de vol avec les vraies coordonnées 3D
     let dist = game_logic::calculate_distance(
