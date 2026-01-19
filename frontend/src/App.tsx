@@ -27,9 +27,9 @@ import Tutorial, { useTutorial } from './components/Tutorial';
 import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
 import {
-  LogOut, LayoutDashboard, Pickaxe, Hammer,
+  LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Keyboard, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus
+  Settings as SettingsIcon, Mail, Factory, Rocket, X,Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus
 } from "lucide-react";
 
 interface CombatReport {
