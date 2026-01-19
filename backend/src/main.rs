@@ -772,30 +772,50 @@ async fn get_planet_handler(
                 "Inconnue".to_string()
             };
 
-            // Si c'est la planète cible, on crédite les ressources
+            // ═══════════════════════════════════════════════════════════════════════
+            // CRÉDITER LES RESSOURCES SUR LA PLANÈTE CIBLE
+            // Important: On doit toujours créditer sur la cible, peu importe quelle
+            // planète est en train d'être fetched (source ou cible)
+            // ═══════════════════════════════════════════════════════════════════════
             if m.target_planet_id == id {
+                // La planète qu'on fetch EST la cible → on utilise `active`
                 active.metal_amount = Set(active.metal_amount.clone().unwrap() + m.metal);
                 active.crystal_amount = Set(active.crystal_amount.clone().unwrap() + m.crystal);
                 active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() + m.deuterium);
-
-                // Notifier le destinataire du transport
-                if let Some(ref ws) = state.ws {
-                    websocket::notify_transport_arrived(
-                        ws,
-                        m.target_planet_id,
-                        &source_planet_name,
-                        m.metal,
-                        m.crystal,
-                        m.deuterium,
-                    );
+            } else {
+                // La planète qu'on fetch est la SOURCE → on doit charger et mettre à jour la CIBLE
+                if let Ok(Some(target_planet)) = Planet::find_by_id(m.target_planet_id).one(&state.db).await {
+                    let mut target_active: planet::ActiveModel = target_planet.clone().into();
+                    target_active.metal_amount = Set(target_planet.metal_amount + m.metal);
+                    target_active.crystal_amount = Set(target_planet.crystal_amount + m.crystal);
+                    target_active.deuterium_amount = Set(target_planet.deuterium_amount + m.deuterium);
+                    let _ = target_active.update(&state.db).await;
                 }
             }
 
+            // Notifier le destinataire du transport (toujours)
+            if let Some(ref ws) = state.ws {
+                websocket::notify_transport_arrived(
+                    ws,
+                    m.target_planet_id,
+                    &source_planet_name,
+                    m.metal,
+                    m.crystal,
+                    m.deuterium,
+                );
+            }
+
             // Retourner les transporteurs à la planète source
-            if let Ok(Some(source_planet)) = Planet::find_by_id(m.source_planet_id).one(&state.db).await {
-                let mut source_active: planet::ActiveModel = source_planet.into();
-                source_active.transporter_count = Set(source_active.transporter_count.clone().unwrap() + m.ships_count);
-                let _ = source_active.update(&state.db).await;
+            if m.source_planet_id == id {
+                // La planète qu'on fetch EST la source → on utilise `active`
+                active.transporter_count = Set(active.transporter_count.clone().unwrap() + m.ships_count);
+            } else {
+                // La planète qu'on fetch est la CIBLE → on doit charger et mettre à jour la SOURCE
+                if let Ok(Some(source_planet)) = Planet::find_by_id(m.source_planet_id).one(&state.db).await {
+                    let mut source_active: planet::ActiveModel = source_planet.clone().into();
+                    source_active.transporter_count = Set(source_planet.transporter_count + m.ships_count);
+                    let _ = source_active.update(&state.db).await;
+                }
             }
 
             let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
