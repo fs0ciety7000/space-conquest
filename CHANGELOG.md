@@ -1,5 +1,72 @@
 # Changelog - Space Conquest
 
+## [2.0.1] - 2026-01-19 - Corrections UI/UX et Graphiques Statistiques
+
+### 🔧 Corrections
+
+#### Harmonisation des calculs de production
+- **ResourceDisplay.tsx** : Correction du calcul du ratio énergétique
+  - Utilisation cohérente de `planet.energy_ratio` du backend
+  - Les calculs sont maintenant identiques entre `EmpireBar`, `ResourceDisplay`, `ProductionStats` et `PlanetOverview`
+
+#### Correction CombatModal (Rapports)
+- Résolution du problème de masquage du contenu
+- Meilleure structure de layout avec scroll interne
+- Bouton "Archiver le rapport" fixé en bas, toujours visible
+- Amélioration du responsive design pour mobile
+- Logs de combat avec scroll dédié (max 200px)
+
+### 🎨 Améliorations Design
+
+#### Refonte cards PlanetOverview (style Réseau Électrique)
+- **Infrastructures** : 
+  - Nouveau design avec effets de fond lumineux
+  - Icônes colorées avec bordures assorties
+  - Barre de niveau d'industrialisation global
+  
+- **Hangar (Baie de Stationnement)** :
+  - Design immersif avec jauges animées style voltmètre
+  - Indicateur de capacité avec glow dynamique
+  - Grille des vaisseaux avec icônes emoji
+  - Alertes visuelles si hangar plein
+  
+- **Défenses planétaires (Bouclier Orbital)** :
+  - Barres verticales style voltmètre pour missiles/plasma
+  - Indicateur de puissance défensive
+  - Stats dégâts/round et points coque
+  - Alerte si planète vulnérable
+
+#### Réduction des glows blancs excessifs
+- Remplacement des effets `via-white/30` par des couleurs adaptées
+- Shimmer effects plus subtils (`via-indigo-400/15`)
+- Meilleure lisibilité générale
+
+### 📊 Nouveaux graphiques (ProductionStats)
+
+**Installation de Recharts** pour des visualisations vibrantes :
+
+- **Projection 24h (AreaChart)** :
+  - Graphique d'aire avec dégradés colorés
+  - Affichage à 6h, 12h, 18h, 24h
+  - Tooltips personnalisés style sci-fi
+  
+- **Répartition production (PieChart)** :
+  - Camembert avec trou central
+  - Couleurs métal/cristal/deutérium
+  
+- **Taux de victoire (PieChart)** :
+  - Graphique victoires/défaites
+  - Pourcentage central animé
+  
+- **Pillage total (BarChart)** :
+  - Barres colorées par ressource
+  - Formatage automatique k/M
+
+### 📦 Dépendances ajoutées
+- `recharts` : Librairie de graphiques React
+
+---
+
 ## [2.0.0] - 2026-01-19 - Refonte graphique Sci-Fi Spatiale complète
 
 ### 🎨 Refonte Design System
