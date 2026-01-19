@@ -221,6 +221,8 @@ async fn main() {
         .route("/admin/planet/:id", get(admin::get_planet_admin_handler))
         .route("/admin/planet/:id", patch(admin::update_planet_admin_handler))
         .route("/admin/stats", get(admin::get_server_stats_handler))
+        .route("/admin/config", get(admin::get_server_config_handler))
+        .route("/admin/config", patch(admin::update_server_config_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);

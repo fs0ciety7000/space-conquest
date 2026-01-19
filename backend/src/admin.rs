@@ -13,8 +13,9 @@ use uuid::Uuid;
 use chrono::Utc;
 
 use crate::entities::{
-    prelude::{Planet, User},
+    prelude::{Planet, User, ServerConfig},
     planet,
+    server_config,
 };
 use crate::{AppState, game_logic};
 
@@ -265,6 +266,17 @@ pub async fn get_server_stats_handler(
         total_defenses += p.missile_launcher_count + p.plasma_turret_count;
     }
 
+    // Récupérer le SPEED_FACTOR depuis la DB (fallback sur la constante)
+    let speed_factor = if let Ok(Some(config)) = ServerConfig::find()
+        .filter(server_config::Column::ConfigKey.eq("speed_factor"))
+        .one(&state.db)
+        .await
+    {
+        config.config_value.parse::<f64>().unwrap_or(game_logic::SPEED_FACTOR)
+    } else {
+        game_logic::SPEED_FACTOR
+    };
+
     let stats = ServerStats {
         total_users,
         total_planets,
@@ -273,8 +285,105 @@ pub async fn get_server_stats_handler(
         total_deuterium,
         total_ships,
         total_defenses,
-        speed_factor: game_logic::SPEED_FACTOR,
+        speed_factor,
     };
 
     Json(stats).into_response()
+}
+
+// GET /admin/config - Récupérer toutes les configurations
+pub async fn get_server_config_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    let configs = ServerConfig::find().all(&state.db).await.unwrap_or_default();
+
+    // Transformer en HashMap pour faciliter l'utilisation frontend
+    let mut config_map = HashMap::new();
+    for config in configs {
+        config_map.insert(config.config_key.clone(), config.config_value.clone());
+    }
+
+    Json(config_map).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct ConfigUpdate {
+    pub speed_factor: Option<String>,
+    pub construction_speed_multiplier: Option<String>,
+    pub mining_speed_multiplier: Option<String>,
+}
+
+// PATCH /admin/config - Mettre à jour une ou plusieurs configurations
+pub async fn update_server_config_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(updates): Json<ConfigUpdate>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    let now = Utc::now().naive_utc();
+
+    // Mettre à jour speed_factor si fourni
+    if let Some(value) = updates.speed_factor {
+        if let Ok(config) = ServerConfig::find()
+            .filter(server_config::Column::ConfigKey.eq("speed_factor"))
+            .one(&state.db)
+            .await
+        {
+            if let Some(c) = config {
+                let mut active: server_config::ActiveModel = c.into();
+                active.config_value = Set(value);
+                active.updated_at = Set(now);
+                let _ = active.update(&state.db).await;
+            }
+        }
+    }
+
+    // Mettre à jour construction_speed_multiplier si fourni
+    if let Some(value) = updates.construction_speed_multiplier {
+        if let Ok(config) = ServerConfig::find()
+            .filter(server_config::Column::ConfigKey.eq("construction_speed_multiplier"))
+            .one(&state.db)
+            .await
+        {
+            if let Some(c) = config {
+                let mut active: server_config::ActiveModel = c.into();
+                active.config_value = Set(value);
+                active.updated_at = Set(now);
+                let _ = active.update(&state.db).await;
+            }
+        }
+    }
+
+    // Mettre à jour mining_speed_multiplier si fourni
+    if let Some(value) = updates.mining_speed_multiplier {
+        if let Ok(config) = ServerConfig::find()
+            .filter(server_config::Column::ConfigKey.eq("mining_speed_multiplier"))
+            .one(&state.db)
+            .await
+        {
+            if let Some(c) = config {
+                let mut active: server_config::ActiveModel = c.into();
+                active.config_value = Set(value);
+                active.updated_at = Set(now);
+                let _ = active.update(&state.db).await;
+            }
+        }
+    }
+
+    Json(json!({
+        "success": true,
+        "message": "Configuration mise à jour"
+    })).into_response()
 }

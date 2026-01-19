@@ -77,6 +77,12 @@ interface ServerStats {
   speed_factor: number;
 }
 
+interface ServerConfig {
+  speed_factor: string;
+  construction_speed_multiplier: string;
+  mining_speed_multiplier: string;
+}
+
 type AdminTab = 'players' | 'stats';
 
 export default function AdminPanel() {
@@ -89,6 +95,9 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<ServerStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [config, setConfig] = useState<ServerConfig | null>(null);
+  const [editedConfig, setEditedConfig] = useState<Partial<ServerConfig>>({});
+  const [loadingConfig, setLoadingConfig] = useState(false);
 
   const token = localStorage.getItem('token');
   const currentUsername = localStorage.getItem('username');
@@ -118,6 +127,7 @@ export default function AdminPanel() {
   useEffect(() => {
     if (activeTab === 'stats') {
       fetchStats();
+      fetchConfig();
     }
   }, [activeTab]);
 
@@ -154,6 +164,54 @@ export default function AdminPanel() {
       toast.error('Erreur réseau');
     } finally {
       setLoadingStats(false);
+    }
+  };
+
+  const fetchConfig = async () => {
+    setLoadingConfig(true);
+    try {
+      const res = await fetch(apiUrl(`/admin/config?user_id=${userId}`), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setConfig(data);
+        setEditedConfig(data);
+      } else {
+        toast.error('Impossible de charger la configuration');
+      }
+    } catch (e) {
+      toast.error('Erreur réseau');
+    } finally {
+      setLoadingConfig(false);
+    }
+  };
+
+  const updateConfig = async () => {
+    setLoadingConfig(true);
+    try {
+      const res = await fetch(apiUrl(`/admin/config?user_id=${userId}`), {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editedConfig)
+      });
+
+      if (res.ok) {
+        toast.success('✅ Configuration mise à jour', {
+          description: 'Les paramètres ont été modifiés avec succès'
+        });
+        fetchConfig();
+        fetchStats(); // Rafraîchir les stats pour voir le nouveau SPEED_FACTOR
+      } else {
+        toast.error('Erreur lors de la sauvegarde');
+      }
+    } catch (e) {
+      toast.error('Erreur réseau');
+    } finally {
+      setLoadingConfig(false);
     }
   };
 
@@ -346,19 +404,76 @@ export default function AdminPanel() {
                 <CardHeader>
                   <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
                     <Settings size={16} />
-                    Paramètres Serveur
+                    Paramètres Serveur (Éditable)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-indigo-400 font-bold mb-1">SPEED FACTOR</p>
-                        <p className="text-sm text-slate-400">Multiplicateur de vitesse du jeu</p>
+                  {loadingConfig || !config ? (
+                    <div className="text-center py-8 text-slate-500">Chargement...</div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-lg p-4">
+                          <label className="text-xs text-indigo-400 font-bold mb-2 block">SPEED FACTOR</label>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            value={editedConfig.speed_factor ?? config.speed_factor}
+                            onChange={(e) => setEditedConfig({...editedConfig, speed_factor: e.target.value})}
+                            className="bg-black/40 border-indigo-500/30 text-white font-mono text-xl"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">Multiplicateur vitesse général</p>
+                        </div>
+
+                        <div className="bg-purple-950/20 border border-purple-500/30 rounded-lg p-4">
+                          <label className="text-xs text-purple-400 font-bold mb-2 block">CONSTRUCTION SPEED</label>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            value={editedConfig.construction_speed_multiplier ?? config.construction_speed_multiplier}
+                            onChange={(e) => setEditedConfig({...editedConfig, construction_speed_multiplier: e.target.value})}
+                            className="bg-black/40 border-purple-500/30 text-white font-mono text-xl"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">Vitesse construction bâtiments</p>
+                        </div>
+
+                        <div className="bg-green-950/20 border border-green-500/30 rounded-lg p-4">
+                          <label className="text-xs text-green-400 font-bold mb-2 block">MINING SPEED</label>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            value={editedConfig.mining_speed_multiplier ?? config.mining_speed_multiplier}
+                            onChange={(e) => setEditedConfig({...editedConfig, mining_speed_multiplier: e.target.value})}
+                            className="bg-black/40 border-green-500/30 text-white font-mono text-xl"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">Vitesse production ressources</p>
+                        </div>
                       </div>
-                      <p className="text-3xl font-mono font-black text-white">×{stats.speed_factor / 100}</p>
+
+                      <div className="flex gap-3 pt-2">
+                        <Button
+                          onClick={updateConfig}
+                          disabled={loadingConfig}
+                          className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold uppercase tracking-wider"
+                        >
+                          <Save size={16} className="mr-2" />
+                          Enregistrer les modifications
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setEditedConfig(config)}
+                          className="border-white/10 bg-white/5 hover:bg-white/10"
+                        >
+                          Annuler
+                        </Button>
+                      </div>
+
+                      <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-400 flex items-start gap-2">
+                        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                        <span>⚠️ Les modifications prennent effet immédiatement pour toutes les opérations futures. Les opérations en cours conservent leur vitesse d'origine.</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </>
