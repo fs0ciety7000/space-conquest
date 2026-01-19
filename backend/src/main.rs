@@ -635,15 +635,23 @@ async fn build_fleet_handler(
 
     if qty <= 0 { return Err(StatusCode::BAD_REQUEST); }
 
-    let active_constructions = ConstructionQueue::find()
-        .filter(construction_queue::Column::PlanetId.eq(p.id))
-        .count(&state.db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Vérifier le nombre de constructions actives (max 3 pour vaisseaux, illimité pour défenses)
+    let is_defense = ["missile_launcher", "plasma_turret"].contains(&type_ship.as_str());
 
-    if active_constructions >= 3 { return Err(StatusCode::CONFLICT); }
+    if !is_defense {
+        let active_ship_constructions = ConstructionQueue::find()
+            .filter(construction_queue::Column::PlanetId.eq(p.id))
+            .all(&state.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .iter()
+            .filter(|c| !["missile_launcher", "plasma_turret"].contains(&c.building_type.as_str()))
+            .count();
 
-    if !["missile_launcher", "plasma_turret"].contains(&type_ship.as_str()) {
+        if active_ship_constructions >= 3 { return Err(StatusCode::CONFLICT); }
+    }
+
+    if !is_defense {
         let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
                                + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
         let max_capacity = game_logic::get_fleet_capacity(p.hangar_level);
@@ -667,8 +675,8 @@ async fn build_fleet_handler(
 
     let (cost_m, cost_c) = match type_ship.as_str() {
         "light_hunter" => game_logic::get_light_hunter_stats(),
-        "cruiser" => (20000.0, 7000.0),
-        "recycler" => (10000.0, 6000.0),
+        "cruiser" => game_logic::get_cruiser_stats(),
+        "recycler" => game_logic::get_recycler_stats(),
         "spy_probe" => game_logic::get_spy_probe_stats(),
         "missile_launcher" => game_logic::get_missile_launcher_stats(),
         "plasma_turret" => game_logic::get_plasma_turret_stats(),
@@ -1402,9 +1410,13 @@ async fn cancel_construction_handler(
         "light_hunter" | "cruiser" | "recycler" | "spy_probe" | "colony_ship" | "transporter" | "missile_launcher" | "plasma_turret" => {
             let (m, c) = match item.building_type.as_str() {
                 "light_hunter" => game_logic::get_light_hunter_stats(),
-                "cruiser" => (20000.0, 7000.0), "recycler" => (10000.0, 6000.0), "spy_probe" => game_logic::get_spy_probe_stats(),
-                "colony_ship" => game_logic::get_colony_ship_stats(), "transporter" => game_logic::get_transporter_stats(),
-                "missile_launcher" => game_logic::get_missile_launcher_stats(), "plasma_turret" => game_logic::get_plasma_turret_stats(),
+                "cruiser" => game_logic::get_cruiser_stats(),
+                "recycler" => game_logic::get_recycler_stats(),
+                "spy_probe" => game_logic::get_spy_probe_stats(),
+                "colony_ship" => game_logic::get_colony_ship_stats(),
+                "transporter" => game_logic::get_transporter_stats(),
+                "missile_launcher" => game_logic::get_missile_launcher_stats(),
+                "plasma_turret" => game_logic::get_plasma_turret_stats(),
                 _ => (0.0, 0.0),
             };
             (m * item.level as f64, c * item.level as f64, 0.0)
