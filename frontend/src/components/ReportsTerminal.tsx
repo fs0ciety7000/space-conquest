@@ -101,12 +101,13 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                 <div className="text-center text-slate-600 text-xs py-10 font-mono">Aucun rapport de combat enregistré.</div>
             ) : (
                 combatLogs.map(log => {
-                    const isVictory = log.result === 'victory';
+                    const isVictory = log.result === 'victory' || log.result === 'calm';
                     const isDefense = log.mission_type === 'defense';
                     const isSpy = log.mission_type === 'spy_defense';
                     const isExpedition = log.mission_type === 'expedition';
                     const isPlanetConquered = log.mission_type === 'planet_conquered';
                     const isPlanetLost = log.mission_type === 'planet_lost';
+                    const isCalm = log.result === 'calm';
 
                     // Rapport de conquête de planète (attaquant)
                     if (isPlanetConquered) {
