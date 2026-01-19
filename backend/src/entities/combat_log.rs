@@ -17,8 +17,8 @@ pub struct Model {
     pub loot_crystal: f64,
     pub ships_lost: i32,
     pub date: DateTime,
-    
-    
+    #[sea_orm(column_type = "Json", nullable)]
+    pub detailed_report: Option<serde_json::Value>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

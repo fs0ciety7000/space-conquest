@@ -191,6 +191,7 @@ let (system, position) = {
         crystal_amount: Set(1000.0),
         deuterium_amount: Set(500.0),
         last_update: Set(Utc::now().naive_utc()),
+        created_at: Set(Utc::now().naive_utc()),
         ..Default::default()
     };
 

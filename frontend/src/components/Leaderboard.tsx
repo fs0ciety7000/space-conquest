@@ -22,6 +22,7 @@ interface RankItem {
     is_me: boolean;
     owner_id: string;
     planets: PlanetInfo[];
+    rank_badge: string;
 }
 
 interface LeaderboardProps {
@@ -124,16 +125,21 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                             </div>
                                         </td>
                                         <td className="p-2 md:p-4">
-                                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                                                <button
-                                                    onClick={() => setSelectedPlayer(player.owner_id)}
-                                                    className="flex items-center gap-2 group"
-                                                >
-                                                    <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2`}>
-                                                        {player.username}
-                                                    </span>
-                                                </button>
-                                                {player.is_me && <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-bold tracking-wider w-fit">VOUS</span>}
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                                                    <button
+                                                        onClick={() => setSelectedPlayer(player.owner_id)}
+                                                        className="flex items-center gap-2 group"
+                                                    >
+                                                        <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2`}>
+                                                            {player.username}
+                                                        </span>
+                                                    </button>
+                                                    {player.is_me && <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-bold tracking-wider w-fit">VOUS</span>}
+                                                </div>
+                                                <span className="text-[10px] text-yellow-500/80 font-semibold uppercase tracking-wide">
+                                                    {player.rank_badge}
+                                                </span>
                                             </div>
                                         </td>
                                         <td className="p-2 md:p-4 text-slate-400 font-mono text-xs hidden sm:table-cell">

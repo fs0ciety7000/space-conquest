@@ -69,6 +69,7 @@ struct RankItem {
     is_me: bool,
     owner_id: Uuid,
     planets: Vec<PlanetInfo>,
+    rank_badge: String,
 }
 
 #[derive(Deserialize)]
@@ -176,6 +177,7 @@ async fn main() {
         .route("/planets/:id/expedition/scout", post(scout_expedition_handler))
         .route("/planets/:id/clear-report", post(clear_report_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
+        .route("/combat-reports/:id/detail", get(get_combat_report_detail_handler))
         .route("/planets/:id/transport-logs", get(get_transport_logs_handler))
         .route("/planets/:id/rename", post(rename_planet_handler))
         .route("/my-planets", get(get_my_planets_handler))
@@ -399,6 +401,7 @@ async fn resolve_attack_mission(
         loot_crystal: Set(-result.loot.crystal),
         ships_lost: Set(result.defender_losses),
         date: Set(now),
+        detailed_report: Set(Some(def_rep_json.clone())),
     }.insert(db).await;
 
     // Combat log pour l'attaquant
@@ -413,6 +416,7 @@ async fn resolve_attack_mission(
         loot_crystal: Set(result.loot.crystal),
         ships_lost: Set(result.attacker_losses),
         date: Set(now),
+        detailed_report: Set(Some(att_rep_json.clone())),
     }.insert(db).await;
 
     FleetMission::delete_by_id(mission.id).exec(db).await.unwrap();
@@ -478,6 +482,7 @@ async fn get_ranking_handler(
 
         let username = user_map.get(&owner_id).cloned().unwrap_or("Inconnu".to_string());
         let is_me = current_owner_id.map(|id| id == owner_id).unwrap_or(false);
+        let rank_badge = game_logic::get_rank_badge(total_score);
 
         RankItem {
             rank: 0,
@@ -488,6 +493,7 @@ async fn get_ranking_handler(
             is_me,
             owner_id,
             planets: planet_infos,
+            rank_badge: rank_badge.to_string(),
         }
     }).collect();
 
@@ -915,14 +921,30 @@ async fn expedition_handler(
             logs.push(format!("RESULTAT : {}", combat_res.message));
             logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
 
-            // Répartir les pertes entre chasseurs et croiseurs
-            let total_sent = total_ships as f64;
-            let hunter_ratio = hunters as f64 / total_sent;
-            lost_hunters = (combat_res.ships_lost as f64 * hunter_ratio) as i32;
-            lost_cruisers = combat_res.ships_lost - lost_hunters;
+            // Répartir les pertes : les croiseurs sont plus résistants (50% moins de pertes)
+            // On distribue les pertes en tenant compte de la résistance de chaque type
+            let hunter_vulnerability = hunters as f64 * 1.0; // Chasseurs: vulnérabilité normale
+            let cruiser_vulnerability = cruisers as f64 * 0.5; // Croiseurs: 2x plus résistants
+            let total_vulnerability = hunter_vulnerability + cruiser_vulnerability;
 
-            if lost_hunters > hunters { lost_hunters = hunters; }
-            if lost_cruisers > cruisers { lost_cruisers = cruisers; }
+            if total_vulnerability > 0.0 {
+                let hunter_loss_ratio = hunter_vulnerability / total_vulnerability;
+                lost_hunters = (combat_res.ships_lost as f64 * hunter_loss_ratio).ceil() as i32;
+                lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_loss_ratio)).floor() as i32;
+
+                // Assurer qu'on ne perd pas plus que ce qu'on a
+                if lost_hunters > hunters { lost_hunters = hunters; }
+                if lost_cruisers > cruisers { lost_cruisers = cruisers; }
+
+                // Log des pertes
+                if lost_hunters > 0 || lost_cruisers > 0 {
+                    let mut loss_msg = "PERTES : ".to_string();
+                    if lost_hunters > 0 { loss_msg.push_str(&format!("{} Chasseur(s)", lost_hunters)); }
+                    if lost_hunters > 0 && lost_cruisers > 0 { loss_msg.push_str(", "); }
+                    if lost_cruisers > 0 { loss_msg.push_str(&format!("{} Croiseur(s)", lost_cruisers)); }
+                    logs.push(loss_msg);
+                }
+            }
 
             active.metal_amount = Set(p.metal_amount + metal);
             active.crystal_amount = Set(p.crystal_amount + crystal);
@@ -931,11 +953,35 @@ async fn expedition_handler(
             winner = "pirates";
             logs.push(format!("RESULTAT : {}", combat_res.message));
 
-            // Répartir les pertes entre chasseurs et croiseurs (défaite = pertes lourdes)
-            let total_sent = total_ships as f64;
-            let hunter_ratio = hunters as f64 / total_sent;
-            lost_hunters = (combat_res.ships_lost as f64 * hunter_ratio * 1.5).min(hunters as f64) as i32;
-            lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_ratio) * 1.5).min(cruisers as f64) as i32;
+            // En cas de défaite, pertes très lourdes avec même distribution
+            let hunter_vulnerability = hunters as f64 * 1.0;
+            let cruiser_vulnerability = cruisers as f64 * 0.5; // Croiseurs toujours plus résistants
+            let total_vulnerability = hunter_vulnerability + cruiser_vulnerability;
+
+            if total_vulnerability > 0.0 {
+                let hunter_loss_ratio = hunter_vulnerability / total_vulnerability;
+                lost_hunters = (combat_res.ships_lost as f64 * hunter_loss_ratio).ceil() as i32;
+                lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_loss_ratio)).floor() as i32;
+
+                // Assurer qu'on ne perd pas plus que ce qu'on a
+                if lost_hunters > hunters { lost_hunters = hunters; }
+                if lost_cruisers > cruisers { lost_cruisers = cruisers; }
+
+                // En cas de défaite avec 1 seul vaisseau, on le perd
+                if total_ships == 1 {
+                    if hunters == 1 { lost_hunters = 1; }
+                    if cruisers == 1 { lost_cruisers = 1; }
+                }
+
+                // Log des pertes (défaite = pertes lourdes)
+                if lost_hunters > 0 || lost_cruisers > 0 {
+                    let mut loss_msg = "PERTES LOURDES : ".to_string();
+                    if lost_hunters > 0 { loss_msg.push_str(&format!("{} Chasseur(s)", lost_hunters)); }
+                    if lost_hunters > 0 && lost_cruisers > 0 { loss_msg.push_str(", "); }
+                    if lost_cruisers > 0 { loss_msg.push_str(&format!("{} Croiseur(s)", lost_cruisers)); }
+                    logs.push(loss_msg);
+                }
+            }
 
             (0.0, 0.0)
         }
@@ -965,6 +1011,22 @@ async fn expedition_handler(
     
     let updated_planet = Planet::find_by_id(id).one(&state.db).await.unwrap().unwrap();
 
+    // Créer le rapport détaillé pour l'expédition
+    let expedition_report = json!({
+        "winner": winner,
+        "log": logs,
+        "loot": {
+            "metal": loot_metal,
+            "crystal": loot_crystal,
+            "deuterium": 0.0
+        },
+        "attacker_losses": lost_hunters + lost_cruisers,
+        "defender_losses": 0,
+        "lost_missiles": 0,
+        "lost_plasmas": 0,
+        "mission_type": "expedition"
+    });
+
     let log_exp = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(id),
@@ -976,24 +1038,13 @@ async fn expedition_handler(
         loot_crystal: Set(loot_crystal),
         ships_lost: Set(lost_hunters + lost_cruisers),
         date: Set(Utc::now().naive_utc()),
+        detailed_report: Set(Some(expedition_report.clone())),
     };
     let _ = log_exp.insert(&state.db).await;
 
    let response = json!({
     "planet": updated_planet,
-    "report": {
-        "winner": winner,
-        "log": logs,
-        "loot": {
-            "metal": loot_metal,
-            "crystal": loot_crystal,
-            "deuterium": 0.0
-        },
-        "attacker_losses": lost_hunters + lost_cruisers,
-        "defender_losses": 0,
-        "lost_missiles": 0,
-        "lost_plasmas": 0
-    }
+    "report": expedition_report
 });
 
     (StatusCode::OK, Json(response)).into_response()
@@ -1105,6 +1156,30 @@ async fn get_reports_handler(
     Json(logs)
 }
 
+// Récupérer le rapport détaillé d'un combat
+async fn get_combat_report_detail_handler(
+    Path(report_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let report = CombatLog::find_by_id(report_id)
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    match report {
+        Some(log) => {
+            if let Some(detailed) = log.detailed_report {
+                (StatusCode::OK, Json(detailed)).into_response()
+            } else {
+                (StatusCode::NOT_FOUND, Json(json!({"error": "Aucun détail disponible pour ce rapport"}))).into_response()
+            }
+        }
+        None => {
+            (StatusCode::NOT_FOUND, Json(json!({"error": "Rapport introuvable"}))).into_response()
+        }
+    }
+}
+
 async fn get_transport_logs_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
@@ -1143,13 +1218,6 @@ async fn get_transport_logs_handler(
     }).collect();
 
     Json(logs_json)
-}
-
-fn calculate_flight_time(source_sys: i32, target_sys: i32, speed_factor: f64) -> i64 {
-    let distance = (source_sys - target_sys).abs() as f64;
-    let base_time = 30.0 + (distance * 10.0); 
-    let final_time = base_time / speed_factor;
-    std::cmp::max(10, final_time as i64)
 }
 
 async fn spy_handler(
@@ -1229,6 +1297,7 @@ async fn spy_handler(
         loot_crystal: Set(0.0),
         ships_lost: Set(0),
         date: Set(Utc::now().naive_utc()),
+        detailed_report: Set(None), // Pas de détails de combat pour l'espionnage
     };
     let _ = spy_log.insert(&state.db).await;
 
@@ -1423,6 +1492,7 @@ async fn colonize_handler(
     let new_planet = planet::ActiveModel {
         id: Set(new_id), owner_id: Set(owner_id), name: Set(colony_name), password: Set(password), galaxy: Set(payload.galaxy), system: Set(payload.system), position: Set(payload.position),
         metal_mine_level: Set(1), crystal_mine_level: Set(1), deuterium_mine_level: Set(1), metal_amount: Set(500.0), crystal_amount: Set(500.0), last_update: Set(Utc::now().naive_utc()),
+        created_at: Set(Utc::now().naive_utc()),
         ..Default::default()
     };
 
@@ -1479,12 +1549,19 @@ async fn transport_handler(
 
     if payload.transporters > source_model.transporter_count || payload.transporters <= 0 { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Transporteurs insuffisants"}))).into_response(); }
     if payload.metal > source_model.metal_amount || payload.crystal > source_model.crystal_amount || payload.deuterium > source_model.deuterium_amount { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ressources insuffisantes"}))).into_response(); }
-    
-    let total_load = payload.metal + payload.crystal + payload.deuterium;
-    let capacity = payload.transporters as f64 * game_logic::TRANSPORTER_CAPACITY;
-    if total_load > capacity { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Surcharge !"}))).into_response(); }
 
-    let flight_duration = calculate_flight_time(source_model.system, target_model.system, game_logic::SPEED_FACTOR);
+    let total_load = payload.metal + payload.crystal + payload.deuterium;
+    // Capacité évolutive: +5% par niveau de hangar
+    let transporter_capacity = game_logic::get_transporter_capacity(source_model.hangar_level);
+    let capacity = payload.transporters as f64 * transporter_capacity;
+    if total_load > capacity { return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Surcharge ! Capacité max: {:.0}", capacity)}))).into_response(); }
+
+    // Calcul du temps de vol avec les vraies coordonnées 3D
+    let dist = game_logic::calculate_distance(
+        (source_model.galaxy, source_model.system, source_model.position),
+        (target_model.galaxy, target_model.system, target_model.position)
+    );
+    let flight_duration = game_logic::calculate_flight_time(dist, game_logic::SPEED_FACTOR);
     let arrival = Utc::now().naive_utc() + Duration::seconds(flight_duration);
 
     let mut source: planet::ActiveModel = source_model.into();
@@ -1801,22 +1878,25 @@ async fn get_player_profile_handler(
         0
     };
     
-    // Planète principale
+    // Planète principale (= la plus ancienne, planète mère)
     let main_planet_with_points: Option<(&planet::Model, i32, i32, i32)> = planets.iter()
         .map(|p| {
             let (pts, eco, mil) = game_logic::calculate_planet_points(p);
             (p, pts, eco, mil)
         })
-        .max_by_key(|(_, pts, _, _)| *pts);
+        .min_by_key(|(p, _, _, _)| p.created_at); // Planète la plus ancienne
     
     // Badge de rang
     let rank_badge = game_logic::get_rank_badge(total_points);
     
+    // ✅ Formater created_at en ISO 8601 avec Z pour UTC
+    let created_at_utc = user.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+
     // ✅ Construire la réponse avec masquage progressif
     let response = json!({
         "user_id": user.id,
         "username": user.username,
-        "created_at": if show_all { json!(user.created_at) } else { json!(null) },
+        "created_at": if show_all { json!(created_at_utc) } else { json!(null) },
         "is_own_profile": is_own_profile,
         "espionage_level": espionage_level,
         

@@ -330,10 +330,19 @@ pub fn get_ship_production_time(qty: i32) -> i64 {
 }
 
 // 📦 CAPACITÉS
-pub fn get_fleet_capacity(hangar_level: i32) -> i32 { 
-    500 + (hangar_level * 500) 
+pub fn get_fleet_capacity(hangar_level: i32) -> i32 {
+    500 + (hangar_level * 500)
 }
-pub const TRANSPORTER_CAPACITY: f64 = 10000.0;
+
+// Capacité transporteur évolutive basée sur niveau hangar
+// Base: 10000, +5% par niveau de hangar
+pub fn get_transporter_capacity(hangar_level: i32) -> f64 {
+    let base_capacity = 10000.0;
+    let bonus_per_level = 0.05; // +5% par niveau
+    base_capacity * (1.0 + (hangar_level as f64 * bonus_per_level))
+}
+
+pub const TRANSPORTER_CAPACITY: f64 = 10000.0; // Deprecated: utilisez get_transporter_capacity()
 
 // Helper functions
 pub fn get_light_hunter_stats() -> (f64, f64) { get_unit_cost("light_hunter") }
@@ -502,14 +511,39 @@ pub fn resolve_pvp(
 
 pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
     let mut rng = rand::thread_rng();
-    let pirates = rng.gen_range(10..100);
-    let player = fleet_size + (defense_bonus * 5);
-    if player > pirates {
-        let lost = (fleet_size as f64 * rng.gen_range(0.0..0.2)) as i32;
-        CombatResult { victory: true, message: "Victoire spatiale !".into(), ships_lost: lost }
+
+    // Niveau pirate aléatoire (10-100) avec forte variation
+    let pirate_strength = rng.gen_range(10..100);
+    let player_strength = fleet_size + (defense_bonus * 5);
+
+    if player_strength > pirate_strength {
+        // VICTOIRE : Pertes faibles (5-25% avec variation ±20%)
+        let base_loss_rate = rng.gen_range(0.05..0.25);
+        let variation = rng.gen_range(-0.2..0.2);
+        let loss_rate = (base_loss_rate * (1.0 + variation)).clamp(0.01, 0.4);
+
+        let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1 si fleet > 0
+        let lost = lost.max(0).min(fleet_size); // Clamp entre 0 et fleet_size
+
+        CombatResult {
+            victory: true,
+            message: format!("Victoire ! Pirates éliminés (force: {})", pirate_strength),
+            ships_lost: lost
+        }
     } else {
-        let lost = (fleet_size as f64 * rng.gen_range(0.4..0.9)) as i32;
-        CombatResult { victory: false, message: "Défaite cuisante...".into(), ships_lost: lost }
+        // DÉFAITE : Pertes lourdes (50-90% avec variation ±20%)
+        let base_loss_rate = rng.gen_range(0.5..0.9);
+        let variation = rng.gen_range(-0.2..0.2);
+        let loss_rate = (base_loss_rate * (1.0 + variation)).clamp(0.4, 1.0);
+
+        let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1
+        let lost = lost.max(1).min(fleet_size); // Minimum 1 perte en cas de défaite
+
+        CombatResult {
+            victory: false,
+            message: format!("Défaite ! Retraite forcée (pirates: {})", pirate_strength),
+            ships_lost: lost
+        }
     }
 }
 

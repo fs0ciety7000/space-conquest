@@ -71,3 +71,11 @@ export const checkPrerequisites = (planet: any, type: string): { locked: boolean
     const locked = reqs.some(r => !r.met);
     return { locked, requirements: reqs };
 };
+
+// Calcul de la capacité des transporteurs (évolutive selon niveau hangar)
+// Base: 10000, +5% par niveau de hangar
+export const getTransporterCapacity = (hangarLevel: number): number => {
+    const baseCapacity = 10000;
+    const bonusPerLevel = 0.05; // +5% par niveau
+    return baseCapacity * (1 + hangarLevel * bonusPerLevel);
+};
