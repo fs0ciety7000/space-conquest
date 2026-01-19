@@ -11,6 +11,9 @@ interface PlanetInfo {
     total_score: number;
     economy_score: number;
     military_score: number;
+    galaxy: number;
+    system: number;
+    position: number;
 }
 
 interface RankItem {
@@ -199,8 +202,8 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                             <td className="p-2 md:p-4 pl-8 md:pl-12">
                                                 <span className="text-slate-400 font-mono text-xs">↳ {planet.name}</span>
                                             </td>
-                                            <td className="p-2 md:p-4 text-slate-500 font-mono text-[10px] hidden sm:table-cell">
-                                                Coordonnées
+                                            <td className="p-2 md:p-4 text-cyan-500 font-mono text-[10px] hidden sm:table-cell">
+                                                [{planet.galaxy}:{planet.system}:{planet.position}]
                                             </td>
                                             <td className="p-2 md:p-4 text-right">
                                                 <span className="font-mono text-xs text-slate-400">

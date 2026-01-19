@@ -1,5 +1,195 @@
 # Changelog - Space Conquest
 
+## [1.8.0] - 2026-01-19 - Rôles utilisateurs, slots de production, améliorations commerce et expéditions
+
+### 🎯 Nouvelles fonctionnalités
+
+#### 👤 Système de rôles utilisateurs
+**Feature**: Gestion des permissions admin/user avec vérification en base de données
+
+**Implémentation**:
+- Nouvelle migration `m20260119_100000_add_role_to_users.rs` ajoutant colonne `role` (VARCHAR, default "user")
+- Vérification asynchrone des rôles dans `admin.rs` via `check_admin()`
+- Nouvel endpoint `PATCH /admin/user/:id/role` pour modifier les rôles
+- Création d'utilisateurs avec role "user" par défaut
+
+**Rôles disponibles**:
+- `admin`: Accès complet au panel d'administration
+- `user`: Joueur standard (défaut)
+
+**Fichiers**:
+- `backend/migration/src/m20260119_100000_add_role_to_users.rs` (nouveau)
+- `backend/src/entities/user.rs` (ajout champ `role`)
+- `backend/src/admin.rs` (check_admin async + endpoint)
+- `backend/src/auth.rs` (role par défaut à la création)
+
+---
+
+#### 🔧 Système de slots de production bonus
+**Feature**: 4 slots supplémentaires (slots 5-8) pour booster la production de ressources
+
+**Fonctionnement**:
+- 4 slots de base (mines métal, cristal, deutérium, énergie)
+- 4 slots bonus débloquables par le joueur
+- Chaque slot bonus donne **+50% de production** à la ressource assignée
+- Coût progressif pour débloquer les slots
+
+**Coûts de déblocage**:
+| Slot | Métal | Cristal | Deutérium |
+|------|-------|---------|-----------|
+| 5 | 10,000 | 5,000 | 2,500 |
+| 6 | 25,000 | 12,500 | 6,250 |
+| 7 | 50,000 | 25,000 | 12,500 |
+| 8 | 100,000 | 50,000 | 25,000 |
+
+**Interface**: Intégrée dans la page "Ressources" sous les 4 mines de base
+
+**Fichiers**:
+- `backend/migration/src/m20260119_000004_create_resource_slots.rs`
+- `backend/src/entities/resource_slot.rs` (nouveau)
+- `backend/src/game_logic.rs` (fonctions de calcul slots)
+- `frontend/src/components/ResourceDisplay.tsx` (affichage slots 5-8)
+
+---
+
+#### 💱 Commerce NPC bidirectionnel
+**Feature**: Saisie bidirectionnelle des quantités dans les échanges NPC
+
+**Améliorations**:
+- Labels explicites avec nom de ressource ("Quantité de Métal à vendre")
+- Champ "Quantité à obtenir" éditable
+- Calcul automatique bidirectionnel:
+  - Modifier quantité vendue → recalcule quantité obtenue
+  - Modifier quantité obtenue → recalcule quantité à vendre
+- Indicateur visuel du champ actif (bordure indigo)
+- Récapitulatif avec taux d'échange et marge NPC (15%)
+
+**Fichiers**:
+- `frontend/src/components/market/NpcTradeCard.tsx`
+  - Ajout `resourceLabels` pour noms français
+  - États `buyQuantity` et `lastEdited`
+  - Handlers bidirectionnels
+
+---
+
+#### 🌌 Gains de deutérium en expédition
+**Feature**: Possibilité de trouver du deutérium lors des expéditions
+
+**Balance**:
+- **50% de chance** de trouver du deutérium
+- Chasseurs: 10-25 deutérium par vaisseau
+- Croiseurs: 30-60 deutérium par vaisseau
+- Bonus secteur calme: ×1.2
+
+**Affichage**:
+- Logs d'expédition incluent le deutérium trouvé
+- Scout affiche estimation deutérium (0 - max possible)
+- Note "50% de chance de trouver du deutérium"
+
+**Fichiers**:
+- `backend/src/main.rs` (expedition_handler, scout_expedition_handler)
+- `frontend/src/components/ExpeditionZone.tsx` (interface + affichage)
+
+---
+
+#### 🏆 Coordonnées dans le classement
+**Feature**: Affichage des coordonnées des planètes dans le classement
+
+**Implémentation**:
+- Ajout coordonnées (galaxy, system, position) dans `PlanetInfo`
+- Format d'affichage: `[G:S:P]` (ex: `[1:45:7]`)
+- Couleur cyan pour les coordonnées
+
+**Fichiers**:
+- `backend/src/main.rs` (struct PlanetInfo + ranking handler)
+- `frontend/src/components/Leaderboard.tsx` (interface + affichage)
+
+---
+
+### 🔧 Modifications techniques
+
+#### Backend
+
+**Migrations**:
+1. `m20260119_100000_add_role_to_users.rs` - Rôles utilisateurs
+2. `m20260119_000004_create_resource_slots.rs` - Slots de ressources
+
+**Entités modifiées**:
+- `user.rs`: Ajout `role: String`
+- `resource_slot.rs`: Nouvelle entité pour slots
+
+**Endpoints modifiés/ajoutés**:
+- `PATCH /admin/user/:id/role` - Modification rôle utilisateur
+- `GET /ranking` - Inclut maintenant les coordonnées des planètes
+- `POST /planets/:id/expedition` - Gains deutérium
+- `POST /planets/:id/expedition/scout` - Estimation deutérium
+
+#### Frontend
+
+**Composants modifiés**:
+- `ResourceDisplay.tsx` - Intégration slots 5-8
+- `NpcTradeCard.tsx` - Commerce bidirectionnel
+- `ExpeditionZone.tsx` - Estimation/affichage deutérium
+- `Leaderboard.tsx` - Coordonnées planètes
+
+---
+
+### 📝 Notes techniques
+
+**Calcul production avec slots**:
+```typescript
+// Bonus par slot actif = +50%
+production_finale = production_base * (1 + nb_slots_actifs * 0.5)
+```
+
+**Échange NPC bidirectionnel**:
+```typescript
+// Taux d'échange avec marge 15%
+exchangeRate = (sellPrice / buyPrice) * 0.85
+
+// Vente → Achat
+buyQuantity = sellQuantity * exchangeRate
+
+// Achat → Vente
+sellQuantity = buyQuantity / exchangeRate
+```
+
+**Deutérium expédition**:
+```rust
+// 50% de chance
+let found_deuterium = rng.gen_bool(0.5);
+
+// Gains par vaisseau
+let base_deut_per_hunter = 10.0 + rng.gen_range(0.0..=15.0);  // 10-25
+let base_deut_per_cruiser = 30.0 + rng.gen_range(0.0..=30.0); // 30-60
+```
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: **OUI - OBLIGATOIRE**
+```bash
+cd migration
+cargo run
+```
+
+**Tests recommandés**:
+1. ✅ Créer un nouvel utilisateur → role = "user"
+2. ✅ Modifier role via panel admin
+3. ✅ Débloquer un slot bonus → vérifier coût et production
+4. ✅ Commerce NPC → saisir quantité obtenue → vérifier calcul inverse
+5. ✅ Expédition → vérifier gains deutérium (50% des fois)
+6. ✅ Classement → développer joueur → voir coordonnées planètes
+
+---
+
+### ⚠️ Breaking Changes
+
+Aucun breaking change. Toutes les modifications sont rétrocompatibles.
+
+---
+
 ## [1.7.0] - 2026-01-19 - Configuration dynamique du serveur (SPEED_FACTOR modifiable)
 
 ### 🎯 Nouvelles fonctionnalités

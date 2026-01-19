@@ -22,6 +22,8 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
       metal_max: number;
       crystal_min: number;
       crystal_max: number;
+      deuterium_min: number;
+      deuterium_max: number;
     }
   } | null>(null);
 
@@ -309,6 +311,13 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                               {scoutResult.estimated_loot.crystal_min.toLocaleString()} - {scoutResult.estimated_loot.crystal_max.toLocaleString()}
                             </span>
                           </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Deutérium:</span>
+                            <span className="font-mono text-emerald-400">
+                              {scoutResult.estimated_loot.deuterium_min.toLocaleString()} - {scoutResult.estimated_loot.deuterium_max.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="text-[8px] text-slate-500 italic mt-1">* 50% de chance de trouver du deutérium</div>
                         </div>
                       )}
                       <div className="mt-3 pt-3 border-t border-white/10">

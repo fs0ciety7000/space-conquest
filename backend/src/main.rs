@@ -57,6 +57,9 @@ struct PlanetInfo {
     total_score: i32,
     economy_score: i32,
     military_score: i32,
+    galaxy: i32,
+    system: i32,
+    position: i32,
 }
 
 #[derive(Serialize)]
@@ -487,6 +490,9 @@ async fn get_ranking_handler(
                 total_score: total,
                 economy_score: economy,
                 military_score: military,
+                galaxy: p.galaxy,
+                system: p.system,
+                position: p.position,
             }
         }).collect();
 
@@ -948,16 +954,21 @@ async fn expedition_handler(
     let combat_triggered = rand::thread_rng().gen_bool(0.3);
 
     // Calcul des gains basé sur la taille et type de flotte
-    // Chasseurs: 50-100 métal, 20-50 cristal
-    // Croiseurs: 150-250 métal, 60-100 cristal (3x plus puissants)
+    // Chasseurs: 50-100 métal, 20-50 cristal, 10-25 deutérium (50% chance)
+    // Croiseurs: 150-250 métal, 60-100 cristal, 30-60 deutérium (50% chance)
     let base_metal_per_hunter = 50.0 + rand::thread_rng().gen_range(0.0..=50.0);
     let base_crystal_per_hunter = 20.0 + rand::thread_rng().gen_range(0.0..=30.0);
+    let base_deut_per_hunter = 10.0 + rand::thread_rng().gen_range(0.0..=15.0);
     let base_metal_per_cruiser = 150.0 + rand::thread_rng().gen_range(0.0..=100.0);
     let base_crystal_per_cruiser = 60.0 + rand::thread_rng().gen_range(0.0..=40.0);
+    let base_deut_per_cruiser = 30.0 + rand::thread_rng().gen_range(0.0..=30.0);
+
+    // 50% de chance de trouver du deutérium
+    let found_deuterium = rand::thread_rng().gen_bool(0.5);
 
     let total_ships = hunters + cruisers;
 
-    let (loot_metal, loot_crystal) = if combat_triggered {
+    let (loot_metal, loot_crystal, loot_deuterium) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
         let combat_res = game_logic::simulate_combat(total_ships, p.laser_battery_level);
 
@@ -966,9 +977,18 @@ async fn expedition_handler(
             // Gains proportionnels au nombre et type de vaisseaux
             let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0);
             let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0);
+            let deuterium = if found_deuterium {
+                (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0)
+            } else {
+                0.0
+            };
 
             logs.push(format!("RESULTAT : {}", combat_res.message));
-            logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
+            if deuterium > 0.0 {
+                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium récupérés.", metal, crystal, deuterium));
+            } else {
+                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
+            }
 
             // Répartir les pertes : les croiseurs sont plus résistants (50% moins de pertes)
             // On distribue les pertes en tenant compte de la résistance de chaque type
@@ -997,7 +1017,10 @@ async fn expedition_handler(
 
             active.metal_amount = Set(p.metal_amount + metal);
             active.crystal_amount = Set(p.crystal_amount + crystal);
-            (metal, crystal)
+            if deuterium > 0.0 {
+                active.deuterium_amount = Set(p.deuterium_amount + deuterium);
+            }
+            (metal, crystal, deuterium)
         } else {
             winner = "pirates";
             logs.push(format!("RESULTAT : {}", combat_res.message));
@@ -1032,20 +1055,32 @@ async fn expedition_handler(
                 }
             }
 
-            (0.0, 0.0)
+            (0.0, 0.0, 0.0)
         }
     } else {
         winner = "player";
         // Gains proportionnels au nombre et type de vaisseaux (bonus pour secteur calme: x1.2)
         let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
         let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
+        let deuterium = if found_deuterium {
+            (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0)
+        } else {
+            0.0
+        };
 
         logs.push("SCAN : Secteur calme.".to_string());
-        logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", metal, crystal));
+        if deuterium > 0.0 {
+            logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium.", metal, crystal, deuterium));
+        } else {
+            logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", metal, crystal));
+        }
 
         active.metal_amount = Set(p.metal_amount + metal);
         active.crystal_amount = Set(p.crystal_amount + crystal);
-        (metal, crystal)
+        if deuterium > 0.0 {
+            active.deuterium_amount = Set(p.deuterium_amount + deuterium);
+        }
+        (metal, crystal, deuterium)
     };
     
     active.light_hunter_count = Set(p.light_hunter_count - lost_hunters);
@@ -1067,7 +1102,7 @@ async fn expedition_handler(
         "loot": {
             "metal": loot_metal,
             "crystal": loot_crystal,
-            "deuterium": 0.0
+            "deuterium": loot_deuterium
         },
         "attacker_losses": lost_hunters + lost_cruisers,
         "defender_losses": 0,
@@ -1161,21 +1196,27 @@ async fn scout_expedition_handler(
     };
 
     // Calcul des gains estimés (basé sur le même calcul que l'expédition réelle)
-    // Chasseurs: 50-100 métal (moy 75), 20-50 cristal (moy 35)
-    // Croiseurs: 150-250 métal (moy 200), 60-100 cristal (moy 80)
+    // Chasseurs: 50-100 métal (moy 75), 20-50 cristal (moy 35), 10-25 deutérium (moy 17.5, 50% chance)
+    // Croiseurs: 150-250 métal (moy 200), 60-100 cristal (moy 80), 30-60 deutérium (moy 45, 50% chance)
     let avg_metal_per_hunter = 75.0;
     let avg_crystal_per_hunter = 35.0;
+    let avg_deut_per_hunter = 17.5 * 0.5; // 50% chance, donc moyenne divisée par 2
     let avg_metal_per_cruiser = 200.0;
     let avg_crystal_per_cruiser = 80.0;
+    let avg_deut_per_cruiser = 45.0 * 0.5; // 50% chance
 
     // Min/Max avec variation de ±30%
     let base_metal = avg_metal_per_hunter * hunters as f64 + avg_metal_per_cruiser * cruisers as f64;
     let base_crystal = avg_crystal_per_hunter * hunters as f64 + avg_crystal_per_cruiser * cruisers as f64;
+    let base_deut = avg_deut_per_hunter * hunters as f64 + avg_deut_per_cruiser * cruisers as f64;
 
     let estimated_metal_min = (base_metal * 0.7) * (game_logic::SPEED_FACTOR / 100.0);
     let estimated_metal_max = (base_metal * 1.5) * (game_logic::SPEED_FACTOR / 100.0);
     let estimated_crystal_min = (base_crystal * 0.7) * (game_logic::SPEED_FACTOR / 100.0);
     let estimated_crystal_max = (base_crystal * 1.5) * (game_logic::SPEED_FACTOR / 100.0);
+    // Pour deutérium: min à 0 (50% chance de rien), max basé sur la formule normale
+    let estimated_deut_min = 0;
+    let estimated_deut_max = (base_deut * 3.0) * (game_logic::SPEED_FACTOR / 100.0); // x3 car la moyenne inclut 50% de 0
 
     Json(json!({
         "danger": danger_level,
@@ -1186,7 +1227,9 @@ async fn scout_expedition_handler(
             "metal_min": estimated_metal_min as i32,
             "metal_max": estimated_metal_max as i32,
             "crystal_min": estimated_crystal_min as i32,
-            "crystal_max": estimated_crystal_max as i32
+            "crystal_max": estimated_crystal_max as i32,
+            "deuterium_min": estimated_deut_min,
+            "deuterium_max": estimated_deut_max as i32
         }
     })).into_response()
 }
