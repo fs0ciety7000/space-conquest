@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::entities::prelude::*;
 use crate::game_logic;
-use sea_orm::{EntityTrait, DatabaseConnection};
+use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait};
 
 // ============================================================================
 // TYPES ET STRUCTURES
