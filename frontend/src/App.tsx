@@ -24,6 +24,7 @@ import MyPlanets from './components/MyPlanets';
 import Marketplace from './components/Marketplace';
 import ProductionStats from './components/ProductionStats';
 import AllianceView from './components/AllianceView';
+import MissionsView from './components/MissionsView';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
@@ -49,7 +50,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -517,6 +518,7 @@ export default function App() {
     
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
     { id: 'alliance', label: 'Alliance', icon: Shield, category: 'DONNÉES' },
+    { id: 'missions', label: 'Missions', icon: Telescope, category: 'DONNÉES' },
     { id: 'stats', label: 'Statistiques', icon: Activity, category: 'DONNÉES' },
     { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
     { id: 'changelog', label: 'Changelog', icon: FileText, category: 'SYSTÈME' },
@@ -770,6 +772,7 @@ export default function App() {
                     {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
                     {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
                     {activeTab === 'alliance' && <AllianceView userId={userId!} token={token!} onOpenMessage={handleOpenMessage} />}
+                    {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
                     {activeTab === 'stats' && <ProductionStats planet={planet} speedFactor={speedFactor} />}
                     
                     {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}

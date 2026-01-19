@@ -19,3 +19,10 @@ pub use super :: resource_slot :: Entity as ResourceSlot ;
 pub use super :: alliance :: Entity as Alliance ;
 pub use super :: alliance_member :: Entity as AllianceMember ;
 pub use super :: alliance_invitation :: Entity as AllianceInvitation ;
+
+// Missions & Achievements system
+pub use super :: daily_mission :: Entity as DailyMission ;
+pub use super :: user_daily_mission :: Entity as UserDailyMission ;
+pub use super :: achievement :: Entity as Achievement ;
+pub use super :: user_achievement :: Entity as UserAchievement ;
+pub use super :: login_streak :: Entity as LoginStreak ;

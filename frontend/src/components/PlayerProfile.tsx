@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { 
   User, Globe, Trophy, Rocket, Shield, Target, Zap, Award, 
   Star, Crown, Swords, TrendingUp, MapPin, Building, Atom, Calendar,
-  X, Lock, Eye, AlertTriangle
+  X, Lock, Eye, AlertTriangle, Flame
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,18 @@ interface PlayerProfileProps {
   onClose: () => void;
 }
 
+interface DisplayedAchievement {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  rarity: string;
+  unlocked_at: string;
+}
+
 export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
   const [profile, setProfile] = useState<any>(null);
+  const [achievements, setAchievements] = useState<DisplayedAchievement[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,7 +52,20 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
       }
     };
 
+    const fetchAchievements = async () => {
+      try {
+        const res = await fetch(apiUrl(`/users/${userId}/achievements`));
+        if (res.ok) {
+          const data = await res.json();
+          setAchievements(data);
+        }
+      } catch (error) {
+        console.error('Error fetching achievements:', error);
+      }
+    };
+
     fetchProfile();
+    fetchAchievements();
   }, [userId]);
 
   if (loading) {
@@ -281,6 +304,50 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
               </div>
             </CardContent>
           </Card>
+
+          {/* Badges & Achievements */}
+          {achievements.length > 0 && (
+            <Card className="bg-gradient-to-br from-amber-950/20 to-orange-950/20 border border-amber-500/20 mt-6">
+              <CardContent className="p-6">
+                <h3 className="text-sm font-black uppercase tracking-widest text-amber-400 mb-4 flex items-center gap-2">
+                  <Trophy size={16} /> Succès débloqués ({achievements.length})
+                </h3>
+                
+                <div className="flex flex-wrap gap-3">
+                  {achievements.map((ach) => (
+                    <div 
+                      key={ach.id}
+                      className={`
+                        relative group flex items-center gap-2 px-4 py-2 rounded-xl border
+                        ${ach.rarity === 'legendary' ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-500/50 animate-pulse' :
+                          ach.rarity === 'epic' ? 'bg-purple-500/10 border-purple-500/30' :
+                          ach.rarity === 'rare' ? 'bg-blue-500/10 border-blue-500/30' :
+                          ach.rarity === 'uncommon' ? 'bg-green-500/10 border-green-500/30' :
+                          'bg-slate-500/10 border-slate-500/30'
+                        }
+                        hover:scale-105 transition-transform cursor-default
+                      `}
+                    >
+                      <span className="text-xl" style={{ textShadow: `0 0 10px ${ach.color}` }}>
+                        {ach.icon}
+                      </span>
+                      <span className="text-sm font-bold text-white">{ach.name}</span>
+                      
+                      {/* Tooltip au hover */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-black/90 border border-white/10 rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 whitespace-nowrap">
+                        <div className="text-xs text-slate-400">
+                          Débloqué le {new Date(ach.unlocked_at).toLocaleDateString('fr-FR')}
+                        </div>
+                        <div className="text-[10px] text-slate-500 capitalize">
+                          {ach.rarity}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* ✅ Footer - Membre depuis (si visible) */}
           {daysSince !== null && (

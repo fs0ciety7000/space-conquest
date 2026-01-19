@@ -21,3 +21,10 @@ pub mod resource_slot;
 pub mod alliance;
 pub mod alliance_member;
 pub mod alliance_invitation;
+
+// Missions & Achievements system
+pub mod daily_mission;
+pub mod user_daily_mission;
+pub mod achievement;
+pub mod user_achievement;
+pub mod login_streak;
