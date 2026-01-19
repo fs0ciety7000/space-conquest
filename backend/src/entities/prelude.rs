@@ -12,3 +12,4 @@ pub use super :: market_listing :: Entity as MarketListing ;
 pub use super :: market_transaction :: Entity as MarketTransaction ;
 pub use super :: server_resource_stats :: Entity as ServerResourceStats ;
 pub use super :: market_price_history :: Entity as MarketPriceHistory ;
+pub use super :: server_config :: Entity as ServerConfig ;

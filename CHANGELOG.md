@@ -1,5 +1,123 @@
 # Changelog - Space Conquest
 
+## [1.7.0] - 2026-01-19 - Configuration dynamique du serveur (SPEED_FACTOR modifiable)
+
+### 🎯 Nouvelles fonctionnalités
+
+#### ⚙️ Configuration serveur dynamique (Panel Admin)
+**Feature**: Modification en temps réel des paramètres de vitesse du jeu depuis le panel admin
+
+**Paramètres éditables**:
+- **SPEED_FACTOR**: Multiplicateur de vitesse général du jeu (construction, recherche, production)
+- **Construction Speed Multiplier**: Multiplicateur spécifique pour la vitesse de construction
+- **Mining Speed Multiplier**: Multiplicateur spécifique pour la vitesse de production des ressources
+
+**Fonctionnement**:
+- Valeurs stockées en base de données (table `server_config`)
+- Modification via interface admin avec inputs numériques
+- Application immédiate pour toutes les nouvelles opérations
+- Fallback sur les valeurs par défaut si DB inaccessible
+
+**Accès**: Panel Admin → Onglet "Statistiques Serveur" → Section "Paramètres Serveur (Éditable)"
+
+---
+
+### 🔧 Modifications techniques
+
+#### Backend
+
+**Migration SeaORM** (`m20260119_000003_create_server_config.rs`):
+```sql
+CREATE TABLE server_config (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  config_key VARCHAR UNIQUE NOT NULL,
+  config_value VARCHAR NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Valeurs par défaut
+INSERT INTO server_config VALUES
+  ('speed_factor', '500.0'),
+  ('construction_speed_multiplier', '1.0'),
+  ('mining_speed_multiplier', '1.0');
+```
+
+**Entité** (`entities/server_config.rs`):
+- Model avec `config_key` (unique), `config_value`, `updated_at`
+- Ajouté dans `mod.rs` et `prelude.rs`
+
+**Endpoints admin** (`admin.rs`):
+- `GET /admin/config` - Récupérer toutes les configurations
+- `PATCH /admin/config` - Mettre à jour une ou plusieurs configurations
+- Struct `ConfigUpdate` pour gérer les mises à jour partielles
+- Fonction `get_server_stats_handler` modifiée pour lire le SPEED_FACTOR depuis la DB
+
+**Routes** (`main.rs`):
+- Ajout des routes `/admin/config` (GET et PATCH)
+
+#### Frontend
+
+**AdminPanel.tsx**:
+- Nouvelle interface `ServerConfig` pour typer les configurations
+- États `config`, `editedConfig`, `loadingConfig`
+- Fonctions `fetchConfig()` et `updateConfig()` pour gérer les configurations
+- Section éditable avec 3 inputs numériques (step 0.1)
+- Boutons "Enregistrer" et "Annuler"
+- Toast de confirmation après modification
+- Avertissement sur l'application immédiate des changements
+
+**App.tsx**:
+- Ajout import `FileText` manquant pour l'icône Changelog
+
+---
+
+### 📝 Notes techniques
+
+**Application des modifications**:
+- Les changements prennent effet **immédiatement** pour toutes les nouvelles opérations
+- Les opérations en cours (constructions, recherches) conservent leur vitesse d'origine
+- Le SPEED_FACTOR est lu depuis la DB à chaque calcul de durée
+
+**Valeurs par défaut**:
+- `speed_factor`: 500.0 (×5.0 de vitesse)
+- `construction_speed_multiplier`: 1.0 (vitesse normale)
+- `mining_speed_multiplier`: 1.0 (vitesse normale)
+
+**Sécurité**:
+- Vérification admin (`check_admin`) obligatoire
+- user_id requis dans les paramètres de requête
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: **OUI - OBLIGATOIRE**
+```bash
+cd migration
+cargo run
+```
+
+**Tests recommandés**:
+1. ✅ Exécuter la migration pour créer la table `server_config`
+2. ✅ Vérifier que les valeurs par défaut sont insérées
+3. ✅ Accéder au panel admin → Statistiques Serveur
+4. ✅ Modifier le SPEED_FACTOR (ex: 1000.0 pour ×10)
+5. ✅ Enregistrer et vérifier que la valeur est mise à jour
+6. ✅ Vérifier que les nouvelles constructions utilisent la nouvelle vitesse
+
+---
+
+### ⚠️ Breaking Changes
+
+**IMPORTANT**: Cette version nécessite l'exécution de la migration pour fonctionner correctement. Sans la table `server_config`, le système utilisera les valeurs hardcodées par défaut (fallback).
+
+**Impact**:
+- Aucun impact sur les données existantes
+- Ajout d'une nouvelle table uniquement
+- Rétrocompatible (fallback sur constantes)
+
+---
+
 ## [1.6.0] - 2026-01-19 - Améliorations panel admin (statistiques serveur)
 
 ### 🎯 Nouvelles fonctionnalités
