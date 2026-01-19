@@ -1,5 +1,18 @@
 # Changelog - Space Conquest
 
+## [2.0.2] - 2026-01-19 - Correction calcul production EmpireBar
+
+### 🔧 Corrections
+
+#### Harmonisation complète des calculs de production
+- **EmpireBar.tsx** : Correction du filtrage des slots bonus
+  - Filtrage des slots `>= 5` uniquement (slots bonus)
+  - Avant : tous les slots étaient comptés (incluant slots 1-4)
+  - Après : seuls les slots bonus 5-8 sont comptés
+  - Production maintenant identique entre EmpireBar, PlanetOverview et ProductionStats
+
+---
+
 ## [2.0.1] - 2026-01-19 - Corrections UI/UX et Graphiques Statistiques
 
 ### 🔧 Corrections

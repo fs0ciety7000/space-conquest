@@ -86,7 +86,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     fetchMyPlanets();
   }, [planet?.id]);
 
-  // Charger les slots pour calculer la production réelle
+  // Charger les slots bonus (5-8) pour calculer la production réelle
   useEffect(() => {
     const fetchSlots = async () => {
       const token = localStorage.getItem('token');
@@ -98,7 +98,8 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         });
         if (res.ok) {
           const data = await res.json();
-          setSlots(data);
+          // Filtrer uniquement les slots bonus (5-8), pas les slots de base (1-4)
+          setSlots(data.filter((s: ResourceSlot) => s.slot_number >= 5));
         }
       } catch (e) {
         console.error("Erreur chargement slots", e);
