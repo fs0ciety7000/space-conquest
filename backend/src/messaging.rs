@@ -17,7 +17,7 @@ use crate::entities::{
     prelude::{User, Message, Conversation},
     user, message, conversation
 };
-use crate::websocket::{WsEvent, WsState};
+use crate::websocket::WsEvent;
 use crate::AppState;
 
 #[derive(Serialize)]

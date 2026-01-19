@@ -17,7 +17,8 @@ use crate::entities::{
     prelude::{Alliance, AllianceMember, AllianceInvitation, User, Planet},
     alliance, alliance_member, alliance_invitation, user, planet
 };
-use crate::websocket::{WsEvent, WsState};
+// WebSocket notifications peuvent être ajoutées ici plus tard
+// use crate::websocket::{WsEvent, WsState};
 use crate::AppState;
 
 // ============================================================================
