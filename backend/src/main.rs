@@ -533,9 +533,27 @@ async fn get_planet_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
+    use entities::{prelude::ResourceSlot, resource_slot};
+
     let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     let now = Utc::now().naive_utc();
     let mut active: planet::ActiveModel = p.clone().into();
+
+    // Récupérer les slots bonus (5-8) depuis la table resource_slots
+    let slots = ResourceSlot::find()
+        .filter(resource_slot::Column::PlanetId.eq(id))
+        .filter(resource_slot::Column::SlotNumber.gte(5))
+        .filter(resource_slot::Column::IsActive.eq(true))
+        .filter(resource_slot::Column::IsLocked.eq(false))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    // Convertir en format Option<String> pour compatibilité avec les fonctions existantes
+    let slot_1: Option<String> = slots.iter().find(|s| s.slot_number == 5).map(|s| s.resource_type.clone());
+    let slot_2: Option<String> = slots.iter().find(|s| s.slot_number == 6).map(|s| s.resource_type.clone());
+    let slot_3: Option<String> = slots.iter().find(|s| s.slot_number == 7).map(|s| s.resource_type.clone());
+    let slot_4: Option<String> = slots.iter().find(|s| s.slot_number == 8).map(|s| s.resource_type.clone());
 
     // Calculate energy ratio
     let energy_ratio = game_logic::calculate_energy_ratio(
@@ -551,15 +569,15 @@ async fn get_planet_handler(
         // Utiliser la nouvelle fonction avec prise en compte des slots
         active.metal_amount = Set(game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &p.slot_1, &p.slot_2, &p.slot_3, &p.slot_4
+            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4
         ));
         active.crystal_amount = Set(game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &p.slot_1, &p.slot_2, &p.slot_3, &p.slot_4
+            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4
         ));
         active.deuterium_amount = Set(game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &p.slot_1, &p.slot_2, &p.slot_3, &p.slot_4
+            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4
         ));
         active.last_update = Set(now);
     }
@@ -639,13 +657,13 @@ async fn get_planet_handler(
     // Calculate energy using new functions with slots
     let energy_prod = game_logic::calculate_energy_production_with_slots(
         updated_model.solar_plant_level, updated_model.energy_tech_level,
-        &updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4
+        &slot_1, &slot_2, &slot_3, &slot_4
     );
     let energy_cons = game_logic::calculate_energy_consumption(updated_model.metal_mine_level, updated_model.crystal_mine_level, updated_model.deuterium_mine_level);
     let energy_ratio_percent = (energy_ratio * 100.0) as i32; // Convert to percentage
 
     // Calculer les infos sur les slots
-    let next_slot = game_logic::get_next_slot_to_unlock(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4);
+    let next_slot = game_logic::get_next_slot_to_unlock(&slot_1, &slot_2, &slot_3, &slot_4);
     let next_slot_cost = next_slot.map(game_logic::get_slot_unlock_cost);
 
     // ✅ AJOUT : Calculer les messages non lus
@@ -674,10 +692,10 @@ async fn get_planet_handler(
         }
 
         // Bonus de production par slots
-        let metal_slots = game_logic::count_slots_for_resource(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4, "metal");
-        let crystal_slots = game_logic::count_slots_for_resource(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4, "crystal");
-        let energy_slots = game_logic::count_slots_for_resource(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4, "energy");
-        let deuterium_slots = game_logic::count_slots_for_resource(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4, "deuterium");
+        let metal_slots = game_logic::count_slots_for_resource(&slot_1, &slot_2, &slot_3, &slot_4, "metal");
+        let crystal_slots = game_logic::count_slots_for_resource(&slot_1, &slot_2, &slot_3, &slot_4, "crystal");
+        let energy_slots = game_logic::count_slots_for_resource(&slot_1, &slot_2, &slot_3, &slot_4, "energy");
+        let deuterium_slots = game_logic::count_slots_for_resource(&slot_1, &slot_2, &slot_3, &slot_4, "deuterium");
 
         obj.insert("slot_bonuses".into(), json!({
             "metal": format!("+{}%", metal_slots * 50),
