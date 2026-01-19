@@ -1188,13 +1188,6 @@ async fn get_transport_logs_handler(
     Json(logs_json)
 }
 
-fn calculate_flight_time(source_sys: i32, target_sys: i32, speed_factor: f64) -> i64 {
-    let distance = (source_sys - target_sys).abs() as f64;
-    let base_time = 30.0 + (distance * 10.0); 
-    let final_time = base_time / speed_factor;
-    std::cmp::max(10, final_time as i64)
-}
-
 async fn spy_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -1528,7 +1521,12 @@ async fn transport_handler(
     let capacity = payload.transporters as f64 * game_logic::TRANSPORTER_CAPACITY;
     if total_load > capacity { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Surcharge !"}))).into_response(); }
 
-    let flight_duration = calculate_flight_time(source_model.system, target_model.system, game_logic::SPEED_FACTOR);
+    // Calcul du temps de vol avec les vraies coordonnées 3D
+    let dist = game_logic::calculate_distance(
+        (source_model.galaxy, source_model.system, source_model.position),
+        (target_model.galaxy, target_model.system, target_model.position)
+    );
+    let flight_duration = game_logic::calculate_flight_time(dist, game_logic::SPEED_FACTOR);
     let arrival = Utc::now().naive_utc() + Duration::seconds(flight_duration);
 
     let mut source: planet::ActiveModel = source_model.into();

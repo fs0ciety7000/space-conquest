@@ -27,8 +27,9 @@ mod m20260112_072815_add_usernames_to_logs;
 mod m20260112_152510_add_armour_tech;
 mod m20260118_000001_create_conversation_system;
 mod m20260118_000002_add_conversation_archived;
-// mod m20260118_000003_add_created_at_to_users; 
-mod m20260118_200000_create_market_system; 
+mod m20260118_000003_add_created_at_to_users;
+mod m20260118_200000_create_market_system;
+mod m20260119_000001_add_created_at_to_planets; 
 
 pub struct Migrator;
 
@@ -63,8 +64,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260112_152510_add_armour_tech::Migration),
             Box::new(m20260118_000001_create_conversation_system::Migration),
             Box::new(m20260118_000002_add_conversation_archived::Migration),
-// Box::new(m20260118_000003_add_created_at_to_users::Migration),            
-Box::new(m20260118_200000_create_market_system::Migration),
+            Box::new(m20260118_000003_add_created_at_to_users::Migration),
+            Box::new(m20260118_200000_create_market_system::Migration),
+            Box::new(m20260119_000001_add_created_at_to_planets::Migration),
         ]
     }
 }
