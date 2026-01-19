@@ -1,5 +1,17 @@
 # Changelog - Space Conquest
 
+## [2.0.2] - 2026-01-19 - Harmonisation calcul production (tous les slots)
+
+### 🔧 Corrections
+
+#### Harmonisation complète des calculs de production
+- **Tous les composants** utilisent maintenant TOUS les slots pour le calcul de production
+  - EmpireBar, PlanetOverview, ProductionStats, ResourceDisplay : calcul identique
+  - Suppression du filtrage `>= 5` dans le calcul de production
+  - L'affichage des "Slots Bonus" dans ResourceDisplay reste filtré sur les slots 5-8
+
+---
+
 ## [2.0.1] - 2026-01-19 - Corrections UI/UX et Graphiques Statistiques
 
 ### 🔧 Corrections

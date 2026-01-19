@@ -64,7 +64,7 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
         });
         if (slotsRes.ok) {
           const slotsData = await slotsRes.json();
-          setSlots(slotsData.filter((s: ResourceSlot) => s.slot_number >= 5));
+          setSlots(slotsData);
         }
 
         // Récupérer les logs de combat (72h)
