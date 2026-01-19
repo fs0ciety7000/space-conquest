@@ -33,18 +33,12 @@ use rand::Rng;
 
 use sea_orm_migration::MigratorTrait;
 
-mod auth;
-mod game_logic;
-mod combat;
-mod entities;
-mod config;
-mod admin;
-mod messaging;
-mod market;
-mod websocket;
-mod alliance;
+// Utiliser les modules de la lib pour éviter la double compilation
+use backend::{
+    auth, game_logic, combat, entities, config, admin, 
+    messaging, market, websocket, alliance, AppState
+};
 use config::Config;
-use backend::AppState;
 use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
