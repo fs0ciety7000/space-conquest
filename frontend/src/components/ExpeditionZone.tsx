@@ -103,10 +103,10 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-500">
-      
+
       {/* --- MODULE PRINCIPAL (GAUCHE) --- */}
       <div className="lg:col-span-2 space-y-6">
-        <div className={`relative overflow-hidden rounded-3xl border ${theme.border} bg-black/60 backdrop-blur-md p-8 shadow-2xl group`}>
+        <div className={`relative overflow-hidden rounded-3xl border ${theme.border} bg-black/60 backdrop-blur-md p-8 shadow-2xl group card-depth hover:shadow-3xl transition-all duration-500 animate-slide-up glass-card`}>
           
           {/* DECORATION D'ARRIÈRE-PLAN (RADAR) */}
           <div className="absolute -right-20 -top-20 opacity-10 pointer-events-none">
@@ -118,9 +118,9 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
             {/* Header */}
             <div className="mb-8">
               <div className={`text-[10px] font-black uppercase tracking-[0.4em] mb-2 ${theme.text} flex items-center gap-2`}>
-                <Compass size={14} className="animate-pulse"/> Systèmes de Navigation
+                <Compass size={14} className="animate-pulse animate-bounce-subtle"/> Systèmes de Navigation
               </div>
-              <h2 className="text-4xl font-black italic uppercase text-white tracking-tighter">Exploration <span className="text-slate-500">Profonde</span></h2>
+              <h2 className="text-4xl font-black italic uppercase text-white tracking-tighter animate-fade-in">Exploration <span className="text-slate-500">Profonde</span></h2>
               <p className="text-xs text-slate-400 max-w-md mt-2">
                 Envoi de drones éclaireurs vers le Quadrant 04-B. Recherche de ressources rares et d'artefacts perdus.
               </p>
@@ -130,12 +130,12 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               
               {/* Module Flotte */}
-              <div className={`p-4 rounded-xl border border-white/5 bg-black/40 relative overflow-hidden ${hasShips ? '' : 'border-red-900/50'}`}>
+              <div className={`p-4 rounded-xl border border-white/5 bg-black/40 relative overflow-hidden glass-card hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth animate-fade-in ${hasShips ? '' : 'border-red-900/50 animate-glow-pulse'}`}>
                 <div className="flex justify-between items-start mb-2">
                    <h4 className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2">
-                      <Rocket size={12}/> Disponibilité Flotte
+                      <Rocket size={12} className="animate-bounce-subtle"/> Disponibilité Flotte
                    </h4>
-                   <div className={`h-2 w-2 rounded-full ${hasShips ? 'bg-green-500 shadow-[0_0_10px_lime]' : 'bg-red-500 animate-pulse'}`}></div>
+                   <div className={`h-2 w-2 rounded-full ${hasShips ? 'bg-green-500 shadow-[0_0_10px_lime] animate-scale-pulse' : 'bg-red-500 animate-pulse'}`}></div>
                 </div>
                 <div className="flex items-end gap-2">
                    <span className={`text-3xl font-mono font-black ${hasShips ? 'text-white' : 'text-red-500'}`}>
@@ -147,15 +147,15 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
               </div>
 
               {/* Module Risques */}
-              <div className="p-4 rounded-xl border border-white/5 bg-black/40">
+              <div className="p-4 rounded-xl border border-white/5 bg-black/40 glass-card hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth animate-fade-in">
                 <div className="flex justify-between items-start mb-4">
                    <h4 className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2">
-                      <AlertTriangle size={12} className="text-amber-500"/> Analyse Menace
+                      <AlertTriangle size={12} className="text-amber-500 animate-bounce-subtle"/> Analyse Menace
                    </h4>
-                   <span className="text-[10px] font-bold text-amber-500 bg-amber-950/30 px-2 py-0.5 rounded border border-amber-900">MOYEN</span>
+                   <span className="text-[10px] font-bold text-amber-500 bg-amber-950/30 px-2 py-0.5 rounded border border-amber-900 animate-scale-pulse">MOYEN</span>
                 </div>
-                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                   <div className="h-full bg-amber-500 w-[50%] shadow-[0_0_10px_orange]"></div>
+                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden progress-bar-animated">
+                   <div className="h-full bg-amber-500 w-[50%] shadow-[0_0_10px_orange] animate-gradient"></div>
                 </div>
                 <p className="text-[9px] text-slate-500 mt-2 font-mono">
                    Probabilité pirates: 30%
@@ -166,9 +166,9 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
             {/* Sélection de vaisseaux */}
             {!isInMission && hasShips && (
               <div className="mb-6 space-y-4">
-                <div className="p-4 rounded-xl border border-cyan-500/30 bg-cyan-950/10">
+                <div className="p-4 rounded-xl border border-cyan-500/30 bg-cyan-950/10 glass-card hover:-translate-y-1 hover:shadow-xl transition-all duration-500 card-depth animate-slide-up">
                   <h4 className="text-[10px] font-black uppercase text-cyan-400 mb-3 flex items-center gap-2">
-                    <Rocket size={12}/> Configuration Flotte
+                    <Rocket size={12} className="animate-bounce-subtle"/> Configuration Flotte
                   </h4>
 
                   {/* Chasseurs Légers */}
@@ -256,7 +256,7 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                 <Button
                   onClick={handleScout}
                   disabled={scouting}
-                  className="w-full h-14 font-bold tracking-wide uppercase bg-purple-950/20 hover:bg-purple-900/30 text-purple-400 border border-purple-500/50"
+                  className="w-full h-14 font-bold tracking-wide uppercase bg-purple-950/20 hover:bg-purple-900/30 text-purple-400 border border-purple-500/50 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 card-depth"
                 >
                   {scouting ? (
                     <span className="flex items-center gap-2 animate-pulse">
@@ -271,7 +271,7 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
 
                 {/* Résultat du sondage */}
                 {scoutResult && (
-                  <div className={`p-4 rounded-xl border bg-black/40 ${
+                  <div className={`p-4 rounded-xl border bg-black/40 card-depth glass-card animate-fade-in hover:-translate-y-1 hover:shadow-xl transition-all duration-300 ${
                     scoutResult.color === 'green' ? 'border-green-500/50 bg-green-950/10' :
                     scoutResult.color === 'orange' ? 'border-orange-500/50 bg-orange-950/10' :
                     'border-red-500/50 bg-red-950/10'
@@ -330,15 +330,15 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
             )}
 
             {/* Bouton d'action principal */}
-            <Button 
-              onClick={handleLaunch} 
+            <Button
+              onClick={handleLaunch}
               disabled={isInMission || !hasShips}
-              className={`w-full h-20 font-black tracking-[0.2em] uppercase transition-all rounded-xl relative overflow-hidden group/btn shadow-xl
-                ${isInMission 
-                  ? 'bg-slate-900 border border-white/10 text-slate-500' 
+              className={`w-full h-20 font-black tracking-[0.2em] uppercase transition-all rounded-xl relative overflow-hidden group/btn shadow-xl card-depth hover:-translate-y-1 hover:shadow-3xl duration-500
+                ${isInMission
+                  ? 'bg-slate-900 border border-white/10 text-slate-500'
                   : !hasShips
                     ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
-                    : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow}`
+                    : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow} hover:scale-105`
                 }`}
             >
               {/* Effet de scan au survol */}
@@ -361,7 +361,7 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                 "VAISSEAU REQUIS POUR DÉCOLLAGE"
               ) : (
                 <span className="flex items-center gap-3 relative z-10">
-                  <Send size={20} className={theme.text} /> LANCER L'EXPÉDITION
+                  <Send size={20} className={`${theme.text} group-hover/btn:scale-110 transition-transform duration-300`} /> LANCER L'EXPÉDITION
                 </span>
               )}
             </Button>
@@ -369,10 +369,10 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
         </div>
 
         {/* Console de logs */}
-        <div className="bg-black/80 border border-white/10 p-6 rounded-2xl font-mono relative overflow-hidden">
+        <div className="bg-black/80 border border-white/10 p-6 rounded-2xl font-mono relative overflow-hidden card-depth hover:shadow-2xl transition-all duration-500 animate-slide-up glass-card">
           <div className="absolute inset-0 bg-[url('/assets/grid.png')] opacity-5 pointer-events-none"></div>
           <h4 className="text-[10px] font-black uppercase text-slate-500 mb-4 flex items-center gap-2">
-             <ScanLine size={12} className="text-green-500"/> COM_LINK_V4
+             <ScanLine size={12} className="text-green-500 animate-pulse"/> COM_LINK_V4
           </h4>
           <div className="text-[10px] space-y-2 text-green-500/80">
             <p>&gt; Scan secteur 04-B... Terminé.</p>
@@ -389,42 +389,42 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
 
       {/* --- MODULE DROIT (BUTINS) --- */}
       <div className="space-y-6">
-        <Card className="bg-slate-950 border border-white/5 p-8 rounded-3xl relative overflow-hidden shadow-xl">
+        <Card className="bg-slate-950 border border-white/5 p-8 rounded-3xl relative overflow-hidden shadow-xl card-depth hover:shadow-3xl transition-all duration-500 animate-slide-up glass-card">
            {/* Icône de fond */}
            <div className="absolute -bottom-6 -right-6 opacity-5 pointer-events-none">
              <Database size={150} />
            </div>
 
            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-8 flex items-center gap-2">
-             <Map size={14}/> Analyse Butin
+             <Map size={14} className="animate-bounce-subtle"/> Analyse Butin
            </h4>
 
            <div className="space-y-6 relative z-10">
-              <div className="group">
+              <div className="group hover:-translate-y-1 transition-all duration-300">
                  <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] uppercase font-bold text-slate-400">Métal</span>
-                    <span className="text-[10px] font-black text-green-400 bg-green-950/30 px-2 rounded border border-green-900">+5,000</span>
+                    <span className="text-[10px] font-black text-green-400 bg-green-950/30 px-2 rounded border border-green-900 animate-scale-pulse">+5,000</span>
                  </div>
-                 <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 w-[80%] shadow-[0_0_10px_lime]"></div>
+                 <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden progress-bar-animated">
+                    <div className="h-full bg-green-500 w-[80%] shadow-[0_0_10px_lime] animate-gradient"></div>
                  </div>
                  <p className="text-[9px] text-slate-600 mt-1 italic">Ressource très abondante dans ce secteur.</p>
               </div>
 
-              <div className="group opacity-50">
+              <div className="group opacity-50 hover:-translate-y-1 transition-all duration-300">
                  <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] uppercase font-bold text-slate-400">Cristal</span>
                     <span className="text-[10px] font-black text-slate-500 border border-white/5 px-2 rounded">??</span>
                  </div>
-                 <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 w-[10%]"></div>
+                 <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden progress-bar-animated">
+                    <div className="h-full bg-blue-500 w-[10%] animate-gradient"></div>
                  </div>
                  <p className="text-[9px] text-slate-600 mt-1 italic">Nécessite Scanner MK-II.</p>
               </div>
            </div>
 
            <div className="mt-8 pt-6 border-t border-white/5">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5 glass-card hover:-translate-y-1 transition-all duration-300">
                  <div className="h-2 w-2 bg-cyan-400 rounded-full animate-ping"></div>
                  <p className="text-[9px] text-slate-300 font-mono">
                     Les rapports indiquent une zone calme, mais la présence de pirates a augmenté récemment.
