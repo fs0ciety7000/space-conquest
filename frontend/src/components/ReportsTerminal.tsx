@@ -67,25 +67,25 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
   };
 
   return (
-    <div className="bg-slate-950/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl h-[600px] flex flex-col animate-in fade-in zoom-in-95 duration-500">
-      
+    <div className="bg-slate-950/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl h-[600px] flex flex-col animate-in fade-in zoom-in-95 duration-500 card-depth glass-card hover:shadow-3xl transition-all">
+
       {/* HEADER */}
       <div className="bg-black/40 border-b border-white/5 p-4 flex items-center justify-between">
         <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
-          <ScrollText size={14} className="text-cyan-400" /> Journal de Bord
+          <ScrollText size={14} className="text-cyan-400 animate-bounce-subtle" /> Journal de Bord
         </h3>
         
         {/* Onglets */}
-        <div className="flex bg-slate-900/50 p-1 rounded-lg">
-            <button 
+        <div className="flex bg-slate-900/50 p-1 rounded-lg card-depth">
+            <button
                 onClick={() => setView('combat')}
-                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-2 ${view === 'combat' ? 'bg-red-500/20 text-red-400 shadow-[0_0_10px_rgba(248,113,113,0.2)]' : 'text-slate-500 hover:text-white'}`}
+                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'combat' ? 'bg-red-500/20 text-red-400 shadow-[0_0_10px_rgba(248,113,113,0.2)] animate-glow-pulse' : 'text-slate-500 hover:text-white'}`}
             >
                 <Swords size={12} /> Opérations Militaires
             </button>
-            <button 
+            <button
                 onClick={() => setView('transport')}
-                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-2 ${view === 'transport' ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.2)]' : 'text-slate-500 hover:text-white'}`}
+                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'transport' ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.2)] animate-glow-pulse' : 'text-slate-500 hover:text-white'}`}
             >
                 <Truck size={12} /> Logistique
             </button>
@@ -115,7 +115,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                             <div
                                 key={log.id}
                                 onClick={() => handleReportClick(log.id)}
-                                className="bg-gradient-to-r from-yellow-950/20 to-orange-950/20 border border-yellow-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-yellow-950/30 transition-colors cursor-pointer"
+                                className="bg-gradient-to-r from-yellow-950/20 to-orange-950/20 border border-yellow-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-yellow-950/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer animate-fade-in card-depth"
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 rounded-lg bg-yellow-500/20 text-yellow-400">
@@ -157,7 +157,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                             <div
                                 key={log.id}
                                 onClick={() => handleReportClick(log.id)}
-                                className="bg-gradient-to-r from-red-950/30 to-orange-950/30 border border-red-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-red-950/40 transition-colors cursor-pointer"
+                                className="bg-gradient-to-r from-red-950/30 to-orange-950/30 border border-red-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-red-950/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer animate-fade-in card-depth animate-glow-pulse"
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 rounded-lg bg-red-500/20 text-red-400">
@@ -196,7 +196,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                     // Rapport d'espionnage
                     if (isSpy) {
                         return (
-                            <div key={log.id} className="bg-purple-950/10 border border-purple-500/30 p-3 rounded-lg flex items-center justify-between group hover:bg-purple-950/20 transition-colors">
+                            <div key={log.id} className="bg-purple-950/10 border border-purple-500/30 p-3 rounded-lg flex items-center justify-between group hover:bg-purple-950/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg animate-fade-in card-depth">
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
                                         <ShieldAlert size={16} />
@@ -229,7 +229,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                         <div
                             key={log.id}
                             onClick={() => handleReportClick(log.id)}
-                            className="bg-black/20 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors cursor-pointer"
+                            className="bg-black/20 border border-white/5 p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer animate-fade-in card-depth"
                         >
                             <div className="flex items-center gap-4">
                                 <div className={`p-2 rounded-lg ${isVictory ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
@@ -276,7 +276,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                     const isReceived = log.target_planet_id === planetId;
                     
                     return (
-                        <div key={log.id} className={`bg-black/20 border p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-colors ${isReceived ? 'border-l-green-500 border-white/5' : 'border-l-yellow-500 border-white/5'}`}>
+                        <div key={log.id} className={`bg-black/20 border p-3 rounded-lg flex items-center justify-between group hover:bg-white/5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg animate-fade-in card-depth ${isReceived ? 'border-l-green-500 border-white/5' : 'border-l-yellow-500 border-white/5'}`}>
                             <div className="flex items-center gap-4">
                                 <div className={`p-2 rounded-lg ${isReceived ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
                                     {isReceived ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
