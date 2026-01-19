@@ -271,8 +271,46 @@ async fn resolve_attack_mission(
         game_logic::Cost { metal: def_planet.metal_amount, crystal: def_planet.crystal_amount, deuterium: def_planet.deuterium_amount }
     );
 
-    let mut def_active: planet::ActiveModel = def_planet_raw.into();
+    let mut def_active: planet::ActiveModel = def_planet_raw.clone().into();
+    let mut planet_conquered = false;
+    let mut conquest_notification = String::new();
+
     if result.winner == "attacker" {
+        // Calculer le pourcentage de ressources volées
+        let total_resources_before = def_planet.metal_amount + def_planet.crystal_amount + def_planet.deuterium_amount;
+        let total_loot = result.loot.metal + result.loot.crystal + result.loot.deuterium;
+        let loot_percentage = if total_resources_before > 0.0 {
+            (total_loot / total_resources_before) * 100.0
+        } else {
+            0.0
+        };
+
+        // Vérifier si c'est une conquête de planète (99% des ressources volées)
+        if loot_percentage >= 99.0 {
+            // Vérifier combien de planètes possède le défenseur
+            let defender_planets = Planet::find()
+                .filter(planet::Column::OwnerId.eq(def_user.id))
+                .count(db)
+                .await
+                .unwrap_or(0);
+
+            // On ne peut conquérir que si le défenseur a plus d'une planète
+            if defender_planets > 1 {
+                planet_conquered = true;
+                conquest_notification = format!("🎯 CONQUÊTE ! Vous avez conquis la planète {} !", def_planet.name);
+
+                // Transférer la propriété
+                def_active.owner_id = Set(att_user.id);
+
+                // Notification pour le défenseur
+                let defender_notif = json!({
+                    "type": "planet_lost",
+                    "message": format!("⚠️ ALERTE CRITIQUE ! Votre planète {} a été conquise par {} !", def_planet.name, att_user.username)
+                });
+                // On stocke cette notification dans unread_report
+            }
+        }
+
         def_active.metal_amount = Set((def_planet.metal_amount - result.loot.metal).max(0.0));
         def_active.crystal_amount = Set((def_planet.crystal_amount - result.loot.crystal).max(0.0));
         def_active.deuterium_amount = Set((def_planet.deuterium_amount - result.loot.deuterium).max(0.0));
@@ -285,11 +323,27 @@ async fn resolve_attack_mission(
     def_active.plasma_turret_count = Set((def_planet.plasma_turret_count - result.lost_plasmas).max(0));
     def_active.last_update = Set(now);
 
-    let def_rep_json = json!({
-        "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
-        "losses": { "ships": result.defender_losses, "missiles": result.lost_missiles, "plasmas": result.lost_plasmas },
-        "is_defense": true, "opponent_name": att_user.username
-    });
+    let def_rep_json = if planet_conquered {
+        json!({
+            "type": "planet_lost",
+            "message": format!("⚠️ ALERTE CRITIQUE ! Votre planète {} a été conquise par {} !", def_planet.name, att_user.username),
+            "winner": result.winner,
+            "log": result.log,
+            "loot": result.loot,
+            "debris": result.debris,
+            "losses": { "ships": result.defender_losses, "missiles": result.lost_missiles, "plasmas": result.lost_plasmas },
+            "is_defense": true,
+            "opponent_name": att_user.username,
+            "conquered": true
+        })
+    } else {
+        json!({
+            "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
+            "losses": { "ships": result.defender_losses, "missiles": result.lost_missiles, "plasmas": result.lost_plasmas },
+            "is_defense": true, "opponent_name": att_user.username,
+            "conquered": false
+        })
+    };
     def_active.unread_report = Set(Some(to_string(&def_rep_json).unwrap()));
     def_active.update(db).await.unwrap();
 
@@ -307,25 +361,57 @@ async fn resolve_attack_mission(
     att_active.light_hunter_count = Set(att_planet.light_hunter_count + (att_hunters - lost_h));
     att_active.cruiser_count = Set(att_planet.cruiser_count + (att_cruisers - lost_c));
 
-    let att_rep_json = json!({
-        "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
-        "losses": { "ships": result.attacker_losses }, "is_defense": false, "opponent_name": def_user.username
-    });
+    let att_rep_json = if planet_conquered {
+        json!({
+            "type": "planet_conquered",
+            "message": format!("🎯 CONQUÊTE RÉUSSIE ! Vous avez conquis la planète {} de {} !", def_planet.name, def_user.username),
+            "winner": result.winner,
+            "log": result.log,
+            "loot": result.loot,
+            "debris": result.debris,
+            "losses": { "ships": result.attacker_losses },
+            "is_defense": false,
+            "opponent_name": def_user.username,
+            "conquered": true,
+            "conquered_planet_id": def_planet.id,
+            "conquered_planet_name": def_planet.name.clone()
+        })
+    } else {
+        json!({
+            "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
+            "losses": { "ships": result.attacker_losses }, "is_defense": false, "opponent_name": def_user.username,
+            "conquered": false
+        })
+    };
     att_active.unread_report = Set(Some(to_string(&att_rep_json).unwrap()));
     att_active.update(db).await.unwrap();
 
+    // Combat log pour le défenseur
     let _ = combat_log::ActiveModel {
-        id: Set(Uuid::new_v4()), planet_id: Set(mission.target_planet_id), target_name: Set(att_planet.name.clone()),
-        opponent_username: Set(Some(att_user.username.clone())), mission_type: Set("defense".into()),
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(mission.target_planet_id),
+        target_name: Set(att_planet.name.clone()),
+        opponent_username: Set(Some(att_user.username.clone())),
+        mission_type: Set(if planet_conquered { "planet_lost".into() } else { "defense".into() }),
         result: Set(if result.winner == "defender" { "victory".into() } else { "defeat".into() }),
-        loot_metal: Set(-result.loot.metal), loot_crystal: Set(-result.loot.crystal), ships_lost: Set(result.defender_losses), date: Set(now),
+        loot_metal: Set(-result.loot.metal),
+        loot_crystal: Set(-result.loot.crystal),
+        ships_lost: Set(result.defender_losses),
+        date: Set(now),
     }.insert(db).await;
 
+    // Combat log pour l'attaquant
     let _ = combat_log::ActiveModel {
-        id: Set(Uuid::new_v4()), planet_id: Set(mission.source_planet_id), target_name: Set(def_planet.name.clone()),
-        opponent_username: Set(Some(def_user.username.clone())), mission_type: Set("attack".into()),
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(mission.source_planet_id),
+        target_name: Set(def_planet.name.clone()),
+        opponent_username: Set(Some(def_user.username.clone())),
+        mission_type: Set(if planet_conquered { "planet_conquered".into() } else { "attack".into() }),
         result: Set(if result.winner == "attacker" { "victory".into() } else { "defeat".into() }),
-        loot_metal: Set(result.loot.metal), loot_crystal: Set(result.loot.crystal), ships_lost: Set(result.attacker_losses), date: Set(now),
+        loot_metal: Set(result.loot.metal),
+        loot_crystal: Set(result.loot.crystal),
+        ships_lost: Set(result.attacker_losses),
+        date: Set(now),
     }.insert(db).await;
 
     FleetMission::delete_by_id(mission.id).exec(db).await.unwrap();

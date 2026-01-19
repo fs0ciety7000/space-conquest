@@ -210,6 +210,28 @@ export default function App() {
                         duration: 5000,
                     });
                     playSound('error');
+                } else if (reportData.type === 'planet_lost') {
+                    toast.error("🚨 PLANÈTE PERDUE !", {
+                        description: reportData.message || "Une de vos planètes a été conquise !",
+                        duration: 10000,
+                    });
+                    playSound('error');
+                    setCombatReport({
+                        ...reportData,
+                        winner: 'enemy',
+                    });
+                    setShowCombatModal(true);
+                } else if (reportData.type === 'planet_conquered') {
+                    toast.success("🎯 CONQUÊTE RÉUSSIE !", {
+                        description: reportData.message || "Vous avez conquis une planète !",
+                        duration: 10000,
+                    });
+                    playSound('success');
+                    setCombatReport({
+                        ...reportData,
+                        winner: 'player',
+                    });
+                    setShowCombatModal(true);
                 } else {
                     const isVictory = reportData.winner === 'defender'; 
                     if(!isVictory && reportData.is_defense) {
