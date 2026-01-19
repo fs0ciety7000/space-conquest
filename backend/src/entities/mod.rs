@@ -16,3 +16,8 @@ pub mod server_resource_stats;
 pub mod market_price_history;
 pub mod server_config;
 pub mod resource_slot;
+
+// Alliance system
+pub mod alliance;
+pub mod alliance_member;
+pub mod alliance_invitation;
