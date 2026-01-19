@@ -20,6 +20,7 @@ import AdminPanel from './components/AdminPanel';
 import Changelog from './components/Changelog';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
+import MyPlanets from './components/MyPlanets';
 import Marketplace from './components/Marketplace';
 import ProductionStats from './components/ProductionStats';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
@@ -33,7 +34,7 @@ import { Toaster, toast } from "sonner";
 import {
   LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map
 } from "lucide-react";
 
 interface CombatReport {
@@ -46,7 +47,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -450,6 +451,7 @@ export default function App() {
   const MENU_ITEMS = [
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
     { id: 'galaxy', label: 'Galaxie', icon: Globe, category: 'COMMANDEMENT' },
+    { id: 'myplanets', label: 'Mes Planètes', icon: Map, category: 'COMMANDEMENT' },
     { id: 'messages', label: 'Messagerie', icon: Mail, category: 'COMMUNICATION' },
     
     { id: 'resources', label: 'Ressources', icon: Pickaxe, category: 'DÉVELOPPEMENT' },
@@ -710,6 +712,7 @@ export default function App() {
                   >
                     {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
                     {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} onNavigateTransport={handlePrepareTransport} />}
+                    {activeTab === 'myplanets' && <MyPlanets currentPlanetId={planet.id} onSelectPlanet={(id) => { switchPlanet(id); setActiveTab('overview'); }} />}
                     {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
                     {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
                     {activeTab === 'stats' && <ProductionStats planet={planet} speedFactor={speedFactor} />}
