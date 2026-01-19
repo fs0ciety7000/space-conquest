@@ -29,7 +29,7 @@ import { Toaster, toast } from "sonner";
 import {
   LogOut, LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Keyboard, Database, ShoppingCart
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Keyboard, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus
 } from "lucide-react";
 
 interface CombatReport {
