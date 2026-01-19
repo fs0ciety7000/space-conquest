@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FileText, Calendar, Code, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { apiUrl } from '@/config/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -16,7 +15,7 @@ export default function Changelog() {
 
   const loadChangelog = async () => {
     try {
-      const res = await fetch(apiUrl('/changelog'));
+      const res = await fetch('/changelog.md');
       if (res.ok) {
         const text = await res.text();
         setContent(text);
