@@ -107,6 +107,9 @@ pub struct Model {
 
     // --- NOUVEAU CHAMP ---
     pub unread_report: Option<String>,
+
+    // Date de création (pour déterminer la planète mère)
+    pub created_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

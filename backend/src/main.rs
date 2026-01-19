@@ -1466,6 +1466,7 @@ async fn colonize_handler(
     let new_planet = planet::ActiveModel {
         id: Set(new_id), owner_id: Set(owner_id), name: Set(colony_name), password: Set(password), galaxy: Set(payload.galaxy), system: Set(payload.system), position: Set(payload.position),
         metal_mine_level: Set(1), crystal_mine_level: Set(1), deuterium_mine_level: Set(1), metal_amount: Set(500.0), crystal_amount: Set(500.0), last_update: Set(Utc::now().naive_utc()),
+        created_at: Set(Utc::now().naive_utc()),
         ..Default::default()
     };
 
@@ -1844,22 +1845,25 @@ async fn get_player_profile_handler(
         0
     };
     
-    // Planète principale
+    // Planète principale (= la plus ancienne, planète mère)
     let main_planet_with_points: Option<(&planet::Model, i32, i32, i32)> = planets.iter()
         .map(|p| {
             let (pts, eco, mil) = game_logic::calculate_planet_points(p);
             (p, pts, eco, mil)
         })
-        .max_by_key(|(_, pts, _, _)| *pts);
+        .min_by_key(|(p, _, _, _)| p.created_at); // Planète la plus ancienne
     
     // Badge de rang
     let rank_badge = game_logic::get_rank_badge(total_points);
     
+    // ✅ Formater created_at en ISO 8601 avec Z pour UTC
+    let created_at_utc = user.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+
     // ✅ Construire la réponse avec masquage progressif
     let response = json!({
         "user_id": user.id,
         "username": user.username,
-        "created_at": if show_all { json!(user.created_at) } else { json!(null) },
+        "created_at": if show_all { json!(created_at_utc) } else { json!(null) },
         "is_own_profile": is_own_profile,
         "espionage_level": espionage_level,
         
