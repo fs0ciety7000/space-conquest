@@ -137,9 +137,9 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
       <div className={`w-full max-w-3xl relative overflow-hidden rounded-3xl border-2 ${theme.border} bg-slate-950 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col max-h-[95vh]`}>
-        
+
         {/* HEADER TACTIQUE */}
-        <div className={`p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r ${isVictory ? 'from-green-900/40' : 'from-red-900/40'} to-transparent`}>
+        <div className={`p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r ${isVictory ? 'from-green-900/40' : 'from-red-900/40'} to-transparent shrink-0`}>
           <div className="flex items-center gap-6">
             <div className={`p-4 rounded-2xl bg-black/60 border border-white/10 shadow-2xl ${theme.color}`}>
                 <theme.icon size={40} />
@@ -159,7 +159,10 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
           <button onClick={onClose} className="text-white/20 hover:text-white transition-colors"><X size={32} /></button>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-8 custom-scrollbar">
+        <div className="p-6 overflow-y-auto space-y-8 flex-1 min-h-0" style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgb(71 85 105) rgb(15 23 42)'
+        }}>
             
             {/* GRILLE DE RESSOURCES (BUTIN) */}
             {lootTotal > 0 && (
