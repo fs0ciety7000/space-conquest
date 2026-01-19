@@ -393,9 +393,54 @@ pub async fn update_server_config_handler(
         }
     }
 
+    // Recharger le cache de configuration depuis la DB
+    let mut new_speed_factor = game_logic::SPEED_FACTOR;
+    let mut new_construction_speed = 1.0;
+    let mut new_mining_speed = 1.0;
+
+    // Recharger speed_factor
+    if let Ok(Some(config)) = ServerConfig::find()
+        .filter(server_config::Column::ConfigKey.eq("speed_factor"))
+        .one(&state.db)
+        .await
+    {
+        if let Ok(val) = config.config_value.parse::<f64>() {
+            new_speed_factor = val;
+        }
+    }
+
+    // Recharger construction_speed_multiplier
+    if let Ok(Some(config)) = ServerConfig::find()
+        .filter(server_config::Column::ConfigKey.eq("construction_speed_multiplier"))
+        .one(&state.db)
+        .await
+    {
+        if let Ok(val) = config.config_value.parse::<f64>() {
+            new_construction_speed = val;
+        }
+    }
+
+    // Recharger mining_speed_multiplier
+    if let Ok(Some(config)) = ServerConfig::find()
+        .filter(server_config::Column::ConfigKey.eq("mining_speed_multiplier"))
+        .one(&state.db)
+        .await
+    {
+        if let Ok(val) = config.config_value.parse::<f64>() {
+            new_mining_speed = val;
+        }
+    }
+
+    // Mettre à jour le cache
+    if let Ok(mut cache) = state.config.write() {
+        cache.speed_factor = new_speed_factor;
+        cache.construction_speed = new_construction_speed;
+        cache.mining_speed = new_mining_speed;
+    }
+
     Json(json!({
         "success": true,
-        "message": "Configuration mise à jour"
+        "message": "Configuration mise à jour et rechargée"
     })).into_response()
 }
 

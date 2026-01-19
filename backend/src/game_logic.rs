@@ -207,6 +207,31 @@ pub fn calculate_energy_ratio(solar_plant_level: i32, energy_tech_level: i32,
     (production / consumption).min(1.0) // Max 100%
 }
 
+/// Calcule la production horaire d'une ressource (en unités/heure)
+pub fn calculate_resource_production(
+    res_type: ResourceType,
+    level: i32,
+    energy_tech_level: i32,
+    energy_ratio: f64
+) -> f64 {
+    if level == 0 {
+        return 0.0;
+    }
+
+    // Bonus technologie énergie (+1% par niveau)
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.01);
+
+    // Production de base (ratio 3:2:1)
+    let base_production = match res_type {
+        ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),
+        ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),
+        ResourceType::Deuterium => 10.0 * (level as f64) * 1.05f64.powi(level),
+    };
+
+    // Production par heure avec tous les bonus
+    base_production * tech_bonus * energy_ratio * (SPEED_FACTOR / 100.0)
+}
+
 /// Calcule les ressources avec prise en compte du ratio énergétique
 pub fn calculate_resources_with_energy(
     res_type: ResourceType,

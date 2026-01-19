@@ -80,15 +80,36 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const energyConsumption = planet.energy_consumption ?? 0;
   const energyRatio = planet.energy_ratio ?? 100; // percentage
 
-  // Calculs production (AJOUT)
-  const calculateProduction = (level: number, baseFactor: number) => {
-    const baseProd = baseFactor * level * Math.pow(1.1, level);
-    return Math.floor(baseProd * speedFactor);
+  // Calculs production avec tous les bonus (tech, énergie, slots, speed)
+  const calculateProduction = (level: number, baseFactor: number, resourceType: 'metal' | 'crystal' | 'deuterium') => {
+    if (level === 0) return 0;
+
+    // Production de base
+    let prod = baseFactor * level * Math.pow(1.1, level);
+
+    // Bonus technologie énergie (+1% par niveau)
+    const techLevel = planet.energy_tech_level || 0;
+    const techBonus = 1.0 + (techLevel * 0.01);
+    prod *= techBonus;
+
+    // Ratio énergétique
+    const energyRatioDecimal = (energyRatio) / 100;
+    prod *= energyRatioDecimal;
+
+    // Bonus slots (+50% par slot actif du même type)
+    // Note: On ne peut pas charger les slots ici facilement, donc on estime à 0
+    // Pour une valeur exacte, il faudrait que le backend envoie la production totale
+    // Ou qu'on charge les slots séparément (mais ça alourdirait les requêtes)
+
+    // Speed factor
+    prod *= speedFactor;
+
+    return Math.floor(prod);
   };
 
-  const prodMetal = calculateProduction(planet.metal_mine_level || 0, 30);
-  const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, 20);
-  const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, 10);
+  const prodMetal = calculateProduction(planet.metal_mine_level || 0, 30, 'metal');
+  const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, 20, 'crystal');
+  const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, 10, 'deuterium');
 
   return (
     <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-slate-950/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-white/10 min-h-[60px] md:h-[72px] w-full shadow-2xl z-50">
