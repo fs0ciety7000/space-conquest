@@ -207,21 +207,93 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
                 <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-2">
                     <Activity size={12} className="text-indigo-500"/> Journal de l'IA de Combat
                 </h3>
-                <div className="bg-black border border-white/5 rounded-2xl p-3 sm:p-6 font-mono text-[10px] sm:text-[11px] leading-relaxed shadow-inner space-y-2 max-h-[200px] overflow-y-auto" style={{
+                <div className="bg-gradient-to-b from-slate-950 to-black border border-white/10 rounded-2xl p-4 sm:p-6 shadow-inner max-h-[250px] overflow-y-auto" style={{
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgb(71 85 105) rgb(15 23 42)'
                 }}>
-                    {visibleLogs.map((log, i) => (
-                        <div key={i} className="flex gap-2 sm:gap-4 group">
-                            <span className="text-slate-700 font-bold shrink-0">[{i+1}]</span>
-                            <span className={`break-words
-                                ${log.includes("Round") ? "text-indigo-400 font-bold border-b border-indigo-500/20 w-full" : 
-                                  log.includes("VICTOIRE") ? "text-green-400 font-black" : 
-                                  log.includes("DÉFAITE") ? "text-red-400 font-black" : "text-slate-400"}
-                            `}>{log}</span>
-                        </div>
-                    ))}
-                    {visibleLogs.length === 0 && <span className="text-slate-700 italic">Initialisation des données tactiques...</span>}
+                    <div className="space-y-3">
+                        {visibleLogs.map((log, i) => {
+                            // Détection du type de log pour le style
+                            const isRadar = log.includes("RADAR") || log.includes("⚠️");
+                            const isResult = log.includes("RESULTAT") || log.includes("RÉSULTAT");
+                            const isPillage = log.includes("PILLAGE") || log.includes("DÉCOUVERTE") || log.includes("DECOUVERTE");
+                            const isPertes = log.includes("PERTES");
+                            const isScan = log.includes("SCAN");
+                            const isRound = log.includes("Round");
+                            const isVictoire = log.includes("VICTOIRE") || log.includes("Victoire");
+                            const isDefaite = log.includes("DÉFAITE") || log.includes("Défaite");
+
+                            // Nettoyer les emojis du texte pour un affichage plus propre
+                            const cleanLog = log.replace(/[⚠️🎯💀🏆]/g, '').trim();
+
+                            return (
+                                <div 
+                                    key={i} 
+                                    className={`flex items-start gap-3 p-3 rounded-xl transition-all duration-300 animate-in fade-in slide-in-from-left-2 ${
+                                        isRadar ? 'bg-yellow-500/10 border border-yellow-500/30' :
+                                        isResult && isVictoire ? 'bg-green-500/10 border border-green-500/30' :
+                                        isResult && isDefaite ? 'bg-red-500/10 border border-red-500/30' :
+                                        isResult ? 'bg-blue-500/10 border border-blue-500/30' :
+                                        isPillage ? 'bg-emerald-500/10 border border-emerald-500/30' :
+                                        isPertes ? 'bg-red-500/10 border border-red-500/30' :
+                                        isScan ? 'bg-cyan-500/10 border border-cyan-500/30' :
+                                        isRound ? 'bg-indigo-500/10 border border-indigo-500/30' :
+                                        'bg-slate-900/50 border border-white/5'
+                                    }`}
+                                    style={{ animationDelay: `${i * 50}ms` }}
+                                >
+                                    {/* Icône du type de log */}
+                                    <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
+                                        isRadar ? 'bg-yellow-500/20 text-yellow-400' :
+                                        isResult && isVictoire ? 'bg-green-500/20 text-green-400' :
+                                        isResult && isDefaite ? 'bg-red-500/20 text-red-400' :
+                                        isResult ? 'bg-blue-500/20 text-blue-400' :
+                                        isPillage ? 'bg-emerald-500/20 text-emerald-400' :
+                                        isPertes ? 'bg-red-500/20 text-red-400' :
+                                        isScan ? 'bg-cyan-500/20 text-cyan-400' :
+                                        isRound ? 'bg-indigo-500/20 text-indigo-400' :
+                                        'bg-slate-700/50 text-slate-500'
+                                    }`}>
+                                        {isRadar && <AlertCircle size={16} />}
+                                        {isResult && <Swords size={16} />}
+                                        {isPillage && <Box size={16} />}
+                                        {isPertes && <Skull size={16} />}
+                                        {isScan && <Activity size={16} />}
+                                        {isRound && <Zap size={16} />}
+                                        {!isRadar && !isResult && !isPillage && !isPertes && !isScan && !isRound && <Activity size={16} />}
+                                    </div>
+
+                                    {/* Contenu du log */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className={`text-xs sm:text-sm font-medium leading-relaxed ${
+                                            isRadar ? 'text-yellow-300' :
+                                            isResult && isVictoire ? 'text-green-300 font-bold' :
+                                            isResult && isDefaite ? 'text-red-300 font-bold' :
+                                            isResult ? 'text-blue-300 font-semibold' :
+                                            isPillage ? 'text-emerald-300' :
+                                            isPertes ? 'text-red-300' :
+                                            isScan ? 'text-cyan-300' :
+                                            isRound ? 'text-indigo-300 font-bold' :
+                                            'text-slate-300'
+                                        }`}>
+                                            {cleanLog}
+                                        </div>
+                                    </div>
+
+                                    {/* Numéro de séquence */}
+                                    <span className="shrink-0 text-[10px] font-mono text-slate-600 bg-slate-800/50 px-2 py-1 rounded">
+                                        #{i + 1}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                        {visibleLogs.length === 0 && (
+                            <div className="flex items-center justify-center gap-3 p-6 text-slate-600">
+                                <Activity size={20} className="animate-pulse" />
+                                <span className="text-sm italic">Initialisation des données tactiques...</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
