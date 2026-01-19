@@ -67,11 +67,11 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
 
     return (
         <>
-            <div className="bg-slate-900/80 p-6 rounded-xl border border-white/10 backdrop-blur-xl shadow-2xl">
+            <div className="bg-slate-900/80 p-6 rounded-xl border border-white/10 backdrop-blur-xl shadow-2xl card-depth glass-card animate-fade-in hover:shadow-3xl transition-all duration-500">
                 {/* Header et Filtres */}
                 <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 p-3 rounded-lg border border-yellow-500/30">
+                        <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 p-3 rounded-lg border border-yellow-500/30 animate-glow-pulse">
                             <Trophy className="text-yellow-500" size={28} />
                         </div>
                         <div>
@@ -80,22 +80,22 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                         </div>
                     </div>
 
-                    <div className="flex bg-slate-950/50 p-1 rounded-lg border border-white/10">
-                        <button 
+                    <div className="flex bg-slate-950/50 p-1 rounded-lg border border-white/10 card-depth">
+                        <button
                             onClick={() => setCategory('general')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all ${category === 'general' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'general' ? 'bg-indigo-600 text-white shadow-lg animate-glow-pulse' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                         >
                             <Globe size={14} /> Général
                         </button>
-                        <button 
+                        <button
                             onClick={() => setCategory('economy')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all ${category === 'economy' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'economy' ? 'bg-emerald-600 text-white shadow-lg animate-glow-pulse' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                         >
                             <TrendingUp size={14} /> Économie
                         </button>
-                        <button 
+                        <button
                             onClick={() => setCategory('military')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all ${category === 'military' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'military' ? 'bg-red-600 text-white shadow-lg animate-glow-pulse' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                         >
                             <ShieldAlert size={14} /> Militaire
                         </button>
@@ -103,7 +103,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                 </div>
                 
                 {/* Tableau */}
-                <div className="overflow-x-auto rounded-lg border border-white/5 bg-slate-950/30">
+                <div className="overflow-x-auto rounded-lg border border-white/5 bg-slate-950/30 card-depth animate-slide-up">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-white/5 text-slate-400 text-[10px] uppercase tracking-wider font-bold">
@@ -120,7 +120,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                     {/* Ligne principale du joueur */}
                                     <tr
                                         key={player.owner_id}
-                                        className={`transition-all hover:bg-white/5 border-b border-white/5 ${player.is_me ? 'bg-indigo-500/10 hover:bg-indigo-500/20' : ''}`}
+                                        className={`transition-all duration-300 hover:bg-white/5 hover:-translate-y-0.5 hover:shadow-lg border-b border-white/5 animate-fade-in ${player.is_me ? 'bg-indigo-500/10 hover:bg-indigo-500/20' : ''}`}
                                     >
                                         <td className="p-2 md:p-4 text-center">
                                             <div className="flex justify-center items-center">
@@ -132,9 +132,9 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                                                     <button
                                                         onClick={() => setSelectedPlayer(player.owner_id)}
-                                                        className="flex items-center gap-2 group"
+                                                        className="flex items-center gap-2 group transition-all duration-300"
                                                     >
-                                                        <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2`}>
+                                                        <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2 group-hover:scale-105 transition-transform duration-300`}>
                                                             {player.username}
                                                         </span>
                                                     </button>
@@ -148,9 +148,9 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                         <td className="p-2 md:p-4 text-slate-400 font-mono text-xs hidden sm:table-cell">
                                             <button
                                                 onClick={() => toggleExpanded(player.owner_id)}
-                                                className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                                                className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-all duration-300 hover:scale-105 hover:shadow-lg"
                                             >
-                                                <Globe size={12} />
+                                                <Globe size={12} className="group-hover:animate-bounce-subtle" />
                                                 {player.planets.length} planète{player.planets.length > 1 ? 's' : ''}
                                                 {expandedUsers.has(player.owner_id) ? ' ▼' : ' ►'}
                                             </button>
@@ -170,7 +170,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-7 w-7 md:h-8 md:w-8 hover:bg-purple-500/20 hover:text-purple-400 transition-colors"
+                                                    className="h-7 w-7 md:h-8 md:w-8 hover:bg-purple-500/20 hover:text-purple-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
                                                     onClick={() => setSelectedPlayer(player.owner_id)}
                                                     title="Voir le profil"
                                                 >
@@ -181,7 +181,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                                     <Button
                                                         size="icon"
                                                         variant="ghost"
-                                                        className="h-7 w-7 md:h-8 md:w-8 hover:bg-indigo-500/20 hover:text-indigo-400 transition-colors"
+                                                        className="h-7 w-7 md:h-8 md:w-8 hover:bg-indigo-500/20 hover:text-indigo-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
                                                         onClick={() => onSendMessage(player.username)}
                                                         title="Envoyer un message"
                                                     >
@@ -196,7 +196,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                     {expandedUsers.has(player.owner_id) && player.planets.map((planet) => (
                                         <tr
                                             key={planet.id}
-                                            className="bg-slate-950/50 hover:bg-slate-900/50 transition-all border-b border-white/5"
+                                            className="bg-slate-950/50 hover:bg-slate-900/50 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg border-b border-white/5 glass-card animate-fade-in"
                                         >
                                             <td className="p-2 md:p-4"></td>
                                             <td className="p-2 md:p-4 pl-8 md:pl-12">
@@ -218,7 +218,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                                         <Button
                                                             size="icon"
                                                             variant="ghost"
-                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-blue-500/20 hover:text-blue-400 transition-colors"
+                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-blue-500/20 hover:text-blue-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
                                                             onClick={() => onSpy(planet.id)}
                                                             title="Espionner"
                                                         >
@@ -227,7 +227,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                                         <Button
                                                             size="icon"
                                                             variant="ghost"
-                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-red-500/20 hover:text-red-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
                                                             onClick={() => onAttack(planet.id, planet.name)}
                                                             title="Attaquer"
                                                         >

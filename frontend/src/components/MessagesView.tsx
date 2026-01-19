@@ -204,21 +204,21 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
     const displayedConversations = showArchived ? archivedConversations : activeConversations;
 
     return (
-        <div className="flex flex-col lg:flex-row h-[calc(100vh-200px)] max-w-7xl mx-auto gap-2 lg:gap-4 px-2 lg:px-0">
+        <div className="flex flex-col lg:flex-row h-[calc(100vh-200px)] max-w-7xl mx-auto gap-2 lg:gap-4 px-2 lg:px-0 animate-fade-in">
 
             {/* SIDEBAR : LISTE DES CONVERSATIONS */}
-            <div className={`${selectedConv || isComposing ? 'hidden lg:flex' : 'flex'} w-full lg:w-80 flex-col bg-slate-900/80 border border-white/10 rounded-xl overflow-hidden`}>
+            <div className={`${selectedConv || isComposing ? 'hidden lg:flex' : 'flex'} w-full lg:w-80 flex-col bg-slate-900/80 border border-white/10 rounded-xl overflow-hidden card-depth glass-card animate-slide-up hover:shadow-2xl transition-all duration-500`}>
                 <div className="p-3 lg:p-4 border-b border-white/10 bg-slate-950/50">
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="font-black uppercase tracking-widest text-xs lg:text-sm text-white flex items-center gap-2">
-                            <MessageCircle size={16} className="lg:w-[18px] lg:h-[18px] text-indigo-400"/>
+                            <MessageCircle size={16} className="lg:w-[18px] lg:h-[18px] text-indigo-400 animate-bounce-subtle"/>
                             {showArchived ? "Archivées" : "Boîte de réception"}
                         </h3>
                         <div className="flex gap-1 lg:gap-2">
-                            <Button variant="ghost" size="icon" onClick={fetchConversations} className="h-6 w-6 lg:h-7 lg:w-7">
+                            <Button variant="ghost" size="icon" onClick={fetchConversations} className="h-6 w-6 lg:h-7 lg:w-7 hover:scale-110 transition-all duration-300 card-depth hover:shadow-lg">
                                 <RotateCw size={12} className={`lg:w-3.5 lg:h-3.5 ${loading ? "animate-spin" : ""}`}/>
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(true)} className="h-6 w-6 lg:h-7 lg:w-7 text-indigo-400">
+                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(true)} className="h-6 w-6 lg:h-7 lg:w-7 text-indigo-400 hover:scale-110 transition-all duration-300 card-depth hover:shadow-lg animate-glow-pulse">
                                 <Plus size={14} className="lg:w-4 lg:h-4"/>
                             </Button>
                         </div>
@@ -228,9 +228,9 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                     <div className="flex gap-1 lg:gap-2">
                         <button
                             onClick={() => setShowArchived(false)}
-                            className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all ${
+                            className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
                                 !showArchived
-                                    ? 'bg-indigo-600 text-white'
+                                    ? 'bg-indigo-600 text-white animate-glow-pulse'
                                     : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
                             }`}
                         >
@@ -244,9 +244,9 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                         </button>
                         <button
                             onClick={() => setShowArchived(true)}
-                            className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all ${
+                            className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
                                 showArchived
-                                    ? 'bg-indigo-600 text-white'
+                                    ? 'bg-indigo-600 text-white animate-glow-pulse'
                                     : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
                             }`}
                         >
@@ -280,7 +280,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                         displayedConversations.map(conv => (
                             <div
                                 key={conv.id}
-                                className={`group border-b border-white/5 transition-all hover:bg-white/5 ${
+                                className={`group border-b border-white/5 transition-all duration-300 hover:bg-white/5 hover:-translate-y-0.5 hover:shadow-lg animate-fade-in ${
                                     selectedConv?.id === conv.id ? 'bg-indigo-900/30 border-l-4 border-l-indigo-500' : ''
                                 }`}
                             >
@@ -302,7 +302,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                                                     e.stopPropagation();
                                                     handleToggleArchive(conv.id, conv.is_archived);
                                                 }}
-                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-700 rounded transition-all"
+                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-700 rounded transition-all duration-300 hover:scale-110 card-depth"
                                                 title={conv.is_archived ? "Restaurer" : "Archiver"}
                                             >
                                                 {conv.is_archived ? (
@@ -330,16 +330,16 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
             </div>
 
             {/* ZONE PRINCIPALE */}
-            <div className={`${!selectedConv && !isComposing ? 'hidden lg:flex' : 'flex'} flex-1 flex-col bg-slate-900/40 border border-white/10 rounded-xl overflow-hidden`}>
+            <div className={`${!selectedConv && !isComposing ? 'hidden lg:flex' : 'flex'} flex-1 flex-col bg-slate-900/40 border border-white/10 rounded-xl overflow-hidden card-depth glass-card animate-slide-up hover:shadow-2xl transition-all duration-500`}>
                 
                 {isComposing ? (
                     // FORMULAIRE NOUVEAU MESSAGE
                     <div className="flex-1 flex flex-col">
                         <div className="p-4 border-b border-white/10 bg-slate-950/50 flex items-center gap-3">
-                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(false)}>
+                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(false)} className="hover:scale-110 transition-all duration-300 card-depth">
                                 <ArrowLeft size={18}/>
                             </Button>
-                            <h3 className="font-black uppercase text-sm tracking-widest text-indigo-400">
+                            <h3 className="font-black uppercase text-sm tracking-widest text-indigo-400 animate-glow-pulse">
                                 Nouveau Message
                             </h3>
                         </div>
@@ -364,7 +364,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                                 className="flex-1 bg-slate-950 border-slate-800 resize-none font-mono"
                                 rows={10}
                             />
-                            <Button type="submit" disabled={isSending} className="bg-indigo-600 hover:bg-indigo-500 font-bold">
+                            <Button type="submit" disabled={isSending} className="bg-indigo-600 hover:bg-indigo-500 font-bold card-depth hover:scale-105 hover:-translate-y-1 transition-all duration-300 hover:shadow-2xl">
                                 {isSending ? "Envoi en cours..." : "Envoyer le message"}
                             </Button>
                         </form>
@@ -374,19 +374,19 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                     <>
                         <div className="p-3 lg:p-4 border-b border-white/10 bg-slate-950/50 flex items-center justify-between">
                             <div className="flex items-center gap-2 lg:gap-3">
-                                <Button variant="ghost" size="icon" onClick={() => setSelectedConv(null)} className="h-7 w-7 lg:h-auto lg:w-auto lg:hidden">
+                                <Button variant="ghost" size="icon" onClick={() => setSelectedConv(null)} className="h-7 w-7 lg:h-auto lg:w-auto lg:hidden hover:scale-110 transition-all duration-300 card-depth">
                                     <ArrowLeft size={16} className="lg:w-[18px] lg:h-[18px]"/>
                                 </Button>
-                                <User size={16} className="lg:w-[18px] lg:h-[18px] text-indigo-400"/>
+                                <User size={16} className="lg:w-[18px] lg:h-[18px] text-indigo-400 animate-bounce-subtle"/>
                                 <h3 className="font-bold text-sm lg:text-base text-white">{selectedConv.other_user_name}</h3>
                             </div>
-                            
+
                             {/* ✅ BOUTON ARCHIVAGE DANS LE HEADER */}
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleToggleArchive(selectedConv.id, selectedConv.is_archived)}
-                                className="text-slate-400 hover:text-white"
+                                className="text-slate-400 hover:text-white hover:scale-105 transition-all duration-300 card-depth hover:shadow-lg"
                             >
                                 {selectedConv.is_archived ? (
                                     <>
@@ -404,8 +404,8 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
 
                         <div className="flex-1 overflow-y-auto p-2 lg:p-4 space-y-2 lg:space-y-3 scrollbar-thin scrollbar-thumb-slate-800">
                             {thread.map(msg => (
-                                <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[85%] lg:max-w-[70%] p-2 lg:p-3 rounded-xl ${
+                                <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                                    <div className={`max-w-[85%] lg:max-w-[70%] p-2 lg:p-3 rounded-xl hover:-translate-y-0.5 transition-all duration-300 hover:shadow-lg card-depth ${
                                         msg.is_mine
                                             ? 'bg-indigo-600 text-white'
                                             : 'bg-slate-800 text-slate-200'
@@ -438,7 +438,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             />
                             <Button
                                 onClick={handleReply}
-                                className="bg-indigo-600 hover:bg-indigo-500 px-3 lg:px-6"
+                                className="bg-indigo-600 hover:bg-indigo-500 px-3 lg:px-6 card-depth hover:scale-110 hover:-translate-y-1 transition-all duration-300 hover:shadow-2xl"
                                 disabled={!replyContent.trim()}
                             >
                                 <Send size={14} className="lg:w-4 lg:h-4"/>
