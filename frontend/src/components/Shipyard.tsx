@@ -74,11 +74,11 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
     { 
       id: 'transporter', 
       name: 'Transporteur', 
-      stats: { atk: 5, shd: 5, hull: 800, fret: 5000 }, 
+      stats: { atk: 5, shd: 5, hull: 800, fret: 10000 }, 
       icon: Truck, 
       type: 'LOGISTIQUE', 
       class: 'Cargo Standard', 
-      desc: "Indispensable pour le fret." 
+      desc: "Capacité de base 10k (+5%/niveau hangar)." 
     },
     { 
       id: 'colony_ship', 

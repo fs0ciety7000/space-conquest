@@ -10,7 +10,7 @@ import { getTransporterCapacity } from '@/lib/gameRules';
 
 interface TransportModalProps {
   currentPlanet: any;
-  targetPlanet: { id: string; name: string; system?: number };
+  targetPlanet: { id: string; name: string; galaxy?: number; system?: number; position?: number };
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -27,12 +27,30 @@ export default function TransportModal({ currentPlanet, targetPlanet, onClose, o
   const capacity = transporters * getTransporterCapacity(currentPlanet.hangar_level || 0);
   const currentLoad = metal + crystal + deuterium;
 
+  // Calcul du temps de vol basé sur la distance 3D (comme le backend)
   useEffect(() => {
-      const sys1 = currentPlanet.system || 1;
-      const sys2 = targetPlanet.system || 1;
-      const distance = Math.abs(sys1 - sys2);
-      const time = Math.max(10, (30 + distance * 10)); 
-      setFlightTime(time);
+      const g1 = currentPlanet.galaxy || 1;
+      const s1 = currentPlanet.system || 1;
+      const p1 = currentPlanet.position || 1;
+      const g2 = targetPlanet.galaxy || g1;
+      const s2 = targetPlanet.system || s1;
+      const p2 = targetPlanet.position || p1;
+      
+      // Calcul distance identique au backend
+      let dist = 5.0;
+      if (g1 !== g2) {
+          dist = Math.abs(g1 - g2) * 20000;
+      } else if (s1 !== s2) {
+          dist = Math.abs(s1 - s2) * 2000 + 2700;
+      } else if (p1 !== p2) {
+          dist = Math.abs(p1 - p2) * 5 + 1000;
+      }
+      
+      // Calcul temps identique au backend (avec SPEED_FACTOR = 500)
+      const speedFactor = 500; // TODO: récupérer du serveur
+      const baseTime = 10 + Math.sqrt(dist) / 2;
+      const seconds = Math.max(5, Math.floor((baseTime * 100) / speedFactor));
+      setFlightTime(seconds);
   }, [currentPlanet, targetPlanet]);
   
   const handleSend = async () => {
@@ -65,8 +83,11 @@ export default function TransportModal({ currentPlanet, targetPlanet, onClose, o
         });
         const data = await res.json();
         if(res.ok) {
+            // Extraire le temps réel du message du backend si disponible
+            const match = data.message?.match(/(\d+)s/);
+            const realFlightTime = match ? parseInt(match[1]) : flightTime;
             toast.success("Flotte logistique lancée !", {
-                description: `Livraison estimée dans ${flightTime} secondes.`,
+                description: `Livraison estimée dans ${realFlightTime} secondes.`,
                 duration: 5000,
                 icon: <Truck className="text-green-500" />
             });

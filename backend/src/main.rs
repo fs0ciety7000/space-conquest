@@ -275,10 +275,41 @@ async fn resolve_attack_mission(
     let def_planet_raw = Planet::find_by_id(mission.target_planet_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
     let def_user = User::find_by_id(def_planet_raw.owner_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
 
+    // Calculer le ratio énergétique du défenseur pour un calcul précis des ressources
+    let def_energy_ratio = game_logic::calculate_energy_ratio(
+        def_planet_raw.solar_plant_level,
+        def_planet_raw.energy_tech_level,
+        def_planet_raw.metal_mine_level,
+        def_planet_raw.crystal_mine_level,
+        def_planet_raw.deuterium_mine_level
+    );
+    
     let mut def_planet = def_planet_raw.clone();
-    def_planet.metal_amount = game_logic::calculate_resources(game_logic::ResourceType::Metal, def_planet_raw.metal_mine_level, def_planet_raw.metal_amount, def_planet_raw.last_update, def_planet_raw.energy_tech_level);
-    def_planet.crystal_amount = game_logic::calculate_resources(game_logic::ResourceType::Crystal, def_planet_raw.crystal_mine_level, def_planet_raw.crystal_amount, def_planet_raw.last_update, def_planet_raw.energy_tech_level);
-    def_planet.deuterium_amount = game_logic::calculate_resources(game_logic::ResourceType::Deuterium, def_planet_raw.deuterium_mine_level, def_planet_raw.deuterium_amount, def_planet_raw.last_update, def_planet_raw.energy_tech_level);
+    // Utiliser calculate_resources_with_energy pour prendre en compte le ratio énergétique
+    def_planet.metal_amount = game_logic::calculate_resources_with_energy(
+        game_logic::ResourceType::Metal, 
+        def_planet_raw.metal_mine_level, 
+        def_planet_raw.metal_amount, 
+        def_planet_raw.last_update, 
+        def_planet_raw.energy_tech_level,
+        def_energy_ratio
+    );
+    def_planet.crystal_amount = game_logic::calculate_resources_with_energy(
+        game_logic::ResourceType::Crystal, 
+        def_planet_raw.crystal_mine_level, 
+        def_planet_raw.crystal_amount, 
+        def_planet_raw.last_update, 
+        def_planet_raw.energy_tech_level,
+        def_energy_ratio
+    );
+    def_planet.deuterium_amount = game_logic::calculate_resources_with_energy(
+        game_logic::ResourceType::Deuterium, 
+        def_planet_raw.deuterium_mine_level, 
+        def_planet_raw.deuterium_amount, 
+        def_planet_raw.last_update, 
+        def_planet_raw.energy_tech_level,
+        def_energy_ratio
+    );
 
     let att_hunters = mission.metal as i32; 
     let att_cruisers = mission.crystal as i32;
@@ -656,6 +687,24 @@ async fn get_planet_handler(
     let incoming_raw = FleetMission::find().filter(fleet_mission::Column::TargetPlanetId.eq(id)).all(&state.db).await.unwrap_or_default();
     let outgoing_raw = FleetMission::find().filter(fleet_mission::Column::SourcePlanetId.eq(id)).all(&state.db).await.unwrap_or_default();
 
+    // Détailler les missions entrantes avec infos sur la source
+    let mut incoming_detailed = Vec::new();
+    for m in &incoming_raw {
+        let source_p = Planet::find_by_id(m.source_planet_id).one(&state.db).await.ok().flatten();
+        let mut val = serde_json::to_value(&m).unwrap();
+        if let Some(sp) = source_p {
+            if let Some(obj) = val.as_object_mut() {
+                obj.insert("source_name".into(), json!(sp.name));
+                obj.insert("source_coords".into(), json!(format!("[{}:{}:{}]", sp.galaxy, sp.system, sp.position)));
+                // Récupérer le nom du joueur attaquant
+                if let Ok(Some(owner)) = User::find_by_id(sp.owner_id).one(&state.db).await {
+                    obj.insert("attacker_name".into(), json!(owner.username));
+                }
+            }
+        }
+        incoming_detailed.push(val);
+    }
+
     let mut outgoing_detailed = Vec::new();
     for m in outgoing_raw {
         let target_p = Planet::find_by_id(m.target_planet_id).one(&state.db).await.ok().flatten();
@@ -688,7 +737,7 @@ async fn get_planet_handler(
 
     let mut json_response = serde_json::to_value(&updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
-        obj.insert("incoming_missions".into(), json!(incoming_raw));
+        obj.insert("incoming_missions".into(), json!(incoming_detailed));
         obj.insert("outgoing_missions".into(), json!(outgoing_detailed));
         obj.insert("energy".into(), json!(energy_prod as i32 - energy_cons as i32));
         obj.insert("energy_production".into(), json!(energy_prod as i32));

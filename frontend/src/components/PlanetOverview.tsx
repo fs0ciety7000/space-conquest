@@ -179,6 +179,32 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   // --- MISSIONS (Backend enrichit l'objet planet avec ces listes) ---
   const incomingMissions = planet.incoming_missions || [];
   const outgoingMissions = planet.outgoing_missions || [];
+  
+  // Alerte sonore et toast pour les attaques entrantes
+  const [alertedMissions, setAlertedMissions] = useState<Set<string>>(new Set());
+  
+  useEffect(() => {
+    const incomingAttacks = incomingMissions.filter((m: any) => m.mission_type === 'attack');
+    incomingAttacks.forEach((attack: any) => {
+      if (!alertedMissions.has(attack.id)) {
+        // Nouvelle attaque détectée - alerter !
+        toast.error(`⚠️ ALERTE ATTAQUE !`, {
+          description: `${attack.attacker_name || 'Un ennemi'} attaque avec ${attack.ships_count} vaisseaux !`,
+          duration: 10000,
+          important: true,
+        });
+        
+        // Jouer un son d'alerte si disponible
+        try {
+          const alertSound = new Audio('/sounds/alert.wav');
+          alertSound.volume = 0.5;
+          alertSound.play().catch(() => {});
+        } catch (e) {}
+        
+        setAlertedMissions(prev => new Set([...prev, attack.id]));
+      }
+    });
+  }, [incomingMissions, alertedMissions]);
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
@@ -199,21 +225,47 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                           const tl = getTimeLeft(m.arrival_time);
                           const isAttack = m.mission_type === 'attack';
                           return (
-                              <div key={m.id} className={`flex items-center justify-between p-3 rounded-lg border ${isAttack ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-500/5 border-blue-500/10'}`}>
-                                  <div className="flex items-center gap-3">
-                                      <div className={`p-2 rounded-full ${isAttack ? 'bg-red-500 animate-ping' : 'bg-blue-500'}`}>
-                                          <Rocket size={12} className="text-white" />
+                              <div key={m.id} className={`flex flex-col gap-2 p-3 rounded-lg border ${isAttack ? 'bg-red-950/30 border-red-500/30 shadow-[inset_0_0_30px_rgba(239,68,68,0.1)]' : 'bg-blue-500/5 border-blue-500/10'}`}>
+                                  <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                          <div className={`p-2 rounded-full relative ${isAttack ? 'bg-red-500' : 'bg-blue-500'}`}>
+                                              {isAttack && <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75"></div>}
+                                              <Rocket size={14} className="text-white relative z-10" />
+                                          </div>
+                                          <div>
+                                              <p className={`text-xs font-black uppercase tracking-wider ${isAttack ? 'text-red-400' : 'text-blue-400'}`}>
+                                                  {isAttack ? '⚠️ ALERTE ATTAQUE' : '📦 Transport civil'}
+                                              </p>
+                                              {m.attacker_name && (
+                                                  <p className="text-[10px] font-bold text-red-300">
+                                                      Attaquant : {m.attacker_name}
+                                                  </p>
+                                              )}
+                                              {m.source_coords && (
+                                                  <p className="text-[9px] font-mono text-slate-500">
+                                                      Origine : {m.source_coords}
+                                                  </p>
+                                              )}
+                                          </div>
                                       </div>
-                                      <div>
-                                          <p className={`text-xs font-black uppercase tracking-wider ${isAttack ? 'text-red-400' : 'text-blue-400'}`}>
-                                              {isAttack ? '⚠️ Attaque ennemie' : '📦 Transport civil'}
-                                          </p>
-                                          <p className="text-[9px] font-mono text-slate-500 uppercase">Impact : {tl}s</p>
+                                      <div className="text-right">
+                                          <div className={`font-mono text-lg font-black ${isAttack ? 'text-red-400' : 'text-white'}`}>
+                                              {tl}s
+                                          </div>
+                                          <div className="text-[9px] font-mono text-slate-500">
+                                              {m.ships_count} Unités
+                                          </div>
                                       </div>
                                   </div>
-                                  <div className="text-right font-mono text-xs font-bold text-white">
-                                      {m.ships_count} Unités
-                                  </div>
+                                  {/* Barre de progression pour les attaques */}
+                                  {isAttack && (
+                                      <div className="h-2 w-full bg-slate-900 rounded-full border border-red-500/20 overflow-hidden">
+                                          <div 
+                                              className="h-full bg-gradient-to-r from-red-600 to-orange-500 rounded-full transition-all duration-1000 animate-pulse"
+                                              style={{ width: `${Math.max(5, 100 - (tl / 3))}%` }}
+                                          />
+                                      </div>
+                                  )}
                               </div>
                           );
                       }) : (
