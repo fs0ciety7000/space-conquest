@@ -52,15 +52,47 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanets
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(apiUrl('/my-planets'), {
+      const res = await fetch(apiUrl(`/my-planets?current_planet_id=${currentPlanetId}`), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setPlanets(data.map((p: Planet) => ({
-          ...p,
-          is_current: p.id === currentPlanetId
-        })));
+        // Vérifier si on a reçu des données valides avec tous les champs nécessaires
+        if (Array.isArray(data) && data.length > 0 && data[0].metal_amount !== undefined) {
+          setPlanets(data.map((p: Planet) => ({
+            ...p,
+            is_current: p.id === currentPlanetId
+          })));
+        } else if (Array.isArray(data) && data.length > 0) {
+          // Le backend retourne des données partielles, on doit récupérer les détails complets
+          // Pour l'instant, on affiche ce qu'on a
+          setPlanets(data.map((p: any) => ({
+            ...p,
+            is_current: p.id === currentPlanetId,
+            // Valeurs par défaut si manquantes
+            metal_amount: p.metal_amount ?? 0,
+            crystal_amount: p.crystal_amount ?? 0,
+            deuterium_amount: p.deuterium_amount ?? 0,
+            metal_mine_level: p.metal_mine_level ?? 0,
+            crystal_mine_level: p.crystal_mine_level ?? 0,
+            deuterium_mine_level: p.deuterium_mine_level ?? 0,
+            solar_plant_level: p.solar_plant_level ?? 0,
+            shipyard_level: p.shipyard_level ?? 0,
+            research_lab_level: p.research_lab_level ?? 0,
+            hangar_level: p.hangar_level ?? 0,
+            light_hunter_count: p.light_hunter_count ?? 0,
+            cruiser_count: p.cruiser_count ?? 0,
+            recycler_count: p.recycler_count ?? 0,
+            spy_probe_count: p.spy_probe_count ?? 0,
+            colony_ship_count: p.colony_ship_count ?? 0,
+            transporter_count: p.transporter_count ?? 0,
+            missile_launcher_count: p.missile_launcher_count ?? 0,
+            plasma_turret_count: p.plasma_turret_count ?? 0,
+            energy_tech_level: p.energy_tech_level ?? 0,
+          })));
+        } else {
+          setPlanets([]);
+        }
       }
     } catch (error) {
       console.error('Erreur chargement planètes:', error);

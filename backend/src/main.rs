@@ -1795,7 +1795,36 @@ async fn get_my_planets_handler(
     if let Some(p) = current {
         let my_planets = Planet::find().filter(planet::Column::OwnerId.eq(p.owner_id)).all(&state.db).await.unwrap_or_default();
         let list: Vec<serde_json::Value> = my_planets.into_iter().map(|mp| json!({
-            "id": mp.id, "name": mp.name, "galaxy": mp.galaxy, "system": mp.system, "position": mp.position, "is_current": mp.id == current_id
+            "id": mp.id,
+            "name": mp.name,
+            "galaxy": mp.galaxy,
+            "system": mp.system,
+            "position": mp.position,
+            "is_current": mp.id == current_id,
+            // Ressources
+            "metal_amount": mp.metal_amount,
+            "crystal_amount": mp.crystal_amount,
+            "deuterium_amount": mp.deuterium_amount,
+            // Bâtiments
+            "metal_mine_level": mp.metal_mine_level,
+            "crystal_mine_level": mp.crystal_mine_level,
+            "deuterium_mine_level": mp.deuterium_mine_level,
+            "solar_plant_level": mp.solar_plant_level,
+            "shipyard_level": mp.shipyard_level,
+            "research_lab_level": mp.research_lab_level,
+            "hangar_level": mp.hangar_level,
+            // Technologie
+            "energy_tech_level": mp.energy_tech_level,
+            // Flotte
+            "light_hunter_count": mp.light_hunter_count,
+            "cruiser_count": mp.cruiser_count,
+            "recycler_count": mp.recycler_count,
+            "spy_probe_count": mp.spy_probe_count,
+            "colony_ship_count": mp.colony_ship_count,
+            "transporter_count": mp.transporter_count,
+            // Défenses
+            "missile_launcher_count": mp.missile_launcher_count,
+            "plasma_turret_count": mp.plasma_turret_count
         })).collect();
         return Json(list).into_response();
     }
