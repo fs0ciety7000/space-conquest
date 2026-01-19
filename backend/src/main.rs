@@ -42,6 +42,7 @@ mod admin;
 mod messaging;
 mod market;
 mod websocket;
+mod alliance;
 use config::Config;
 use backend::AppState;
 use websocket::WsState;
@@ -249,6 +250,22 @@ async fn main() {
         .route("/admin/user/:id/email", patch(admin::update_email_handler))
         .route("/admin/user/:id/reset-password", post(admin::reset_password_handler))
         .route("/admin/user/:id", delete(admin::delete_user_handler))
+        // Alliance system
+        .route("/alliances", get(alliance::list_alliances_handler))
+        .route("/alliances", post(alliance::create_alliance_handler))
+        .route("/alliances/my", get(alliance::get_my_alliance_handler))
+        .route("/alliances/invitations", get(alliance::get_my_invitations_handler))
+        .route("/alliances/apply", post(alliance::apply_to_alliance_handler))
+        .route("/alliances/:id", get(alliance::get_alliance_handler))
+        .route("/alliances/:id", patch(alliance::update_alliance_handler))
+        .route("/alliances/:id", delete(alliance::dissolve_alliance_handler))
+        .route("/alliances/:id/leave", post(alliance::leave_alliance_handler))
+        .route("/alliances/:id/invite", post(alliance::invite_player_handler))
+        .route("/alliances/:id/applications", get(alliance::get_alliance_applications_handler))
+        .route("/alliances/:id/kick/:user_id", delete(alliance::kick_member_handler))
+        .route("/alliances/:id/role/:user_id", patch(alliance::change_role_handler))
+        .route("/alliances/:id/transfer/:user_id", post(alliance::transfer_leadership_handler))
+        .route("/alliances/invitations/:invitation_id/respond", post(alliance::respond_to_invitation_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);

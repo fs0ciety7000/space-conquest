@@ -34,6 +34,7 @@ mod m20260119_000002_add_detailed_report_to_combat_log;
 mod m20260119_000003_create_server_config;
 mod m20260119_000004_create_resource_slots;
 mod m20260119_100000_add_role_to_users;
+mod m20260119_200000_create_alliance_system;
 
 pub struct Migrator;
 
@@ -75,6 +76,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260119_000003_create_server_config::Migration),
             Box::new(m20260119_000004_create_resource_slots::Migration),
             Box::new(m20260119_100000_add_role_to_users::Migration),
+            Box::new(m20260119_200000_create_alliance_system::Migration),
         ]
     }
 }
