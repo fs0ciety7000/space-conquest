@@ -145,15 +145,15 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, 10, 'deuterium');
 
   return (
-    <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-slate-950/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-white/10 min-h-[60px] md:h-[72px] w-full shadow-2xl z-50">
+    <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-slate-950/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-white/10 min-h-[60px] md:h-[72px] w-full shadow-2xl z-50 card-depth glass-card">
       
       {/* Partie Gauche : Menu mobile + Logo + Planète */}
       <div className="flex items-center gap-2 md:gap-6 shrink-0">
         {/* Menu hamburger mobile */}
         {onToggleSidebar && (
-          <button 
+          <button
             onClick={onToggleSidebar}
-            className="md:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="md:hidden p-2 hover:bg-white/10 rounded-lg transition-all duration-300 hover:scale-110 card-depth hover:shadow-lg"
             aria-label="Toggle menu"
           >
             <Menu size={20} className="text-white" />
@@ -163,7 +163,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         {/* Logo cliquable */}
         <button
           onClick={onNavigateToOverview}
-          className="flex items-center gap-2 md:gap-3 hover:bg-white/5 rounded-lg px-2 py-1 transition-all group"
+          className="flex items-center gap-2 md:gap-3 hover:bg-white/5 rounded-lg px-2 py-1 transition-all duration-300 hover:scale-105 hover:-translate-y-0.5 card-depth group hover:shadow-lg"
           title="Retour à l'accueil"
         >
             <img src="/logo.svg" alt="Space Conquest" className="h-8 w-8 md:h-10 md:w-10 drop-shadow-[0_0_10px_rgba(99,102,241,0.4)] group-hover:drop-shadow-[0_0_15px_rgba(99,102,241,0.6)] transition-all" />
@@ -177,7 +177,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 md:gap-3 hover:bg-white/5 text-left h-auto py-1.5 px-2 md:px-3 border border-transparent hover:border-white/10 rounded-lg transition-all focus:outline-none">
+            <Button variant="ghost" className="flex items-center gap-2 md:gap-3 hover:bg-white/5 text-left h-auto py-1.5 px-2 md:px-3 border border-transparent hover:border-white/10 rounded-lg transition-all duration-300 hover:scale-105 card-depth hover:shadow-lg focus:outline-none">
                 <div className="flex flex-col items-start">
                     <span className="text-[9px] md:text-[10px] text-slate-400 font-mono tracking-wider hidden sm:inline">COORD [{planet.galaxy}:{planet.system}:{planet.position}]</span>
                     <span className="font-bold text-white flex items-center gap-1 md:gap-2 text-xs md:text-sm">
@@ -260,8 +260,8 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                                onSwitchPlanet(p.id);
                                setSearchQuery("");
                              }}
-                             className={`flex justify-between items-center py-2 px-4 cursor-pointer focus:bg-white/10 focus:text-white transition-colors ${
-                               p.is_current ? 'bg-indigo-600/20 text-indigo-300 border-l-2 border-indigo-400' : 'text-slate-300 hover:bg-white/5'
+                             className={`flex justify-between items-center py-2 px-4 cursor-pointer focus:bg-white/10 focus:text-white transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg animate-fade-in ${
+                               p.is_current ? 'bg-indigo-600/20 text-indigo-300 border-l-2 border-indigo-400 animate-glow-pulse' : 'text-slate-300 hover:bg-white/5'
                              }`}
                            >
                              <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -305,7 +305,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex flex-col gap-1 bg-black/20 px-3 py-1.5 rounded-lg border border-white/5 cursor-help min-w-[100px]">
+                  <div className="flex flex-col gap-1 bg-black/20 px-3 py-1.5 rounded-lg border border-white/5 cursor-help min-w-[100px] card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
                       <div className="flex items-center justify-between gap-2">
                         <Zap size={14} className={energyRatio < 100 ? "text-red-500 animate-pulse" : "text-yellow-400"} />
                         <span className={`font-mono text-xs font-bold ${energyRatio < 100 ? "text-red-400" : "text-emerald-400"}`}>
@@ -349,7 +349,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         {/* Ressources - Version mobile compacte */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="lg:hidden flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-lg">
+            <Button variant="ghost" className="lg:hidden flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-lg card-depth hover:scale-105 transition-all duration-300 hover:shadow-lg">
               <div className="flex items-center gap-1">
                 <Stone size={14} className="text-orange-300" />
                 <span className="text-xs font-mono">{formatCompact(planet.metal_amount)}</span>
@@ -422,9 +422,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         <div className="h-8 w-px bg-white/10 hidden sm:block"></div>
 
        {/*  - Section Messagerie */}
-<button 
+<button
     onClick={onOpenMessages}
-    className="relative p-2 md:p-2.5 rounded-full hover:bg-white/10 transition-all group shrink-0"
+    className="relative p-2 md:p-2.5 rounded-full hover:bg-white/10 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 card-depth group shrink-0 hover:shadow-lg"
     title="Messagerie"
 >
     <Mail size={18} className={`transition-colors ${unreadMessages > 0 ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
@@ -470,7 +470,7 @@ function ResourceItem({ icon: Icon, value, label, color, production }: any) {
         <TooltipProvider>
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <div className="flex items-center gap-3 group cursor-help">
+                    <div className="flex items-center gap-3 group cursor-help card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300 px-3 py-1.5 rounded-lg hover:bg-white/5">
                         <Icon size={18} className={`${color} transition-transform group-hover:scale-110`} />
                         <span className="font-mono text-sm font-bold text-white min-w-[60px] text-right">
                             {format(value)}

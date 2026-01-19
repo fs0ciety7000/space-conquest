@@ -36,12 +36,12 @@ export default function SpyModal({ report, onClose }: SpyModalProps) {
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-950 border border-slate-800 text-white max-w-lg p-0 overflow-hidden sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+      <DialogContent className="bg-slate-950 border border-slate-800 text-white max-w-lg p-0 overflow-hidden sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] card-depth glass-card animate-slide-up">
         
         {/* HEADER */}
         <div className="relative p-6 bg-slate-900/50 border-b border-white/5 overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10">
-                <ScanEye size={120} />
+                <ScanEye size={120} className="animate-spin-slow" />
             </div>
             
             <div className="relative z-10 flex justify-between items-start">
@@ -55,7 +55,7 @@ export default function SpyModal({ report, onClose }: SpyModalProps) {
                         Cryptage: <span className={statusColor}>{report.tech_difference > 0 ? "DÉCHIFFRÉ" : "PARTIEL"} (Delta Tech: {report.tech_difference})</span>
                     </p>
                 </div>
-                <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white">
+                <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-all duration-300 hover:scale-110 card-depth hover:shadow-lg text-slate-400 hover:text-white">
                     <X size={20} />
                 </button>
             </div>
@@ -83,7 +83,7 @@ export default function SpyModal({ report, onClose }: SpyModalProps) {
                         <div className="grid grid-cols-2 gap-2">
                             {Object.entries(report.fleet).map(([key, count]) => (
                                 count > 0 && (
-                                    <div key={key} className="flex justify-between items-center p-2 bg-white/5 rounded border border-white/5">
+                                    <div key={key} className="flex justify-between items-center p-2 bg-white/5 rounded border border-white/5 hover:-translate-y-0.5 transition-all duration-300 card-depth hover:shadow-lg">
                                         <span className="text-xs uppercase text-slate-400 font-bold">{key.replace('_', ' ')}</span>
                                         <span className="text-sm font-mono text-white">{count.toLocaleString()}</span>
                                     </div>
@@ -101,8 +101,8 @@ export default function SpyModal({ report, onClose }: SpyModalProps) {
             {/* 3. DÉFENSE (Full Scan uniquement) */}
             <Section title="Systèmes Défensifs" icon={ShieldAlert} isLocked={!hasDefense} delay={3}>
                 {report.defense !== undefined ? (
-                     <div className="flex items-center gap-4 p-3 bg-red-950/20 border border-red-500/20 rounded-lg">
-                        <AlertTriangle className="text-red-500" size={24} />
+                     <div className="flex items-center gap-4 p-3 bg-red-950/20 border border-red-500/20 rounded-lg glass-card hover:-translate-y-0.5 transition-all duration-300 card-depth">
+                        <AlertTriangle className="text-red-500 animate-bounce-subtle" size={24} />
                         <div>
                             <div className="text-xs uppercase font-bold text-red-400">Signature Défensive</div>
                             <div className="text-lg font-black text-white">{report.defense > 0 ? `${report.defense} Unités` : "Aucune défense"}</div>
@@ -113,7 +113,7 @@ export default function SpyModal({ report, onClose }: SpyModalProps) {
         </div>
 
         <div className="p-4 bg-slate-900 border-t border-white/5">
-            <Button onClick={onClose} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold uppercase tracking-widest">
+            <Button onClick={onClose} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold uppercase tracking-widest card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
                 Fermer le dossier
             </Button>
         </div>
@@ -144,7 +144,7 @@ function Section({ title, icon: Icon, children, isLocked, delay }: any) {
     return (
         <div className="animate-in slide-in-from-bottom-2 fade-in duration-500" style={{ animationDelay: `${delay * 100}ms` }}>
             <div className="flex items-center gap-2 mb-3 text-slate-400">
-                <Icon size={16} className="text-blue-400" />
+                <Icon size={16} className="text-blue-400 animate-bounce-subtle" />
                 <h4 className="text-xs font-bold uppercase tracking-widest">{title}</h4>
             </div>
             {children}
@@ -154,8 +154,8 @@ function Section({ title, icon: Icon, children, isLocked, delay }: any) {
 
 function ResourceCard({ icon: Icon, label, value, color }: any) {
     return (
-        <div className="bg-slate-900/50 p-2.5 rounded-lg border border-white/5 flex flex-col items-center text-center gap-1">
-            <Icon size={14} className={color} />
+        <div className="bg-slate-900/50 p-2.5 rounded-lg border border-white/5 flex flex-col items-center text-center gap-1 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth">
+            <Icon size={14} className={`${color} group-hover:scale-110 transition-transform`} />
             <span className="text-[9px] uppercase font-bold text-slate-500">{label}</span>
             <span className={`text-xs font-mono font-bold ${color}`}>{Math.floor(value).toLocaleString()}</span>
         </div>
