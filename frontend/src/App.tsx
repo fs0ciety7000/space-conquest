@@ -516,36 +516,50 @@ export default function App() {
                 ))}
             </div>
 
-             {/* Bouton aide raccourcis */}
-             <div className="px-4 pb-3">
-                <button 
-                  onClick={() => setShowShortcutsHelp(true)}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-indigo-950/30 text-indigo-400 hover:bg-indigo-900/40 hover:text-indigo-300 transition-colors text-xs font-bold uppercase border border-indigo-900/30"
-                >
-                  <Keyboard size={16}/> Raccourcis (?)
-                </button>
-             </div>
+           {/* Bouton aide raccourcis */}
+<div className="px-4 pb-3">
+  <button
+    onClick={() => setShowShortcutsHelp(true)}
+    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-indigo-950/30 text-indigo-400 hover:bg-indigo-900/40 hover:text-indigo-300 transition-colors text-xs font-bold uppercase border border-indigo-900/30"
+  >
+    <Keyboard size={16} /> Raccourcis (?)
+  </button>
+</div>
 
-             <div className="p-4 border-t border-white/5">
-                 <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors text-xs font-bold uppercase border border-red-900/20">
-                     <LogOut size={16}/> Déconnexion
-                 </button>
-             </div>
+{/* ✨ Bouton Soumettre un bug / Amélioration */}
+<div className="px-4 pb-3">
+  <a
+    href="https://github.com/nicolasdessenius/space-conquest/issues/new/choose"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-purple-950/30 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300 transition-colors text-xs font-bold uppercase border border-purple-900/30"
+  >
+    <MessageSquarePlus size={16} /> Signaler un problème
+  </a>
+</div>
 
-              {/* ✨ Footer */}
-    <div className="mt-auto px-4 pb-4 pt-3 border-t border-white/5">
-      <div className="text-center space-y-1.5">
-        <p className="text-[10px] text-slate-400">
-          Développé avec <span className="text-red-500">❤️</span> par{' '}
-          <span className="font-bold text-white">Nicolas Dessenius</span>
-        </p>
-        <p className="text-[10px] text-slate-500">
-          Propulsé par <span className="font-bold text-orange-400">🦀 Rust</span>
-        </p>
-      </div>
-    </div>
-  </aside>
-       
+<div className="p-4 border-t border-white/5">
+  <button 
+    onClick={handleLogout} 
+    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors text-xs font-bold uppercase border border-red-900/20"
+  >
+    <LogOut size={16} /> Déconnexion
+  </button>
+</div>
+
+{/* ✨ Footer */}
+<div className="mt-auto px-4 pb-4 pt-3 border-t border-white/5">
+  <div className="text-center space-y-1.5">
+    <p className="text-[10px] text-slate-400">
+      Développé avec <span className="text-red-500">❤️</span> par{' '}
+      <span className="font-bold text-white">Nicolas Dessenius</span>
+    </p>
+    <p className="text-[10px] text-slate-500">
+      Propulsé par <span className="font-bold text-orange-400">🦀 Rust</span>
+    </p>
+  </div>
+</div>
+</aside>
 
         {/* Sidebar Mobile */}
         {sidebarOpen && (
