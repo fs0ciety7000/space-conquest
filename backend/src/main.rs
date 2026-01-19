@@ -87,7 +87,8 @@ struct ColonizePayload {
 
 #[derive(Deserialize)]
 struct ExpeditionPayload {
-    ship_count: i32,
+    hunters: i32,
+    cruisers: i32,
 }
 
 #[derive(Deserialize)]
@@ -871,16 +872,19 @@ async fn expedition_handler(
     }
 
     // Validation du nombre de vaisseaux
-    let ship_count = payload.ship_count;
-    if ship_count <= 0 {
+    let hunters = payload.hunters;
+    let cruisers = payload.cruisers;
+    if hunters + cruisers <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
     }
-    if ship_count > p.light_hunter_count {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de vaisseaux"}))).into_response();
+    if hunters > p.light_hunter_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de chasseurs"}))).into_response();
+    }
+    if cruisers > p.cruiser_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de croiseurs"}))).into_response();
     }
 
     let mut active: planet::ActiveModel = p.clone().into();
-    let loot = 0.0;
     let mut logs: Vec<String> = Vec::new();
     let winner;
     let mut lost_hunters = 0;
@@ -888,25 +892,37 @@ async fn expedition_handler(
 
     let combat_triggered = rand::thread_rng().gen_bool(0.3);
 
-    // Calcul des gains basé sur la taille de la flotte
-    let base_metal_per_ship = 50.0 + rand::thread_rng().gen_range(0.0..=50.0);
-    let base_crystal_per_ship = 20.0 + rand::thread_rng().gen_range(0.0..=30.0);
+    // Calcul des gains basé sur la taille et type de flotte
+    // Chasseurs: 50-100 métal, 20-50 cristal
+    // Croiseurs: 150-250 métal, 60-100 cristal (3x plus puissants)
+    let base_metal_per_hunter = 50.0 + rand::thread_rng().gen_range(0.0..=50.0);
+    let base_crystal_per_hunter = 20.0 + rand::thread_rng().gen_range(0.0..=30.0);
+    let base_metal_per_cruiser = 150.0 + rand::thread_rng().gen_range(0.0..=100.0);
+    let base_crystal_per_cruiser = 60.0 + rand::thread_rng().gen_range(0.0..=40.0);
+
+    let total_ships = hunters + cruisers;
 
     let (loot_metal, loot_crystal) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
-        let combat_res = game_logic::simulate_combat(ship_count + p.cruiser_count, p.laser_battery_level);
+        let combat_res = game_logic::simulate_combat(total_ships, p.laser_battery_level);
 
         if combat_res.victory {
             winner = "player";
-            // Gains proportionnels au nombre de vaisseaux
-            let metal = (base_metal_per_ship * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
-            let crystal = (base_crystal_per_ship * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+            // Gains proportionnels au nombre et type de vaisseaux
+            let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0);
+            let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0);
 
             logs.push(format!("RESULTAT : {}", combat_res.message));
             logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
 
-            lost_hunters = combat_res.ships_lost;
-            if lost_hunters > ship_count { lost_hunters = ship_count; }
+            // Répartir les pertes entre chasseurs et croiseurs
+            let total_sent = total_ships as f64;
+            let hunter_ratio = hunters as f64 / total_sent;
+            lost_hunters = (combat_res.ships_lost as f64 * hunter_ratio) as i32;
+            lost_cruisers = combat_res.ships_lost - lost_hunters;
+
+            if lost_hunters > hunters { lost_hunters = hunters; }
+            if lost_cruisers > cruisers { lost_cruisers = cruisers; }
 
             active.metal_amount = Set(p.metal_amount + metal);
             active.crystal_amount = Set(p.crystal_amount + crystal);
@@ -914,15 +930,20 @@ async fn expedition_handler(
         } else {
             winner = "pirates";
             logs.push(format!("RESULTAT : {}", combat_res.message));
-            lost_hunters = (ship_count as f64 * 0.5) as i32;
-            lost_cruisers = (p.cruiser_count as f64 * 0.3) as i32;
+
+            // Répartir les pertes entre chasseurs et croiseurs (défaite = pertes lourdes)
+            let total_sent = total_ships as f64;
+            let hunter_ratio = hunters as f64 / total_sent;
+            lost_hunters = (combat_res.ships_lost as f64 * hunter_ratio * 1.5).min(hunters as f64) as i32;
+            lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_ratio) * 1.5).min(cruisers as f64) as i32;
+
             (0.0, 0.0)
         }
     } else {
         winner = "player";
-        // Gains proportionnels au nombre de vaisseaux (bonus pour secteur calme)
-        let metal = (base_metal_per_ship * ship_count as f64 * 1.2) * (game_logic::SPEED_FACTOR / 100.0);
-        let crystal = (base_crystal_per_ship * ship_count as f64 * 1.2) * (game_logic::SPEED_FACTOR / 100.0);
+        // Gains proportionnels au nombre et type de vaisseaux (bonus pour secteur calme: x1.2)
+        let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
+        let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
 
         logs.push("SCAN : Secteur calme.".to_string());
         logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", metal, crystal));
@@ -951,8 +972,8 @@ async fn expedition_handler(
         opponent_username: Set(None),
         mission_type: Set("expedition".to_string()),
         result: Set(winner.to_string()),
-        loot_metal: Set(loot),
-        loot_crystal: Set(0.0),
+        loot_metal: Set(loot_metal),
+        loot_crystal: Set(loot_crystal),
         ships_lost: Set(lost_hunters + lost_cruisers),
         date: Set(Utc::now().naive_utc()),
     };
@@ -989,9 +1010,18 @@ async fn scout_expedition_handler(
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
     };
 
-    let ship_count = payload.ship_count;
-    if ship_count <= 0 || ship_count > p.light_hunter_count {
+    let hunters = payload.hunters;
+    let cruisers = payload.cruisers;
+    let total_ships = hunters + cruisers;
+
+    if total_ships <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
+    }
+    if hunters > p.light_hunter_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de chasseurs"}))).into_response();
+    }
+    if cruisers > p.cruiser_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de croiseurs"}))).into_response();
     }
 
     // Simulation du scan (aléatoire mais basé sur la force de la flotte)
@@ -1021,22 +1051,31 @@ async fn scout_expedition_handler(
         )
     };
 
-    // Ajustement de la probabilité en fonction du nombre de vaisseaux
-    let adjusted_probability = if ship_count >= 10 {
+    // Ajustement de la probabilité en fonction du nombre total de vaisseaux
+    let adjusted_probability = if total_ships >= 10 {
         std::cmp::min(95, probability + 10)
-    } else if ship_count >= 5 {
+    } else if total_ships >= 5 {
         probability
     } else {
         std::cmp::max(20, probability - 10)
     };
 
     // Calcul des gains estimés (basé sur le même calcul que l'expédition réelle)
-    let base_metal_per_ship = 75.0; // Moyenne de 50-100
-    let base_crystal_per_ship = 35.0; // Moyenne de 20-50
-    let estimated_metal_min = (base_metal_per_ship * 0.7 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
-    let estimated_metal_max = (base_metal_per_ship * 1.5 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
-    let estimated_crystal_min = (base_crystal_per_ship * 0.7 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
-    let estimated_crystal_max = (base_crystal_per_ship * 1.5 * ship_count as f64) * (game_logic::SPEED_FACTOR / 100.0);
+    // Chasseurs: 50-100 métal (moy 75), 20-50 cristal (moy 35)
+    // Croiseurs: 150-250 métal (moy 200), 60-100 cristal (moy 80)
+    let avg_metal_per_hunter = 75.0;
+    let avg_crystal_per_hunter = 35.0;
+    let avg_metal_per_cruiser = 200.0;
+    let avg_crystal_per_cruiser = 80.0;
+
+    // Min/Max avec variation de ±30%
+    let base_metal = avg_metal_per_hunter * hunters as f64 + avg_metal_per_cruiser * cruisers as f64;
+    let base_crystal = avg_crystal_per_hunter * hunters as f64 + avg_crystal_per_cruiser * cruisers as f64;
+
+    let estimated_metal_min = (base_metal * 0.7) * (game_logic::SPEED_FACTOR / 100.0);
+    let estimated_metal_max = (base_metal * 1.5) * (game_logic::SPEED_FACTOR / 100.0);
+    let estimated_crystal_min = (base_crystal * 0.7) * (game_logic::SPEED_FACTOR / 100.0);
+    let estimated_crystal_max = (base_crystal * 1.5) * (game_logic::SPEED_FACTOR / 100.0);
 
     Json(json!({
         "danger": danger_level,
