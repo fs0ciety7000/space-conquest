@@ -1,0 +1,25 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="90" fill="#1a2332" stroke="#ef4444" stroke-width="3"/>
+
+  <!-- Military helmet -->
+  <path d="M 65 75 Q 65 55 100 55 Q 135 55 135 75 L 135 95 L 65 95 Z" fill="#991b1b" stroke="#ef4444" stroke-width="2"/>
+  <rect x="65" y="95" width="70" height="5" fill="#7f1d1d"/>
+
+  <!-- Visor/Face guard -->
+  <rect x="75" y="75" width="50" height="15" rx="3" fill="#1e1b4b" opacity="0.7"/>
+
+  <!-- Armor -->
+  <path d="M 70 100 L 70 130 Q 70 135 75 135 L 95 135 L 95 160 L 105 160 L 105 135 L 125 135 Q 130 135 130 130 L 130 100 Z" fill="#dc2626" stroke="#991b1b" stroke-width="2"/>
+
+  <!-- Star emblem -->
+  <g transform="translate(100, 115)">
+    <polygon points="0,-8 2,-3 8,-3 3,1 5,7 0,3 -5,7 -3,1 -8,-3 -2,-3" fill="#fbbf24" stroke="#f59e0b" stroke-width="1"/>
+  </g>
+
+  <!-- Weapon icon -->
+  <g transform="translate(100, 145)">
+    <rect x="-2" y="-12" width="4" height="24" fill="#7f1d1d"/>
+    <polygon points="0,-15 -5,-12 5,-12" fill="#991b1b"/>
+  </g>
+</svg>

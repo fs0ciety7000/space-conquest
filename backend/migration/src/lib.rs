@@ -36,6 +36,8 @@ mod m20260119_000004_create_resource_slots;
 mod m20260119_100000_add_role_to_users;
 mod m20260119_200000_create_alliance_system;
 mod m20260119_300000_create_missions_achievements;
+mod m20260119_400000_create_officers_system;
+mod m20260119_400001_seed_officers;
 
 pub struct Migrator;
 
@@ -79,6 +81,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260119_100000_add_role_to_users::Migration),
             Box::new(m20260119_200000_create_alliance_system::Migration),
             Box::new(m20260119_300000_create_missions_achievements::Migration),
+            Box::new(m20260119_400000_create_officers_system::Migration),
+            Box::new(m20260119_400001_seed_officers::Migration),
         ]
     }
 }

@@ -28,3 +28,7 @@ pub mod user_daily_mission;
 pub mod achievement;
 pub mod user_achievement;
 pub mod login_streak;
+
+// Officers system
+pub mod officer_template;
+pub mod user_officer;

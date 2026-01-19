@@ -1,0 +1,31 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="90" fill="#1a2332" stroke="#dc2626" stroke-width="3"/>
+
+  <!-- Commander helmet with plume -->
+  <path d="M 70 70 Q 70 50 100 50 Q 130 50 130 70 L 130 85 L 70 85 Z" fill="#991b1b" stroke="#dc2626" stroke-width="2"/>
+
+  <!-- Plume -->
+  <path d="M 95 50 Q 95 30 100 25 Q 105 30 105 50" fill="#ef4444" stroke="#dc2626" stroke-width="1.5"/>
+
+  <!-- Visor -->
+  <rect x="75" y="70" width="50" height="12" rx="3" fill="#1e1b4b" opacity="0.8"/>
+
+  <!-- Armor plates -->
+  <path d="M 68 90 L 68 130 L 78 130 L 78 100 L 122 100 L 122 130 L 132 130 L 132 90 Q 115 88 100 88 Q 85 88 68 90 Z" fill="#dc2626" stroke="#991b1b" stroke-width="2"/>
+  <rect x="85" y="100" width="30" height="30" fill="#7f1d1d" stroke="#991b1b" stroke-width="1"/>
+
+  <!-- Rank stars -->
+  <g transform="translate(100, 115)">
+    <polygon points="-8,-6 -6.5,-2.5 -2,-2 -5,0.5 -3.5,5 -8,2.5 -12.5,5 -11,0.5 -14,-2 -9.5,-2.5" fill="#fbbf24"/>
+    <polygon points="0,-6 1.5,-2.5 6,-2 3,0.5 4.5,5 0,2.5 -4.5,5 -3,0.5 -6,-2 -1.5,-2.5" fill="#fbbf24"/>
+    <polygon points="8,-6 9.5,-2.5 14,-2 11,0.5 12.5,5 8,2.5 3.5,5 5,0.5 2,-2 6.5,-2.5" fill="#fbbf24"/>
+  </g>
+
+  <!-- Sword emblem -->
+  <g transform="translate(100, 145)">
+    <rect x="-2" y="-15" width="4" height="30" fill="#d4d4d8"/>
+    <rect x="-8" y="-18" width="16" height="4" fill="#fbbf24"/>
+    <polygon points="0,-20 -4,-15 4,-15" fill="#d4d4d8"/>
+  </g>
+</svg>
