@@ -761,6 +761,7 @@ pub fn calculate_resources_with_slots(
     slot_2: &Option<String>,
     slot_3: &Option<String>,
     slot_4: &Option<String>,
+    speed_factor: f64,
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
     let duration = now.signed_duration_since(last_update).num_seconds() as f64;
@@ -786,8 +787,8 @@ pub fn calculate_resources_with_slots(
         ResourceType::Deuterium => 10.0 * (level as f64) * 1.05f64.powi(level),
     };
 
-    // Application du ratio énergétique et des slots
-    let production_per_sec = (base_production * tech_bonus * energy_ratio * slot_bonus / 3600.0) * (SPEED_FACTOR / 100.0);
+    // Application du ratio énergétique, slots et speed_factor dynamique
+    let production_per_sec = (base_production * tech_bonus * energy_ratio * slot_bonus / 3600.0) * (speed_factor / 100.0);
     current_amount + (production_per_sec * duration)
 }
 

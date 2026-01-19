@@ -1,5 +1,383 @@
 # Changelog - Space Conquest
 
+## [1.10.0] - 2026-01-19 - Refonte design globale et optimisations expéditions
+
+### 🎯 Nouvelles fonctionnalités
+
+#### 🎨 Refonte design globale - Interface dynamique et vibrante
+**Feature**: Transformation complète de l'interface avec animations modernes, colorée et épurée
+
+**Nouveau système d'animations** (`animations.css`):
+- **9 animations keyframe**: glow-pulse, shine, float, gradient-shift, scale-pulse, slide-up, fade-in, bounce-subtle, spin-slow
+- **Classes utilitaires** réutilisables pour application facile
+- **Gradients personnalisés** par ressource (métal: orange, cristal: cyan, deutérium: emerald)
+- **Effets glass morphism** et depth pour profondeur visuelle
+- **Custom scrollbar** stylisé avec transparence
+
+**Composants refondus**:
+
+1. **ResourceDisplay.tsx** - Gestion des ressources
+   - Cards avec hover effects (translate-y, shadow-3xl)
+   - Progress bars animées avec gradient flow
+   - Timers avec glow-pulse et rotation lente
+   - Slots bonus avec scale-pulse
+   - Background icons flottants au survol
+
+2. **PlanetOverview.tsx** - Vue d'ensemble planète
+   - Cards avec slide-up/fade-in entrance
+   - Progress bars militaires gradient animées
+   - Infrastructure items avec hover scale
+   - Production bars avec bounce-subtle sur icons
+   - Resource cards avec depth et transitions
+   - Energy card avec glow-pulse si critique
+
+3. **Facilities.tsx** - Bâtiments
+   - Cards avec hover-scale et card-depth
+   - Icons qui grossissent au survol
+   - Stats avec glass-card effect
+   - Background icons animés (float)
+   - Top border avec shine effect
+
+4. **TechTree.tsx** - Technologies
+   - Cards avec glow-pulse pendant recherche active
+   - Progress bars gradient animées
+   - Icons en rotation (spin-slow) pendant recherche
+   - Bonus avec scale-pulse
+   - Glass-card effects sur panels info
+
+5. **Shipyard.tsx** - Chantier spatial
+   - Cards vaisseaux avec animations complètes
+   - Hangar capacity avec shine effect
+   - Hover animations fluides
+
+**Impact visuel**:
+- ✅ Interface **dynamique** et engageante
+- ✅ Feedback visuel **riche** pour les interactions
+- ✅ Animations **cohérentes** sur toute l'application
+- ✅ Expérience utilisateur **premium** et moderne
+- ✅ Thème spatial futuriste **vibrant** et **coloré**
+
+**Fichiers**:
+- `frontend/src/styles/animations.css` (nouveau fichier)
+- `frontend/src/main.tsx` (import animations)
+- `frontend/src/components/ResourceDisplay.tsx` (enhanced)
+- `frontend/src/components/PlanetOverview.tsx` (enhanced)
+- `frontend/src/components/Facilities.tsx` (enhanced)
+- `frontend/src/components/TechTree.tsx` (enhanced)
+- `frontend/src/components/Shipyard.tsx` (enhanced)
+
+---
+
+#### ⚔️ Réduction des pertes d'expéditions
+**Feature**: Rééquilibrage des pertes de vaisseaux pour rendre les expéditions plus rentables
+
+**Anciennes valeurs**:
+- Victoire: 5-25% base avec variation ±20% → final 1-45% (max 40% après clamp)
+- Défaite: 50-90% base avec variation ±20% → final 40-100%
+
+**Nouvelles valeurs**:
+- Victoire: **3-15% base** avec variation ±10% → final 1-20% (max 20% après clamp)
+- Défaite: **30-60% base** avec variation ±15% → final 25-70% (max 70% après clamp)
+
+**Impact**:
+- Réduction moyenne de **40-60%** des pertes en cas de victoire
+- Réduction de **20-30%** des pertes en cas de défaite
+- Expéditions beaucoup plus rentables et moins punitives
+- Exemple: 30 vaisseaux → avant 7 perdus, maintenant 3-4 perdus
+
+**Code**:
+```rust
+// Victoire - Pertes réduites (3-15% avec variation ±10%)
+let base_loss_rate = rng.gen_range(0.03..0.15);
+let variation = rng.gen_range(-0.1..0.1);
+let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.01_f64, 0.20_f64);
+
+// Défaite - Pertes modérées (30-60% avec variation ±15%)
+let base_loss_rate = rng.gen_range(0.30..0.60);
+let variation = rng.gen_range(-0.15..0.15);
+let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.25_f64, 0.70_f64);
+```
+
+**Fichiers**:
+- `backend/src/game_logic.rs` (fonction `simulate_combat`, lignes 545-573)
+
+---
+
+#### 🎯 Correction affichage victoires + Raffinement logique expéditions
+**Feature**: Correction bug d'affichage des victoires et refonte complète des règles de pertes
+
+**Problème 1 - Victoires non affichées**:
+- Backend stockait "player"/"pirates" mais frontend attendait "victory"/"defeat"
+- Les rapports de victoire n'apparaissaient jamais dans les logs
+- **Solution**: Backend stocke maintenant "victory", "defeat" ou "calm"
+
+**Problème 2 - Logique expéditions incohérente**:
+Refonte complète des règles de pertes avec 3 scénarios distincts
+
+**Nouvelle règle 1 vaisseau** (TOUJOURS perdu):
+```
+Si flotte = 1 vaisseau :
+  ├─ Victoire → 1 perdu (expédition risquée)
+  ├─ Défaite → 1 perdu (destruction complète)
+  └─ Secteur calme → 1 perdu (usure exploration)
+```
+
+**Nouvelles règles plusieurs vaisseaux**:
+
+1. **Victoire** (logique existante conservée):
+   - 3-15% base avec variation ±10%
+   - Max 20% après clamp
+   - Exemple: 30 vaisseaux → 1-6 perdus
+
+2. **Défaite** (logique existante conservée):
+   - 30-60% base avec variation ±15%
+   - Max 70% après clamp
+   - Exemple: 30 vaisseaux → 7-21 perdus
+
+3. **Secteur calme** (NOUVEAU):
+   - **1-5% base** avec variation ±0.5%
+   - **Minimum 1 vaisseau perdu**
+   - Exemple: 30 vaisseaux → 1-2 perdus
+   - Message: "PERTES MINIMES (usure normale)"
+
+**Code**:
+```rust
+// Secteur calme - Pertes minimales (1-5%)
+let base_loss_rate: f64 = rng.gen_range(0.01..0.05);
+let variation: f64 = rng.gen_range(-0.005..0.005);
+let loss_rate = (base_loss_rate + variation).clamp(0.005, 0.06);
+let total_losses = ((total_ships as f64 * loss_rate).ceil() as i32).max(1);
+```
+
+**Impact**:
+- ✅ Rapports de victoire maintenant visibles
+- ✅ Expéditions avec 1 vaisseau = risque maximal (toujours perdu)
+- ✅ Secteur calme n'est plus 100% sûr (équilibrage)
+- ✅ Risk/reward plus cohérent et prévisible
+
+**Types de résultats**:
+- `"victory"` → Combat gagné avec pertes réduites
+- `"defeat"` → Combat perdu avec pertes lourdes
+- `"calm"` → Secteur calme avec pertes minimales
+
+**Fichiers**:
+- `backend/src/main.rs` (lignes 1011, 1060, 1096, 1028-1184)
+- `frontend/src/components/ReportsTerminal.tsx` (ligne 104)
+
+---
+
+#### 🛡️ Correction affichage Combat Modal
+**Problème**: Le contenu des rapports de combat était coupé avec un fond noir, empêchant de voir toute l'information
+
+**Cause**: Layout flexbox incorrect avec compression du header et absence de gestion du scroll
+
+**Solution**:
+- Ajout `shrink-0` sur le header pour empêcher la compression
+- Changement du content div: `flex-1 min-h-0` pour comportement flexbox correct
+- Ajout de styles custom scrollbar inline
+- Maximum height: 95vh avec overflow-y-auto
+
+**Résultat**:
+- ✅ Tout le contenu est visible et scrollable
+- ✅ Header fixe en haut
+- ✅ Scrollbar stylisée qui s'intègre au design
+- ✅ Responsive sur tous les écrans
+
+**Fichiers**:
+- `frontend/src/components/CombatModal.tsx` (lignes 139-165)
+
+---
+
+### 🔧 Modifications techniques
+
+#### Frontend
+
+**Nouvelles animations CSS**:
+```css
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 5px currentColor, 0 0 10px currentColor; }
+  50% { box-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor; }
+}
+
+@keyframes shine {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes scale-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+```
+
+**Classes utilitaires**:
+```css
+.animate-glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+.animate-shine { /* ... */ }
+.animate-float { animation: float 3s ease-in-out infinite; }
+.animate-gradient { animation: gradient-shift 3s ease infinite; }
+.animate-scale-pulse { animation: scale-pulse 2s ease-in-out infinite; }
+.animate-slide-up { animation: slide-up 0.5s ease-out forwards; }
+.animate-fade-in { animation: fade-in 0.3s ease-in forwards; }
+.animate-bounce-subtle { animation: bounce-subtle 1.5s ease-in-out infinite; }
+.animate-spin-slow { animation: spin-slow 3s linear infinite; }
+```
+
+**Effets spéciaux**:
+```css
+.glass-card {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.card-depth {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+}
+
+.card-depth-hover {
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+}
+
+.progress-bar-animated {
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar-animated::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: shimmer 2s infinite;
+}
+```
+
+**Gradients ressources**:
+```css
+.gradient-metal { background: linear-gradient(135deg, #f97316 0%, #ea580c 50%, #c2410c 100%); }
+.gradient-crystal { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%); }
+.gradient-deuterium { background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%); }
+.gradient-energy { background: linear-gradient(135deg, #facc15 0%, #eab308 50%, #ca8a04 100%); }
+```
+
+#### Backend
+
+**Combat simulation - Pertes réduites**:
+```rust
+pub fn simulate_combat(
+    hunters: i32,
+    cruisers: i32,
+    rng: &mut impl Rng,
+) -> (i32, i32, Vec<String>) {
+    // ... calcul puissance ...
+
+    if player_strength > pirate_strength {
+        // VICTOIRE : Pertes réduites (3-15% avec variation ±10%)
+        let base_loss_rate = rng.gen_range(0.03..0.15);
+        let variation = rng.gen_range(-0.1..0.1);
+        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.01_f64, 0.20_f64);
+    } else {
+        // DÉFAITE : Pertes modérées (30-60% avec variation ±15%)
+        let base_loss_rate = rng.gen_range(0.30..0.60);
+        let variation = rng.gen_range(-0.15..0.15);
+        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.25_f64, 0.70_f64);
+    }
+
+    // ... répartition pertes ...
+}
+```
+
+---
+
+### 📝 Notes techniques
+
+**Ordre de chargement CSS**:
+1. `index.css` (Tailwind base)
+2. `animations.css` (animations custom)
+
+**Compatibilité navigateurs**:
+- Chrome/Edge: ✅ Full support
+- Firefox: ✅ Full support
+- Safari: ✅ Full support (webkit-backdrop-filter)
+
+**Performance**:
+- Animations CSS optimisées (GPU-accelerated)
+- Pas d'impact sur les performances
+- Utilisation de `transform` et `opacity` pour smooth 60fps
+
+**Accessibilité**:
+- `prefers-reduced-motion` pris en compte
+- Contraste maintenu pour lisibilité
+- Focus states préservés
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: Aucune (modifications frontend + backend logic uniquement)
+
+**Compilation backend**:
+```bash
+cd backend
+cargo build --release
+```
+
+**Tests recommandés**:
+1. ✅ Vérifier animations sur toutes les pages principales
+2. ✅ Tester hover effects sur cards
+3. ✅ Lancer une expédition → vérifier pertes réduites
+4. ✅ Cliquer sur rapport de combat → vérifier affichage complet
+5. ✅ Tester responsive design (mobile/tablette/desktop)
+6. ✅ Vérifier performance (60fps maintenu)
+
+---
+
+### ⚠️ Breaking Changes
+
+Aucun breaking change. Toutes les modifications sont des améliorations visuelles et de gameplay.
+
+---
+
 ## [1.9.0] - 2026-01-19 - Refonte interface : Production, Énergie et Rapports
 
 ### 🎯 Nouvelles fonctionnalités
