@@ -73,7 +73,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
       });
       if (res.ok) {
         const data = await res.json();
-        setExtraSlots(data.filter((s: ResourceSlot) => s.slot_number >= 5));
+        setExtraSlots(data);
       }
     } catch (error) {
       console.error('Erreur chargement slots:', error);
@@ -377,8 +377,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
         );
       })}
 
-      {/* SLOTS SUPPLÉMENTAIRES (5-8) */}
-      {extraSlots.length > 0 && (
+      {/* SLOTS SUPPLÉMENTAIRES (5-8) - Affichage uniquement des slots bonus */}
+      {extraSlots.filter(s => s.slot_number >= 5).length > 0 && (
         <div className="col-span-full mt-8">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
@@ -395,7 +395,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {extraSlots.map((slot) => {
+            {extraSlots.filter(s => s.slot_number >= 5).map((slot) => {
               const resInfo = RESOURCE_TYPES[slot.resource_type as keyof typeof RESOURCE_TYPES];
               const SlotIcon = resInfo?.icon || Pickaxe;
               const slotColor = resInfo?.color || "text-gray-400";

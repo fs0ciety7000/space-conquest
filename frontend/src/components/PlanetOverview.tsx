@@ -75,7 +75,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         });
         if (res.ok) {
           const data = await res.json();
-          setSlots(data.filter((s: ResourceSlot) => s.slot_number >= 5));
+          setSlots(data);
         }
       } catch (error) {
         console.error('Erreur chargement slots:', error);
