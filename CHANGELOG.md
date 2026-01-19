@@ -1,5 +1,180 @@
 # Changelog - Space Conquest
 
+## [1.4.0] - 2026-01-19 - Rééquilibrage énergétique et améliorations marché
+
+### 🔧 Corrections critiques
+
+#### ⚡ Rééquilibrage énergétique majeur
+**Problème**: Production d'énergie toujours insuffisante → mines constamment dans le rouge
+**Cause**: Croissance exponentielle des mines (1.1^niveau) dépassait rapidement la production solaire
+
+**Solutions appliquées**:
+- ✅ Production centrale solaire **×3** (60.0 au lieu de 20.0 par niveau)
+- ✅ Bonus tech énergie **+10% par niveau** (au lieu de +5%)
+- ✅ Système de réduction automatique déjà implémenté
+  - Production mines réduite proportionnellement au ratio énergétique
+  - Ex: 50% d'énergie disponible → 50% de production des mines
+
+**Formules mises à jour**:
+```rust
+// Production énergie
+base = 60 * level * 1.1^level * (1 + energy_tech * 0.10)
+
+// Réduction production ressources
+production_effective = production_base * energy_ratio
+```
+
+**Impact**: Meilleur équilibre énergie/production, moins de micro-gestion
+
+**Fichiers**: `backend/src/game_logic.rs` (lignes 176-184)
+
+---
+
+#### 💰 Correction affichage prix marché NPC
+**Problème**: Tous les prix affichés à "1.00" malgré système dynamique fonctionnel
+
+**Cause**: Désynchronisation format backend ↔ frontend
+- Backend renvoyait `npc_prices` (tableau)
+- Frontend cherchait `prices.metal` (objet)
+
+**Solution**: Transformation tableau → objet dans `PriceOverview.tsx`
+```typescript
+const prices: Record<string, {buy, sell, market}> = {};
+for (const npcPrice of stats.npc_prices) {
+  prices[npcPrice.resource_type] = {
+    buy: npcPrice.npc_buy_price,
+    sell: npcPrice.npc_sell_price,
+    market: npcPrice.market_price
+  };
+}
+```
+
+**Système de prix dynamiques** (déjà implémenté côté backend):
+- Calcul basé sur rareté des ressources serveur
+- Formule: `scarcity = expected_ratio / actual_ratio`
+- Bornes: 0.5× à 2.0× le prix de base
+- Mise à jour temps réel (toutes les 5s)
+
+**Fichiers**: `frontend/src/components/market/PriceOverview.tsx` (lignes 8-18, 53)
+
+---
+
+#### 🛠️ Corrections compilation Rust
+**Erreurs corrigées**:
+1. **Types ambigus pour `clamp()`**:
+   - Erreur: `can't call method clamp on ambiguous numeric type {float}`
+   - Solution: Explicitation types `0.01_f64`, `0.4_f64`
+
+2. **Imports non utilisés**:
+   - Suppression `Serialize`, `Deserialize` dans `server_resource_stats.rs`
+
+**Fichiers**:
+- `backend/src/game_logic.rs` (lignes 523, 537)
+- `backend/src/entities/server_resource_stats.rs` (ligne 2)
+
+---
+
+### 🎯 Nouvelles fonctionnalités
+
+#### 📋 Page Changelog intégrée
+**Feature**: Consultation du changelog depuis le jeu
+
+**Backend**:
+- Endpoint `GET /changelog` lit `CHANGELOG.md`
+- Retourne contenu brut markdown
+
+**Frontend**:
+- Composant `Changelog.tsx` avec design cohérent
+- Affichage préformaté + gestion chargement/erreurs
+- Ajout menu SYSTÈME (icône FileText)
+
+**Accès**: Menu → SYSTÈME → Changelog
+
+**Fichiers**:
+- `backend/src/main.rs` (ligne 218, 2705-2711)
+- `frontend/src/components/Changelog.tsx` (nouveau)
+- `frontend/src/App.tsx` (imports + routing)
+
+---
+
+### 📝 Notes techniques
+
+**Production d'énergie** (exemple niveau 10):
+```
+Avant: 20 * 10 * 1.1^10 * 1.5 = 777 unités
+Après:  60 * 10 * 1.1^10 * 2.0 = 3108 unités (+300%)
+```
+
+**Consommation 3 mines niveau 10**:
+```
+(10*10 + 10*10 + 20*10) * 1.1^10 = ~1036 unités
+Ratio: 3108 / 1036 = 300% → Production à 100%
+```
+
+**Prix marché dynamiques**:
+- Métal: base 1.0 × scarcity
+- Cristal: base 1.5 × scarcity
+- Deutérium: base 3.0 × scarcity
+- Scarcity calculée: `expected / actual`
+
+---
+
+### 🚀 Déploiement
+
+**Aucune migration** requise pour cette version.
+
+**Redémarrage backend** recommandé pour appliquer les nouveaux calculs d'énergie.
+
+---
+
+### 📦 Fichiers modifiés (8 fichiers)
+
+#### Backend (4 fichiers)
+- ✏️ `backend/src/game_logic.rs` - Production énergie ×3, tech bonus +10%
+- ✏️ `backend/src/entities/server_resource_stats.rs` - Suppression imports inutilisés
+- ✏️ `backend/src/main.rs` - Endpoint /changelog
+
+#### Frontend (4 fichiers)
+- ✏️ `frontend/src/components/market/PriceOverview.tsx` - Fix affichage prix
+- ➕ `frontend/src/components/Changelog.tsx` - Nouveau composant
+- ✏️ `frontend/src/App.tsx` - Routing changelog
+
+---
+
+### ✅ Tests recommandés
+
+- [ ] **Énergie**: Vérifier production > consommation pour planètes niveau moyen
+- [ ] **Marché**: Confirmer affichage prix variables (≠ 1.00)
+- [ ] **Changelog**: Accès via menu SYSTÈME → contenu affiché correctement
+
+---
+
+### 🐛 Bugs connus
+
+**Timer construction défenses**: Investigation en cours
+- Les missiles se construisent correctement
+- Les tourelles plasma : timer parfois ne s'affiche pas
+- Nécessite debugging approfondi (frontend + backend)
+
+---
+
+### 🔮 Améliorations futures identifiées
+
+- **Panel Admin**: Stats serveur, gestion users, modifier SPEED_FACTOR
+- **Système de rôles**: Admin/User avec permissions
+- **Changement username**: Dans paramètres utilisateur
+- **Empire Bar**: Amélioration visuelle pour nombreuses planètes
+- **Système de slots**: Mines modulaires (8 slots configurables)
+- **Timer défenses**: Investigation et correction complète
+
+---
+
+**Commits**: `ee49fbe`, `5521fcc`, `d7e1b62`
+**Branche**: `claude/responsive-ranking-npc-costs-iIrjT`
+**Fichiers**: 8 modifiés, 1 créé
+
+---
+
 ## [1.3.0] - 2026-01-19 - Session de corrections et améliorations majeures
 
 ### 🎯 Nouveautés
