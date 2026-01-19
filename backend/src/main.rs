@@ -2071,7 +2071,38 @@ async fn get_player_profile_handler(
     } else {
         0
     };
-    
+
+    // Statistiques de combat (72 dernières heures)
+    use crate::entities::{combat_log, prelude::CombatLog};
+    let (combat_victories, combat_defeats, combat_total, combat_win_rate) = if !planet_ids.is_empty() {
+        let now = chrono::Utc::now().naive_utc();
+        let seventy_two_hours_ago = now - chrono::Duration::hours(72);
+
+        let combat_logs = CombatLog::find()
+            .filter(combat_log::Column::PlanetId.is_in(planet_ids.clone()))
+            .filter(combat_log::Column::Date.gte(seventy_two_hours_ago))
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+
+        let total = combat_logs.len();
+        let victories = combat_logs.iter()
+            .filter(|log| log.result == "victory" || log.result == "player")
+            .count();
+        let defeats = combat_logs.iter()
+            .filter(|log| log.result == "defeat" || log.result == "defender")
+            .count();
+        let win_rate = if total > 0 {
+            (victories as f64 / total as f64 * 100.0) as i32
+        } else {
+            0
+        };
+
+        (victories as i32, defeats as i32, total as i32, win_rate)
+    } else {
+        (0, 0, 0, 0)
+    };
+
     // Planète principale (= la plus ancienne, planète mère)
     let main_planet_with_points: Option<(&planet::Model, i32, i32, i32)> = planets.iter()
         .map(|p| {
@@ -2105,7 +2136,24 @@ async fn get_player_profile_handler(
         "total_fleet": mask_number(total_fleet, show_fleet || show_all),
         "total_defenses": mask_number(total_defenses, show_defenses || show_all),
         "completed_missions": mask_number(completed_missions, show_military || show_all),
-        
+
+        // Statistiques de combat (72h)
+        "combat_stats_72h": if show_military || show_all {
+            json!({
+                "total_battles": combat_total,
+                "victories": combat_victories,
+                "defeats": combat_defeats,
+                "win_rate": combat_win_rate
+            })
+        } else {
+            json!({
+                "total_battles": "███",
+                "victories": "███",
+                "defeats": "███",
+                "win_rate": "███"
+            })
+        },
+
         // Planète principale
         "main_planet": main_planet_with_points.map(|(p, points, _, _)| json!({
             "name": p.name,

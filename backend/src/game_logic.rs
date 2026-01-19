@@ -575,7 +575,7 @@ pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
 // 📊 CALCUL DES POINTS D'UNE PLANÈTE (utilisé par leaderboard et profil)
 pub fn calculate_planet_points(p: &crate::entities::planet::Model) -> (i32, i32, i32) {
     // Points économie (bâtiments) - DRASTIQUEMENT réduit
-    let economy = 
+    let buildings =
         (p.metal_mine_level * p.metal_mine_level * 10) +      // 50 → 10
         (p.crystal_mine_level * p.crystal_mine_level * 15) +  // 80 → 15
         (p.deuterium_mine_level * p.deuterium_mine_level * 25) + // 150 → 25
@@ -585,14 +585,14 @@ pub fn calculate_planet_points(p: &crate::entities::planet::Model) -> (i32, i32,
         (p.hangar_level * p.hangar_level * 35);               // 180 → 35
 
     // Points recherche (technologies) - DRASTIQUEMENT réduit
-    let research = 
+    let research =
         (p.energy_tech_level * p.energy_tech_level * 50) +      // 400 → 50
         (p.laser_battery_level * p.laser_battery_level * 40) +  // 350 → 40
         (p.espionage_tech_level * p.espionage_tech_level * 60) + // 500 → 60
         (p.armour_tech_level * p.armour_tech_level * 70);       // 600 → 70
 
     // Points militaire (flotte + défenses) - DRASTIQUEMENT réduit
-    let military = 
+    let military =
         (p.light_hunter_count * 5) +            // 40 → 5
         (p.cruiser_count * 30) +                // 270 → 30
         (p.recycler_count * 20) +               // 160 → 20
@@ -602,8 +602,47 @@ pub fn calculate_planet_points(p: &crate::entities::planet::Model) -> (i32, i32,
         (p.missile_launcher_count * 2) +        // 20 → 2
         (p.plasma_turret_count * 100);          // 1000 → 100
 
-    let total = economy + research + military;
-    
+    // Points production (basé sur la production horaire)
+    // Calculer la production horaire avec tous les bonus
+    let energy_ratio = calculate_energy_ratio(
+        p.solar_plant_level,
+        p.energy_tech_level,
+        p.metal_mine_level,
+        p.crystal_mine_level,
+        p.deuterium_mine_level
+    );
+
+    // Production de base avec bonus tech et énergie (slots non pris en compte ici car on n'a pas accès)
+    let prod_metal = calculate_resource_production(
+        ResourceType::Metal,
+        p.metal_mine_level,
+        p.energy_tech_level,
+        energy_ratio
+    );
+    let prod_crystal = calculate_resource_production(
+        ResourceType::Crystal,
+        p.crystal_mine_level,
+        p.energy_tech_level,
+        energy_ratio
+    );
+    let prod_deuterium = calculate_resource_production(
+        ResourceType::Deuterium,
+        p.deuterium_mine_level,
+        p.energy_tech_level,
+        energy_ratio
+    );
+
+    // 1 point par tranche de 1000 ressources produites par heure
+    // Pondération : métal x1, cristal x1.5, deutérium x2 (rareté)
+    let production_points = (
+        (prod_metal / 1000.0) +
+        (prod_crystal / 1000.0 * 1.5) +
+        (prod_deuterium / 1000.0 * 2.0)
+    ) as i32;
+
+    let economy = buildings + research + production_points;
+    let total = economy + military;
+
     (total, economy, military)
 }
 
