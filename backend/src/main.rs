@@ -282,6 +282,7 @@ fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
 async fn resolve_attack_mission(
     db: &DatabaseConnection,
     mission: fleet_mission::Model,
+    ws_state: Option<&websocket::WsState>,
 ) -> Result<(), StatusCode> {
     let now = Utc::now().naive_utc();
     
@@ -509,6 +510,49 @@ async fn resolve_attack_mission(
     }.insert(db).await;
 
     FleetMission::delete_by_id(mission.id).exec(db).await.unwrap();
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NOTIFICATIONS WEBSOCKET
+    // ═══════════════════════════════════════════════════════════════════════════
+    if let Some(ws) = ws_state {
+        // Notifier le défenseur du résultat du combat
+        websocket::notify_combat_result(
+            ws,
+            mission.target_planet_id,
+            if result.winner == "defender" { "victory" } else { "defeat" },
+            &att_user.username,
+        );
+
+        // Notifier l'attaquant du résultat du combat
+        websocket::notify_combat_result(
+            ws,
+            mission.source_planet_id,
+            if result.winner == "attacker" { "victory" } else { "defeat" },
+            &def_user.username,
+        );
+
+        // Notifier en cas de conquête
+        if planet_conquered {
+            // Notifier le défenseur de la perte de sa planète
+            websocket::notify_planet_status(
+                ws,
+                mission.target_planet_id,
+                "lost",
+                &def_planet.name,
+                &att_user.username,
+            );
+            
+            // Notifier l'attaquant de sa conquête
+            websocket::notify_planet_status(
+                ws,
+                mission.source_planet_id,
+                "conquered",
+                &def_planet.name,
+                &def_user.username,
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -666,6 +710,13 @@ async fn get_planet_handler(
 
     let finished = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).filter(construction_queue::Column::EndTime.lte(now)).all(&state.db).await.unwrap_or_default();
     for item in finished {
+        // Déterminer si c'est un bâtiment/tech ou un vaisseau/défense
+        let is_ship_or_defense = matches!(
+            item.building_type.as_str(),
+            "light_hunter" | "cruiser" | "missile_launcher" | "plasma_turret" | 
+            "spy_probe" | "transporter" | "colony_ship" | "recycler"
+        );
+
         match item.building_type.as_str() {
             "metal" => active.metal_mine_level = Set(item.level),
             "crystal" => active.crystal_mine_level = Set(item.level),
@@ -688,6 +739,20 @@ async fn get_planet_handler(
             "recycler" => active.recycler_count = Set(active.recycler_count.unwrap() + item.level),
             _ => {}
         }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // NOTIFICATION WEBSOCKET - Construction/Production terminée
+        // ═══════════════════════════════════════════════════════════════════════
+        if let Some(ref ws) = state.ws {
+            if is_ship_or_defense {
+                // C'est un vaisseau ou une défense
+                websocket::notify_ship_complete(ws, p.id, &item.building_type, item.level);
+            } else {
+                // C'est un bâtiment ou une technologie
+                websocket::notify_construction_complete(ws, p.id, &item.building_type, item.level);
+            }
+        }
+
         let _ = ConstructionQueue::delete_by_id(item.id).exec(&state.db).await;
     }
 
@@ -698,17 +763,36 @@ async fn get_planet_handler(
 
     for m in arrived {
         if m.mission_type == "attack" {
-            let _ = resolve_attack_mission(&state.db, m).await;
+            let _ = resolve_attack_mission(&state.db, m, state.ws.as_ref()).await;
         } else if m.mission_type == "transport" {
+            // Récupérer le nom de la planète source pour la notification
+            let source_planet_name = if let Ok(Some(sp)) = Planet::find_by_id(m.source_planet_id).one(&state.db).await {
+                sp.name.clone()
+            } else {
+                "Inconnue".to_string()
+            };
+
             // Si c'est la planète cible, on crédite les ressources
             if m.target_planet_id == id {
                 active.metal_amount = Set(active.metal_amount.clone().unwrap() + m.metal);
                 active.crystal_amount = Set(active.crystal_amount.clone().unwrap() + m.crystal);
                 active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() + m.deuterium);
+
+                // Notifier le destinataire du transport
+                if let Some(ref ws) = state.ws {
+                    websocket::notify_transport_arrived(
+                        ws,
+                        m.target_planet_id,
+                        &source_planet_name,
+                        m.metal,
+                        m.crystal,
+                        m.deuterium,
+                    );
+                }
             }
 
             // Retourner les transporteurs à la planète source
-            if let Ok(Some(mut source_planet)) = Planet::find_by_id(m.source_planet_id).one(&state.db).await {
+            if let Ok(Some(source_planet)) = Planet::find_by_id(m.source_planet_id).one(&state.db).await {
                 let mut source_active: planet::ActiveModel = source_planet.into();
                 source_active.transporter_count = Set(source_active.transporter_count.clone().unwrap() + m.ships_count);
                 let _ = source_active.update(&state.db).await;
@@ -1024,6 +1108,29 @@ async fn attack_handler(
         ..Default::default()
     };
     new_mission.insert(&state.db).await.unwrap();
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NOTIFICATION WEBSOCKET - Alerter le défenseur de l'attaque entrante
+    // ═══════════════════════════════════════════════════════════════════════════
+    if let Some(ref ws) = state.ws {
+        // Récupérer le nom de l'attaquant
+        if let Ok(Some(attacker_planet)) = Planet::find_by_id(attacker_id).one(&state.db).await {
+            if let Ok(Some(attacker_user)) = User::find_by_id(attacker_planet.owner_id).one(&state.db).await {
+                let source_coords = format!(
+                    "[{}:{}:{}]",
+                    attacker_planet.galaxy, attacker_planet.system, attacker_planet.position
+                );
+                websocket::notify_attack_incoming(
+                    ws,
+                    payload.target_planet_id,
+                    &attacker_user.username,
+                    &source_coords,
+                    &arrival.to_string(),
+                    payload.hunters + payload.cruisers,
+                );
+            }
+        }
+    }
 
     (StatusCode::OK, Json(json!({ 
         "status": "success", 
@@ -1570,13 +1677,13 @@ async fn spy_handler(
 
     // Create a spy report in combat_log for the defender
     let att_user = User::find_by_id(att_planet.owner_id).one(&state.db).await.unwrap();
-    let attacker_username = att_user.map(|u| u.username).unwrap_or("Inconnu".to_string());
+    let attacker_username = att_user.map(|u| u.username.clone()).unwrap_or("Inconnu".to_string());
 
     let spy_log = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(def_planet.id),
         target_name: Set(att_planet.name.clone()),
-        opponent_username: Set(Some(attacker_username)),
+        opponent_username: Set(Some(attacker_username.clone())),
         mission_type: Set("spy_defense".to_string()),
         result: Set("alert".to_string()),
         loot_metal: Set(0.0),
@@ -1586,6 +1693,13 @@ async fn spy_handler(
         detailed_report: Set(None), // Pas de détails de combat pour l'espionnage
     };
     let _ = spy_log.insert(&state.db).await;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NOTIFICATION WEBSOCKET - Alerter le défenseur de l'espionnage
+    // ═══════════════════════════════════════════════════════════════════════════
+    if let Some(ref ws) = state.ws {
+        websocket::notify_spy_alert(ws, def_planet.id, &attacker_username);
+    }
 
     (StatusCode::OK, Json(json!({
         "status": "success",
