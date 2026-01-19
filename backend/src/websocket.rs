@@ -216,6 +216,8 @@ pub async fn websocket_handler(
 
 /// Gère une connexion WebSocket individuelle
 async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
+    println!("🔌 WebSocket: Nouvelle connexion pour planet_id={}", planet_id);
+
     let (mut sender, mut receiver) = socket.split();
 
     // Créer ou récupérer le canal broadcast pour cette planète
@@ -230,16 +232,37 @@ async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
     let connected_msg = serde_json::to_string(&WsEvent::Connected {
         planet_id: planet_id.to_string(),
     }).unwrap();
-    
+
     if sender.send(Message::Text(connected_msg)).await.is_err() {
+        eprintln!("❌ WebSocket: Erreur lors de l'envoi du message 'connected' pour planet_id={}", planet_id);
         return;
     }
+    println!("✅ WebSocket: Message 'connected' envoyé pour planet_id={}", planet_id);
 
     // Envoyer les ressources initiales
-    if let Ok(Some(planet)) = Planet::find_by_id(planet_id).one(&state.db).await {
-        let resources = calculate_current_resources(&planet, &state.db).await;
-        let msg = serde_json::to_string(&resources).unwrap();
-        let _ = sender.send(Message::Text(msg)).await;
+    match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(planet)) => {
+            println!("✅ WebSocket: Planète trouvée: {}", planet.name);
+            let resources = calculate_current_resources(&planet, &state.db).await;
+            let msg = serde_json::to_string(&resources).unwrap();
+            if sender.send(Message::Text(msg)).await.is_err() {
+                eprintln!("❌ WebSocket: Erreur lors de l'envoi des ressources initiales");
+                return;
+            }
+            println!("✅ WebSocket: Ressources initiales envoyées");
+        }
+        Ok(None) => {
+            eprintln!("⚠️ WebSocket: Planète {} non trouvée dans la DB", planet_id);
+            let error_msg = serde_json::to_string(&WsEvent::Error {
+                message: format!("Planet {} not found", planet_id),
+            }).unwrap();
+            let _ = sender.send(Message::Text(error_msg)).await;
+            return;
+        }
+        Err(e) => {
+            eprintln!("❌ WebSocket: Erreur DB lors de la recherche de la planète: {:?}", e);
+            return;
+        }
     }
 
     // Spawner la tâche de mise à jour périodique des ressources
@@ -262,13 +285,16 @@ async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
         while let Ok(event) = rx.recv().await {
             let msg = serde_json::to_string(&event).unwrap();
             if sender.send(Message::Text(msg)).await.is_err() {
+                eprintln!("❌ WebSocket: Erreur lors de l'envoi d'un message au client");
                 break;
             }
         }
+        println!("🔌 WebSocket: Tâche d'envoi terminée pour planet_id={}", planet_id);
     });
 
     // Tâche pour recevoir les messages du client
     let state_clone = state.clone();
+    let planet_id_clone = planet_id;
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             match msg {
@@ -276,7 +302,7 @@ async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
                     if let Ok(client_msg) = serde_json::from_str::<WsClientMessage>(&text) {
                         match client_msg {
                             WsClientMessage::Ping => {
-                                state_clone.broadcast_to_planet(planet_id, WsEvent::Pong);
+                                state_clone.broadcast_to_planet(planet_id_clone, WsEvent::Pong);
                             }
                             WsClientMessage::Subscribe { planet_id: new_id } => {
                                 // Changer de planète (pas implémenté pour l'instant)
@@ -286,20 +312,31 @@ async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
                         }
                     }
                 }
-                Message::Close(_) => break,
+                Message::Close(_) => {
+                    println!("🔌 WebSocket: Client a fermé la connexion pour planet_id={}", planet_id_clone);
+                    break;
+                }
                 _ => {}
             }
         }
+        println!("🔌 WebSocket: Tâche de réception terminée pour planet_id={}", planet_id_clone);
     });
+
+    println!("🔌 WebSocket: Tâches lancées, en attente de messages pour planet_id={}", planet_id);
 
     // Attendre que l'une des tâches se termine
     tokio::select! {
-        _ = send_task => {}
-        _ = recv_task => {}
+        _ = send_task => {
+            println!("🔌 WebSocket: send_task terminée en premier pour planet_id={}", planet_id);
+        }
+        _ = recv_task => {
+            println!("🔌 WebSocket: recv_task terminée en premier pour planet_id={}", planet_id);
+        }
     }
 
     // Cleanup
     update_task.abort();
+    println!("🔌 WebSocket: Cleanup effectué pour planet_id={}", planet_id);
     
     // Supprimer la connexion si plus personne n'écoute
     if tx.receiver_count() == 0 {
