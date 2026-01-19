@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Power, User, ArrowRight, ShieldCheck, Lock, Mail, AlertCircle } from "lucide-react";
+import { motion } from 'framer-motion';
+import { User, ArrowRight, ShieldCheck, Lock, Mail, AlertCircle, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { SpaceBackground, SpaceLoader } from "@/components/ui/space-background";
 import { toast } from "sonner";
-import { apiUrl } from '@/config/api';
 
 interface LoginProps {
   onLogin: (token: string, planetId: string, userId: string, username: string, email: string) => void;
@@ -41,8 +42,6 @@ const getApiUrl = (): string => {
   
   return apiUrl.replace(/\/$/, '');
 };
-
-
 
 export default function Login({ onLogin }: LoginProps) {
   const [username, setUsername] = useState('');
@@ -109,7 +108,7 @@ export default function Login({ onLogin }: LoginProps) {
     const API_BASE = getApiUrl();
     const endpoint = isRegistering ? `${API_BASE}/register` : `${API_BASE}/login`;
     
-    console.log('🔗 URL de l\'API:', endpoint); // Debug
+    console.log('🔗 URL de l\'API:', endpoint);
     
     const body = isRegistering 
       ? { username, email, password }
@@ -117,7 +116,7 @@ export default function Login({ onLogin }: LoginProps) {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       console.log('📤 Envoi de la requête vers:', endpoint);
       console.log('📦 Body:', JSON.stringify(body, null, 2));
@@ -175,7 +174,6 @@ export default function Login({ onLogin }: LoginProps) {
       }
 
       if (isRegistering) {
-        const registerData = data as RegisterResponse;
         toast.success("✅ Compte créé avec succès ! Connectez-vous maintenant.");
         setIsRegistering(false);
         setPassword('');
@@ -218,120 +216,222 @@ export default function Login({ onLogin }: LoginProps) {
     setEmail('');
   };
 
-  // Afficher l'URL de l'API en mode dev
   const apiUrlDisplay = getApiUrl();
   const isDev = import.meta.env.DEV;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black relative overflow-hidden font-sans">
-      <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=2048&auto=format&fit=crop')] bg-cover bg-center opacity-30"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black"></div>
-      </div>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden font-sans">
+      {/* Fond spatial animé */}
+      <SpaceBackground 
+        showStars={true}
+        showNebulae={true}
+        showParticles={true}
+        showScanLine={true}
+        showGrid={true}
+        starCount={150}
+        particleCount={30}
+      />
 
-      <Card className="w-full max-w-md bg-slate-950/80 border-slate-800 p-8 backdrop-blur-xl shadow-2xl relative z-10 animate-in fade-in zoom-in duration-500">
-        <div className="flex flex-col items-center mb-8">
-          <img src="/logo.svg" alt="Space Conquest" className="h-20 w-20 mb-4 drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]" />
-          <h1 className="text-3xl font-black text-white tracking-widest uppercase">Space Conquest</h1>
-          <p className="text-slate-400 text-sm mt-2 font-mono">Terminal d'accès v3.0</p>
+      {/* Carte de connexion */}
+      <motion.div
+        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+        className="relative z-10"
+      >
+        <Card className="w-full max-w-md glass-card border-cyan-500/20 p-8 backdrop-blur-xl shadow-2xl relative overflow-hidden">
+          {/* Effet de scan holographique */}
+          <motion.div
+            className="absolute left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent"
+            animate={{ top: ['-10%', '110%'] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+          />
           
-          {/* Afficher l'API URL en mode dev */}
-          {isDev && (
-            <p className="text-xs text-slate-600 mt-2 font-mono">
-              API: {apiUrlDisplay}
-            </p>
-          )}
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <div className="relative group">
-              <User className="absolute left-3 top-3 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
-              <Input 
-                type="text" 
-                placeholder="Identifiant (min. 3 caractères)" 
-                value={username} 
-                onChange={(e) => setUsername(e.target.value)}
-                className="pl-10 bg-slate-900/50 border-slate-700 text-white focus:border-indigo-500 h-11"
-                required
-                minLength={3}
-                disabled={loading}
+          {/* Ligne décorative en haut */}
+          <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+          
+          {/* Coins décoratifs */}
+          <div className="absolute top-0 left-0 w-8 h-8 border-l-2 border-t-2 border-cyan-500/30 rounded-tl" />
+          <div className="absolute top-0 right-0 w-8 h-8 border-r-2 border-t-2 border-cyan-500/30 rounded-tr" />
+          <div className="absolute bottom-0 left-0 w-8 h-8 border-l-2 border-b-2 border-cyan-500/30 rounded-bl" />
+          <div className="absolute bottom-0 right-0 w-8 h-8 border-r-2 border-b-2 border-cyan-500/30 rounded-br" />
+          
+          <div className="flex flex-col items-center mb-8 relative">
+            {/* Logo avec effet glow */}
+            <motion.div
+              className="relative"
+              animate={{ 
+                filter: ['drop-shadow(0 0 20px rgba(0,245,255,0.4))', 'drop-shadow(0 0 40px rgba(0,245,255,0.6))', 'drop-shadow(0 0 20px rgba(0,245,255,0.4))']
+              }}
+              transition={{ duration: 3, repeat: Infinity }}
+            >
+              <img src="/logo.svg" alt="Space Conquest" className="h-20 w-20 mb-4" />
+              <motion.div
+                className="absolute inset-0 rounded-full bg-cyan-500/20 blur-xl"
+                animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+                transition={{ duration: 3, repeat: Infinity }}
               />
-            </div>
+            </motion.div>
+            
+            <motion.h1 
+              className="text-3xl font-black text-white tracking-widest uppercase text-glow-cyan"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              Space Conquest
+            </motion.h1>
+            
+            <motion.p 
+              className="text-cyan-400/70 text-sm mt-2 font-mono tracking-wider"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              {isRegistering ? '// NOUVEAU COMMANDANT' : '// TERMINAL D\'ACCÈS v3.0'}
+            </motion.p>
+            
+            {isDev && (
+              <p className="text-xs text-slate-600 mt-2 font-mono">
+                API: {apiUrlDisplay}
+              </p>
+            )}
           </div>
 
-          {isRegistering && (
-            <div className="space-y-1 animate-in slide-in-from-top-2 duration-300">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <motion.div 
+              className="space-y-1"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+            >
               <div className="relative group">
-                <Mail className="absolute left-3 top-3 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
+                <User className="absolute left-3 top-3 text-slate-500 group-focus-within:text-cyan-400 transition-colors z-10" size={18} />
                 <Input 
-                  type="email" 
-                  placeholder="Email Quantique" 
-                  value={email} 
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-slate-900/50 border-slate-700 text-white focus:border-indigo-500 h-11"
+                  type="text" 
+                  placeholder="Identifiant (min. 3 caractères)" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="pl-10 bg-slate-900/50 border-slate-700/50 text-white focus:border-cyan-500/50 focus:ring-cyan-500/20 h-11 backdrop-blur-sm placeholder:text-slate-500"
                   required
+                  minLength={3}
+                  disabled={loading}
+                />
+                <div className="absolute inset-0 rounded-lg opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none border border-cyan-500/30" />
+              </div>
+            </motion.div>
+
+            {isRegistering && (
+              <motion.div 
+                className="space-y-1"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="relative group">
+                  <Mail className="absolute left-3 top-3 text-slate-500 group-focus-within:text-cyan-400 transition-colors z-10" size={18} />
+                  <Input 
+                    type="email" 
+                    placeholder="Email Quantique" 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10 bg-slate-900/50 border-slate-700/50 text-white focus:border-cyan-500/50 focus:ring-cyan-500/20 h-11 backdrop-blur-sm placeholder:text-slate-500"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            <motion.div 
+              className="space-y-1"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <div className="relative group">
+                <Lock className="absolute left-3 top-3 text-slate-500 group-focus-within:text-cyan-400 transition-colors z-10" size={18} />
+                <Input 
+                  type="password" 
+                  placeholder="Code d'accès (min. 6 caractères)" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 bg-slate-900/50 border-slate-700/50 text-white focus:border-cyan-500/50 focus:ring-cyan-500/20 h-11 backdrop-blur-sm placeholder:text-slate-500"
+                  required
+                  minLength={6}
                   disabled={loading}
                 />
               </div>
-            </div>
-          )}
+            </motion.div>
 
-          <div className="space-y-1">
-            <div className="relative group">
-              <Lock className="absolute left-3 top-3 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
-              <Input 
-                type="password" 
-                placeholder="Code d'accès (min. 6 caractères)" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10 bg-slate-900/50 border-slate-700 text-white focus:border-indigo-500 h-11"
-                required
-                minLength={6}
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div className="text-red-400 text-xs font-bold text-center bg-red-950/30 p-3 rounded border border-red-900/50 flex items-center gap-2 justify-center animate-in slide-in-from-top-2">
-              <AlertCircle size={16} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <Button 
-            type="submit" 
-            disabled={loading} 
-            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-6 mt-4 shadow-lg shadow-indigo-900/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <span className="animate-pulse flex items-center gap-2">
-                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                {isRegistering ? 'INITIALISATION...' : 'CONNEXION...'}
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                {isRegistering ? "INITIALISER" : "CONNEXION"} <ArrowRight size={18} />
-              </span>
+            {error && (
+              <motion.div 
+                className="text-red-400 text-xs font-bold text-center bg-red-950/30 p-3 rounded-lg border border-red-500/30 flex items-center gap-2 justify-center"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <AlertCircle size={16} className="animate-pulse" />
+                <span>{error}</span>
+              </motion.div>
             )}
-          </Button>
-        </form>
 
-        <div className="mt-6 text-center">
-          <button 
-            onClick={toggleMode}
-            disabled={loading}
-            className="text-xs text-slate-500 hover:text-indigo-400 transition-colors uppercase font-bold tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Button 
+                type="submit" 
+                disabled={loading} 
+                variant="neon"
+                className="w-full py-6 mt-4 text-base"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-3">
+                    <SpaceLoader size={20} text="" />
+                    {isRegistering ? 'INITIALISATION...' : 'CONNEXION...'}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Rocket size={18} />
+                    {isRegistering ? "CRÉER MA COLONIE" : "LANCER LA CONNEXION"}
+                    <ArrowRight size={18} />
+                  </span>
+                )}
+              </Button>
+            </motion.div>
+          </form>
+
+          <motion.div 
+            className="mt-6 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
           >
-            {isRegistering ? "Déjà un compte ? Se connecter" : "Nouvelle colonie ? S'enregistrer"}
-          </button>
-        </div>
-        
-        <div className="absolute bottom-4 right-4 flex items-center gap-1 text-[10px] text-slate-600">
-          <ShieldCheck size={12} /> SECURE
-        </div>
-      </Card>
+            <button 
+              onClick={toggleMode}
+              disabled={loading}
+              className="text-xs text-slate-400 hover:text-cyan-400 transition-colors uppercase font-bold tracking-wider disabled:opacity-50 disabled:cursor-not-allowed group"
+            >
+              <span className="group-hover:underline">
+                {isRegistering ? "Déjà un compte ? Se connecter" : "Nouvelle colonie ? S'enregistrer"}
+              </span>
+            </button>
+          </motion.div>
+          
+          {/* Badge de sécurité */}
+          <motion.div 
+            className="absolute bottom-4 right-4 flex items-center gap-1.5 text-[10px] text-cyan-500/50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+          >
+            <ShieldCheck size={12} className="animate-pulse" />
+            <span className="font-mono tracking-wider">SECURE CHANNEL</span>
+          </motion.div>
+        </Card>
+      </motion.div>
     </div>
   );
 }
