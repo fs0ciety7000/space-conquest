@@ -123,19 +123,11 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
     : (parsedReport.opponent_username || parsedReport.opponent_name || parsedReport.target_name || "Commandant Inconnu");
 
   // Détermination victoire/défaite
-  let isVictory = false;
-  let isDraw = false;
-
-  if (parsedReport.result) {
-    isVictory = parsedReport.result === 'victory' || parsedReport.result === 'calm';
-    isDraw = parsedReport.result === 'draw';
-  } else if (parsedReport.winner) {
-    if (parsedReport.winner === 'attacker') isVictory = isAttacker;
-    else if (parsedReport.winner === 'defender') isVictory = isDefense;
-    else if (parsedReport.winner === 'player' || parsedReport.winner === 'victory' || parsedReport.winner === 'calm') isVictory = true;
-    else if (parsedReport.winner === 'defeat') isVictory = false;
-    isDraw = parsedReport.winner === 'draw';
-  }
+  // On utilise le champ 'result' qui est maintenant cohérent avec combat_log.result
+  // Valeurs possibles: "victory", "defeat", "calm", "draw"
+  const reportResult = parsedReport.result || parsedReport.winner || 'defeat';
+  const isVictory = reportResult === 'victory' || reportResult === 'calm';
+  const isDraw = reportResult === 'draw';
 
   // Ressources
   const loot = {

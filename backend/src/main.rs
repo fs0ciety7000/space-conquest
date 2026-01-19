@@ -381,11 +381,15 @@ async fn resolve_attack_mission(
     def_active.plasma_turret_count = Set((def_planet.plasma_turret_count - result.lost_plasmas).max(0));
     def_active.last_update = Set(now);
 
+    // Résultat du point de vue du défenseur (cohérent avec combat_log.result)
+    let defender_result = if result.winner == "defender" { "victory" } else { "defeat" };
+    
     let def_rep_json = if planet_conquered {
         json!({
             "type": "planet_lost",
             "message": format!("⚠️ ALERTE CRITIQUE ! Votre planète {} a été conquise par {} !", def_planet.name, att_user.username),
             "winner": result.winner,
+            "result": defender_result,
             "log": result.log,
             "loot": result.loot,
             "debris": result.debris,
@@ -396,9 +400,14 @@ async fn resolve_attack_mission(
         })
     } else {
         json!({
-            "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
+            "winner": result.winner, 
+            "result": defender_result,
+            "log": result.log, 
+            "loot": result.loot, 
+            "debris": result.debris,
             "losses": { "ships": result.defender_losses, "missiles": result.lost_missiles, "plasmas": result.lost_plasmas },
-            "is_defense": true, "opponent_name": att_user.username,
+            "is_defense": true, 
+            "opponent_name": att_user.username,
             "conquered": false
         })
     };
@@ -419,11 +428,15 @@ async fn resolve_attack_mission(
     att_active.light_hunter_count = Set(att_planet.light_hunter_count + (att_hunters - lost_h));
     att_active.cruiser_count = Set(att_planet.cruiser_count + (att_cruisers - lost_c));
 
+    // Résultat du point de vue de l'attaquant (cohérent avec combat_log.result)
+    let attacker_result = if result.winner == "attacker" { "victory" } else { "defeat" };
+    
     let att_rep_json = if planet_conquered {
         json!({
             "type": "planet_conquered",
             "message": format!("🎯 CONQUÊTE RÉUSSIE ! Vous avez conquis la planète {} de {} !", def_planet.name, def_user.username),
             "winner": result.winner,
+            "result": attacker_result,
             "log": result.log,
             "loot": result.loot,
             "debris": result.debris,
@@ -436,8 +449,14 @@ async fn resolve_attack_mission(
         })
     } else {
         json!({
-            "winner": result.winner, "log": result.log, "loot": result.loot, "debris": result.debris,
-            "losses": { "ships": result.attacker_losses }, "is_defense": false, "opponent_name": def_user.username,
+            "winner": result.winner, 
+            "result": attacker_result,
+            "log": result.log, 
+            "loot": result.loot, 
+            "debris": result.debris,
+            "losses": { "ships": result.attacker_losses }, 
+            "is_defense": false, 
+            "opponent_name": def_user.username,
             "conquered": false
         })
     };
@@ -1253,8 +1272,11 @@ async fn expedition_handler(
     let updated_planet = Planet::find_by_id(id).one(&state.db).await.unwrap().unwrap();
 
     // Créer le rapport détaillé pour l'expédition
+    // Pour les expéditions: winner = "victory", "defeat" ou "calm"
+    // On utilise la même valeur pour result (cohérent avec combat_log.result)
     let expedition_report = json!({
         "winner": winner,
+        "result": winner,
         "log": logs,
         "loot": {
             "metal": loot_metal,
