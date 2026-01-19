@@ -268,17 +268,16 @@ async fn main() {
         .route("/users/:id/achievements", get(missions::get_user_displayed_achievements_handler))
         .route("/streak", get(missions::get_streak_handler))
         .route("/streak/claim", post(missions::claim_daily_reward_handler))
-        .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
-    
+
     // Route WebSocket séparée avec WsState
     let ws_app = Router::new()
         .route("/ws", get(websocket::websocket_handler))
         .with_state(ws_state);
-    
-    // Merger les routes
-    let app = app.merge(ws_app);
+
+    // Merger les routes et appliquer CORS à l'ensemble
+    let app = app.merge(ws_app).layer(cors);
     
     let addr: SocketAddr = config.bind_address()
         .parse()
