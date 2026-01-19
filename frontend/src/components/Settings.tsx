@@ -51,7 +51,8 @@ export default function Settings({
     const fetchUserStats = async () => {
       if (userId !== "unknown") {
         try {
-          const res = await fetch(apiUrl(`/players/${userId}/profile`));
+          // Passer viewer_id pour que le backend reconnaisse le profil comme le sien
+          const res = await fetch(apiUrl(`/players/${userId}/profile?viewer_id=${userId}`));
           if (res.ok) {
             const data = await res.json();
             setUserStats(data);
@@ -65,7 +66,7 @@ export default function Settings({
   }, [userId]);
 
   // ✅ Calcul des jours depuis inscription
-  const daysSince = userStats 
+  const daysSince = userStats?.created_at 
     ? Math.floor((Date.now() - new Date(userStats.created_at).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 

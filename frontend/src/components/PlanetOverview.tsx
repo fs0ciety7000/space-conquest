@@ -2,7 +2,7 @@ import {
   Stone, Gem, MapPin, Shield, Rocket, Globe, Scan, 
   Zap, Hammer, Clock, TrendingUp, AlertTriangle, 
   Droplets, Microscope, Warehouse, Activity, ChevronRight, List, XCircle, ShieldCheck, Sword,
-  Radar, Radio, Navigation
+  Radar, Radio, Navigation, Target, Recycle, Satellite, Truck, Ship
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -910,8 +910,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             </div>
                             Baie de Stationnement
                         </span>
-                        <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${totalFleet >= hangarCap ? 'bg-orange-500/20 text-orange-400 border-orange-500/50 animate-pulse' : 'bg-blue-500/20 text-blue-400 border-blue-500/50'}`}>
-                            {totalFleet >= hangarCap ? '⚠️ PLEIN' : '✓ DISPONIBLE'}
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full border flex items-center gap-1 ${totalFleet >= hangarCap ? 'bg-orange-500/20 text-orange-400 border-orange-500/50 animate-pulse' : 'bg-blue-500/20 text-blue-400 border-blue-500/50'}`}>
+                            {totalFleet >= hangarCap ? <><AlertTriangle size={10} /> PLEIN</> : <><ShieldCheck size={10} /> DISPONIBLE</>}
                         </span>
                     </CardTitle>
                 </CardHeader>
@@ -958,16 +958,16 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                             {[
-                                { label: "Chasseurs Légers", val: planet.light_hunter_count, icon: "⚔️" },
-                                { label: "Croiseurs", val: planet.cruiser_count, icon: "🚀" },
-                                { label: "Recycleurs", val: planet.recycler_count, icon: "♻️" },
-                                { label: "Sondes", val: planet.spy_probe_count, icon: "📡" },
-                                { label: "Vaisseaux Colons", val: planet.colony_ship_count, icon: "🌍" },
-                                { label: "Transporteurs", val: planet.transporter_count, icon: "📦" },
+                                { label: "Chasseurs Légers", val: planet.light_hunter_count, Icon: Target, color: "text-red-400" },
+                                { label: "Croiseurs", val: planet.cruiser_count, Icon: Ship, color: "text-purple-400" },
+                                { label: "Recycleurs", val: planet.recycler_count, Icon: Recycle, color: "text-green-400" },
+                                { label: "Sondes", val: planet.spy_probe_count, Icon: Satellite, color: "text-cyan-400" },
+                                { label: "Vaisseaux Colons", val: planet.colony_ship_count, Icon: Globe, color: "text-emerald-400" },
+                                { label: "Transporteurs", val: planet.transporter_count, Icon: Truck, color: "text-amber-400" },
                             ].map(item => (
-                                <div key={item.label} className="bg-slate-900/60 p-2.5 rounded-lg border border-white/5 flex items-center justify-between hover:bg-slate-800/60 transition-colors group">
+                                <div key={item.label} className="bg-slate-900/60 p-2.5 rounded-lg border border-white/5 flex items-center justify-between hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300 group card-depth">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-base group-hover:scale-110 transition-transform">{item.icon}</span>
+                                        <item.Icon size={16} className={`${item.color} group-hover:scale-110 transition-transform drop-shadow-[0_0_4px_currentColor]`} />
                                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{item.label}</span>
                                     </div>
                                     <span className={`font-mono font-black text-sm ${(item.val || 0) > 0 ? 'text-blue-400' : 'text-slate-600'}`}>{fmt(item.val || 0)}</span>
@@ -999,8 +999,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             </div>
                             Bouclier Orbital
                         </span>
-                        <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${totalDefense > 0 ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-slate-700/30 text-slate-500 border-slate-600/50'}`}>
-                            {totalDefense > 0 ? '🛡️ ACTIF' : '⚠️ VULNÉRABLE'}
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full border flex items-center gap-1 ${totalDefense > 0 ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-slate-700/30 text-slate-500 border-slate-600/50'}`}>
+                            {totalDefense > 0 ? <><ShieldCheck size={10} /> ACTIF</> : <><AlertTriangle size={10} /> VULNÉRABLE</>}
                         </span>
                     </CardTitle>
                 </CardHeader>

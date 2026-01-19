@@ -1,5 +1,40 @@
 # Changelog - Space Conquest
 
+## [2.0.4] - 2026-01-19 - Page Mes Planètes et corrections UI
+
+### ✨ Nouvelles Fonctionnalités
+
+#### Page "Mes Planètes"
+- Nouvelle page accessible depuis la sidebar (catégorie COMMANDEMENT)
+- Liste détaillée de toutes les planètes du joueur avec :
+  - Ressources actuelles (métal, cristal, deutérium)
+  - Niveaux des bâtiments (mines, chantier, labo, hangar)
+  - Composition de la flotte et défenses
+  - Score de chaque planète
+- Vue extensible avec détails de la flotte au clic
+- Navigation rapide vers n'importe quelle planète
+- Statistiques globales de l'empire (planètes, flotte totale, défenses, score)
+- Design cohérent avec le reste du jeu (cards dynamiques, animations)
+
+### 🔧 Corrections
+
+#### Card Baie de Stationnement (PlanetOverview)
+- Remplacement des emojis par des icônes Lucide :
+  - Chasseurs Légers : Target (rouge)
+  - Croiseurs : Ship (violet)
+  - Recycleurs : Recycle (vert)
+  - Sondes : Satellite (cyan)
+  - Vaisseaux Colons : Globe (émeraude)
+  - Transporteurs : Truck (ambre)
+- Badges de statut également mis à jour (icônes au lieu d'emojis)
+
+#### Paramètres - Calcul "Commandant depuis X jours"
+- Correction du bug qui affichait ~20472 jours au lieu de la vraie durée
+- Cause : le paramètre `viewer_id` n'était pas passé à l'API, retournant `null`
+- Solution : ajout de `viewer_id` dans l'appel API et validation null-safe
+
+---
+
 ## [2.0.3] - 2026-01-19 - Corrections combat, transport et alertes attaque
 
 ### 🔧 Corrections Backend
