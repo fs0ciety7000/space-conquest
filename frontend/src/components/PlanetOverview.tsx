@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
+import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 // --- Dictionnaire de noms ---
 const getLabel = (id: string | null) => {
     if (!id) return "Inconnu";
@@ -56,6 +57,9 @@ interface ResourceSlot {
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
   const [, setTick] = useState(0);
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
+
+  // Hook pour ressources en temps réel
+  const realtimeResources = useRealtimeResources(planet, speedFactor);
 
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 1000);
@@ -717,7 +721,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 <Stone size={14} className="text-orange-400" />
                                 <span className="text-orange-300 font-bold text-xs uppercase">Métal</span>
                             </div>
-                            <div className="text-white font-mono font-black text-lg">{fmt(planet.metal_amount)}</div>
+                            <div className="text-white font-mono font-black text-lg">{fmt(realtimeResources?.metal ?? planet.metal_amount)}</div>
                             <div className="mt-2 space-y-1">
                                 <div className="flex justify-between text-[10px]">
                                     <span className="text-slate-500">Par heure</span>
@@ -738,7 +742,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 <Gem size={14} className="text-cyan-400" />
                                 <span className="text-cyan-300 font-bold text-xs uppercase">Cristal</span>
                             </div>
-                            <div className="text-white font-mono font-black text-lg">{fmt(planet.crystal_amount)}</div>
+                            <div className="text-white font-mono font-black text-lg">{fmt(realtimeResources?.crystal ?? planet.crystal_amount)}</div>
                             <div className="mt-2 space-y-1">
                                 <div className="flex justify-between text-[10px]">
                                     <span className="text-slate-500">Par heure</span>
@@ -759,7 +763,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 <Droplets size={14} className="text-emerald-400" />
                                 <span className="text-emerald-300 font-bold text-xs uppercase">Deutérium</span>
                             </div>
-                            <div className="text-white font-mono font-black text-lg">{fmt(planet.deuterium_amount)}</div>
+                            <div className="text-white font-mono font-black text-lg">{fmt(realtimeResources?.deuterium ?? planet.deuterium_amount)}</div>
                             <div className="mt-2 space-y-1">
                                 <div className="flex justify-between text-[10px]">
                                     <span className="text-slate-500">Par heure</span>

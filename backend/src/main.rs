@@ -451,7 +451,9 @@ async fn resolve_attack_mission(
 
 async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResponse {
     let speed_factor = state.config.read().unwrap().speed_factor;
-    Json(json!({ "speed_factor": speed_factor }))
+    // Normaliser pour le frontend (500 → 5, 1000 → 10, etc.)
+    let normalized_speed_factor = speed_factor / 100.0;
+    Json(json!({ "speed_factor": normalized_speed_factor }))
 }
 
 async fn get_ranking_handler(
@@ -576,20 +578,23 @@ async fn get_planet_handler(
         p.deuterium_mine_level
     );
 
+    // Récupérer speed_factor dynamique depuis la configuration
+    let speed_factor = state.config.read().unwrap().speed_factor;
+
     let elapsed = now.signed_duration_since(p.last_update).num_seconds();
     if elapsed > 0 {
-        // Utiliser la nouvelle fonction avec prise en compte des slots
+        // Utiliser la nouvelle fonction avec prise en compte des slots ET speed_factor dynamique
         active.metal_amount = Set(game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4
+            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
         ));
         active.crystal_amount = Set(game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4
+            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
         ));
         active.deuterium_amount = Set(game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4
+            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
         ));
         active.last_update = Set(now);
     }

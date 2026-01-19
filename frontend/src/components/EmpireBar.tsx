@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
+import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 import {
   Zap,
   Stone,
@@ -59,6 +60,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
+
+  // Hook pour ressources en temps réel
+  const realtimeResources = useRealtimeResources(planet, speedFactor);
 
   // Récupérer la liste des planètes
   useEffect(() => {
@@ -291,11 +295,11 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
       {/* Partie Droite : Ressources + Messagerie */}
       <div className="flex items-center gap-2 md:gap-6 lg:gap-8 ml-auto">
         
-        {/* Ressources - Version desktop */}
+        {/* Ressources - Version desktop (temps réel) */}
         <div className="hidden lg:flex items-center gap-6">
-            <ResourceItem icon={Stone} value={planet.metal_amount} label="Métal" color="text-orange-300" production={prodMetal} />
-            <ResourceItem icon={Gem} value={planet.crystal_amount} label="Cristal" color="text-cyan-300" production={prodCrystal} />
-            <ResourceItem icon={Droplets} value={planet.deuterium_amount} label="Deutérium" color="text-green-300" production={prodDeut} />
+            <ResourceItem icon={Stone} value={realtimeResources?.metal ?? planet.metal_amount} label="Métal" color="text-orange-300" production={prodMetal} />
+            <ResourceItem icon={Gem} value={realtimeResources?.crystal ?? planet.crystal_amount} label="Cristal" color="text-cyan-300" production={prodCrystal} />
+            <ResourceItem icon={Droplets} value={realtimeResources?.deuterium ?? planet.deuterium_amount} label="Deutérium" color="text-green-300" production={prodDeut} />
             
             {/* ÉNERGIE */}
             <TooltipProvider>
