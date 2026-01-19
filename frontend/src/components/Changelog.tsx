@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { FileText, Calendar, Code, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { apiUrl } from '@/config/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function Changelog() {
   const [content, setContent] = useState('');
@@ -74,10 +76,28 @@ export default function Changelog() {
 
         {/* Content */}
         <Card className="bg-slate-950/50 border border-white/10 shadow-2xl backdrop-blur-sm">
-          <div className="p-8">
-            <pre className="whitespace-pre-wrap font-mono text-sm text-slate-300 leading-relaxed overflow-x-auto">
+          <div className="p-8 prose prose-invert prose-sm max-w-none
+            prose-headings:text-slate-200 prose-headings:font-bold
+            prose-h1:text-3xl prose-h1:border-b prose-h1:border-indigo-500/30 prose-h1:pb-3 prose-h1:mb-6 prose-h1:text-indigo-400
+            prose-h2:text-2xl prose-h2:text-purple-400 prose-h2:border-b prose-h2:border-purple-500/20 prose-h2:pb-2 prose-h2:mt-8 prose-h2:mb-4
+            prose-h3:text-xl prose-h3:text-cyan-400 prose-h3:mt-6 prose-h3:mb-3
+            prose-h4:text-lg prose-h4:text-orange-400 prose-h4:mt-4 prose-h4:mb-2
+            prose-p:text-slate-300 prose-p:leading-relaxed
+            prose-strong:text-white prose-strong:font-bold
+            prose-code:bg-slate-800 prose-code:text-emerald-400 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono prose-code:before:content-none prose-code:after:content-none
+            prose-pre:bg-slate-900/80 prose-pre:border prose-pre:border-slate-700 prose-pre:rounded-lg prose-pre:text-sm
+            prose-ul:text-slate-300 prose-ol:text-slate-300
+            prose-li:my-1 prose-li:marker:text-indigo-400
+            prose-a:text-indigo-400 prose-a:no-underline hover:prose-a:underline
+            prose-table:text-slate-300
+            prose-th:bg-slate-800/50 prose-th:text-slate-200 prose-th:px-4 prose-th:py-2 prose-th:border prose-th:border-slate-700
+            prose-td:px-4 prose-td:py-2 prose-td:border prose-td:border-slate-700
+            prose-hr:border-slate-700
+            prose-blockquote:border-l-indigo-500 prose-blockquote:bg-slate-900/50 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:italic
+          ">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {content}
-            </pre>
+            </ReactMarkdown>
           </div>
         </Card>
 

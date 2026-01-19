@@ -1,71 +1,114 @@
 import { useEffect, useState } from 'react';
-import { X, Skull, Trophy, ShieldAlert, Crosshair, User, Swords, Box, Gem, Droplets, Zap, Activity } from "lucide-react";
+import { X, Skull, Trophy, ShieldAlert, User, Swords, Box, Gem, Droplets, Zap, Activity, Rocket, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CombatModalProps {
-  report: any | null; 
+  report: any | null;
   onClose: () => void;
 }
 
 export default function CombatModal({ report, onClose }: CombatModalProps) {
   const [visibleLogs, setVisibleLogs] = useState<string[]>([]);
   const [parsedReport, setParsedReport] = useState<any>(null);
-useEffect(() => {
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
     if (!report) {
       setParsedReport(null);
       setVisibleLogs([]);
+      setLoadError(null);
       return;
     }
 
     let data = report;
+
+    // Si c'est une string JSON, parser
     if (typeof report === 'string') {
-        try { data = JSON.parse(report); } 
-        catch (e) { console.error("Erreur parsing", e); return; }
+      try {
+        data = JSON.parse(report);
+      } catch (e) {
+        console.error("Erreur parsing rapport:", e);
+        setLoadError("Format de rapport invalide");
+        return;
+      }
     }
-    
+
+    // Si on a une erreur du backend
+    if (data?.error) {
+      setLoadError(data.error);
+      return;
+    }
+
+    setLoadError(null);
     setParsedReport(data);
 
-    // Correction ici : On vide d'abord et on utilise une variable locale pour le suivi
-    if (data && Array.isArray(data.log)) {
-        setVisibleLogs([]); // Reset immédiat
-        
-        const timeouts: NodeJS.Timeout[] = [];
-        
-        data.log.forEach((line: string, index: number) => {
-            const timeoutId = setTimeout(() => {
-                // On utilise la version fonctionnelle de setState pour s'assurer
-                // qu'on ne traite chaque index qu'une seule fois
-                setVisibleLogs(prev => {
-                    // Si la ligne existe déjà à cet index (cas du double trigger), on ne fait rien
-                    if (prev.length > index) return prev;
-                    return [...prev, line];
-                });
-            }, index * 80);
-            timeouts.push(timeoutId);
-        });
+    // Animation des logs
+    const logs = data?.log || data?.logs || [];
+    if (Array.isArray(logs) && logs.length > 0) {
+      setVisibleLogs([]);
 
-        // Nettoyage si le composant est démonté ou si le rapport change
-        return () => {
-            timeouts.forEach(clearTimeout);
-        };
+      const timeouts: NodeJS.Timeout[] = [];
+
+      logs.forEach((line: string, index: number) => {
+        const timeoutId = setTimeout(() => {
+          setVisibleLogs(prev => {
+            if (prev.length > index) return prev;
+            return [...prev, line];
+          });
+        }, index * 80);
+        timeouts.push(timeoutId);
+      });
+
+      return () => {
+        timeouts.forEach(clearTimeout);
+      };
+    } else {
+      // Pas de logs, afficher un message par défaut
+      setVisibleLogs(["Aucun log de combat détaillé disponible."]);
     }
-  }, [report]); // On ne dépend que de 'report'
+  }, [report]);
+
+  // Affichage d'erreur
+  if (loadError) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+        <div className="w-full max-w-md relative overflow-hidden rounded-2xl border border-red-500/50 bg-slate-950 shadow-2xl p-8 text-center">
+          <AlertCircle size={64} className="text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-white mb-2">Rapport non disponible</h2>
+          <p className="text-slate-400 text-sm mb-6">{loadError}</p>
+          <Button onClick={onClose} variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10">
+            Fermer
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!parsedReport) return null;
 
   // --- NORMALISATION ---
-  const isDefense = parsedReport.is_defense === true || parsedReport.mission_type === 'defense';
+  const missionType = parsedReport.mission_type || 'attack';
+  const isExpedition = missionType === 'expedition';
+  const isDefense = parsedReport.is_defense === true || missionType === 'defense';
   const isAttacker = !isDefense;
 
-  const opponentName = parsedReport.opponent_username || parsedReport.opponent_name || (isAttacker ? parsedReport.target_name : "Commandant Inconnu");
+  const opponentName = isExpedition
+    ? "Pirates Galactiques"
+    : (parsedReport.opponent_username || parsedReport.opponent_name || parsedReport.target_name || "Commandant Inconnu");
 
+  // Détermination victoire/défaite
   let isVictory = false;
+  let isDraw = false;
+
   if (parsedReport.result) {
-      isVictory = parsedReport.result === 'victory';
-  } else {
-      if (parsedReport.winner === 'attacker') isVictory = isAttacker;
-      else if (parsedReport.winner === 'defender') isVictory = isDefense;
-      else if (parsedReport.winner === 'player') isVictory = true;
+    isVictory = parsedReport.result === 'victory';
+    isDraw = parsedReport.result === 'draw';
+  } else if (parsedReport.winner) {
+    if (parsedReport.winner === 'attacker') isVictory = isAttacker;
+    else if (parsedReport.winner === 'defender') isVictory = isDefense;
+    else if (parsedReport.winner === 'player' || parsedReport.winner === 'victory') isVictory = true;
+    else if (parsedReport.winner === 'defeat') isVictory = false;
+    isDraw = parsedReport.winner === 'draw';
   }
 
   // Ressources
@@ -77,15 +120,19 @@ useEffect(() => {
   const lootTotal = Math.floor(Math.abs(loot.metal + loot.crystal + loot.deuterium));
 
   // Pertes (On différencie les vaisseaux des structures)
-  const attackerLosses = parsedReport.attacker_losses ?? 0;
-  const defenderLosses = (parsedReport.defender_losses ?? 0);
+  const attackerLosses = parsedReport.attacker_losses ?? parsedReport.ships_lost ?? 0;
+  const defenderLosses = parsedReport.defender_losses ?? 0;
   const structureLosses = (parsedReport.lost_missiles ?? 0) + (parsedReport.lost_plasmas ?? 0);
 
-  const theme = isVictory 
-    ? { color: 'text-green-500', border: 'border-green-500/50', icon: Trophy, title: "VICTOIRE" }
-    : parsedReport.winner === 'draw' 
-      ? { color: 'text-slate-400', border: 'border-slate-500/50', icon: Swords, title: "MATCH NUL" }
-      : { color: 'text-red-500', border: 'border-red-500/50', icon: Skull, title: "DÉFAITE" };
+  // Thème visuel
+  let theme;
+  if (isDraw) {
+    theme = { color: 'text-slate-400', border: 'border-slate-500/50', icon: Swords, title: "MATCH NUL" };
+  } else if (isVictory) {
+    theme = { color: 'text-green-500', border: 'border-green-500/50', icon: isExpedition ? Rocket : Trophy, title: isExpedition ? "EXPÉDITION RÉUSSIE" : "VICTOIRE" };
+  } else {
+    theme = { color: 'text-red-500', border: 'border-red-500/50', icon: Skull, title: isExpedition ? "EXPÉDITION ÉCHOUÉE" : "DÉFAITE" };
+  }
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
@@ -101,7 +148,7 @@ useEffect(() => {
                 <h2 className="text-5xl font-black uppercase tracking-tighter text-white leading-none">{theme.title}</h2>
                 <div className="flex items-center gap-3 mt-2">
                     <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded font-mono text-slate-300">
-                        {isDefense ? "SECTEUR DÉFENSIF" : "INCURSION OFFENSIVE"}
+                        {isExpedition ? "ZONE D'EXPÉDITION" : isDefense ? "SECTEUR DÉFENSIF" : "INCURSION OFFENSIVE"}
                     </span>
                     <span className="text-sm font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-2">
                         <User size={14} className="text-slate-500"/> {opponentName}

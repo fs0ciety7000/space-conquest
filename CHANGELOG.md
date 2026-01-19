@@ -1,5 +1,170 @@
 # Changelog - Space Conquest
 
+## [1.9.0] - 2026-01-19 - Refonte interface : Production, Énergie et Rapports
+
+### 🎯 Nouvelles fonctionnalités
+
+#### 📊 Module Production Industrielle amélioré
+**Feature**: Refonte complète du module de production avec visualisation graphique
+
+**Améliorations**:
+- Graphiques en barres comparatifs pour la production /h (Métal, Cristal, Deutérium)
+- Barres proportionnelles avec dégradés colorés
+- Affichage production par heure ET par jour
+- Indicateur de bonus slots actifs
+- Total journalier récapitulatif
+
+**Design**:
+- Barres avec animations de transition fluides
+- Couleurs distinctives : orange (métal), cyan (cristal), vert (deutérium)
+- Indicateur d'efficacité énergétique intégré
+
+**Fichiers**:
+- `frontend/src/components/PlanetOverview.tsx` (refonte section Production)
+
+---
+
+#### ⚡ Module Réseau Électrique redesigné
+**Feature**: Design "électrique" vibrant avec graphiques de flux énergétique
+
+**Nouveaux éléments visuels**:
+- **Effets de fond électriques** : Lueurs animées, lignes de courant horizontales
+- **Graphique Production vs Consommation** : Barres verticales style voltmètre
+- **Jauge d'efficacité** : Style compteur électrique avec graduations
+- **Animations dynamiques** : Pulse, shimmer, glow selon l'état du réseau
+
+**États visuels**:
+| État | Couleurs | Animations | Badge |
+|------|----------|------------|-------|
+| Optimal (≥100%) | Vert/Cyan/Jaune | Calmes, glow doux | ⚡ OPTIMAL |
+| Ralenti (50-99%) | Orange/Jaune | Pulse léger | ⚠️ RALENTI |
+| Critique (<50%) | Rouge vif | Pulse urgent, ping | 🔴 CRITIQUE |
+
+**Composants du graphique**:
+- Barre Production (dégradé emerald→cyan) avec effet shimmer
+- Barre Consommation (dégradé selon état) avec glow
+- Indicateur central avec flèche directionnelle et flux net
+- Point lumineux pulsant au bout de la jauge
+
+**Fichiers**:
+- `frontend/src/components/PlanetOverview.tsx` (section Réseau Électrique)
+
+---
+
+#### 📜 Page Changelog avec rendu Markdown
+**Feature**: Affichage du changelog avec rendu Markdown complet
+
+**Améliorations**:
+- Installation de `react-markdown` et `remark-gfm`
+- Support complet GitHub-Flavored Markdown (tables, code blocks, listes)
+- Plugin `@tailwindcss/typography` pour le styling prose
+
+**Styles appliqués**:
+- Titres colorés (H1 indigo, H2 purple, H3 cyan, H4 orange)
+- Code blocks avec fond sombre et texte emerald
+- Tables stylisées avec bordures et alternance de couleurs
+- Listes avec markers indigo
+- Séparateurs subtils
+
+**Fichiers**:
+- `frontend/src/components/Changelog.tsx` (ReactMarkdown + styles)
+- `frontend/src/index.css` (plugin typography)
+- `frontend/package.json` (dépendances react-markdown, remark-gfm)
+
+---
+
+#### 🎯 Modal de rapports de combat améliorée
+**Feature**: Gestion robuste des différents types de rapports
+
+**Corrections**:
+- Gestion des erreurs backend (rapport non disponible)
+- Support unifié des formats (expéditions, combats PvP, défenses)
+- Normalisation des champs `winner`/`result` pour tous les types
+- Fallback si aucun log détaillé disponible
+
+**Améliorations pour les expéditions**:
+- Affichage "Pirates Galactiques" comme adversaire
+- Icône fusée (Rocket) au lieu de trophée
+- Badge "ZONE D'EXPÉDITION" / "EXPÉDITION RÉUSSIE/ÉCHOUÉE"
+
+**Gestion d'erreurs**:
+- Modal d'erreur dédiée si rapport non disponible
+- Message explicatif avec bouton de fermeture
+- Icône AlertCircle pour signaler l'erreur
+
+**Fichiers**:
+- `frontend/src/components/CombatModal.tsx`
+
+---
+
+### 🔧 Modifications techniques
+
+#### Frontend
+
+**Nouvelles dépendances**:
+```json
+{
+  "react-markdown": "^10.1.0",
+  "remark-gfm": "^4.0.1",
+  "@tailwindcss/typography": "^0.5.19"
+}
+```
+
+**Configuration Tailwind v4**:
+```css
+@plugin "@tailwindcss/typography";
+```
+
+**Composants modifiés**:
+- `PlanetOverview.tsx` - Production avec graphiques + Énergie électrique
+- `Changelog.tsx` - Rendu Markdown complet
+- `CombatModal.tsx` - Robustesse et support expéditions
+
+---
+
+### 📝 Notes techniques
+
+**Animations CSS utilisées**:
+- `animate-pulse` - Pulsation douce
+- `animate-ping` - Effet ping pour alertes critiques
+- `animate-shimmer` - Effet brillance traversante
+- `drop-shadow-[0_0_Xpx_color]` - Glow personnalisés
+
+**Classes Tailwind Typography**:
+```
+prose prose-invert prose-sm
+prose-h1:text-indigo-400
+prose-code:text-emerald-400
+prose-table:text-slate-300
+```
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: Aucune (modifications frontend uniquement)
+
+**Installation dépendances**:
+```bash
+cd frontend
+npm install react-markdown remark-gfm @tailwindcss/typography
+```
+
+**Tests recommandés**:
+1. ✅ PlanetOverview → Vérifier graphiques de production
+2. ✅ PlanetOverview → Tester module énergie (optimal/ralenti/critique)
+3. ✅ Changelog → Vérifier rendu markdown (tables, code, titres)
+4. ✅ Rapports → Cliquer sur rapport d'expédition → modal s'affiche
+5. ✅ Rapports → Cliquer sur ancien rapport sans détails → message d'erreur
+
+---
+
+### ⚠️ Breaking Changes
+
+Aucun breaking change. Toutes les modifications sont des améliorations visuelles.
+
+---
+
 ## [1.8.0] - 2026-01-19 - Rôles utilisateurs, slots de production, améliorations commerce et expéditions
 
 ### 🎯 Nouvelles fonctionnalités

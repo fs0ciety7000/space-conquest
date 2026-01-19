@@ -327,52 +327,191 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             </CardContent>
         </Card>
 
-        {/* ENERGIE */}
-        <Card className="bg-slate-900/80 border border-white/10 backdrop-blur-md flex flex-col justify-between relative overflow-hidden">
-             <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-20 ${energyRatio >= 100 ? 'bg-yellow-400' : energyRatio >= 50 ? 'bg-orange-400' : 'bg-red-500'}`}></div>
-            <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                    <Zap size={14} className={energyRatio >= 100 ? "text-yellow-400" : energyRatio >= 50 ? "text-orange-400" : "text-red-500 animate-pulse"} /> Réseau Électrique
+        {/* ENERGIE - DESIGN ÉLECTRIQUE */}
+        <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${energyRatio >= 100 ? 'border-yellow-500/50' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50'} backdrop-blur-md flex flex-col relative overflow-hidden`}>
+            {/* Effets de fond électriques */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {/* Lueur principale */}
+                <div className={`absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-30 ${energyRatio >= 100 ? 'bg-yellow-400 animate-pulse' : energyRatio >= 50 ? 'bg-orange-400 animate-pulse' : 'bg-red-500 animate-ping'}`}></div>
+                <div className={`absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-20 ${energyRatio >= 100 ? 'bg-cyan-400' : 'bg-orange-500'}`}></div>
+                {/* Lignes électriques animées */}
+                <div className="absolute inset-0 opacity-10">
+                    <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-yellow-400 to-transparent animate-pulse"></div>
+                    <div className="absolute top-2/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                    <div className="absolute top-3/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-yellow-400 to-transparent animate-pulse" style={{ animationDelay: '1s' }}></div>
+                </div>
+            </div>
+
+            <CardHeader className="pb-2 relative z-10">
+                <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                        <div className={`relative ${energyRatio < 50 ? 'animate-pulse' : ''}`}>
+                            <Zap size={18} className={`${energyRatio >= 100 ? 'text-yellow-400' : energyRatio >= 50 ? 'text-orange-400' : 'text-red-500'} drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]`} />
+                            {energyRatio >= 100 && <Zap size={18} className="absolute inset-0 text-yellow-400 animate-ping opacity-50" />}
+                        </div>
+                        Réseau Électrique
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${energyRatio >= 100 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : energyRatio >= 50 ? 'bg-orange-500/20 text-orange-400 border-orange-500/50' : 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse'}`}>
+                        {energyRatio >= 100 ? '⚡ OPTIMAL' : energyRatio >= 50 ? '⚠️ RALENTI' : '🔴 CRITIQUE'}
+                    </span>
                 </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="flex items-end justify-between">
-                    <span className={`text-3xl font-mono font-black ${energyRatio >= 100 ? 'text-emerald-400' : energyRatio >= 50 ? 'text-orange-400' : 'text-red-400'}`}>{energyRatio}%</span>
-                    <span className={`text-xs font-bold px-2 py-1 rounded ${energyRatio >= 100 ? 'bg-emerald-500/10 text-emerald-400' : energyRatio >= 50 ? 'bg-orange-500/10 text-orange-400' : 'bg-red-500/10 text-red-400'}`}>
-                        {energyRatio >= 100 ? 'OPTIMAL' : energyRatio >= 50 ? 'RALENTI' : 'CRITIQUE'}
-                    </span>
-                </div>
-                <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
-                        <span>Efficacité Mines</span>
-                        <span>{energyRatio}%</span>
+
+            <CardContent className="space-y-4 relative z-10">
+                {/* Indicateur principal avec effet glow */}
+                <div className="text-center py-2">
+                    <div className={`text-5xl font-black font-mono tracking-tighter ${energyRatio >= 100 ? 'text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]' : energyRatio >= 50 ? 'text-orange-400 drop-shadow-[0_0_15px_rgba(251,146,60,0.5)]' : 'text-red-400 drop-shadow-[0_0_20px_rgba(248,113,113,0.7)] animate-pulse'}`}>
+                        {energyRatio}%
                     </div>
-                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Efficacité du réseau</div>
+                </div>
+
+                {/* Graphique Production vs Consommation */}
+                <div className="bg-black/40 rounded-xl p-4 border border-white/10 relative overflow-hidden">
+                    <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold flex items-center gap-2">
+                        <Activity size={10} className="text-cyan-400" /> Flux énergétique
+                    </div>
+
+                    {/* Barres comparatives verticales style voltmètre */}
+                    <div className="flex items-end justify-center gap-6 h-24">
+                        {/* Barre Production */}
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="relative w-8 h-20 bg-slate-900 rounded-lg border border-white/10 overflow-hidden">
+                                {/* Graduation */}
+                                <div className="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-30">
+                                    {[...Array(5)].map((_, i) => (
+                                        <div key={i} className="h-px bg-white/50 w-full"></div>
+                                    ))}
+                                </div>
+                                {/* Barre de remplissage */}
+                                <div
+                                    className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-emerald-600 via-emerald-400 to-cyan-400 transition-all duration-700 rounded-b-md"
+                                    style={{ height: `${Math.min(100, (energyProd / Math.max(energyProd, energyCons, 1)) * 100)}%` }}
+                                >
+                                    {/* Effet de brillance */}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                                    {/* Effet lightning */}
+                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-full bg-white/50 opacity-0 animate-pulse"></div>
+                                </div>
+                                {/* Glow effect */}
+                                <div className="absolute -inset-1 bg-emerald-500/20 blur-md -z-10 rounded-lg"></div>
+                            </div>
+                            <div className="text-center">
+                                <Zap size={10} className="text-emerald-400 mx-auto mb-0.5" />
+                                <span className="text-emerald-400 font-mono text-[10px] font-bold block">+{fmt(energyProd)}</span>
+                                <span className="text-[8px] text-slate-600 uppercase">Prod.</span>
+                            </div>
+                        </div>
+
+                        {/* Indicateur central - Flux */}
+                        <div className="flex flex-col items-center justify-center h-20">
+                            <div className={`text-2xl font-black font-mono ${energyNet >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>
+                                {energyNet >= 0 ? '→' : '←'}
+                            </div>
+                            <div className={`text-xs font-mono font-bold ${energyNet >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>
+                                {energyNet >= 0 ? '+' : ''}{fmt(energyNet)}
+                            </div>
+                            <div className="text-[8px] text-slate-600 uppercase">Net</div>
+                        </div>
+
+                        {/* Barre Consommation */}
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="relative w-8 h-20 bg-slate-900 rounded-lg border border-white/10 overflow-hidden">
+                                {/* Graduation */}
+                                <div className="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-30">
+                                    {[...Array(5)].map((_, i) => (
+                                        <div key={i} className="h-px bg-white/50 w-full"></div>
+                                    ))}
+                                </div>
+                                {/* Barre de remplissage */}
+                                <div
+                                    className={`absolute bottom-0 left-0 right-0 transition-all duration-700 rounded-b-md ${energyRatio >= 100 ? 'bg-gradient-to-t from-orange-600 via-orange-400 to-yellow-400' : 'bg-gradient-to-t from-red-700 via-red-500 to-orange-400'}`}
+                                    style={{ height: `${Math.min(100, (energyCons / Math.max(energyProd, energyCons, 1)) * 100)}%` }}
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+                                </div>
+                                {/* Glow effect */}
+                                <div className={`absolute -inset-1 blur-md -z-10 rounded-lg ${energyRatio >= 100 ? 'bg-orange-500/20' : 'bg-red-500/30'}`}></div>
+                            </div>
+                            <div className="text-center">
+                                <Activity size={10} className={`mx-auto mb-0.5 ${energyRatio >= 100 ? 'text-orange-400' : 'text-red-400'}`} />
+                                <span className={`font-mono text-[10px] font-bold block ${energyRatio >= 100 ? 'text-orange-400' : 'text-red-400'}`}>-{fmt(energyCons)}</span>
+                                <span className="text-[8px] text-slate-600 uppercase">Conso.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Jauge d'efficacité style électrique */}
+                <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
+                        <span>Charge du réseau</span>
+                        <span className={energyRatio >= 100 ? 'text-emerald-400' : energyRatio >= 50 ? 'text-orange-400' : 'text-red-400'}>{Math.round(energyPercent)}%</span>
+                    </div>
+                    <div className="relative h-4 w-full bg-slate-900 rounded-full overflow-hidden border border-white/10">
+                        {/* Graduations */}
+                        <div className="absolute inset-0 flex justify-between px-1 items-center">
+                            {[...Array(10)].map((_, i) => (
+                                <div key={i} className="w-px h-2 bg-white/20"></div>
+                            ))}
+                        </div>
+                        {/* Barre de progression */}
                         <div
-                            className={`h-full transition-all ${energyRatio < 50 ? 'bg-red-500' : energyRatio < 100 ? 'bg-orange-400' : 'bg-emerald-400'}`}
-                            style={{ width: `${Math.min(energyRatio, 100)}%` }}
+                            className={`h-full transition-all duration-500 relative ${
+                                energyRatio >= 100
+                                    ? 'bg-gradient-to-r from-emerald-600 via-emerald-400 to-cyan-400'
+                                    : energyRatio >= 50
+                                        ? 'bg-gradient-to-r from-orange-600 via-orange-400 to-yellow-400'
+                                        : 'bg-gradient-to-r from-red-700 via-red-500 to-orange-500'
+                            }`}
+                            style={{ width: `${Math.min(energyPercent, 100)}%` }}
+                        >
+                            {/* Effet de brillance animé */}
+                            <div className="absolute inset-0 overflow-hidden">
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
+                            </div>
+                            {/* Point lumineux au bout */}
+                            <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full ${energyRatio >= 100 ? 'bg-cyan-400' : energyRatio >= 50 ? 'bg-yellow-400' : 'bg-red-400'} shadow-[0_0_10px_currentColor] animate-pulse`}></div>
+                        </div>
+                        {/* Glow sous la barre */}
+                        <div
+                            className={`absolute bottom-0 left-0 h-1 blur-sm transition-all duration-500 ${energyRatio >= 100 ? 'bg-cyan-400' : energyRatio >= 50 ? 'bg-yellow-400' : 'bg-red-500'}`}
+                            style={{ width: `${Math.min(energyPercent, 100)}%` }}
                         ></div>
                     </div>
                 </div>
+
+                {/* Alerte si déficit */}
                 {energyRatio < 100 && (
-                    <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-2">
-                        <p className="text-[9px] text-orange-400 font-bold uppercase flex items-center gap-1">
-                            <AlertTriangle size={10} /> Production réduite de {100 - energyRatio}%
-                        </p>
+                    <div className={`rounded-lg p-3 border flex items-center gap-3 ${energyRatio >= 50 ? 'bg-orange-500/10 border-orange-500/30' : 'bg-red-500/20 border-red-500/50 animate-pulse'}`}>
+                        <div className={`p-2 rounded-full ${energyRatio >= 50 ? 'bg-orange-500/20' : 'bg-red-500/30'}`}>
+                            <AlertTriangle size={16} className={energyRatio >= 50 ? 'text-orange-400' : 'text-red-400'} />
+                        </div>
+                        <div>
+                            <p className={`text-xs font-bold uppercase ${energyRatio >= 50 ? 'text-orange-400' : 'text-red-400'}`}>
+                                {energyRatio >= 50 ? 'Surcharge partielle' : 'Surcharge critique'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                                Production minière réduite de <span className={`font-bold ${energyRatio >= 50 ? 'text-orange-300' : 'text-red-300'}`}>{100 - energyRatio}%</span>
+                            </p>
+                        </div>
                     </div>
                 )}
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                    <div className="bg-white/5 p-2 rounded text-center">
-                        <span className="block text-slate-500">Prod.</span>
-                        <span className="text-green-400">+{fmt(energyProd)}</span>
+
+                {/* Stats compactes en bas */}
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5">
+                    <div className="text-center">
+                        <span className="text-[8px] text-slate-600 uppercase block">Centrale</span>
+                        <span className="text-yellow-400 font-mono text-xs font-bold">Niv.{planet.solar_plant_level}</span>
                     </div>
-                    <div className="bg-white/5 p-2 rounded text-center">
-                        <span className="block text-slate-500">Conso.</span>
-                        <span className="text-red-400">-{fmt(energyCons)}</span>
+                    <div className="text-center border-x border-white/5">
+                        <span className="text-[8px] text-slate-600 uppercase block">Tech. Énergie</span>
+                        <span className="text-purple-400 font-mono text-xs font-bold">Niv.{planet.energy_tech_level || 0}</span>
                     </div>
-                </div>
-                <div className="text-center text-[9px] text-slate-500 font-mono">
-                    Net: {energyNet >= 0 ? '+' : ''}{fmt(energyNet)} unités
+                    <div className="text-center">
+                        <span className="text-[8px] text-slate-600 uppercase block">Rendement</span>
+                        <span className={`font-mono text-xs font-bold ${energyNet >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>{energyNet >= 0 ? '+' : ''}{fmt(energyNet)}</span>
+                    </div>
                 </div>
             </CardContent>
         </Card>
@@ -453,56 +592,145 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </div>
 
         <div className="md:col-span-3 min-w-0">
-            <Card className="bg-green-950/10 border border-green-500/20">
-                <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between text-xs font-black uppercase tracking-[0.2em] text-green-400">
-                        <span className="flex items-center gap-2"><TrendingUp size={14} /> Production Industrielle</span>
-                        <span className="bg-green-500/20 px-2 py-1 rounded text-green-300">
-                            {energyRatio}% efficacité
+            <Card className="bg-gradient-to-br from-slate-900/80 to-green-950/20 border border-green-500/30">
+                <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-green-400">
+                            <TrendingUp size={16} /> Production Industrielle
                         </span>
+                        <div className="flex items-center gap-2">
+                            {energyRatio < 100 && (
+                                <span className="text-[10px] text-red-400 bg-red-500/20 px-2 py-1 rounded flex items-center gap-1">
+                                    <AlertTriangle size={10} /> -{100 - energyRatio}%
+                                </span>
+                            )}
+                            <span className="text-xs bg-green-500/20 px-2 py-1 rounded text-green-300 font-mono">
+                                {energyRatio}% efficacité
+                            </span>
+                        </div>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                    {/* Métal */}
-                    <div className="bg-slate-900/50 p-3 rounded border border-orange-500/20">
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="flex items-center gap-2 text-orange-300 font-bold text-xs"><Stone size={12} /> Métal</span>
-                            <span className="text-white font-mono font-bold text-sm">{fmt(planet.metal_amount)}</span>
+                <CardContent className="space-y-4">
+                    {/* Graphique comparatif */}
+                    <div className="bg-black/30 rounded-lg p-3 border border-white/5">
+                        <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold">Répartition Production /h</div>
+                        <div className="space-y-2">
+                            {(() => {
+                                const maxProd = Math.max(prodMetal, prodCrystal, prodDeut, 1);
+                                return (
+                                    <>
+                                        <div className="flex items-center gap-2">
+                                            <Stone size={12} className="text-orange-400 shrink-0" />
+                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full transition-all duration-500"
+                                                    style={{ width: `${(prodMetal / maxProd) * 100}%` }}
+                                                />
+                                            </div>
+                                            <span className="text-orange-400 font-mono text-xs font-bold w-16 text-right">+{fmt(prodMetal)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Gem size={12} className="text-cyan-400 shrink-0" />
+                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full transition-all duration-500"
+                                                    style={{ width: `${(prodCrystal / maxProd) * 100}%` }}
+                                                />
+                                            </div>
+                                            <span className="text-cyan-400 font-mono text-xs font-bold w-16 text-right">+{fmt(prodCrystal)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Droplets size={12} className="text-emerald-400 shrink-0" />
+                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-500"
+                                                    style={{ width: `${(prodDeut / maxProd) * 100}%` }}
+                                                />
+                                            </div>
+                                            <span className="text-emerald-400 font-mono text-xs font-bold w-16 text-right">+{fmt(prodDeut)}</span>
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
-                        <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-yellow-400">+{fmt(prodMetal)}/h</span>
-                            <span className="text-green-400">+{fmt(prodMetal * 24)}/j</span>
+                    </div>
+
+                    {/* Détails par ressource */}
+                    <div className="grid grid-cols-3 gap-2">
+                        {/* Métal */}
+                        <div className="bg-gradient-to-b from-orange-950/30 to-slate-900/50 p-3 rounded-lg border border-orange-500/30">
+                            <div className="flex items-center gap-1.5 mb-2">
+                                <Stone size={14} className="text-orange-400" />
+                                <span className="text-orange-300 font-bold text-xs uppercase">Métal</span>
+                            </div>
+                            <div className="text-white font-mono font-black text-lg">{fmt(planet.metal_amount)}</div>
+                            <div className="mt-2 space-y-1">
+                                <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-500">Par heure</span>
+                                    <span className="text-yellow-400 font-mono font-bold">+{fmt(prodMetal)}</span>
+                                </div>
+                                <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-500">Par jour</span>
+                                    <span className="text-green-400 font-mono font-bold">+{fmt(prodMetal * 24)}</span>
+                                </div>
+                            </div>
                             {planet.slot_bonuses?.metal && planet.slot_bonuses.metal !== "+0%" && (
-                                <span className="text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded">{planet.slot_bonuses.metal} bonus</span>
+                                <div className="mt-2 text-[9px] text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded text-center">{planet.slot_bonuses.metal} slot</div>
                             )}
                         </div>
-                    </div>
-                    {/* Cristal */}
-                    <div className="bg-slate-900/50 p-3 rounded border border-cyan-500/20">
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="flex items-center gap-2 text-cyan-400 font-bold text-xs"><Gem size={12} /> Cristal</span>
-                            <span className="text-white font-mono font-bold text-sm">{fmt(planet.crystal_amount)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-yellow-400">+{fmt(prodCrystal)}/h</span>
-                            <span className="text-green-400">+{fmt(prodCrystal * 24)}/j</span>
+                        {/* Cristal */}
+                        <div className="bg-gradient-to-b from-cyan-950/30 to-slate-900/50 p-3 rounded-lg border border-cyan-500/30">
+                            <div className="flex items-center gap-1.5 mb-2">
+                                <Gem size={14} className="text-cyan-400" />
+                                <span className="text-cyan-300 font-bold text-xs uppercase">Cristal</span>
+                            </div>
+                            <div className="text-white font-mono font-black text-lg">{fmt(planet.crystal_amount)}</div>
+                            <div className="mt-2 space-y-1">
+                                <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-500">Par heure</span>
+                                    <span className="text-yellow-400 font-mono font-bold">+{fmt(prodCrystal)}</span>
+                                </div>
+                                <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-500">Par jour</span>
+                                    <span className="text-green-400 font-mono font-bold">+{fmt(prodCrystal * 24)}</span>
+                                </div>
+                            </div>
                             {planet.slot_bonuses?.crystal && planet.slot_bonuses.crystal !== "+0%" && (
-                                <span className="text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded">{planet.slot_bonuses.crystal} bonus</span>
+                                <div className="mt-2 text-[9px] text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded text-center">{planet.slot_bonuses.crystal} slot</div>
+                            )}
+                        </div>
+                        {/* Deutérium */}
+                        <div className="bg-gradient-to-b from-emerald-950/30 to-slate-900/50 p-3 rounded-lg border border-emerald-500/30">
+                            <div className="flex items-center gap-1.5 mb-2">
+                                <Droplets size={14} className="text-emerald-400" />
+                                <span className="text-emerald-300 font-bold text-xs uppercase">Deutérium</span>
+                            </div>
+                            <div className="text-white font-mono font-black text-lg">{fmt(planet.deuterium_amount)}</div>
+                            <div className="mt-2 space-y-1">
+                                <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-500">Par heure</span>
+                                    <span className="text-yellow-400 font-mono font-bold">+{fmt(prodDeut)}</span>
+                                </div>
+                                <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-500">Par jour</span>
+                                    <span className="text-green-400 font-mono font-bold">+{fmt(prodDeut * 24)}</span>
+                                </div>
+                            </div>
+                            {planet.slot_bonuses?.deuterium && planet.slot_bonuses.deuterium !== "+0%" && (
+                                <div className="mt-2 text-[9px] text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded text-center">{planet.slot_bonuses.deuterium} slot</div>
                             )}
                         </div>
                     </div>
-                    {/* Deutérium */}
-                    <div className="bg-slate-900/50 p-3 rounded border border-emerald-500/20">
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="flex items-center gap-2 text-emerald-400 font-bold text-xs"><Droplets size={12} /> Deutérium</span>
-                            <span className="text-white font-mono font-bold text-sm">{fmt(planet.deuterium_amount)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-yellow-400">+{fmt(prodDeut)}/h</span>
-                            <span className="text-green-400">+{fmt(prodDeut * 24)}/j</span>
-                            {planet.slot_bonuses?.deuterium && planet.slot_bonuses.deuterium !== "+0%" && (
-                                <span className="text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded">{planet.slot_bonuses.deuterium} bonus</span>
-                            )}
+
+                    {/* Total journalier */}
+                    <div className="bg-gradient-to-r from-yellow-950/20 to-green-950/20 rounded-lg p-3 border border-yellow-500/20">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Production totale /jour</span>
+                            <div className="flex items-center gap-4 text-xs font-mono font-bold">
+                                <span className="text-orange-400">+{fmt(prodMetal * 24)} M</span>
+                                <span className="text-cyan-400">+{fmt(prodCrystal * 24)} C</span>
+                                <span className="text-emerald-400">+{fmt(prodDeut * 24)} D</span>
+                            </div>
                         </div>
                     </div>
                 </CardContent>
