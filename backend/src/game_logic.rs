@@ -502,14 +502,39 @@ pub fn resolve_pvp(
 
 pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
     let mut rng = rand::thread_rng();
-    let pirates = rng.gen_range(10..100);
-    let player = fleet_size + (defense_bonus * 5);
-    if player > pirates {
-        let lost = (fleet_size as f64 * rng.gen_range(0.0..0.2)) as i32;
-        CombatResult { victory: true, message: "Victoire spatiale !".into(), ships_lost: lost }
+
+    // Niveau pirate aléatoire (10-100) avec forte variation
+    let pirate_strength = rng.gen_range(10..100);
+    let player_strength = fleet_size + (defense_bonus * 5);
+
+    if player_strength > pirate_strength {
+        // VICTOIRE : Pertes faibles (5-25% avec variation ±20%)
+        let base_loss_rate = rng.gen_range(0.05..0.25);
+        let variation = rng.gen_range(-0.2..0.2);
+        let loss_rate = (base_loss_rate * (1.0 + variation)).clamp(0.01, 0.4);
+
+        let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1 si fleet > 0
+        let lost = lost.max(0).min(fleet_size); // Clamp entre 0 et fleet_size
+
+        CombatResult {
+            victory: true,
+            message: format!("Victoire ! Pirates éliminés (force: {})", pirate_strength),
+            ships_lost: lost
+        }
     } else {
-        let lost = (fleet_size as f64 * rng.gen_range(0.4..0.9)) as i32;
-        CombatResult { victory: false, message: "Défaite cuisante...".into(), ships_lost: lost }
+        // DÉFAITE : Pertes lourdes (50-90% avec variation ±20%)
+        let base_loss_rate = rng.gen_range(0.5..0.9);
+        let variation = rng.gen_range(-0.2..0.2);
+        let loss_rate = (base_loss_rate * (1.0 + variation)).clamp(0.4, 1.0);
+
+        let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1
+        let lost = lost.max(1).min(fleet_size); // Minimum 1 perte en cas de défaite
+
+        CombatResult {
+            victory: false,
+            message: format!("Défaite ! Retraite forcée (pirates: {})", pirate_strength),
+            ships_lost: lost
+        }
     }
 }
 

@@ -69,6 +69,7 @@ struct RankItem {
     is_me: bool,
     owner_id: Uuid,
     planets: Vec<PlanetInfo>,
+    rank_badge: String,
 }
 
 #[derive(Deserialize)]
@@ -478,6 +479,7 @@ async fn get_ranking_handler(
 
         let username = user_map.get(&owner_id).cloned().unwrap_or("Inconnu".to_string());
         let is_me = current_owner_id.map(|id| id == owner_id).unwrap_or(false);
+        let rank_badge = game_logic::get_rank_badge(total_score);
 
         RankItem {
             rank: 0,
@@ -488,6 +490,7 @@ async fn get_ranking_handler(
             is_me,
             owner_id,
             planets: planet_infos,
+            rank_badge: rank_badge.to_string(),
         }
     }).collect();
 
@@ -915,14 +918,30 @@ async fn expedition_handler(
             logs.push(format!("RESULTAT : {}", combat_res.message));
             logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
 
-            // Répartir les pertes entre chasseurs et croiseurs
-            let total_sent = total_ships as f64;
-            let hunter_ratio = hunters as f64 / total_sent;
-            lost_hunters = (combat_res.ships_lost as f64 * hunter_ratio) as i32;
-            lost_cruisers = combat_res.ships_lost - lost_hunters;
+            // Répartir les pertes : les croiseurs sont plus résistants (50% moins de pertes)
+            // On distribue les pertes en tenant compte de la résistance de chaque type
+            let hunter_vulnerability = hunters as f64 * 1.0; // Chasseurs: vulnérabilité normale
+            let cruiser_vulnerability = cruisers as f64 * 0.5; // Croiseurs: 2x plus résistants
+            let total_vulnerability = hunter_vulnerability + cruiser_vulnerability;
 
-            if lost_hunters > hunters { lost_hunters = hunters; }
-            if lost_cruisers > cruisers { lost_cruisers = cruisers; }
+            if total_vulnerability > 0.0 {
+                let hunter_loss_ratio = hunter_vulnerability / total_vulnerability;
+                lost_hunters = (combat_res.ships_lost as f64 * hunter_loss_ratio).ceil() as i32;
+                lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_loss_ratio)).floor() as i32;
+
+                // Assurer qu'on ne perd pas plus que ce qu'on a
+                if lost_hunters > hunters { lost_hunters = hunters; }
+                if lost_cruisers > cruisers { lost_cruisers = cruisers; }
+
+                // Log des pertes
+                if lost_hunters > 0 || lost_cruisers > 0 {
+                    let mut loss_msg = "PERTES : ".to_string();
+                    if lost_hunters > 0 { loss_msg.push_str(&format!("{} Chasseur(s)", lost_hunters)); }
+                    if lost_hunters > 0 && lost_cruisers > 0 { loss_msg.push_str(", "); }
+                    if lost_cruisers > 0 { loss_msg.push_str(&format!("{} Croiseur(s)", lost_cruisers)); }
+                    logs.push(loss_msg);
+                }
+            }
 
             active.metal_amount = Set(p.metal_amount + metal);
             active.crystal_amount = Set(p.crystal_amount + crystal);
@@ -931,11 +950,35 @@ async fn expedition_handler(
             winner = "pirates";
             logs.push(format!("RESULTAT : {}", combat_res.message));
 
-            // Répartir les pertes entre chasseurs et croiseurs (défaite = pertes lourdes)
-            let total_sent = total_ships as f64;
-            let hunter_ratio = hunters as f64 / total_sent;
-            lost_hunters = (combat_res.ships_lost as f64 * hunter_ratio * 1.5).min(hunters as f64) as i32;
-            lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_ratio) * 1.5).min(cruisers as f64) as i32;
+            // En cas de défaite, pertes très lourdes avec même distribution
+            let hunter_vulnerability = hunters as f64 * 1.0;
+            let cruiser_vulnerability = cruisers as f64 * 0.5; // Croiseurs toujours plus résistants
+            let total_vulnerability = hunter_vulnerability + cruiser_vulnerability;
+
+            if total_vulnerability > 0.0 {
+                let hunter_loss_ratio = hunter_vulnerability / total_vulnerability;
+                lost_hunters = (combat_res.ships_lost as f64 * hunter_loss_ratio).ceil() as i32;
+                lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_loss_ratio)).floor() as i32;
+
+                // Assurer qu'on ne perd pas plus que ce qu'on a
+                if lost_hunters > hunters { lost_hunters = hunters; }
+                if lost_cruisers > cruisers { lost_cruisers = cruisers; }
+
+                // En cas de défaite avec 1 seul vaisseau, on le perd
+                if total_ships == 1 {
+                    if hunters == 1 { lost_hunters = 1; }
+                    if cruisers == 1 { lost_cruisers = 1; }
+                }
+
+                // Log des pertes (défaite = pertes lourdes)
+                if lost_hunters > 0 || lost_cruisers > 0 {
+                    let mut loss_msg = "PERTES LOURDES : ".to_string();
+                    if lost_hunters > 0 { loss_msg.push_str(&format!("{} Chasseur(s)", lost_hunters)); }
+                    if lost_hunters > 0 && lost_cruisers > 0 { loss_msg.push_str(", "); }
+                    if lost_cruisers > 0 { loss_msg.push_str(&format!("{} Croiseur(s)", lost_cruisers)); }
+                    logs.push(loss_msg);
+                }
+            }
 
             (0.0, 0.0)
         }

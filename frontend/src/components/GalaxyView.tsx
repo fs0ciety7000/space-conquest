@@ -74,18 +74,35 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
 
     const handleRecycle = async (targetId: string) => {
         const token = localStorage.getItem('token');
+        const availableRecyclers = planet.recycler_count || 0;
+
+        if (availableRecyclers === 0) {
+            toast.error("Aucun recycleur disponible", {
+                description: "Construisez des recycleurs au chantier spatial"
+            });
+            return;
+        }
+
+        // Envoyer tous les recycleurs disponibles (max 50 pour éviter les surcharges)
+        const recyclersToSend = Math.min(availableRecyclers, 50);
+
         try {
             const res = await fetch(apiUrl(`/recycle?current_planet_id=${planet.id}`), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ target_planet_id: targetId, recyclers: 50 })
+                body: JSON.stringify({ target_planet_id: targetId, recyclers: recyclersToSend })
             });
             if (res.ok) {
                 const data = await res.json();
                 toast.success("Recyclage terminé", { description: data.message });
                 fetchSystem();
-            } else { toast.error("Échec recyclage"); }
-        } catch (e) { toast.error("Erreur réseau"); }
+            } else {
+                const error = await res.json();
+                toast.error("Échec recyclage", { description: error.error || "Erreur inconnue" });
+            }
+        } catch (e) {
+            toast.error("Erreur réseau");
+        }
     };
 
     const getPlanetStyle = (name: string) => {
