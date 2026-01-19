@@ -28,7 +28,7 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-slate-950 border-2 border-red-900 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(220,38,38,0.3)]">
+      <div className="w-full max-w-lg bg-slate-950 border-2 border-red-900 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(220,38,38,0.3)] card-depth glass-card animate-slide-up">
         
         {/* Header */}
         <div className="bg-red-950/50 p-6 border-b border-red-900/50 flex justify-between items-center">
@@ -41,7 +41,7 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
                 <p className="text-xs text-red-400 font-mono">Cible : {targetName}</p>
             </div>
           </div>
-          <button onClick={onCancel} className="text-red-400 hover:text-white transition-colors">
+          <button onClick={onCancel} className="text-red-400 hover:text-white transition-all duration-300 hover:scale-110 card-depth hover:shadow-lg hover:-translate-y-0.5">
             <X size={24} />
           </button>
         </div>
@@ -56,7 +56,7 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
                     <span className="text-white">Dispo: {myFleet.hunters}</span>
                 </div>
                 <div className="flex gap-4 items-center">
-                    <Rocket size={20} className="text-slate-500" />
+                    <Rocket size={20} className="text-slate-500 animate-bounce-subtle" />
                     <Input 
                         type="range" 
                         min="0" 
@@ -83,16 +83,16 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
                     <span className="text-white">Dispo: {myFleet.cruisers}</span>
                 </div>
                 <div className="flex gap-4 items-center">
-                    <Shield size={20} className="text-slate-500" />
+                    <Shield size={20} className="text-slate-500 animate-bounce-subtle" />
                     <Input disabled type="range" value={0} className="flex-1 h-2 bg-slate-800" />
                     <Input disabled type="number" value={0} className="w-20 bg-black border-slate-800 text-slate-500 text-right font-mono"/>
                 </div>
             </div>
 
             {/* Résumé */}
-            <div className="bg-red-900/10 border border-red-900/30 p-4 rounded-xl flex items-center justify-between">
+            <div className="bg-red-900/10 border border-red-900/30 p-4 rounded-xl flex items-center justify-between glass-card hover:-translate-y-0.5 transition-all duration-300 card-depth">
                 <div className="flex items-center gap-2 text-red-500 text-xs font-bold uppercase">
-                    <AlertTriangle size={14} /> Zone de Guerre
+                    <AlertTriangle size={14} className="animate-bounce-subtle" /> Zone de Guerre
                 </div>
                 <div className="text-right">
                     <p className="text-[10px] text-slate-500 uppercase">Puissance de feu</p>
@@ -102,13 +102,13 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
 
             {/* Actions */}
             <div className="grid grid-cols-2 gap-4">
-                <Button onClick={onCancel} className="bg-transparent border border-white/10 hover:bg-white/5 text-slate-400 font-bold uppercase">
+                <Button onClick={onCancel} className="bg-transparent border border-white/10 hover:bg-white/5 text-slate-400 font-bold uppercase card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
                     Annuler
                 </Button>
-                <Button 
-                    onClick={handleSubmit} 
+                <Button
+                    onClick={handleSubmit}
                     disabled={power === 0}
-                    className="bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest shadow-[0_0_20px_rgba(220,38,38,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest shadow-[0_0_20px_rgba(220,38,38,0.5)] disabled:opacity-50 disabled:cursor-not-allowed card-depth hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 hover:scale-105 animate-glow-pulse"
                 >
                     FEU À VOLONTÉ
                 </Button>
