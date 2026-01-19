@@ -1,6 +1,9 @@
 # Build stage - Rust stable 1.83
 FROM rust:1.83-bookworm AS builder
 
+# Cache buster - changer cette valeur pour forcer un rebuild
+ARG CACHE_BUST=2025-01-19-v2
+
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \

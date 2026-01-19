@@ -9,8 +9,9 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 export default function ExpeditionZone({ planet, onAction }: { planet: any, onAction: (hunters: number, cruisers: number) => void }) {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
-  const [hunterCount, setHunterCount] = useState(1);
+  const [hunterCount, setHunterCount] = useState(0);
   const [cruiserCount, setCruiserCount] = useState(0);
+  const [initialized, setInitialized] = useState(false);
   const [scouting, setScouting] = useState(false);
   const [scoutResult, setScoutResult] = useState<{
     danger: string;
@@ -26,6 +27,32 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
       deuterium_max: number;
     }
   } | null>(null);
+
+  // Initialisation intelligente des compteurs de vaisseaux
+  useEffect(() => {
+    if (planet && !initialized) {
+      const availableHunters = planet.light_hunter_count || 0;
+      const availableCruisers = planet.cruiser_count || 0;
+      
+      // Initialiser avec le premier type de vaisseau disponible
+      if (availableHunters > 0) {
+        setHunterCount(1);
+        setCruiserCount(0);
+      } else if (availableCruisers > 0) {
+        setHunterCount(0);
+        setCruiserCount(1);
+      } else {
+        setHunterCount(0);
+        setCruiserCount(0);
+      }
+      setInitialized(true);
+    }
+  }, [planet, initialized]);
+
+  // Reset l'initialisation si la planète change
+  useEffect(() => {
+    setInitialized(false);
+  }, [planet?.id]);
 
   // Gestion du compte à rebours visuel (purement UI)
   useEffect(() => {
