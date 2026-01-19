@@ -20,6 +20,7 @@ import Changelog from './components/Changelog';
 import TransportModal from './components/TransportModal';
 import SpyModal from './components/SpyModal';
 import Marketplace from './components/Marketplace';
+import ProductionStats from './components/ProductionStats';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
@@ -30,7 +31,7 @@ import { Toaster, toast } from "sonner";
 import {
   LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Layers
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Layers, Activity
 } from "lucide-react";
 
 interface CombatReport {
@@ -454,6 +455,7 @@ export default function App() {
     { id: 'expedition', label: 'Expéditions', icon: Telescope, category: 'MILITAIRE' },
     
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
+    { id: 'stats', label: 'Statistiques', icon: Activity, category: 'DONNÉES' },
     { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
     { id: 'changelog', label: 'Changelog', icon: FileText, category: 'SYSTÈME' },
     { id: 'settings', label: 'Paramètres', icon: SettingsIcon, category: 'SYSTÈME' },
@@ -679,6 +681,7 @@ export default function App() {
                     {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} onNavigateTransport={handlePrepareTransport} />}
                     {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
                     {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
+                    {activeTab === 'stats' && <ProductionStats planet={planet} speedFactor={speedFactor} />}
                     
                     {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
                     {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}
