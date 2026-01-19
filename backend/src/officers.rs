@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -158,8 +158,57 @@ pub async fn recruit_officer_handler(
         return Err((StatusCode::BAD_REQUEST, "Officer not available".to_string()));
     }
 
-    // TODO: Vérifier que l'utilisateur a assez de ressources
-    // TODO: Déduire les ressources de l'utilisateur
+    // Vérifier que l'utilisateur possède au moins une planète
+    let planet = Planet::find()
+        .filter(crate::entities::planet::Column::OwnerId.eq(user_uuid))
+        .one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "No planet found for user".to_string()))?;
+
+    // Calculer le facteur de coût basé sur la vitesse du serveur
+    let speed_factor = if let Ok(config) = state.config.read() {
+        (config.speed_factor / 100.0).max(1.0)
+    } else {
+        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
+    };
+
+    // Calculer les coûts réels (divisés par le speed_factor, comme pour les autres unités)
+    let actual_cost_metal = template.recruitment_cost_metal / speed_factor;
+    let actual_cost_crystal = template.recruitment_cost_crystal / speed_factor;
+    let actual_cost_deuterium = template.recruitment_cost_deuterium / speed_factor;
+
+    // Vérifier que le joueur a assez de ressources
+    if planet.metal_amount < actual_cost_metal {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Pas assez de métal (requis: {:.0}, disponible: {:.0})",
+                actual_cost_metal, planet.metal_amount)
+        ));
+    }
+    if planet.crystal_amount < actual_cost_crystal {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Pas assez de cristal (requis: {:.0}, disponible: {:.0})",
+                actual_cost_crystal, planet.crystal_amount)
+        ));
+    }
+    if planet.deuterium_amount < actual_cost_deuterium {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Pas assez de deutérium (requis: {:.0}, disponible: {:.0})",
+                actual_cost_deuterium, planet.deuterium_amount)
+        ));
+    }
+
+    // Déduire les ressources
+    let mut planet_active: crate::entities::planet::ActiveModel = planet.clone().into();
+    planet_active.metal_amount = Set(planet.metal_amount - actual_cost_metal);
+    planet_active.crystal_amount = Set(planet.crystal_amount - actual_cost_crystal);
+    planet_active.deuterium_amount = Set(planet.deuterium_amount - actual_cost_deuterium);
+    planet_active.last_update = Set(chrono::Utc::now().naive_utc());
+    planet_active.update(&state.db).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Créer l'officier
     let new_officer = crate::entities::user_officer::ActiveModel {

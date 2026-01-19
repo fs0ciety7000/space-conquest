@@ -259,10 +259,17 @@ pub async fn claim_mission_reward_handler(
     let streak = get_or_create_streak(&state, user_id).await;
     let bonus = calculate_streak_bonus(streak.current_streak);
 
-    // Appliquer le bonus aux récompenses
-    let metal = mission.reward_metal * bonus;
-    let crystal = mission.reward_crystal * bonus;
-    let deuterium = mission.reward_deuterium * bonus;
+    // Récupérer le facteur de vitesse du serveur
+    let speed_factor = if let Ok(config) = state.config.read() {
+        (config.speed_factor / 100.0).max(1.0)
+    } else {
+        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
+    };
+
+    // Appliquer le bonus de streak ET le multiplicateur de vitesse aux récompenses
+    let metal = mission.reward_metal * bonus * speed_factor;
+    let crystal = mission.reward_crystal * bonus * speed_factor;
+    let deuterium = mission.reward_deuterium * bonus * speed_factor;
 
     // Créditer la planète
     let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
@@ -549,6 +556,18 @@ pub async fn claim_daily_reward_handler(
 
     let reward = calculate_streak_reward(streak.current_streak);
 
+    // Récupérer le facteur de vitesse du serveur pour adapter les récompenses
+    let speed_factor = if let Ok(config) = state.config.read() {
+        (config.speed_factor / 100.0).max(1.0)
+    } else {
+        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
+    };
+
+    // Appliquer le multiplicateur de vitesse aux récompenses
+    let metal = reward.metal * speed_factor;
+    let crystal = reward.crystal * speed_factor;
+    let deuterium = reward.deuterium * speed_factor;
+
     // Créditer la planète
     let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
         Ok(Some(p)) => p,
@@ -556,9 +575,9 @@ pub async fn claim_daily_reward_handler(
     };
 
     let mut planet_active: planet::ActiveModel = planet.clone().into();
-    planet_active.metal_amount = Set(planet.metal_amount + reward.metal);
-    planet_active.crystal_amount = Set(planet.crystal_amount + reward.crystal);
-    planet_active.deuterium_amount = Set(planet.deuterium_amount + reward.deuterium);
+    planet_active.metal_amount = Set(planet.metal_amount + metal);
+    planet_active.crystal_amount = Set(planet.crystal_amount + crystal);
+    planet_active.deuterium_amount = Set(planet.deuterium_amount + deuterium);
     let _ = planet_active.update(&state.db).await;
 
     // Marquer comme réclamé
@@ -576,7 +595,12 @@ pub async fn claim_daily_reward_handler(
 
     (StatusCode::OK, Json(json!({
         "message": "Récompense quotidienne réclamée !",
-        "rewards": reward
+        "rewards": {
+            "metal": metal,
+            "crystal": crystal,
+            "deuterium": deuterium,
+            "xp": reward.xp
+        }
     }))).into_response()
 }
 
