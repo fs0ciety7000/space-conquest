@@ -180,6 +180,10 @@ async fn main() {
         .route("/combat-reports/:id/detail", get(get_combat_report_detail_handler))
         .route("/planets/:id/transport-logs", get(get_transport_logs_handler))
         .route("/planets/:id/rename", post(rename_planet_handler))
+        // Slots de production
+        .route("/planets/:id/slots/unlock", post(unlock_slot_handler))
+        .route("/planets/:id/slots/assign", post(assign_slot_handler))
+        .route("/planets/:id/slots/deactivate", post(deactivate_slot_handler))
         .route("/my-planets", get(get_my_planets_handler))
         // Actions
         .route("/attack", post(attack_handler))
@@ -223,6 +227,7 @@ async fn main() {
         .route("/admin/stats", get(admin::get_server_stats_handler))
         .route("/admin/config", get(admin::get_server_config_handler))
         .route("/admin/config", patch(admin::update_server_config_handler))
+        .route("/admin/user/:id/role", patch(admin::update_user_role_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
@@ -537,9 +542,19 @@ async fn get_planet_handler(
 
     let elapsed = now.signed_duration_since(p.last_update).num_seconds();
     if elapsed > 0 {
-        active.metal_amount = Set(game_logic::calculate_resources_with_energy(game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update, p.energy_tech_level, energy_ratio));
-        active.crystal_amount = Set(game_logic::calculate_resources_with_energy(game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update, p.energy_tech_level, energy_ratio));
-        active.deuterium_amount = Set(game_logic::calculate_resources_with_energy(game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update, p.energy_tech_level, energy_ratio));
+        // Utiliser la nouvelle fonction avec prise en compte des slots
+        active.metal_amount = Set(game_logic::calculate_resources_with_slots(
+            game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update,
+            p.energy_tech_level, energy_ratio, &p.slot_1, &p.slot_2, &p.slot_3, &p.slot_4
+        ));
+        active.crystal_amount = Set(game_logic::calculate_resources_with_slots(
+            game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update,
+            p.energy_tech_level, energy_ratio, &p.slot_1, &p.slot_2, &p.slot_3, &p.slot_4
+        ));
+        active.deuterium_amount = Set(game_logic::calculate_resources_with_slots(
+            game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
+            p.energy_tech_level, energy_ratio, &p.slot_1, &p.slot_2, &p.slot_3, &p.slot_4
+        ));
         active.last_update = Set(now);
     }
 
@@ -615,15 +630,22 @@ async fn get_planet_handler(
 
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
-    // Calculate energy using new functions
-    let energy_prod = game_logic::calculate_energy_production(updated_model.solar_plant_level, updated_model.energy_tech_level);
+    // Calculate energy using new functions with slots
+    let energy_prod = game_logic::calculate_energy_production_with_slots(
+        updated_model.solar_plant_level, updated_model.energy_tech_level,
+        &updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4
+    );
     let energy_cons = game_logic::calculate_energy_consumption(updated_model.metal_mine_level, updated_model.crystal_mine_level, updated_model.deuterium_mine_level);
     let energy_ratio_percent = (energy_ratio * 100.0) as i32; // Convert to percentage
+
+    // Calculer les infos sur les slots
+    let next_slot = game_logic::get_next_slot_to_unlock(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4);
+    let next_slot_cost = next_slot.map(game_logic::get_slot_unlock_cost);
 
     // ✅ AJOUT : Calculer les messages non lus
     let unread_messages = count_unread_messages(p.owner_id, &state.db).await;
 
-    let mut json_response = serde_json::to_value(updated_model).unwrap();
+    let mut json_response = serde_json::to_value(&updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
         obj.insert("incoming_missions".into(), json!(incoming_raw));
         obj.insert("outgoing_missions".into(), json!(outgoing_detailed));
@@ -635,6 +657,28 @@ async fn get_planet_handler(
         let active_queue = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).order_by_asc(construction_queue::Column::EndTime).all(&state.db).await.unwrap_or_default();
         obj.insert("constructions".into(), json!(active_queue));
 
+        // Infos sur les slots de production
+        obj.insert("next_slot_to_unlock".into(), json!(next_slot));
+        if let Some(cost) = next_slot_cost {
+            obj.insert("next_slot_cost".into(), json!({
+                "metal": cost.metal,
+                "crystal": cost.crystal,
+                "deuterium": cost.deuterium
+            }));
+        }
+
+        // Bonus de production par slots
+        let metal_slots = game_logic::count_slots_for_resource(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4, "metal");
+        let crystal_slots = game_logic::count_slots_for_resource(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4, "crystal");
+        let energy_slots = game_logic::count_slots_for_resource(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4, "energy");
+        let deuterium_slots = game_logic::count_slots_for_resource(&updated_model.slot_1, &updated_model.slot_2, &updated_model.slot_3, &updated_model.slot_4, "deuterium");
+
+        obj.insert("slot_bonuses".into(), json!({
+            "metal": format!("+{}%", metal_slots * 50),
+            "crystal": format!("+{}%", crystal_slots * 50),
+            "energy": format!("+{}%", energy_slots * 50),
+            "deuterium": format!("+{}%", deuterium_slots * 50)
+        }));
     }
 
     Ok(Json(json_response))
@@ -652,6 +696,175 @@ async fn clear_report_handler(
     active.unread_report = Set(None);
     let _ = active.update(&state.db).await;
     StatusCode::OK
+}
+
+// ========================
+// 🎰 HANDLERS SLOTS DE PRODUCTION
+// ========================
+
+// POST /planets/:id/slots/unlock - Débloquer le prochain slot
+async fn unlock_slot_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let p = match Planet::find_by_id(id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))),
+    };
+
+    // Trouver le prochain slot à débloquer
+    let next_slot = game_logic::get_next_slot_to_unlock(&p.slot_1, &p.slot_2, &p.slot_3, &p.slot_4);
+
+    if next_slot.is_none() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Tous les slots sont déjà débloqués"})));
+    }
+
+    let slot_number = next_slot.unwrap();
+    let cost = game_logic::get_slot_unlock_cost(slot_number);
+
+    // Vérifier les ressources
+    if p.metal_amount < cost.metal || p.crystal_amount < cost.crystal || p.deuterium_amount < cost.deuterium {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": "Ressources insuffisantes",
+            "required": {"metal": cost.metal, "crystal": cost.crystal, "deuterium": cost.deuterium}
+        })));
+    }
+
+    // Déduire les ressources et débloquer le slot
+    let mut active: planet::ActiveModel = p.into();
+    active.metal_amount = Set(active.metal_amount.clone().unwrap() - cost.metal);
+    active.crystal_amount = Set(active.crystal_amount.clone().unwrap() - cost.crystal);
+    active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() - cost.deuterium);
+
+    // Débloquer le slot (valeur "none" = débloqué mais non assigné)
+    match slot_number {
+        1 => active.slot_1 = Set(Some("none".to_string())),
+        2 => active.slot_2 = Set(Some("none".to_string())),
+        3 => active.slot_3 = Set(Some("none".to_string())),
+        4 => active.slot_4 = Set(Some("none".to_string())),
+        _ => {}
+    }
+
+    match active.update(&state.db).await {
+        Ok(_) => (StatusCode::OK, Json(json!({
+            "success": true,
+            "message": format!("Slot {} débloqué", slot_number),
+            "slot_number": slot_number
+        }))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct SlotAssignPayload {
+    slot_number: i32,
+    resource_type: String, // "metal", "crystal", "energy", "deuterium"
+}
+
+// POST /planets/:id/slots/assign - Assigner un slot à une ressource
+async fn assign_slot_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<SlotAssignPayload>,
+) -> impl IntoResponse {
+    let p = match Planet::find_by_id(id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))),
+    };
+
+    // Vérifier que le type de ressource est valide
+    let valid_types = ["metal", "crystal", "energy", "deuterium"];
+    if !valid_types.contains(&payload.resource_type.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": "Type de ressource invalide. Utilisez: metal, crystal, energy, deuterium"
+        })));
+    }
+
+    // Vérifier que le slot est débloqué
+    let slot_value = match payload.slot_number {
+        1 => &p.slot_1,
+        2 => &p.slot_2,
+        3 => &p.slot_3,
+        4 => &p.slot_4,
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Numéro de slot invalide (1-4)"}))),
+    };
+
+    if slot_value.is_none() {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Le slot {} n'est pas encore débloqué", payload.slot_number)
+        })));
+    }
+
+    // Assigner le slot
+    let mut active: planet::ActiveModel = p.into();
+    match payload.slot_number {
+        1 => active.slot_1 = Set(Some(payload.resource_type.clone())),
+        2 => active.slot_2 = Set(Some(payload.resource_type.clone())),
+        3 => active.slot_3 = Set(Some(payload.resource_type.clone())),
+        4 => active.slot_4 = Set(Some(payload.resource_type.clone())),
+        _ => {}
+    }
+
+    match active.update(&state.db).await {
+        Ok(_) => (StatusCode::OK, Json(json!({
+            "success": true,
+            "message": format!("Slot {} assigné à {}", payload.slot_number, payload.resource_type),
+            "slot_number": payload.slot_number,
+            "resource_type": payload.resource_type
+        }))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct SlotDeactivatePayload {
+    slot_number: i32,
+}
+
+// POST /planets/:id/slots/deactivate - Désactiver un slot (le reverrouille)
+async fn deactivate_slot_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<SlotDeactivatePayload>,
+) -> impl IntoResponse {
+    let p = match Planet::find_by_id(id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))),
+    };
+
+    // Vérifier que le slot est actif (débloqué)
+    let slot_value = match payload.slot_number {
+        1 => &p.slot_1,
+        2 => &p.slot_2,
+        3 => &p.slot_3,
+        4 => &p.slot_4,
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Numéro de slot invalide (1-4)"}))),
+    };
+
+    if slot_value.is_none() {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Le slot {} est déjà verrouillé", payload.slot_number)
+        })));
+    }
+
+    // Désactiver le slot (reverrouillé = None)
+    let mut active: planet::ActiveModel = p.into();
+    match payload.slot_number {
+        1 => active.slot_1 = Set(None),
+        2 => active.slot_2 = Set(None),
+        3 => active.slot_3 = Set(None),
+        4 => active.slot_4 = Set(None),
+        _ => {}
+    }
+
+    match active.update(&state.db).await {
+        Ok(_) => (StatusCode::OK, Json(json!({
+            "success": true,
+            "message": format!("Slot {} désactivé et reverrouillé", payload.slot_number),
+            "slot_number": payload.slot_number
+        }))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))),
+    }
 }
 
 async fn upgrade_mine_handler(

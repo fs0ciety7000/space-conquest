@@ -4,7 +4,9 @@
       "Bash(cargo run:*)",
       "Bash(psql:*)",
       "Bash(cargo check:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

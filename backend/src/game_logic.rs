@@ -623,3 +623,128 @@ pub fn get_rank_badge(total_points: i32) -> &'static str {
     else if total_points >= 300 { "Caporal" }                  // Premier rang
     else { "Recrue" }                                          // Début
 }
+
+// ========================
+// 🎰 SYSTÈME DE SLOTS DE PRODUCTION
+// ========================
+
+/// Compte le nombre de slots assignés à un type de ressource
+/// Renvoie le nombre de slots actifs pour metal, crystal, energy, deuterium
+pub fn count_slots_for_resource(
+    slot_1: &Option<String>,
+    slot_2: &Option<String>,
+    slot_3: &Option<String>,
+    slot_4: &Option<String>,
+    resource_type: &str
+) -> i32 {
+    let slots = [slot_1, slot_2, slot_3, slot_4];
+    slots.iter()
+        .filter(|s| s.as_ref().map(|v| v == resource_type).unwrap_or(false))
+        .count() as i32
+}
+
+/// Calcule le bonus de production basé sur les slots (+50% par slot)
+pub fn get_slot_bonus(slots_count: i32) -> f64 {
+    1.0 + (slots_count as f64 * 0.5) // +50% par slot
+}
+
+/// Coût progressif pour débloquer un slot (slot_number de 1 à 4)
+pub fn get_slot_unlock_cost(slot_number: i32) -> Cost {
+    let base_cost = Cost {
+        metal: 5000.0,
+        crystal: 3000.0,
+        deuterium: 1000.0,
+    };
+
+    let multiplier = slot_number as f64; // x1, x2, x3, x4
+    let divider = cost_scaling();
+
+    Cost {
+        metal: (base_cost.metal * multiplier) / divider,
+        crystal: (base_cost.crystal * multiplier) / divider,
+        deuterium: (base_cost.deuterium * multiplier) / divider,
+    }
+}
+
+/// Retourne le numéro du prochain slot à débloquer (1-4) ou None si tous débloqués
+pub fn get_next_slot_to_unlock(
+    slot_1: &Option<String>,
+    slot_2: &Option<String>,
+    slot_3: &Option<String>,
+    slot_4: &Option<String>,
+) -> Option<i32> {
+    if slot_1.is_none() { return Some(1); }
+    if slot_2.is_none() { return Some(2); }
+    if slot_3.is_none() { return Some(3); }
+    if slot_4.is_none() { return Some(4); }
+    None // Tous les slots sont déjà débloqués
+}
+
+/// Vérifie si un slot est débloqué (valeur "none" ou une ressource assignée)
+pub fn is_slot_unlocked(slot: &Option<String>) -> bool {
+    slot.is_some()
+}
+
+/// Calcule les ressources avec prise en compte des slots de production
+pub fn calculate_resources_with_slots(
+    res_type: ResourceType,
+    level: i32,
+    current_amount: f64,
+    last_update: chrono::NaiveDateTime,
+    energy_tech_level: i32,
+    energy_ratio: f64,
+    slot_1: &Option<String>,
+    slot_2: &Option<String>,
+    slot_3: &Option<String>,
+    slot_4: &Option<String>,
+) -> f64 {
+    let now = chrono::Utc::now().naive_utc();
+    let duration = now.signed_duration_since(last_update).num_seconds() as f64;
+
+    // Bonus technologie énergie (+1% par niveau)
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.01);
+
+    // Déterminer le type de ressource pour compter les slots
+    let resource_key = match res_type {
+        ResourceType::Metal => "metal",
+        ResourceType::Crystal => "crystal",
+        ResourceType::Deuterium => "deuterium",
+    };
+
+    // Bonus des slots (+50% par slot assigné)
+    let slots_count = count_slots_for_resource(slot_1, slot_2, slot_3, slot_4, resource_key);
+    let slot_bonus = get_slot_bonus(slots_count);
+
+    // Production de base (ratio 3:2:1)
+    let base_production = match res_type {
+        ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),
+        ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),
+        ResourceType::Deuterium => 10.0 * (level as f64) * 1.05f64.powi(level),
+    };
+
+    // Application du ratio énergétique et des slots
+    let production_per_sec = (base_production * tech_bonus * energy_ratio * slot_bonus / 3600.0) * (SPEED_FACTOR / 100.0);
+    current_amount + (production_per_sec * duration)
+}
+
+/// Calcule le bonus d'énergie avec les slots assignés à "energy"
+pub fn calculate_energy_production_with_slots(
+    solar_plant_level: i32,
+    energy_tech_level: i32,
+    slot_1: &Option<String>,
+    slot_2: &Option<String>,
+    slot_3: &Option<String>,
+    slot_4: &Option<String>,
+) -> f64 {
+    if solar_plant_level == 0 {
+        return 0.0;
+    }
+
+    // Bonus des slots énergie
+    let slots_count = count_slots_for_resource(slot_1, slot_2, slot_3, slot_4, "energy");
+    let slot_bonus = get_slot_bonus(slots_count);
+
+    let base_production = 60.0 * (solar_plant_level as f64) * 1.1f64.powi(solar_plant_level);
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.10);
+    base_production * tech_bonus * slot_bonus
+}

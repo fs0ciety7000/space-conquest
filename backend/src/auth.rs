@@ -137,6 +137,7 @@ pub async fn register_handler(
         password: Set(hashed),
         email: Set(payload.email.clone()),
         created_at: Set(Utc::now().naive_utc()),
+        role: Set("user".to_string()),
     };
 
     if new_user.insert(&state.db).await.is_err() {

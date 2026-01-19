@@ -16,6 +16,7 @@ use crate::entities::{
     prelude::{Planet, User, ServerConfig},
     planet,
     server_config,
+    user,
 };
 use crate::{AppState, game_logic};
 
@@ -74,11 +75,21 @@ pub struct PlanetUpdate {
     pub plasma_turret_count: Option<i32>,
 }
 
-// Vérification admin
-fn check_admin(user_id_str: &str, _state: &AppState) -> Result<Uuid, StatusCode> {
+// Vérification admin - vérifie le rôle dans la DB
+async fn check_admin(user_id_str: &str, state: &AppState) -> Result<Uuid, StatusCode> {
     let user_id = Uuid::parse_str(user_id_str).map_err(|_| StatusCode::UNAUTHORIZED)?;
-    // En production tu checkeras depuis la DB, ici on suppose que phantomhex a un ID connu
-    // Pour l'instant on accepte tout pour simplifier, mais tu peux ajouter une vérif username
+
+    // Récupérer l'utilisateur depuis la DB et vérifier son rôle
+    let user = User::find_by_id(user_id)
+        .one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    if user.role != "admin" {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     Ok(user_id)
 }
 
@@ -87,7 +98,7 @@ pub async fn get_all_players_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).is_err() {
+    if check_admin(user_id_str, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
     .into_response();
     }
@@ -128,7 +139,7 @@ pub async fn get_planet_admin_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).is_err() {
+    if check_admin(user_id_str, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -153,7 +164,7 @@ pub async fn update_planet_admin_handler(
     Json(updates): Json<PlanetUpdate>,
 ) -> impl IntoResponse {
     let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).is_err() {
+    if check_admin(user_id_str, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -239,7 +250,7 @@ pub async fn get_server_stats_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).is_err() {
+    if check_admin(user_id_str, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -297,7 +308,7 @@ pub async fn get_server_config_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).is_err() {
+    if check_admin(user_id_str, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -327,7 +338,7 @@ pub async fn update_server_config_handler(
     Json(updates): Json<ConfigUpdate>,
 ) -> impl IntoResponse {
     let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).is_err() {
+    if check_admin(user_id_str, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -386,4 +397,54 @@ pub async fn update_server_config_handler(
         "success": true,
         "message": "Configuration mise à jour"
     })).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct RoleUpdate {
+    pub role: String, // "user" ou "admin"
+}
+
+// PATCH /admin/user/:id/role - Modifier le rôle d'un utilisateur
+pub async fn update_user_role_handler(
+    Path(target_user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(update): Json<RoleUpdate>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    // Vérifier que le rôle est valide
+    if update.role != "user" && update.role != "admin" {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Rôle invalide. Utilisez 'user' ou 'admin'"})))
+            .into_response();
+    }
+
+    // Récupérer l'utilisateur cible
+    let target_user = User::find_by_id(target_user_id)
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if target_user.is_none() {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"})))
+            .into_response();
+    }
+
+    let mut active: user::ActiveModel = target_user.unwrap().into();
+    active.role = Set(update.role.clone());
+
+    match active.update(&state.db).await {
+        Ok(updated) => Json(json!({
+            "success": true,
+            "message": format!("Rôle de l'utilisateur mis à jour: {}", update.role),
+            "user_id": updated.id,
+            "new_role": updated.role
+        })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"})))
+            .into_response(),
+    }
 }

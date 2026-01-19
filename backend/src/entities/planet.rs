@@ -110,6 +110,14 @@ pub struct Model {
 
     // Date de création (pour déterminer la planète mère)
     pub created_at: DateTime,
+
+    // Slots de production supplémentaires (4 slots débloquables)
+    // null = verrouillé, "none" = débloqué mais pas assigné
+    // "metal"/"crystal"/"energy"/"deuterium" = assigné
+    pub slot_1: Option<String>,
+    pub slot_2: Option<String>,
+    pub slot_3: Option<String>,
+    pub slot_4: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

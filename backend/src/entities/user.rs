@@ -12,6 +12,8 @@ pub struct Model {
     #[sea_orm(unique)]
     pub email: String,
     pub created_at: chrono::NaiveDateTime,
+    #[sea_orm(default_value = "user")]
+    pub role: String, // "user" ou "admin"
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
