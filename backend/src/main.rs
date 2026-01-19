@@ -163,7 +163,14 @@ async fn main() {
         Err(e) => eprintln!("❌ Erreur migrations : {:?}", e),
     }
 
-    let state = AppState { db };
+    println!("⚙️ Chargement de la configuration du serveur...");
+    let config_cache = backend::ServerConfigCache::load_from_db(&db).await;
+    println!("✅ Configuration chargée - Speed Factor: {}", config_cache.speed_factor);
+
+    let state = AppState {
+        db,
+        config: std::sync::Arc::new(std::sync::RwLock::new(config_cache)),
+    };
     let cors = CorsLayer::permissive();
 
     let app = Router::new()
@@ -438,8 +445,9 @@ async fn resolve_attack_mission(
 
 // --- GAME HANDLERS ---
 
-async fn get_game_config_handler() -> impl IntoResponse {
-    Json(json!({ "speed_factor": game_logic::SPEED_FACTOR }))
+async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let speed_factor = state.config.read().unwrap().speed_factor;
+    Json(json!({ "speed_factor": speed_factor }))
 }
 
 async fn get_ranking_handler(
@@ -2063,7 +2071,7 @@ async fn get_player_profile_handler(
     let planet_ids: Vec<Uuid> = planets.iter().map(|p| p.id).collect();
     let completed_missions = if !planet_ids.is_empty() {
         FleetMission::find()
-            .filter(fleet_mission::Column::SourcePlanetId.is_in(planet_ids))
+            .filter(fleet_mission::Column::SourcePlanetId.is_in(planet_ids.clone()))
             .filter(fleet_mission::Column::ArrivalTime.lt(chrono::Utc::now().naive_utc()))
             .count(&state.db)
             .await
