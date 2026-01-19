@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    ActiveModelTrait, EntityTrait, Set, QueryFilter, ColumnTrait
+    ActiveModelTrait, EntityTrait, Set, QueryFilter, ColumnTrait, QuerySelect, sea_query::Expr, PaginatorTrait
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -16,7 +16,7 @@ use crate::entities::{
     prelude::{Planet, User},
     planet,
 };
-use crate::AppState;
+use crate::{AppState, game_logic};
 
 #[derive(Serialize)]
 struct PlanetInfo {
@@ -219,4 +219,62 @@ pub async fn update_planet_admin_handler(
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"})))
             .into_response(),
     }
+}
+
+#[derive(Serialize)]
+pub struct ServerStats {
+    pub total_users: i64,
+    pub total_planets: i64,
+    pub total_metal: f64,
+    pub total_crystal: f64,
+    pub total_deuterium: f64,
+    pub total_ships: i32,
+    pub total_defenses: i32,
+    pub speed_factor: f64,
+}
+
+pub async fn get_server_stats_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    let total_users = User::find().count(&state.db).await.unwrap_or(0) as i64;
+    let total_planets = Planet::find().count(&state.db).await.unwrap_or(0) as i64;
+
+    let planets = Planet::find().all(&state.db).await.unwrap_or_default();
+
+    let mut total_metal = 0.0;
+    let mut total_crystal = 0.0;
+    let mut total_deuterium = 0.0;
+    let mut total_ships = 0;
+    let mut total_defenses = 0;
+
+    for p in planets {
+        total_metal += p.metal_amount;
+        total_crystal += p.crystal_amount;
+        total_deuterium += p.deuterium_amount;
+
+        total_ships += p.light_hunter_count + p.cruiser_count + p.recycler_count
+                    + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
+
+        total_defenses += p.missile_launcher_count + p.plasma_turret_count;
+    }
+
+    let stats = ServerStats {
+        total_users,
+        total_planets,
+        total_metal,
+        total_crystal,
+        total_deuterium,
+        total_ships,
+        total_defenses,
+        speed_factor: game_logic::SPEED_FACTOR,
+    };
+
+    Json(stats).into_response()
 }

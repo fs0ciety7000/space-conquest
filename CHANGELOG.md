@@ -1,5 +1,78 @@
 # Changelog - Space Conquest
 
+## [1.6.0] - 2026-01-19 - Améliorations panel admin (statistiques serveur)
+
+### 🎯 Nouvelles fonctionnalités
+
+#### 📊 Tableau de bord statistiques serveur (Panel Admin)
+**Feature**: Onglet "Statistiques Serveur" dans le panel admin pour surveiller l'état global du jeu
+
+**Statistiques affichées**:
+- Nombre total de joueurs
+- Nombre total de planètes
+- Total de vaisseaux (toutes flottes combinées)
+- Total de défenses (missiles + plasma)
+- Ressources totales du serveur (métal, cristal, deutérium)
+- Paramètres serveur (SPEED_FACTOR actuel)
+
+**Design**:
+- Interface en onglets (Statistiques / Gestion Joueurs)
+- Cartes colorées avec dégradés pour chaque métrique
+- Mise à jour en temps réel lors du changement d'onglet
+- Responsive (adapté mobile/tablette/desktop)
+
+**Accès**: Panel Admin → Onglet "Statistiques Serveur"
+
+**Fichiers backend**:
+- `backend/src/admin.rs` (lignes 224-280)
+  - Nouveau endpoint `GET /admin/stats`
+  - Structure `ServerStats` avec toutes les métriques
+  - Import `PaginatorTrait` pour count()
+- `backend/src/main.rs` (ligne 223)
+  - Route `/admin/stats` enregistrée
+
+**Fichiers frontend**:
+- `frontend/src/components/AdminPanel.tsx`
+  - Système d'onglets (stats/players)
+  - Interface `ServerStats` (lignes 69-78)
+  - Type `AdminTab` pour gérer les onglets
+  - Fonction `fetchStats()` pour charger les statistiques
+  - Cartes visuelles pour chaque métrique
+  - Section SPEED_FACTOR en lecture seule
+
+---
+
+### 📝 Notes techniques
+
+**Calculs backend**:
+- Total utilisateurs: `User::find().count()`
+- Total planètes: `Planet::find().count()`
+- Ressources/flottes/défenses: Somme sur toutes les planètes
+
+**Performances**:
+- Chargement à la demande (uniquement quand onglet activé)
+- Cache côté client tant que l'onglet reste actif
+
+**SPEED_FACTOR**:
+- Actuellement en lecture seule (constante dans `game_logic.rs`)
+- Valeur actuelle: 500.0 (×5.0)
+- Modification dynamique nécessiterait table config en DB (amélioration future)
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: Aucune (nouvelle fonctionnalité sans modification schéma)
+
+**Tests recommandés**:
+1. ✅ Accéder au panel admin en tant qu'administrateur
+2. ✅ Vérifier que l'onglet "Statistiques Serveur" s'affiche
+3. ✅ Vérifier les valeurs affichées correspondent aux données réelles
+4. ✅ Tester la navigation entre onglets
+5. ✅ Vérifier l'onglet "Gestion Joueurs" fonctionne toujours correctement
+
+---
+
 ## [1.5.0] - 2026-01-19 - Correction bug timer tourelles plasma
 
 ### 🔧 Corrections critiques
