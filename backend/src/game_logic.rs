@@ -543,10 +543,10 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
     let player_strength = fleet_size + (defense_bonus * 5);
 
     if player_strength > pirate_strength {
-        // VICTOIRE : Pertes faibles (5-25% avec variation ±20%)
-        let base_loss_rate = rng.gen_range(0.05..0.25);
-        let variation = rng.gen_range(-0.2..0.2);
-        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.01_f64, 0.4_f64);
+        // VICTOIRE : Pertes réduites (3-15% avec variation ±10%)
+        let base_loss_rate = rng.gen_range(0.03..0.15);
+        let variation = rng.gen_range(-0.1..0.1);
+        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.01_f64, 0.20_f64);
 
         let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1 si fleet > 0
         let lost = lost.max(0).min(fleet_size); // Clamp entre 0 et fleet_size
@@ -557,10 +557,10 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
             ships_lost: lost
         }
     } else {
-        // DÉFAITE : Pertes lourdes (50-90% avec variation ±20%)
-        let base_loss_rate = rng.gen_range(0.5..0.9);
-        let variation = rng.gen_range(-0.2..0.2);
-        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.4_f64, 1.0_f64);
+        // DÉFAITE : Pertes modérées (30-60% avec variation ±15%)
+        let base_loss_rate = rng.gen_range(0.30..0.60);
+        let variation = rng.gen_range(-0.15..0.15);
+        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.25_f64, 0.70_f64);
 
         let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1
         let lost = lost.max(1).min(fleet_size); // Minimum 1 perte en cas de défaite
