@@ -38,7 +38,7 @@ use sea_orm_migration::MigratorTrait;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, AppState
 };
 use config::Config;
 use websocket::WsState;
@@ -206,8 +206,7 @@ async fn main() {
         .route("/planets/:id/build-fleet/:type/:qty", post(build_fleet_handler))
         .route("/planets/:id/expedition", post(expedition_handler))
         .route("/planets/:id/expedition/scout", post(scout_expedition_handler))
-        // TODO: Fix expedition_v2_handler - temporarily disabled
-        // .route("/planets/:id/expedition-v2", post(expedition_v2_handler))
+        .route("/planets/:id/expedition-v2", post(expedition_v2_handler))
         .route("/planets/:id/clear-report", post(clear_report_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
         .route("/combat-reports/:id/detail", get(get_combat_report_detail_handler))
@@ -272,6 +271,8 @@ async fn main() {
         .route("/admin/user/:id/email", patch(admin::update_email_handler))
         .route("/admin/user/:id/reset-password", post(admin::reset_password_handler))
         .route("/admin/user/:id", delete(admin::delete_user_handler))
+        // Game tick system
+        .route("/tick", post(tick_handler))
         // Alliance system
         .route("/alliances", get(alliance::list_alliances_handler))
         .route("/alliances", post(alliance::create_alliance_handler))
@@ -4429,4 +4430,27 @@ async fn expedition_v2_handler(
         },
         "duration_seconds": duration
     })).into_response()
+}
+
+/// POST /tick - Process game tick (research completion, etc.)
+///
+/// This endpoint should be called periodically (e.g., via cron job)
+/// to process time-based game mechanics like research completion.
+async fn tick_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    match tick_system::process_tick(&state.db).await {
+        Ok(stats) => {
+            Json(json!({
+                "success": true,
+                "research_completed": stats.research_completed,
+            })).into_response()
+        }
+        Err(e) => {
+            eprintln!("❌ Tick processing error: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+                "error": "Tick processing failed"
+            }))).into_response()
+        }
+    }
 }
