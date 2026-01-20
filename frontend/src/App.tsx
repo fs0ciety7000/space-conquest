@@ -26,6 +26,8 @@ import ProductionStats from './components/ProductionStats';
 import AllianceView from './components/AllianceView';
 import MissionsView from './components/MissionsView';
 import Officers from './components/Officers';
+import { SabotagesDashboard } from './components/SabotagesDashboard';
+import { CasusBelliList } from './components/CasusBelliList';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
@@ -38,7 +40,7 @@ import { Toaster, toast } from "sonner";
 import {
   LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords
 } from "lucide-react";
 
 interface CombatReport {
@@ -72,6 +74,8 @@ export default function App() {
   const [targetPlanet, setTargetPlanet] = useState<{id: string, name: string} | null>(null);
   const [transportTarget, setTransportTarget] = useState<{id: string, name: string, galaxy: number, system: number, position: number} | null>(null);
   const [spyReport, setSpyReport] = useState<any>(null);
+  const [showSabotagesDashboard, setShowSabotagesDashboard] = useState(false);
+  const [showCasusBelliList, setShowCasusBelliList] = useState(false);
   const prevPlanetRef = useRef<any>(null);
   const processingReportRef = useRef(false);
 
@@ -572,7 +576,10 @@ export default function App() {
     { id: 'shipyard', label: 'Chantier Spatial', icon: Hammer, category: 'MILITAIRE' },
     { id: 'defenses', label: 'Défense', icon: ShieldCheck, category: 'MILITAIRE' },
     { id: 'expedition', label: 'Expéditions', icon: Telescope, category: 'MILITAIRE' },
-    
+
+    { id: 'sabotages', label: 'Mes Sabotages', icon: Eye, category: 'ESPIONNAGE', onClick: () => setShowSabotagesDashboard(true) },
+    { id: 'casus-belli', label: 'Casus Belli', icon: Swords, category: 'ESPIONNAGE', onClick: () => setShowCasusBelliList(true) },
+
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
     { id: 'alliance', label: 'Alliance', icon: Shield, category: 'DONNÉES' },
     { id: 'missions', label: 'Missions', icon: Telescope, category: 'DONNÉES' },
@@ -627,6 +634,20 @@ export default function App() {
           />
         )}
 
+        {showSabotagesDashboard && token && (
+          <SabotagesDashboard
+            token={token}
+            onClose={() => setShowSabotagesDashboard(false)}
+          />
+        )}
+
+        {showCasusBelliList && token && (
+          <CasusBelliList
+            token={token}
+            onClose={() => setShowCasusBelliList(false)}
+          />
+        )}
+
         {showShortcutsHelp && (
           <ShortcutsHelpModal onClose={() => setShowShortcutsHelp(false)} />
         )}
@@ -655,16 +676,24 @@ export default function App() {
           {/* Ligne lumineuse décorative */}
           <div className="absolute top-0 right-0 w-px h-full bg-gradient-to-b from-cyan-500/20 via-purple-500/10 to-transparent"></div>
              <div className="p-4 space-y-8 mt-4">
-                {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'ÉCONOMIE', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
+                {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'ÉCONOMIE', 'MILITAIRE', 'ESPIONNAGE', 'DONNÉES', 'SYSTÈME'].map(cat => (
 
                     <div key={cat} className="space-y-2">
                         <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
                         <div className="space-y-0.5">
                             {MENU_ITEMS.filter(item => item.category === cat).map(item => (
-                                <motion.button 
+                                <motion.button
                                     key={item.id}
                                     data-tour={item.id}
-                                    onClick={() => handleTabChange(item.id as any)} 
+                                    onClick={() => {
+                                      if ('onClick' in item && item.onClick) {
+                                        item.onClick();
+                                        setSidebarOpen(false);
+                                        playSound('click');
+                                      } else {
+                                        handleTabChange(item.id as any);
+                                      }
+                                    }}
                                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-300 group relative overflow-hidden ${activeTab === item.id ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                                     whileHover={{ x: 4 }}
                                     whileTap={{ scale: 0.98 }}
@@ -751,16 +780,24 @@ export default function App() {
               </div>
 
               <div className="p-4 space-y-6 mt-2">
-               {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'MILITAIRE', 'DONNÉES', 'SYSTÈME'].map(cat => (
+               {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'ÉCONOMIE', 'MILITAIRE', 'ESPIONNAGE', 'DONNÉES', 'SYSTÈME'].map(cat => (
 
                     <div key={cat} className="space-y-2">
                         <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
                         <div className="space-y-1">
                             {MENU_ITEMS.filter(item => item.category === cat).map(item => (
-    <button 
+    <button
         key={item.id}
         data-tour={item.id}
-        onClick={() => handleTabChange(item.id as any)} 
+        onClick={() => {
+          if ('onClick' in item && item.onClick) {
+            item.onClick();
+            setSidebarOpen(false);
+            playSound('click');
+          } else {
+            handleTabChange(item.id as any);
+          }
+        }}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-200 group relative overflow-hidden ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
     >
         <div className="relative">
