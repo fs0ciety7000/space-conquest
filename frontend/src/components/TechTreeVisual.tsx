@@ -96,16 +96,21 @@ const TechNode = ({ data }: { data: any }) => {
   return (
     <Card className={`
       relative overflow-hidden w-[280px] transition-all duration-300
-      ${isLocked ? 'opacity-50 grayscale' : ''}
-      ${!isLocked && !isResearching ? 'hover:-translate-y-1 hover:shadow-2xl cursor-pointer' : ''}
-      bg-slate-950 border ${config.border}
-      ${!isLocked && canAfford ? 'shadow-lg' : ''}
+      ${isLocked
+        ? 'bg-red-950/20 border-red-900/50 opacity-70'
+        : `bg-slate-950 border ${config.border}`
+      }
+      ${!isLocked && !isResearching ? 'hover:-translate-y-1 hover:shadow-2xl cursor-pointer hover:scale-105' : ''}
+      ${!isLocked && canAfford ? 'shadow-lg shadow-cyan-500/20' : ''}
       card-depth
     `}>
       {/* Effet de glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
-        <div className={`absolute top-0 right-0 w-24 h-24 ${config.bg} blur-3xl`}></div>
+        <div className={`absolute top-0 right-0 w-24 h-24 ${isLocked ? 'bg-red-900/30' : config.bg} blur-3xl`}></div>
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+        {isLocked && (
+          <div className="absolute inset-0 bg-red-900/10"></div>
+        )}
       </div>
 
       <CardContent className="p-4 relative z-10">
@@ -293,62 +298,92 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     }
   };
 
-  // Organiser les positions des technologies par catégorie
-  const getNodePosition = (tech_key: string, index: number, category: string) => {
-    const baseY = {
-      'Base': 100,
-      'Advanced': 350,
-      'Propulsion': 600,
-      'Science': 850,
-      'Other': 1000
-    }[category] || 500;
+  // Calculer la profondeur (tier/level) de chaque tech dans l'arbre de dépendances
+  const calculateTechDepth = (techTree: TechInfo[]) => {
+    const depths = new Map<string, number>();
+    const visited = new Set<string>();
 
-    // Spacing horizontal
-    const spacingX = 320;
-    const startX = 50;
+    // Fonction récursive pour calculer la profondeur
+    const getDepth = (tech_key: string): number => {
+      if (depths.has(tech_key)) return depths.get(tech_key)!;
+      if (visited.has(tech_key)) return 0; // Éviter les cycles
 
-    return { x: startX + (index * spacingX), y: baseY };
+      visited.add(tech_key);
+
+      const tech = techTree.find(t => t.tech_key === tech_key);
+      if (!tech || tech.requirements.length === 0) {
+        depths.set(tech_key, 0);
+        return 0;
+      }
+
+      // La profondeur = 1 + max des profondeurs des dépendances
+      const maxDepth = Math.max(
+        ...tech.requirements.map(req => getDepth(req.required_tech_key))
+      );
+      const depth = maxDepth + 1;
+      depths.set(tech_key, depth);
+      return depth;
+    };
+
+    // Calculer pour toutes les techs
+    techTree.forEach(tech => getDepth(tech.tech_key));
+    return depths;
+  };
+
+  // Positionner les nodes en arbre vertical hiérarchique
+  const getNodePosition = (tech_key: string, techTree: TechInfo[], depths: Map<string, number>) => {
+    const depth = depths.get(tech_key) || 0;
+
+    // Grouper les techs par profondeur
+    const techsAtDepth = techTree.filter(t => depths.get(t.tech_key) === depth);
+    const indexAtDepth = techsAtDepth.findIndex(t => t.tech_key === tech_key);
+
+    // Layout vertical : profondeur = Y, index à cette profondeur = X
+    const spacingY = 280; // Espacement vertical entre niveaux
+    const spacingX = 350; // Espacement horizontal entre techs du même niveau
+    const startY = 100;
+
+    // Centrer horizontalement les techs du même niveau
+    const totalWidth = techsAtDepth.length * spacingX;
+    const startX = (window.innerWidth / 2) - (totalWidth / 2) + (indexAtDepth * spacingX);
+
+    return {
+      x: Math.max(50, startX),
+      y: startY + (depth * spacingY)
+    };
   };
 
   // Créer les noeuds dynamiquement depuis l'API
   const initialNodes: Node[] = useMemo(() => {
     if (!techTree.length) return [];
 
-    // Grouper par catégorie
-    const categorized: Record<string, TechInfo[]> = {};
-    techTree.forEach(tech => {
-      const config = getTechConfig(tech.tech_key);
-      const cat = config.category;
-      if (!categorized[cat]) categorized[cat] = [];
-      categorized[cat].push(tech);
-    });
+    // Calculer les profondeurs pour organiser hiérarchiquement
+    const depths = calculateTechDepth(techTree);
 
     const nodes: Node[] = [];
 
-    Object.entries(categorized).forEach(([category, techs]) => {
-      techs.forEach((tech, idx) => {
-        const isResearching = queue.some((q: any) => q.building_type === tech.tech_key);
-        const cost = calculateNextLevelCost(tech);
-        const canAfford = metal >= cost.metal && crystal >= cost.crystal && deuterium >= cost.deuterium;
-        const allRequirementsMet = tech.requirements.every(r => r.met);
+    techTree.forEach((tech) => {
+      const isResearching = queue.some((q: any) => q.building_type === tech.tech_key);
+      const cost = calculateNextLevelCost(tech);
+      const canAfford = metal >= cost.metal && crystal >= cost.crystal && deuterium >= cost.deuterium;
+      const allRequirementsMet = tech.requirements.every(r => r.met);
 
-        nodes.push({
-          id: tech.tech_key,
-          type: 'techNode',
-          position: getNodePosition(tech.tech_key, idx, category),
-          data: {
-            ...tech,
-            isResearching,
-            canAfford,
-            allRequirementsMet,
-            cost,
-            metal,
-            crystal,
-            deuterium,
-            queueFull: isQueueFull,
-            onResearch: () => handleResearch(tech.tech_key),
-          },
-        });
+      nodes.push({
+        id: tech.tech_key,
+        type: 'techNode',
+        position: getNodePosition(tech.tech_key, techTree, depths),
+        data: {
+          ...tech,
+          isResearching,
+          canAfford,
+          allRequirementsMet,
+          cost,
+          metal,
+          crystal,
+          deuterium,
+          queueFull: isQueueFull,
+          onResearch: () => handleResearch(tech.tech_key),
+        },
       });
     });
 
@@ -365,9 +400,9 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
       tech.requirements.forEach(req => {
         const config = getTechConfig(req.required_tech_key);
 
-        // Color coding: satisfied = tech color, unsatisfied = red
-        const edgeColor = req.met ? config.hexColor : '#ef4444'; // red-500
-        const edgeOpacity = req.met ? 0.9 : 0.6;
+        // Color coding: satisfied = tech color, unsatisfied = bright RED
+        const edgeColor = req.met ? config.hexColor : '#dc2626'; // bright red for unmet
+        const edgeOpacity = req.met ? 1.0 : 0.8;
 
         edges.push({
           id: `${req.required_tech_key}-${tech.tech_key}`,
@@ -377,27 +412,31 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
           animated: req.met,
           style: {
             stroke: edgeColor,
-            strokeWidth: req.met ? 3 : 2,
+            strokeWidth: req.met ? 4 : 4, // Same width for both, always very visible
             opacity: edgeOpacity,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: edgeColor,
-            width: 20,
-            height: 20,
+            width: 24,
+            height: 24,
           },
-          label: req.met ? '✓' : `Niv. ${req.required_level}`,
+          label: req.met ? '✓ Débloqué' : `⚠️ Requis Niv. ${req.required_level}`,
           labelStyle: {
-            fill: edgeColor,
-            fontSize: 10,
-            fontWeight: 700,
+            fill: req.met ? '#10b981' : '#dc2626',
+            fontSize: 11,
+            fontWeight: 800,
+            textTransform: 'uppercase',
           },
           labelBgStyle: {
             fill: '#0f172a',
-            fillOpacity: 0.9,
+            fillOpacity: 0.95,
             stroke: edgeColor,
-            strokeWidth: 1,
+            strokeWidth: 2,
+            rx: 4,
+            ry: 4,
           },
+          labelBgPadding: [8, 12],
         });
       });
     });
@@ -416,14 +455,14 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
 
   if (loading) {
     return (
-      <div className="h-[600px] bg-slate-950 rounded-lg border border-white/10 overflow-hidden card-depth flex items-center justify-center">
+      <div className="h-[calc(100vh-200px)] bg-slate-950 rounded-lg border border-white/10 overflow-hidden card-depth flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="h-[700px] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 rounded-lg border border-purple-500/20 overflow-hidden card-depth shadow-2xl">
+    <div className="h-[calc(100vh-200px)] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 rounded-lg border border-purple-500/20 overflow-hidden card-depth shadow-2xl relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -431,29 +470,53 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         fitView
-        minZoom={0.3}
-        maxZoom={1.2}
-        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+        minZoom={0.2}
+        maxZoom={1.5}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
         className="bg-transparent"
         proOptions={{ hideAttribution: true }}
       >
         {/* Removed Background grid for cleaner skill tree look */}
         <Controls
-          className="bg-slate-900/80 border-purple-500/30 backdrop-blur-sm"
+          className="bg-slate-900/90 border-purple-500/30 backdrop-blur-md rounded-lg"
           showInteractive={false}
         />
         <MiniMap
-          className="bg-slate-900/80 border border-purple-500/30 rounded-lg backdrop-blur-sm"
+          className="bg-slate-900/90 border border-purple-500/30 rounded-lg backdrop-blur-md"
           nodeColor={(node) => {
             const config = getTechConfig(node.id);
-            return node.data.allRequirementsMet ? config.hexColor : '#475569';
+            // Red for locked nodes, color for unlocked
+            return node.data.allRequirementsMet ? config.hexColor : '#dc2626';
           }}
-          maskColor="rgba(15, 23, 42, 0.8)"
+          maskColor="rgba(15, 23, 42, 0.9)"
           style={{
             backgroundColor: '#0f172a',
           }}
         />
       </ReactFlow>
+
+      {/* Legend */}
+      <div className="absolute bottom-4 left-4 bg-slate-900/90 backdrop-blur-md border border-purple-500/30 rounded-lg p-3 text-xs z-10">
+        <div className="font-bold text-purple-400 mb-2">Légende</div>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-cyan-500 rounded-full"></div>
+            <span className="text-slate-300">Technologie débloquée</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+            <span className="text-slate-300">Technologie verrouillée</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-0.5 bg-green-500"></div>
+            <span className="text-slate-300">Dépendance satisfaite</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-0.5 bg-red-500"></div>
+            <span className="text-slate-300">Dépendance manquante</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
