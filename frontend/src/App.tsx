@@ -6,6 +6,7 @@ import Shipyard from './components/Shipyard';
 import EmpireBar from './components/EmpireBar';
 import TechTree from './components/TechTree';
 import ExpeditionZone from './components/ExpeditionZone';
+import ExpeditionZoneV2 from './components/ExpeditionZoneV2';
 import CombatModal from './components/CombatModal';
 import Login from './components/Login';
 import Leaderboard from './components/Leaderboard';
@@ -797,7 +798,7 @@ export default function App() {
 
                     {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
                     {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
-                    {activeTab === 'expedition' && <ExpeditionZone planet={planet} onAction={launchExpedition} />}
+                    {activeTab === 'expedition' && <ExpeditionZoneV2 planet={planet} onAction={fetchPlanetData} />}
                     
                     {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
                     {activeTab === 'changelog' && <Changelog />}
