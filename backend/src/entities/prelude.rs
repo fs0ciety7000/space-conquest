@@ -34,3 +34,12 @@ pub use super :: user_officer :: Entity as UserOfficer ;
 // Sabotage system
 pub use super :: sabotage_effect :: Entity as SabotageEffect ;
 pub use super :: casus_belli :: Entity as CasusBelli ;
+
+// Tech Tree system (Expansion 2.0)
+pub use super :: technology :: Entity as Technology ;
+pub use super :: technology_requirement :: Entity as TechnologyRequirement ;
+pub use super :: planet_technology :: Entity as PlanetTechnology ;
+pub use super :: ship_type :: Entity as ShipType ;
+pub use super :: ship_requirement :: Entity as ShipRequirement ;
+pub use super :: planet_ship :: Entity as PlanetShip ;
+pub use super :: rapid_fire_rule :: Entity as RapidFireRule ;

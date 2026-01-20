@@ -45,6 +45,9 @@ mod m20260120_000004_populate_server_config;
 mod m20260120_000005_add_game_mechanics_config;
 mod m20260125_000001_expansion_update;
 mod m20260125_000002_expansion_config;
+mod m20260125_100001_create_tech_tree_system;
+mod m20260125_100002_seed_tech_tree_data;
+mod m20260125_100003_migrate_planet_data;
 
 pub struct Migrator;
 
@@ -97,6 +100,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260120_000005_add_game_mechanics_config::Migration),
             Box::new(m20260125_000001_expansion_update::Migration),
             Box::new(m20260125_000002_expansion_config::Migration),
+            Box::new(m20260125_100001_create_tech_tree_system::Migration),
+            Box::new(m20260125_100002_seed_tech_tree_data::Migration),
+            Box::new(m20260125_100003_migrate_planet_data::Migration),
         ]
     }
 }
