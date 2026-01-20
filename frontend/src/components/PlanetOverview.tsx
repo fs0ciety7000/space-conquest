@@ -364,55 +364,101 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             </CardHeader>
 
             <CardContent className="relative z-10 pt-0 pb-4 px-6">
-                <div className="bg-black/40 border border-white/10 rounded-lg p-3 backdrop-blur-md">
-                    <div className="flex justify-between items-end mb-2">
-                        <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                            <List size={12} /> Opérations en cours
+                <div className="bg-gradient-to-br from-black/60 via-slate-900/40 to-black/60 border-2 border-cyan-500/20 rounded-xl p-4 backdrop-blur-md shadow-[0_0_30px_rgba(6,182,212,0.1)] relative overflow-hidden">
+                    {/* Effets de fond animés */}
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 bg-cyan-400 animate-pulse"></div>
+                        <div className="absolute -bottom-10 -left-10 w-24 h-24 rounded-full blur-2xl opacity-15 bg-indigo-400 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                        <div className="absolute inset-0 opacity-5">
+                            <div className="absolute top-1/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse"></div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-end mb-4 relative z-10">
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-cyan-400 flex items-center gap-2 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
+                            <div className="relative">
+                                <List size={14} className="animate-pulse" />
+                                <List size={14} className="absolute inset-0 animate-ping opacity-30" />
+                            </div>
+                            Chaîne de Production
                         </h3>
-                        <span className={`text-[10px] font-mono font-bold px-2 rounded ${slotsUsed >= maxSlots ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
-                            {slotsUsed} / {maxSlots} Slots
+                        <span className={`text-[10px] font-mono font-black px-3 py-1.5 rounded-full border-2 transition-all duration-300 ${slotsUsed >= maxSlots ? 'bg-red-500/20 text-red-400 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.4)] animate-pulse' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]'}`}>
+                            {slotsUsed} / {maxSlots} SLOTS
                         </span>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2.5 relative z-10">
                         {constructionQueue.length > 0 ? (
                             constructionQueue.map((item: any, index: number) => {
                                 const tl = getTimeLeft(item.end_time);
                                 const type = getItemType(item.building_type);
                                 const label = getLabel(item.building_type);
                                 const refundPercent = index === 0 ? Math.max(0, Math.min(95, Math.round((tl / 60) * 100))) : 95;
+                                const progress = index === 0 ? Math.max(0, 100 - (tl / 3)) : 0;
 
                                 let Icon = Hammer;
                                 let color = "text-white";
-                                if (type === 'tech') { Icon = Microscope; color = "text-purple-400"; }
-                                else if (type === 'fleet') { Icon = Rocket; color = "text-orange-400"; }
-                                else if (type === 'defense') { Icon = Shield; color = "text-red-400"; }
-                                else { color = "text-blue-300"; }
+                                let bgGlow = "from-blue-500/10 to-slate-900/60";
+                                let borderColor = "border-blue-500/30";
+                                if (type === 'tech') { Icon = Microscope; color = "text-purple-400"; bgGlow = "from-purple-500/10 to-slate-900/60"; borderColor = "border-purple-500/30"; }
+                                else if (type === 'fleet') { Icon = Rocket; color = "text-orange-400"; bgGlow = "from-orange-500/10 to-slate-900/60"; borderColor = "border-orange-500/30"; }
+                                else if (type === 'defense') { Icon = Shield; color = "text-red-400"; bgGlow = "from-red-500/10 to-slate-900/60"; borderColor = "border-red-500/30"; }
+                                else { color = "text-cyan-300"; bgGlow = "from-cyan-500/10 to-slate-900/60"; borderColor = "border-cyan-500/30"; }
 
                                 return (
-                                    <div key={item.id} className={`flex justify-between items-center text-xs p-2 rounded border border-white/5 group/item transition-all ${index === 0 ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-slate-900/60'}`}>
-                                        <div className="flex items-center gap-3">
-                                            <Icon size={14} className={color} />
-                                            <div>
-                                                <span className="font-bold text-slate-200 block">{label}</span>
-                                                <span className="text-[9px] text-slate-500 uppercase tracking-wider">
-                                                    {type === 'fleet' || type === 'defense' ? `Quantité: +${item.level}` : `Vers Niveau ${item.level}`}
-                                                </span>
+                                    <div key={item.id} className={`relative bg-gradient-to-r ${bgGlow} border-2 ${borderColor} rounded-lg p-3 group/item transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(6,182,212,0.2)] ${index === 0 ? 'shadow-[0_0_25px_rgba(99,102,241,0.15)]' : ''}`}>
+                                        {/* Barre de progression en fond pour l'item actif */}
+                                        {index === 0 && (
+                                            <div className="absolute inset-0 overflow-hidden rounded-lg">
+                                                <div
+                                                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent transition-all duration-1000"
+                                                    style={{ width: `${progress}%` }}
+                                                >
+                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"></div>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-[10px]">
-                                            <div className="flex items-center gap-2 text-indigo-300 font-mono bg-black/40 px-2 py-1 rounded border border-white/5">
-                                                <Clock size={10} className={index === 0 ? "animate-spin-slow" : ""} />
-                                                {tl}s
+                                        )}
+
+                                        <div className="flex justify-between items-center text-xs relative z-10">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg bg-black/40 border border-white/10 relative ${index === 0 ? 'animate-pulse' : ''}`}>
+                                                    <Icon size={16} className={`${color} drop-shadow-[0_0_6px_currentColor]`} />
+                                                    {index === 0 && <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/20 to-transparent animate-pulse"></div>}
+                                                </div>
+                                                <div>
+                                                    <span className={`font-black text-sm block tracking-wide ${index === 0 ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-slate-200'}`}>{label}</span>
+                                                    <span className="text-[9px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1">
+                                                        {type === 'fleet' || type === 'defense' ? (
+                                                            <>
+                                                                <ChevronRight size={10} className="text-emerald-400" />
+                                                                <span className="text-emerald-400">+{item.level}</span> Unités
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <TrendingUp size={10} className="text-cyan-400" />
+                                                                Niveau <span className="text-cyan-400 font-black">{item.level}</span>
+                                                            </>
+                                                        )}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="relative group/cancel">
-                                                <button onClick={() => cancelOperation(item.id)} className="text-slate-600 hover:text-red-500 transition-colors p-1">
-                                                    <XCircle size={16} />
-                                                </button>
-                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover/cancel:block z-50">
-                                                    <div className="bg-slate-900 border border-red-500/50 text-white text-[9px] p-2 rounded shadow-2xl whitespace-nowrap flex flex-col gap-0.5">
-                                                        <span className="text-red-400 font-black uppercase border-b border-white/10 pb-1 mb-1">Estimation Retour</span>
-                                                        <span>Ratio: {refundPercent}%</span>
+                                            <div className="flex items-center gap-2.5">
+                                                <div className={`flex items-center gap-2 ${index === 0 ? 'text-cyan-300' : 'text-indigo-300'} font-mono bg-black/60 px-3 py-1.5 rounded-lg border-2 ${index === 0 ? 'border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'border-indigo-500/30'}`}>
+                                                    <Clock size={12} className={index === 0 ? "animate-spin-slow drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" : ""} />
+                                                    <span className="font-black text-sm">{tl}s</span>
+                                                </div>
+                                                <div className="relative group/cancel">
+                                                    <button
+                                                        onClick={() => cancelOperation(item.id)}
+                                                        className="text-slate-600 hover:text-red-500 transition-all p-1.5 rounded-lg hover:bg-red-500/10 hover:shadow-[0_0_15px_rgba(239,68,68,0.3)] group-hover/cancel:scale-110"
+                                                    >
+                                                        <XCircle size={18} className="drop-shadow-[0_0_4px_currentColor]" />
+                                                    </button>
+                                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover/cancel:block z-50">
+                                                        <div className="bg-slate-950 border-2 border-red-500/50 text-white text-[10px] p-3 rounded-lg shadow-[0_0_30px_rgba(239,68,68,0.4)] whitespace-nowrap backdrop-blur-md">
+                                                            <span className="text-red-400 font-black uppercase tracking-wider border-b border-red-500/30 pb-1.5 mb-2 block drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]">⚠️ Annulation</span>
+                                                            <span className="text-slate-300 font-semibold">Remboursement: <span className="text-emerald-400 font-black">{refundPercent}%</span></span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -421,9 +467,12 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 );
                             })
                         ) : (
-                            <div className="flex flex-col items-center justify-center py-4 text-slate-600 space-y-1">
-                                <Activity size={24} className="opacity-20" />
-                                <span className="text-[10px] uppercase tracking-widest italic">Aucune opération en cours</span>
+                            <div className="flex flex-col items-center justify-center py-8 text-slate-600 space-y-2 relative">
+                                <div className="relative">
+                                    <Activity size={32} className="opacity-20 animate-pulse" />
+                                    <Activity size={32} className="absolute inset-0 opacity-10 animate-ping" />
+                                </div>
+                                <span className="text-[11px] uppercase tracking-[0.2em] font-black italic text-slate-500/70">Centre de Production Inactif</span>
                             </div>
                         )}
                     </div>
@@ -623,57 +672,173 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
       {/* --- SECTION TACTIQUE MILITAIRE --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="bg-slate-900 border border-red-500/20 relative overflow-hidden group hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
-              <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors"></div>
-              <div className="absolute top-0 inset-x-0 h-px bg-red-500/20 opacity-50 group-hover:bg-red-500/60 transition-all duration-300 animate-shine"></div>
-              <CardHeader className="pb-2 relative z-10">
+          {/* CAPACITÉ OFFENSIVE */}
+          <Card className="bg-gradient-to-br from-slate-950 via-red-950/20 to-slate-950 border-2 border-red-500/40 relative overflow-hidden group hover:-translate-y-1 hover:shadow-[0_0_40px_rgba(239,68,68,0.3)] transition-all duration-500 card-depth animate-fade-in">
+              {/* Effets de fond dynamiques */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                  <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 bg-red-500 animate-pulse"></div>
+                  <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 bg-orange-500 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-orange-500/5 group-hover:from-red-500/10 group-hover:to-orange-500/10 transition-all duration-500"></div>
+                  <div className="absolute inset-0 opacity-10">
+                      <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-400 to-transparent animate-pulse"></div>
+                      <div className="absolute top-2/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange-400 to-transparent animate-pulse" style={{ animationDelay: '0.7s' }}></div>
+                  </div>
+              </div>
+
+              <CardHeader className="pb-3 relative z-10 border-b border-red-500/20">
                   <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-red-400 flex items-center gap-2">
-                          <Sword size={14} /> Capacité Offensive Globale
+                      <span className="text-xs font-black uppercase tracking-[0.2em] text-red-400 flex items-center gap-2 drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]">
+                          <div className="relative">
+                              <Sword size={16} className="animate-pulse" />
+                              <Sword size={16} className="absolute inset-0 animate-ping opacity-30" />
+                          </div>
+                          Puissance Offensive
                       </span>
-                      <TrendingUp size={14} className="text-red-500 animate-pulse" />
+                      <div className="p-2 rounded-full bg-red-500/20 border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)]">
+                          <TrendingUp size={14} className="text-red-400 animate-pulse" />
+                      </div>
                   </div>
               </CardHeader>
-              <CardContent className="relative z-10">
-                  <div className="flex items-end gap-2">
-                      <span className="text-4xl font-black font-mono text-white tracking-tighter">{fmt(totalAtk)}</span>
-                      <span className="text-xs font-bold text-red-500 mb-1 uppercase tracking-tighter">Dégâts / Round</span>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                      <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center">
-                          <span>Armement (NV.{planet.laser_battery_level})</span>
-                          <span className="text-red-400 font-mono animate-scale-pulse">+{Math.round((atkBonus-1)*100)}% DMG</span>
+
+              <CardContent className="relative z-10 pt-4">
+                  {/* Indicateur principal */}
+                  <div className="flex items-end gap-3 mb-6">
+                      <span className="text-5xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-br from-red-400 via-red-300 to-orange-400 tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,0.5)] animate-pulse">{fmt(totalAtk)}</span>
+                      <div className="mb-2">
+                          <span className="text-xs font-black text-red-500 uppercase tracking-wider block drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]">Dégâts</span>
+                          <span className="text-[9px] font-bold text-slate-500 uppercase">/ Round</span>
                       </div>
-                      <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
-                        <div className="h-full bg-gradient-to-r from-red-700 via-red-500 to-red-400 rounded-full" style={{ width: `${Math.min(100, planet.laser_battery_level * 8)}%` }}></div>
+                  </div>
+
+                  {/* Stat détaillée */}
+                  <div className="bg-black/40 rounded-xl p-4 border border-red-500/30 shadow-inner">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center mb-3">
+                          <span className="flex items-center gap-1.5">
+                              <Target size={12} className="text-red-400" />
+                              Armement Niv.{planet.laser_battery_level || 0}
+                          </span>
+                          <span className="text-red-400 font-mono font-black px-2 py-1 bg-red-500/20 rounded-lg border border-red-500/40 shadow-[0_0_8px_rgba(239,68,68,0.3)] animate-pulse">+{Math.round((atkBonus-1)*100)}% DMG</span>
+                      </div>
+
+                      {/* Barre de progression style voltmètre */}
+                      <div className="relative h-3 w-full bg-slate-900 rounded-full overflow-hidden border-2 border-red-500/30 shadow-inner">
+                          {/* Graduations */}
+                          <div className="absolute inset-0 flex justify-between px-1 items-center z-10">
+                              {[...Array(10)].map((_, i) => (
+                                  <div key={i} className="w-px h-2 bg-white/30"></div>
+                              ))}
+                          </div>
+                          {/* Barre de remplissage */}
+                          <div
+                              className="absolute inset-0 bg-gradient-to-r from-red-700 via-red-500 to-orange-400 transition-all duration-700"
+                              style={{ width: `${Math.min(100, planet.laser_battery_level * 8)}%` }}
+                          >
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
+                              {/* Point lumineux au bout */}
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.8)] animate-pulse"></div>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Stats secondaires */}
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="bg-black/30 rounded-lg p-2.5 border border-red-500/20">
+                          <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Vaisseaux</span>
+                          <span className="text-red-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]">
+                              {fmt((planet.light_hunter_count || 0) * 50 + (planet.cruiser_count || 0) * 400)}
+                          </span>
+                      </div>
+                      <div className="bg-black/30 rounded-lg p-2.5 border border-red-500/20">
+                          <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
+                          <span className="text-red-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]">
+                              {fmt((planet.missile_launcher_count || 0) * 80 + (planet.plasma_turret_count || 0) * 3000)}
+                          </span>
                       </div>
                   </div>
               </CardContent>
           </Card>
 
-          <Card className="bg-slate-900 border border-emerald-500/20 relative overflow-hidden group hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
-              <div className="absolute inset-0 bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors"></div>
-              <div className="absolute top-0 inset-x-0 h-px bg-emerald-500/20 opacity-50 group-hover:bg-emerald-500/60 transition-all duration-300 animate-shine"></div>
-              <CardHeader className="pb-2 relative z-10">
+          {/* STRUCTURE & BLINDAGE */}
+          <Card className="bg-gradient-to-br from-slate-950 via-emerald-950/20 to-slate-950 border-2 border-emerald-500/40 relative overflow-hidden group hover:-translate-y-1 hover:shadow-[0_0_40px_rgba(16,185,129,0.3)] transition-all duration-500 card-depth animate-fade-in">
+              {/* Effets de fond dynamiques */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                  <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 bg-emerald-500 animate-pulse"></div>
+                  <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 bg-cyan-500 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5 group-hover:from-emerald-500/10 group-hover:to-cyan-500/10 transition-all duration-500"></div>
+                  <div className="absolute inset-0 opacity-10">
+                      <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse"></div>
+                      <div className="absolute top-2/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse" style={{ animationDelay: '0.7s' }}></div>
+                  </div>
+              </div>
+
+              <CardHeader className="pb-3 relative z-10 border-b border-emerald-500/20">
                   <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
-                          <ShieldCheck size={14} /> Structure & Blindage Global
+                      <span className="text-xs font-black uppercase tracking-[0.2em] text-emerald-400 flex items-center gap-2 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]">
+                          <div className="relative">
+                              <ShieldCheck size={16} className="animate-pulse" />
+                              <ShieldCheck size={16} className="absolute inset-0 animate-ping opacity-30" />
+                          </div>
+                          Résistance Totale
                       </span>
-                      <Activity size={14} className="text-emerald-500" />
+                      <div className="p-2 rounded-full bg-emerald-500/20 border border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]">
+                          <Activity size={14} className="text-emerald-400 animate-pulse" />
+                      </div>
                   </div>
               </CardHeader>
-              <CardContent className="relative z-10">
-                  <div className="flex items-end gap-2">
-                      <span className="text-4xl font-black font-mono text-white tracking-tighter">{fmt(totalHull)}</span>
-                      <span className="text-xs font-bold text-emerald-500 mb-1 uppercase tracking-tighter">Points Coque</span>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                      <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center">
-                          <span>Protection (NV.{planet.armour_tech_level})</span>
-                          <span className="text-emerald-400 font-mono animate-scale-pulse">+{Math.round((hullBonus-1)*100)}% HULL</span>
+
+              <CardContent className="relative z-10 pt-4">
+                  {/* Indicateur principal */}
+                  <div className="flex items-end gap-3 mb-6">
+                      <span className="text-5xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 via-emerald-300 to-cyan-400 tracking-tighter drop-shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse">{fmt(totalHull)}</span>
+                      <div className="mb-2">
+                          <span className="text-xs font-black text-emerald-500 uppercase tracking-wider block drop-shadow-[0_0_6px_rgba(16,185,129,0.6)]">Points</span>
+                          <span className="text-[9px] font-bold text-slate-500 uppercase">Coque</span>
                       </div>
-                      <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
-                        <div className="h-full bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-400 rounded-full" style={{ width: `${Math.min(100, planet.armour_tech_level * 8)}%` }}></div>
+                  </div>
+
+                  {/* Stat détaillée */}
+                  <div className="bg-black/40 rounded-xl p-4 border border-emerald-500/30 shadow-inner">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center mb-3">
+                          <span className="flex items-center gap-1.5">
+                              <Shield size={12} className="text-emerald-400" />
+                              Protection Niv.{planet.armour_tech_level || 0}
+                          </span>
+                          <span className="text-emerald-400 font-mono font-black px-2 py-1 bg-emerald-500/20 rounded-lg border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.3)] animate-pulse">+{Math.round((hullBonus-1)*100)}% HULL</span>
+                      </div>
+
+                      {/* Barre de progression style voltmètre */}
+                      <div className="relative h-3 w-full bg-slate-900 rounded-full overflow-hidden border-2 border-emerald-500/30 shadow-inner">
+                          {/* Graduations */}
+                          <div className="absolute inset-0 flex justify-between px-1 items-center z-10">
+                              {[...Array(10)].map((_, i) => (
+                                  <div key={i} className="w-px h-2 bg-white/30"></div>
+                              ))}
+                          </div>
+                          {/* Barre de remplissage */}
+                          <div
+                              className="absolute inset-0 bg-gradient-to-r from-emerald-700 via-emerald-500 to-cyan-400 transition-all duration-700"
+                              style={{ width: `${Math.min(100, planet.armour_tech_level * 8)}%` }}
+                          >
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
+                              {/* Point lumineux au bout */}
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] animate-pulse"></div>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Stats secondaires */}
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="bg-black/30 rounded-lg p-2.5 border border-emerald-500/20">
+                          <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Vaisseaux</span>
+                          <span className="text-emerald-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]">
+                              {fmt((planet.light_hunter_count || 0) * 400 + (planet.cruiser_count || 0) * 2700)}
+                          </span>
+                      </div>
+                      <div className="bg-black/30 rounded-lg p-2.5 border border-emerald-500/20">
+                          <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
+                          <span className="text-emerald-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]">
+                              {fmt((planet.missile_launcher_count || 0) * 200 + (planet.plasma_turret_count || 0) * 10000)}
+                          </span>
                       </div>
                   </div>
               </CardContent>
