@@ -173,6 +173,9 @@ async fn main() {
     let ws_state = WsState::new(db.clone());
     println!("🔌 WebSocket initialisé");
 
+    // Cloner la DB pour la tâche de nettoyage périodique avant de la déplacer dans AppState
+    let db_cleanup = db.clone();
+
     let state = AppState {
         db,
         config: std::sync::Arc::new(std::sync::RwLock::new(config_cache)),
@@ -294,7 +297,24 @@ async fn main() {
     let addr: SocketAddr = config.bind_address()
         .parse()
         .expect("Invalid bind address");
-    
+
+    // Lancer la tâche périodique de nettoyage des sabotages expirés (toutes les heures)
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // 1 heure
+        loop {
+            interval.tick().await;
+            match sabotage::cleanup_expired_sabotages(&db_cleanup).await {
+                Ok(count) => {
+                    if count > 0 {
+                        println!("🧹 Nettoyage sabotages: {} effet(s) expiré(s) supprimé(s)", count);
+                    }
+                },
+                Err(e) => eprintln!("❌ Erreur lors du nettoyage des sabotages: {:?}", e),
+            }
+        }
+    });
+    println!("🕒 Tâche périodique de nettoyage des sabotages démarrée (intervalle: 1h)");
+
     println!("🚀 SPEED_GAME Backend opérationnel sur http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
@@ -1073,7 +1093,7 @@ async fn upgrade_mine_handler(
     // Le bonus s'applique seulement aux technologies, pas aux bâtiments
     let is_research = matches!(type_mine.as_str(), "research" | "energy_tech" | "laser" | "espionage" | "armour");
     if is_research {
-        let research_bonus = sabotage::apply_research_bonus(&state.db, p.user_id)
+        let research_bonus = sabotage::apply_research_bonus(&state.db, p.owner_id)
             .await
             .unwrap_or(1.0); // Défaut à 1.0 en cas d'erreur
         build_time = (build_time as f64 * research_bonus) as i64;
