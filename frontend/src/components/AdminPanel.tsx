@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings } from 'lucide-react';
+import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -78,9 +78,7 @@ interface ServerStats {
 }
 
 interface ServerConfig {
-  speed_factor: string;
-  construction_speed_multiplier: string;
-  mining_speed_multiplier: string;
+  [key: string]: string;
 }
 
 type AdminTab = 'players' | 'stats' | 'users';
@@ -412,97 +410,321 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
 
-              <Card className="col-span-full bg-slate-950 border-white/10">
-                <CardHeader>
-                  <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                    <Settings size={16} />
-                    Paramètres Serveur (Éditable)
+              {/* CONFIGURATION SERVEUR - NOUVEAU DESIGN */}
+              <Card className="col-span-full bg-gradient-to-br from-slate-950 to-indigo-950/20 border-indigo-500/30 overflow-hidden">
+                <CardHeader className="border-b border-white/5">
+                  <CardTitle className="text-sm font-black uppercase tracking-[0.3em] flex items-center gap-2 text-indigo-300">
+                    <Settings size={18} />
+                    Configuration Serveur (Éditable)
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6">
                   {loadingConfig || !config ? (
-                    <div className="text-center py-8 text-slate-500">Chargement...</div>
+                    <div className="text-center py-12 text-slate-500">
+                      <Settings size={48} className="mx-auto mb-4 opacity-20 animate-spin" />
+                      <p className="text-sm">Chargement de la configuration...</p>
+                    </div>
                   ) : (
-                    <div className="space-y-4">
-                      {/* Affichage des valeurs actuelles */}
-                      <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
-                        <h4 className="text-xs font-bold uppercase text-slate-400 mb-3">Valeurs actives actuelles</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="text-center">
-                            <div className="text-2xl font-black font-mono text-indigo-400">{config.speed_factor}</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Speed Factor</div>
+                    <div className="space-y-6">
+
+                      {/* SECTION 1: MULTIPLICATEURS DE VITESSE */}
+                      <Card className="bg-slate-900/40 border-indigo-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                            <Zap size={14} />
+                            Multiplicateurs de Vitesse
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <ConfigInput
+                              label="Speed Factor"
+                              configKey="speed_factor"
+                              value={editedConfig['speed_factor'] ?? config['speed_factor'] ?? '500.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, speed_factor: v})}
+                              color="indigo"
+                              description="Multiplicateur vitesse général"
+                            />
+                            <ConfigInput
+                              label="Construction Speed"
+                              configKey="construction_speed_multiplier"
+                              value={editedConfig['construction_speed_multiplier'] ?? config['construction_speed_multiplier'] ?? '1.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, construction_speed_multiplier: v})}
+                              color="purple"
+                              description="Vitesse construction bâtiments"
+                            />
+                            <ConfigInput
+                              label="Mining Speed"
+                              configKey="mining_speed_multiplier"
+                              value={editedConfig['mining_speed_multiplier'] ?? config['mining_speed_multiplier'] ?? '1.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, mining_speed_multiplier: v})}
+                              color="green"
+                              description="Vitesse production ressources"
+                            />
                           </div>
-                          <div className="text-center">
-                            <div className="text-2xl font-black font-mono text-purple-400">{config.construction_speed_multiplier}</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Construction Speed</div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SECTION 2: COÛTS DES VAISSEAUX */}
+                      <Card className="bg-slate-900/40 border-cyan-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                            <Rocket size={14} />
+                            Coûts des Vaisseaux
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {[
+                              { ship: 'light_hunter', label: 'Chasseur Léger' },
+                              { ship: 'cruiser', label: 'Croiseur' },
+                              { ship: 'transporter', label: 'Transporteur' },
+                              { ship: 'recycler', label: 'Recycleur' },
+                              { ship: 'spy_probe', label: 'Sonde Espionnage' },
+                              { ship: 'colony_ship', label: 'Vaisseau de Colonisation' }
+                            ].map(({ ship, label }) => (
+                              <div key={ship} className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                                <h4 className="text-xs font-bold text-cyan-300 mb-3">{label}</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <ConfigInput
+                                    label="Métal"
+                                    configKey={`ship_${ship}_metal`}
+                                    value={editedConfig[`ship_${ship}_metal`] ?? config[`ship_${ship}_metal`] ?? '0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, [`ship_${ship}_metal`]: v})}
+                                    color="orange"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Cristal"
+                                    configKey={`ship_${ship}_crystal`}
+                                    value={editedConfig[`ship_${ship}_crystal`] ?? config[`ship_${ship}_crystal`] ?? '0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, [`ship_${ship}_crystal`]: v})}
+                                    color="cyan"
+                                    compact
+                                  />
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <div className="text-center">
-                            <div className="text-2xl font-black font-mono text-green-400">{config.mining_speed_multiplier}</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Mining Speed</div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SECTION 3: COÛTS DES DÉFENSES */}
+                      <Card className="bg-slate-900/40 border-red-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-red-400 flex items-center gap-2">
+                            <Shield size={14} />
+                            Coûts des Défenses
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {[
+                              { defense: 'missile_launcher', label: 'Lanceur de Missiles' },
+                              { defense: 'plasma_turret', label: 'Tourelle Plasma' }
+                            ].map(({ defense, label }) => (
+                              <div key={defense} className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                                <h4 className="text-xs font-bold text-red-300 mb-3">{label}</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <ConfigInput
+                                    label="Métal"
+                                    configKey={`defense_${defense}_metal`}
+                                    value={editedConfig[`defense_${defense}_metal`] ?? config[`defense_${defense}_metal`] ?? '0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, [`defense_${defense}_metal`]: v})}
+                                    color="orange"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Cristal"
+                                    configKey={`defense_${defense}_crystal`}
+                                    value={editedConfig[`defense_${defense}_crystal`] ?? config[`defense_${defense}_crystal`] ?? '0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, [`defense_${defense}_crystal`]: v})}
+                                    color="cyan"
+                                    compact
+                                  />
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      </div>
+                        </CardContent>
+                      </Card>
 
-                      {/* Champs d'édition */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-lg p-4">
-                          <label className="text-xs text-indigo-400 font-bold mb-2 block">SPEED FACTOR</label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={editedConfig.speed_factor ?? config.speed_factor}
-                            onChange={(e) => setEditedConfig({...editedConfig, speed_factor: e.target.value})}
-                            className="bg-black/40 border-indigo-500/30 text-white font-mono text-xl"
-                          />
-                          <p className="text-xs text-slate-500 mt-1">Multiplicateur vitesse général</p>
-                        </div>
+                      {/* SECTION 4: FACTEURS DE PRODUCTION */}
+                      <Card className="bg-slate-900/40 border-green-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-green-400 flex items-center gap-2">
+                            <TrendingUp size={14} />
+                            Facteurs de Production
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-green-300 mb-3">Production de Base</h4>
+                              <div className="grid grid-cols-3 gap-3">
+                                <ConfigInput
+                                  label="Métal Base"
+                                  configKey="production_metal_base"
+                                  value={editedConfig['production_metal_base'] ?? config['production_metal_base'] ?? '30.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, production_metal_base: v})}
+                                  color="orange"
+                                  compact
+                                />
+                                <ConfigInput
+                                  label="Cristal Base"
+                                  configKey="production_crystal_base"
+                                  value={editedConfig['production_crystal_base'] ?? config['production_crystal_base'] ?? '20.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, production_crystal_base: v})}
+                                  color="cyan"
+                                  compact
+                                />
+                                <ConfigInput
+                                  label="Deutérium Base"
+                                  configKey="production_deuterium_base"
+                                  value={editedConfig['production_deuterium_base'] ?? config['production_deuterium_base'] ?? '10.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, production_deuterium_base: v})}
+                                  color="green"
+                                  compact
+                                />
+                              </div>
+                            </div>
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-green-300 mb-3">Facteurs de Croissance</h4>
+                              <div className="grid grid-cols-3 gap-3">
+                                <ConfigInput
+                                  label="Croissance Métal"
+                                  configKey="production_metal_growth"
+                                  value={editedConfig['production_metal_growth'] ?? config['production_metal_growth'] ?? '1.1'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, production_metal_growth: v})}
+                                  color="orange"
+                                  compact
+                                  step="0.01"
+                                />
+                                <ConfigInput
+                                  label="Croissance Cristal"
+                                  configKey="production_crystal_growth"
+                                  value={editedConfig['production_crystal_growth'] ?? config['production_crystal_growth'] ?? '1.1'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, production_crystal_growth: v})}
+                                  color="cyan"
+                                  compact
+                                  step="0.01"
+                                />
+                                <ConfigInput
+                                  label="Croissance Deutérium"
+                                  configKey="production_deuterium_growth"
+                                  value={editedConfig['production_deuterium_growth'] ?? config['production_deuterium_growth'] ?? '1.05'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, production_deuterium_growth: v})}
+                                  color="green"
+                                  compact
+                                  step="0.01"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
 
-                        <div className="bg-purple-950/20 border border-purple-500/30 rounded-lg p-4">
-                          <label className="text-xs text-purple-400 font-bold mb-2 block">CONSTRUCTION SPEED</label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={editedConfig.construction_speed_multiplier ?? config.construction_speed_multiplier}
-                            onChange={(e) => setEditedConfig({...editedConfig, construction_speed_multiplier: e.target.value})}
-                            className="bg-black/40 border-purple-500/30 text-white font-mono text-xl"
-                          />
-                          <p className="text-xs text-slate-500 mt-1">Vitesse construction bâtiments</p>
-                        </div>
+                      {/* SECTION 5: FACTEURS ÉNERGÉTIQUES */}
+                      <Card className="bg-slate-900/40 border-yellow-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-yellow-400 flex items-center gap-2">
+                            <Zap size={14} />
+                            Facteurs Énergétiques
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-yellow-300 mb-3">Centrale Solaire</h4>
+                              <div className="grid grid-cols-3 gap-3">
+                                <ConfigInput
+                                  label="Production Base"
+                                  configKey="energy_solar_base"
+                                  value={editedConfig['energy_solar_base'] ?? config['energy_solar_base'] ?? '60.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, energy_solar_base: v})}
+                                  color="yellow"
+                                  compact
+                                />
+                                <ConfigInput
+                                  label="Croissance"
+                                  configKey="energy_solar_growth"
+                                  value={editedConfig['energy_solar_growth'] ?? config['energy_solar_growth'] ?? '1.1'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, energy_solar_growth: v})}
+                                  color="yellow"
+                                  compact
+                                  step="0.01"
+                                />
+                                <ConfigInput
+                                  label="Bonus Tech (%)"
+                                  configKey="energy_tech_bonus"
+                                  value={editedConfig['energy_tech_bonus'] ?? config['energy_tech_bonus'] ?? '0.10'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, energy_tech_bonus: v})}
+                                  color="yellow"
+                                  compact
+                                  step="0.01"
+                                />
+                              </div>
+                            </div>
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-yellow-300 mb-3">Consommation des Mines</h4>
+                              <div className="grid grid-cols-3 gap-3">
+                                <ConfigInput
+                                  label="Consommation Base"
+                                  configKey="energy_mine_consumption_base"
+                                  value={editedConfig['energy_mine_consumption_base'] ?? config['energy_mine_consumption_base'] ?? '10.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, energy_mine_consumption_base: v})}
+                                  color="orange"
+                                  compact
+                                />
+                                <ConfigInput
+                                  label="Croissance Conso."
+                                  configKey="energy_mine_consumption_growth"
+                                  value={editedConfig['energy_mine_consumption_growth'] ?? config['energy_mine_consumption_growth'] ?? '1.1'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, energy_mine_consumption_growth: v})}
+                                  color="orange"
+                                  compact
+                                  step="0.01"
+                                />
+                                <ConfigInput
+                                  label="Extra Deutérium"
+                                  configKey="energy_deuterium_extra_consumption"
+                                  value={editedConfig['energy_deuterium_extra_consumption'] ?? config['energy_deuterium_extra_consumption'] ?? '20.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, energy_deuterium_extra_consumption: v})}
+                                  color="green"
+                                  compact
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
 
-                        <div className="bg-green-950/20 border border-green-500/30 rounded-lg p-4">
-                          <label className="text-xs text-green-400 font-bold mb-2 block">MINING SPEED</label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={editedConfig.mining_speed_multiplier ?? config.mining_speed_multiplier}
-                            onChange={(e) => setEditedConfig({...editedConfig, mining_speed_multiplier: e.target.value})}
-                            className="bg-black/40 border-green-500/30 text-white font-mono text-xl"
-                          />
-                          <p className="text-xs text-slate-500 mt-1">Vitesse production ressources</p>
-                        </div>
-                      </div>
-
+                      {/* BOUTONS D'ACTION */}
                       <div className="flex gap-3 pt-2">
                         <Button
                           onClick={updateConfig}
                           disabled={loadingConfig}
-                          className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold uppercase tracking-wider"
+                          className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold uppercase tracking-wider shadow-lg"
                         >
                           <Save size={16} className="mr-2" />
-                          Enregistrer les modifications
+                          Enregistrer toutes les modifications
                         </Button>
                         <Button
                           variant="outline"
                           onClick={() => setEditedConfig(config)}
-                          className="border-white/10 bg-white/5 hover:bg-white/10"
+                          className="border-white/20 bg-white/5 hover:bg-white/10 font-bold"
                         >
+                          <X size={16} className="mr-2" />
                           Annuler
                         </Button>
                       </div>
 
-                      <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-400 flex items-start gap-2">
-                        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                        <span>⚠️ Les modifications prennent effet immédiatement pour toutes les opérations futures. Les opérations en cours conservent leur vitesse d'origine.</span>
+                      <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-300 flex items-start gap-3">
+                        <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold mb-1">⚠️ ATTENTION - Modifications en temps réel</p>
+                          <p className="text-yellow-400/80">Les modifications prennent effet immédiatement pour toutes les opérations futures. Les opérations en cours conservent leur vitesse d'origine. Assurez-vous de bien tester les nouvelles valeurs.</p>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1035,6 +1257,58 @@ export default function AdminPanel() {
             </div>
           </CardContent>
         </Card>
+      )}
+    </div>
+  );
+}
+
+// Composant helper pour les inputs de configuration
+interface ConfigInputProps {
+  label: string;
+  configKey: string;
+  value: string;
+  onChange: (value: string) => void;
+  color: 'indigo' | 'purple' | 'green' | 'cyan' | 'orange' | 'red' | 'yellow';
+  description?: string;
+  compact?: boolean;
+  step?: string;
+}
+
+function ConfigInput({ label, value, onChange, color, description, compact, step = "0.1" }: ConfigInputProps) {
+  const colorClasses = {
+    indigo: 'bg-indigo-950/20 border-indigo-500/30 text-indigo-400',
+    purple: 'bg-purple-950/20 border-purple-500/30 text-purple-400',
+    green: 'bg-green-950/20 border-green-500/30 text-green-400',
+    cyan: 'bg-cyan-950/20 border-cyan-500/30 text-cyan-400',
+    orange: 'bg-orange-950/20 border-orange-500/30 text-orange-400',
+    red: 'bg-red-950/20 border-red-500/30 text-red-400',
+    yellow: 'bg-yellow-950/20 border-yellow-500/30 text-yellow-400',
+  };
+
+  const inputColorClasses = {
+    indigo: 'border-indigo-500/30 focus:border-indigo-500',
+    purple: 'border-purple-500/30 focus:border-purple-500',
+    green: 'border-green-500/30 focus:border-green-500',
+    cyan: 'border-cyan-500/30 focus:border-cyan-500',
+    orange: 'border-orange-500/30 focus:border-orange-500',
+    red: 'border-red-500/30 focus:border-red-500',
+    yellow: 'border-yellow-500/30 focus:border-yellow-500',
+  };
+
+  return (
+    <div className={`${colorClasses[color]} rounded-lg p-${compact ? '3' : '4'}`}>
+      <label className={`text-${compact ? '[10px]' : 'xs'} ${colorClasses[color].split(' ')[2]} font-bold mb-2 block uppercase tracking-wider`}>
+        {label}
+      </label>
+      <Input
+        type="number"
+        step={step}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`bg-black/40 ${inputColorClasses[color]} text-white font-mono ${compact ? 'text-sm' : 'text-lg'} transition-all`}
+      />
+      {description && !compact && (
+        <p className="text-xs text-slate-500 mt-1">{description}</p>
       )}
     </div>
   );
