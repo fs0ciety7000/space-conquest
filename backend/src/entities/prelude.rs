@@ -30,3 +30,7 @@ pub use super :: login_streak :: Entity as LoginStreak ;
 // Officers system
 pub use super :: officer_template :: Entity as OfficerTemplate ;
 pub use super :: user_officer :: Entity as UserOfficer ;
+
+// Sabotage system
+pub use super :: sabotage_effect :: Entity as SabotageEffect ;
+pub use super :: casus_belli :: Entity as CasusBelli ;
