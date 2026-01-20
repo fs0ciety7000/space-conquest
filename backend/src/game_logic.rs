@@ -628,7 +628,19 @@ pub fn calculate_distance(start: (i32, i32, i32), end: (i32, i32, i32)) -> f64 {
 }
 
 pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
-    let base_time = 10.0 + (dist.sqrt() / 2.0);
+    // Calculate base time based on distance ranges for more realistic travel times
+    let base_time = if dist < 1000.0 {
+        // Same system, different position: 30s to 2 minutes
+        dist / 10.0 + 30.0
+    } else if dist < 10000.0 {
+        // Same galaxy, different system: 5-15 minutes
+        dist / 5.0 + 200.0
+    } else {
+        // Different galaxy: 30 minutes to 1+ hour
+        dist / 2.0 + 500.0
+    };
+
+    // Apply speed factor (typically 500 = 5x speed)
     let seconds = (base_time * 100.0) / speed_factor;
     seconds.max(5.0) as i64
 }
