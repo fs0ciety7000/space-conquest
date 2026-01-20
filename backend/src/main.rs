@@ -283,6 +283,8 @@ async fn main() {
         // Sabotage
         .route("/sabotage", post(sabotage::attempt_sabotage))
         .route("/planets/:id/sabotages", get(sabotage::get_active_sabotages))
+        .route("/sabotage/my-sabotages", get(sabotage::get_my_sabotages_handler))
+        .route("/casus-belli/active", get(sabotage::get_casus_belli_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

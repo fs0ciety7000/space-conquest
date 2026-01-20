@@ -409,3 +409,102 @@ pub async fn get_active_casus_belli(
         .all(db)
         .await
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENDPOINTS API POUR UI DASHBOARDS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Endpoint: Récupérer tous mes sabotages actifs (sur toutes les planètes)
+/// GET /sabotage/my-sabotages
+pub async fn get_my_sabotages_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    // Vérifier l'authentification
+    let user_id = match extract_user_id_from_headers(&headers) {
+        Ok(id) => id,
+        Err(status) => return (status, Json(json!({"error": "Non authentifié"}))).into_response(),
+    };
+
+    let now = Utc::now().naive_utc();
+
+    // Récupérer tous les sabotages actifs que j'ai effectués
+    let sabotages = match SabotageEffect::find()
+        .filter(sabotage_effect::Column::AttackerUserId.eq(user_id))
+        .filter(sabotage_effect::Column::ExpiresAt.gt(now))
+        .all(&state.db)
+        .await
+    {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+    };
+
+    // Pour chaque sabotage, récupérer le nom de la planète cible
+    let mut sabotages_with_planet_info = Vec::new();
+
+    for sabotage in sabotages {
+        let planet = match Planet::find_by_id(sabotage.target_planet_id).one(&state.db).await {
+            Ok(Some(p)) => p,
+            _ => continue, // Planète supprimée, skip
+        };
+
+        sabotages_with_planet_info.push(json!({
+            "id": sabotage.id,
+            "target_planet_id": sabotage.target_planet_id,
+            "target_planet_name": planet.name,
+            "target_owner_id": planet.owner_id,
+            "effect_type": sabotage.effect_type,
+            "created_at": sabotage.created_at,
+            "expires_at": sabotage.expires_at,
+            "was_detected": sabotage.was_detected,
+        }));
+    }
+
+    (StatusCode::OK, Json(json!({
+        "sabotages": sabotages_with_planet_info
+    }))).into_response()
+}
+
+/// Endpoint: Récupérer tous mes casus belli actifs (qui je peux attaquer)
+/// GET /casus-belli/active
+pub async fn get_casus_belli_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    // Vérifier l'authentification
+    let user_id = match extract_user_id_from_headers(&headers) {
+        Ok(id) => id,
+        Err(status) => return (status, Json(json!({"error": "Non authentifié"}))).into_response(),
+    };
+
+    // Récupérer les casus belli actifs
+    let casus_belli_list = match get_active_casus_belli(&state.db, user_id).await {
+        Ok(cb) => cb,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+    };
+
+    // Enrichir avec les informations de l'agresseur
+    use crate::entities::prelude::User;
+    let mut casus_belli_with_info = Vec::new();
+
+    for cb in casus_belli_list {
+        let aggressor = match User::find_by_id(cb.aggressor_user_id).one(&state.db).await {
+            Ok(Some(u)) => u,
+            _ => continue, // Utilisateur supprimé, skip
+        };
+
+        casus_belli_with_info.push(json!({
+            "id": cb.id,
+            "aggressor_user_id": cb.aggressor_user_id,
+            "aggressor_username": aggressor.username,
+            "reason": cb.reason,
+            "created_at": cb.created_at,
+            "expires_at": cb.expires_at,
+            "was_used": cb.was_used,
+        }));
+    }
+
+    (StatusCode::OK, Json(json!({
+        "casus_belli": casus_belli_with_info
+    }))).into_response()
+}
