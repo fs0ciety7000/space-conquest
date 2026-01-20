@@ -199,7 +199,11 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.clear();
+    // Ne supprimer que les clés d'authentification, pas les préférences utilisateur
+    localStorage.removeItem('token');
+    localStorage.removeItem('planet_id');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('username');
     setToken(null);
     setPlanetId(null);
     setUserId(null);
