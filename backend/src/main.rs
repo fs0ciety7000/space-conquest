@@ -100,6 +100,12 @@ struct ExpeditionPayload {
 }
 
 #[derive(Deserialize)]
+struct ExpeditionPayloadV2 {
+    // Generic fleet composition using ship_key -> count mapping
+    fleet: HashMap<String, i32>,
+}
+
+#[derive(Deserialize)]
 struct TransportPayload {
     target_planet_id: Uuid,
     transporters: i32,
@@ -200,6 +206,8 @@ async fn main() {
         .route("/planets/:id/build-fleet/:type/:qty", post(build_fleet_handler))
         .route("/planets/:id/expedition", post(expedition_handler))
         .route("/planets/:id/expedition/scout", post(scout_expedition_handler))
+        // TODO: Fix expedition_v2_handler - temporarily disabled
+        // .route("/planets/:id/expedition-v2", post(expedition_v2_handler))
         .route("/planets/:id/clear-report", post(clear_report_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
         .route("/combat-reports/:id/detail", get(get_combat_report_detail_handler))
@@ -4199,5 +4207,226 @@ async fn build_ships_handler(
         "quantity": quantity,
         "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
         "duration_seconds": total_build_time
+    })).into_response()
+}
+
+// ========== HELPER FUNCTIONS FOR DYNAMIC COMBAT SYSTEM ==========
+
+/// Helper function to run expedition with dynamic combat system
+/// This is used for new dynamic expedition endpoints that leverage the relational ship system
+async fn run_dynamic_expedition_combat(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    fleet: HashMap<String, i32>,
+) -> Result<(combat::CombatReport, f64, f64, f64), String> {
+    // Run combat with database-driven stats
+    let combat_report = combat::resolve_expedition_combat(db, fleet)
+        .await
+        .map_err(|e| format!("Combat error: {:?}", e))?;
+
+    // Calculate loot based on winner
+    let (metal, crystal, deuterium) = if combat_report.winner == "player" {
+        // Base loot from combat (already in combat_report.loot_metal)
+        // Add some crystal and deuterium based on metal
+        let metal = combat_report.loot_metal;
+        let crystal = metal * 0.4; // 40% of metal as crystal
+        let deuterium = metal * 0.2; // 20% of metal as deuterium
+        (metal, crystal, deuterium)
+    } else {
+        (0.0, 0.0, 0.0)
+    };
+
+    Ok((combat_report, metal, crystal, deuterium))
+}
+
+/// Update planet ships after combat (deduct losses)
+async fn update_planet_ships_after_combat(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    sent_fleet: &HashMap<String, i32>,
+    remaining_fleet: &HashMap<String, i32>,
+) -> Result<(), String> {
+    use entities::{prelude::*, ship_type, planet_ship};
+    use sea_orm::ActiveModelTrait;
+
+    for (ship_key, &sent_count) in sent_fleet {
+        let remaining_count = remaining_fleet.get(ship_key).copied().unwrap_or(0);
+        let lost = sent_count - remaining_count;
+
+        if lost > 0 {
+            // Get ship type ID
+            let ship = ShipType::find()
+                .filter(ship_type::Column::ShipKey.eq(ship_key))
+                .one(db)
+                .await
+                .map_err(|e| format!("DB error: {:?}", e))?
+                .ok_or_else(|| format!("Ship type {} not found", ship_key))?;
+
+            // Update planet_ship count
+            if let Some(planet_ship_record) = PlanetShip::find()
+                .filter(planet_ship::Column::PlanetId.eq(planet_id))
+                .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+                .one(db)
+                .await
+                .map_err(|e| format!("DB error: {:?}", e))?
+            {
+                let mut active: planet_ship::ActiveModel = planet_ship_record.into();
+                let new_count = active.count.as_ref().saturating_sub(lost).max(0);
+                active.count = Set(new_count);
+                active.update(db).await.map_err(|e| format!("Update error: {:?}", e))?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// POST /planets/:id/expedition-v2 - New expedition handler using dynamic combat system
+async fn expedition_v2_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<ExpeditionPayloadV2>,
+) -> impl IntoResponse {
+    use entities::prelude::*;
+    use entities::{planet_ship, ship_type};
+
+    // Get planet
+    let planet = match Planet::find_by_id(id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+    };
+
+    // Check if expedition already active
+    if let Some(date) = planet.expedition_end {
+        if date > Utc::now().naive_utc() {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Expedition already active"}))).into_response();
+        }
+    }
+
+    // Validate fleet
+    if payload.fleet.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "No ships selected"}))).into_response();
+    }
+
+    // Verify planet has these ships
+    for (ship_key, &count) in &payload.fleet {
+        if count <= 0 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
+        }
+
+        // Get ship type
+        let ship = match ShipType::find()
+            .filter(ship_type::Column::ShipKey.eq(ship_key))
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(s)) => s,
+            Ok(None) => return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Unknown ship type: {}", ship_key)}))).into_response(),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+        };
+
+        // Check if planet has enough of this ship
+        let planet_ship_count = match PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(id))
+            .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(ps)) => ps.count,
+            Ok(None) => 0,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+        };
+
+        if count > planet_ship_count {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Not enough {}", ship.display_name)}))).into_response();
+        }
+    }
+
+    // Get config
+    let config = state.config.read().unwrap().clone();
+    let combat_chance = config.get_config("expedition_combat_chance", 0.3);
+    let base_duration = config.get_config("expedition_base_duration", 600.0);
+    let speed_factor = config.speed_factor;
+
+    // Determine if combat occurs
+    let combat_triggered = rand::thread_rng().gen_bool(combat_chance);
+
+    let mut logs = Vec::new();
+    let (final_metal, final_crystal, final_deuterium, winner) = if combat_triggered {
+        logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
+
+        // Run dynamic combat
+        match run_dynamic_expedition_combat(&state.db, id, payload.fleet.clone()).await {
+            Ok((combat_report, metal, crystal, deuterium)) => {
+                // Add combat logs
+                logs.extend(combat_report.log);
+
+                // Update ships based on combat results
+                if let Err(e) = update_planet_ships_after_combat(
+                    &state.db,
+                    id,
+                    &payload.fleet,
+                    &combat_report.remaining_ships,
+                ).await {
+                    eprintln!("Error updating ships after combat: {}", e);
+                }
+
+                let winner = if combat_report.winner == "player" {
+                    logs.push(format!("BUTIN : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium", metal, crystal, deuterium));
+                    "victory"
+                } else if combat_report.winner == "pirates" {
+                    "defeat"
+                } else {
+                    "draw"
+                };
+
+                (metal, crystal, deuterium, winner)
+            }
+            Err(e) => {
+                eprintln!("Combat error: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Combat simulation failed"}))).into_response();
+            }
+        }
+    } else {
+        // Calm sector - peaceful resource gathering
+        logs.push("SCAN : Secteur calme.".to_string());
+        let calm_bonus = config.get_config("expedition_calm_sector_bonus", 1.2);
+
+        // Base loot calculation (simplified for now)
+        let total_ship_value: i32 = payload.fleet.values().sum();
+        let metal = (total_ship_value as f64 * 100.0 * calm_bonus * (speed_factor / 100.0)).floor();
+        let crystal = (metal * 0.4).floor();
+        let deuterium = (metal * 0.2).floor();
+
+        logs.push(format!("DÉCOUVERTE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium", metal, crystal, deuterium));
+
+        (metal, crystal, deuterium, "calm")
+    };
+
+    // Update planet resources
+    let mut active: planet::ActiveModel = planet.clone().into();
+    active.metal_amount = Set(planet.metal_amount + final_metal);
+    active.crystal_amount = Set(planet.crystal_amount + final_crystal);
+    active.deuterium_amount = Set(planet.deuterium_amount + final_deuterium);
+
+    // Set expedition end time
+    let duration = std::cmp::max(1, (base_duration / speed_factor) as i64);
+    active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
+
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update planet"}))).into_response();
+    }
+
+    // Build response
+    Json(json!({
+        "success": true,
+        "result": winner,
+        "logs": logs,
+        "loot": {
+            "metal": final_metal,
+            "crystal": final_crystal,
+            "deuterium": final_deuterium
+        },
+        "duration_seconds": duration
     })).into_response()
 }
