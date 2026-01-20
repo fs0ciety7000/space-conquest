@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp } from 'lucide-react';
+import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -702,6 +702,598 @@ export default function AdminPanel() {
                                   onChange={(v) => setEditedConfig({...editedConfig, energy_deuterium_extra_consumption: v})}
                                   color="green"
                                   compact
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SECTION 6: STATISTIQUES DE COMBAT */}
+                      <Card className="bg-slate-900/40 border-red-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-red-400 flex items-center gap-2">
+                            <Crosshair size={14} />
+                            Statistiques de Combat
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {[
+                              { unit: 'light_hunter', label: 'Chasseur Léger' },
+                              { unit: 'cruiser', label: 'Croiseur' },
+                              { unit: 'missile_launcher', label: 'Lanceur de Missiles' },
+                              { unit: 'plasma_turret', label: 'Tourelle Plasma' }
+                            ].map(({ unit, label }) => (
+                              <div key={unit} className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                                <h4 className="text-xs font-bold text-red-300 mb-3">{label}</h4>
+                                <div className="grid grid-cols-3 gap-3">
+                                  <ConfigInput
+                                    label="Attaque"
+                                    configKey={`combat_${unit}_attack`}
+                                    value={editedConfig[`combat_${unit}_attack`] ?? config[`combat_${unit}_attack`] ?? '50.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, [`combat_${unit}_attack`]: v})}
+                                    color="red"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Bouclier"
+                                    configKey={`combat_${unit}_shield`}
+                                    value={editedConfig[`combat_${unit}_shield`] ?? config[`combat_${unit}_shield`] ?? '10.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, [`combat_${unit}_shield`]: v})}
+                                    color="cyan"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Coque"
+                                    configKey={`combat_${unit}_hull`}
+                                    value={editedConfig[`combat_${unit}_hull`] ?? config[`combat_${unit}_hull`] ?? '400.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, [`combat_${unit}_hull`]: v})}
+                                    color="orange"
+                                    compact
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SECTION 7: TIR RAPIDE */}
+                      <Card className="bg-slate-900/40 border-purple-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-purple-400 flex items-center gap-2">
+                            <Target size={14} />
+                            Tir Rapide (Rapid Fire)
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 gap-4">
+                            <ConfigInput
+                              label="Croiseur vs Chasseur"
+                              configKey="combat_rf_cruiser_vs_light_hunter"
+                              value={editedConfig['combat_rf_cruiser_vs_light_hunter'] ?? config['combat_rf_cruiser_vs_light_hunter'] ?? '6.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, combat_rf_cruiser_vs_light_hunter: v})}
+                              color="purple"
+                              description="Nombre de tirs consécutifs"
+                            />
+                            <ConfigInput
+                              label="Croiseur vs Lanceur"
+                              configKey="combat_rf_cruiser_vs_missile_launcher"
+                              value={editedConfig['combat_rf_cruiser_vs_missile_launcher'] ?? config['combat_rf_cruiser_vs_missile_launcher'] ?? '10.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, combat_rf_cruiser_vs_missile_launcher: v})}
+                              color="purple"
+                              description="Nombre de tirs consécutifs"
+                            />
+                            <ConfigInput
+                              label="Plasma vs Chasseur"
+                              configKey="combat_rf_plasma_vs_light_hunter"
+                              value={editedConfig['combat_rf_plasma_vs_light_hunter'] ?? config['combat_rf_plasma_vs_light_hunter'] ?? '6.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, combat_rf_plasma_vs_light_hunter: v})}
+                              color="purple"
+                              description="Nombre de tirs consécutifs"
+                            />
+                            <ConfigInput
+                              label="Plasma vs Croiseur"
+                              configKey="combat_rf_plasma_vs_cruiser"
+                              value={editedConfig['combat_rf_plasma_vs_cruiser'] ?? config['combat_rf_plasma_vs_cruiser'] ?? '3.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, combat_rf_plasma_vs_cruiser: v})}
+                              color="purple"
+                              description="Nombre de tirs consécutifs"
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SECTION 8: BONUS TECHNOLOGIQUES */}
+                      <Card className="bg-slate-900/40 border-yellow-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-yellow-400 flex items-center gap-2">
+                            <Award size={14} />
+                            Bonus Technologiques
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-3 gap-4">
+                            <ConfigInput
+                              label="Bonus Laser"
+                              configKey="combat_tech_laser_bonus"
+                              value={editedConfig['combat_tech_laser_bonus'] ?? config['combat_tech_laser_bonus'] ?? '0.1'}
+                              onChange={(v) => setEditedConfig({...editedConfig, combat_tech_laser_bonus: v})}
+                              color="red"
+                              description="Bonus par niveau (0.1 = 10%)"
+                              step="0.01"
+                            />
+                            <ConfigInput
+                              label="Bonus Énergie"
+                              configKey="combat_tech_energy_bonus"
+                              value={editedConfig['combat_tech_energy_bonus'] ?? config['combat_tech_energy_bonus'] ?? '0.1'}
+                              onChange={(v) => setEditedConfig({...editedConfig, combat_tech_energy_bonus: v})}
+                              color="cyan"
+                              description="Bonus par niveau (0.1 = 10%)"
+                              step="0.01"
+                            />
+                            <ConfigInput
+                              label="Bonus Blindage"
+                              configKey="combat_tech_armour_bonus"
+                              value={editedConfig['combat_tech_armour_bonus'] ?? config['combat_tech_armour_bonus'] ?? '0.1'}
+                              onChange={(v) => setEditedConfig({...editedConfig, combat_tech_armour_bonus: v})}
+                              color="orange"
+                              description="Bonus par niveau (0.1 = 10%)"
+                              step="0.01"
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SECTION 9: PILLAGE & DÉBRIS */}
+                      <Card className="bg-slate-900/40 border-green-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-green-400 flex items-center gap-2">
+                            <Package size={14} />
+                            Pillage & Débris
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-3 gap-4">
+                            <ConfigInput
+                              label="% Pillage"
+                              configKey="loot_percentage"
+                              value={editedConfig['loot_percentage'] ?? config['loot_percentage'] ?? '0.5'}
+                              onChange={(v) => setEditedConfig({...editedConfig, loot_percentage: v})}
+                              color="green"
+                              description="Pourcentage pillable (0.5 = 50%)"
+                              step="0.01"
+                            />
+                            <ConfigInput
+                              label="Max par ressource"
+                              configKey="loot_max_per_resource"
+                              value={editedConfig['loot_max_per_resource'] ?? config['loot_max_per_resource'] ?? '50000.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, loot_max_per_resource: v})}
+                              color="orange"
+                              description="Maximum pillable par ressource"
+                            />
+                            <ConfigInput
+                              label="% Débris"
+                              configKey="debris_percentage"
+                              value={editedConfig['debris_percentage'] ?? config['debris_percentage'] ?? '0.3'}
+                              onChange={(v) => setEditedConfig({...editedConfig, debris_percentage: v})}
+                              color="red"
+                              description="Pourcentage en débris (0.3 = 30%)"
+                              step="0.01"
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SECTION 10: CAPACITÉS DE CARGO */}
+                      <Card className="bg-slate-900/40 border-cyan-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                            <Box size={14} />
+                            Capacités de Cargo
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 gap-4">
+                            <ConfigInput
+                              label="Capacité Chasseur"
+                              configKey="cargo_light_hunter_capacity"
+                              value={editedConfig['cargo_light_hunter_capacity'] ?? config['cargo_light_hunter_capacity'] ?? '50.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, cargo_light_hunter_capacity: v})}
+                              color="cyan"
+                              description="Cargo du chasseur léger"
+                            />
+                            <ConfigInput
+                              label="Capacité Croiseur"
+                              configKey="cargo_cruiser_capacity"
+                              value={editedConfig['cargo_cruiser_capacity'] ?? config['cargo_cruiser_capacity'] ?? '800.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, cargo_cruiser_capacity: v})}
+                              color="cyan"
+                              description="Cargo du croiseur"
+                            />
+                            <ConfigInput
+                              label="Base Transporteur"
+                              configKey="cargo_transporter_base"
+                              value={editedConfig['cargo_transporter_base'] ?? config['cargo_transporter_base'] ?? '5000.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, cargo_transporter_base: v})}
+                              color="purple"
+                              description="Capacité de base"
+                            />
+                            <ConfigInput
+                              label="Bonus Hangar"
+                              configKey="cargo_transporter_hangar_bonus"
+                              value={editedConfig['cargo_transporter_hangar_bonus'] ?? config['cargo_transporter_hangar_bonus'] ?? '2500.0'}
+                              onChange={(v) => setEditedConfig({...editedConfig, cargo_transporter_hangar_bonus: v})}
+                              color="purple"
+                              description="Bonus par niveau de hangar"
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SECTION 11: EXPÉDITIONS */}
+                      <Card className="bg-slate-900/40 border-indigo-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                            <Map size={14} />
+                            Mécaniques d'Expédition
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {/* Combat & Chances */}
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-indigo-300 mb-3">Combat & Chances</h4>
+                              <div className="grid grid-cols-3 gap-3">
+                                <ConfigInput
+                                  label="% Combat"
+                                  configKey="expedition_combat_chance"
+                                  value={editedConfig['expedition_combat_chance'] ?? config['expedition_combat_chance'] ?? '0.3'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_combat_chance: v})}
+                                  color="red"
+                                  compact
+                                  step="0.01"
+                                />
+                                <ConfigInput
+                                  label="% Deutérium"
+                                  configKey="expedition_deuterium_chance"
+                                  value={editedConfig['expedition_deuterium_chance'] ?? config['expedition_deuterium_chance'] ?? '0.1'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_deuterium_chance: v})}
+                                  color="green"
+                                  compact
+                                  step="0.01"
+                                />
+                                <ConfigInput
+                                  label="Mult. Recycleur"
+                                  configKey="expedition_recycler_multiplier"
+                                  value={editedConfig['expedition_recycler_multiplier'] ?? config['expedition_recycler_multiplier'] ?? '1.5'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_recycler_multiplier: v})}
+                                  color="cyan"
+                                  compact
+                                  step="0.1"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Récompenses Chasseurs */}
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-indigo-300 mb-3">Récompenses Chasseurs</h4>
+                              <div className="grid grid-cols-3 gap-3">
+                                <div className="space-y-2">
+                                  <p className="text-[10px] text-orange-400 font-bold">MÉTAL</p>
+                                  <ConfigInput
+                                    label="Min"
+                                    configKey="expedition_hunter_metal_min"
+                                    value={editedConfig['expedition_hunter_metal_min'] ?? config['expedition_hunter_metal_min'] ?? '50.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_hunter_metal_min: v})}
+                                    color="orange"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Range"
+                                    configKey="expedition_hunter_metal_range"
+                                    value={editedConfig['expedition_hunter_metal_range'] ?? config['expedition_hunter_metal_range'] ?? '200.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_hunter_metal_range: v})}
+                                    color="orange"
+                                    compact
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[10px] text-cyan-400 font-bold">CRISTAL</p>
+                                  <ConfigInput
+                                    label="Min"
+                                    configKey="expedition_hunter_crystal_min"
+                                    value={editedConfig['expedition_hunter_crystal_min'] ?? config['expedition_hunter_crystal_min'] ?? '25.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_hunter_crystal_min: v})}
+                                    color="cyan"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Range"
+                                    configKey="expedition_hunter_crystal_range"
+                                    value={editedConfig['expedition_hunter_crystal_range'] ?? config['expedition_hunter_crystal_range'] ?? '100.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_hunter_crystal_range: v})}
+                                    color="cyan"
+                                    compact
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[10px] text-green-400 font-bold">DEUTÉRIUM</p>
+                                  <ConfigInput
+                                    label="Min"
+                                    configKey="expedition_hunter_deuterium_min"
+                                    value={editedConfig['expedition_hunter_deuterium_min'] ?? config['expedition_hunter_deuterium_min'] ?? '0.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_hunter_deuterium_min: v})}
+                                    color="green"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Range"
+                                    configKey="expedition_hunter_deuterium_range"
+                                    value={editedConfig['expedition_hunter_deuterium_range'] ?? config['expedition_hunter_deuterium_range'] ?? '50.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_hunter_deuterium_range: v})}
+                                    color="green"
+                                    compact
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Récompenses Croiseurs */}
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-indigo-300 mb-3">Récompenses Croiseurs</h4>
+                              <div className="grid grid-cols-3 gap-3">
+                                <div className="space-y-2">
+                                  <p className="text-[10px] text-orange-400 font-bold">MÉTAL</p>
+                                  <ConfigInput
+                                    label="Min"
+                                    configKey="expedition_cruiser_metal_min"
+                                    value={editedConfig['expedition_cruiser_metal_min'] ?? config['expedition_cruiser_metal_min'] ?? '200.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_cruiser_metal_min: v})}
+                                    color="orange"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Range"
+                                    configKey="expedition_cruiser_metal_range"
+                                    value={editedConfig['expedition_cruiser_metal_range'] ?? config['expedition_cruiser_metal_range'] ?? '600.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_cruiser_metal_range: v})}
+                                    color="orange"
+                                    compact
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[10px] text-cyan-400 font-bold">CRISTAL</p>
+                                  <ConfigInput
+                                    label="Min"
+                                    configKey="expedition_cruiser_crystal_min"
+                                    value={editedConfig['expedition_cruiser_crystal_min'] ?? config['expedition_cruiser_crystal_min'] ?? '100.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_cruiser_crystal_min: v})}
+                                    color="cyan"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Range"
+                                    configKey="expedition_cruiser_crystal_range"
+                                    value={editedConfig['expedition_cruiser_crystal_range'] ?? config['expedition_cruiser_crystal_range'] ?? '400.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_cruiser_crystal_range: v})}
+                                    color="cyan"
+                                    compact
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[10px] text-green-400 font-bold">DEUTÉRIUM</p>
+                                  <ConfigInput
+                                    label="Min"
+                                    configKey="expedition_cruiser_deuterium_min"
+                                    value={editedConfig['expedition_cruiser_deuterium_min'] ?? config['expedition_cruiser_deuterium_min'] ?? '0.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_cruiser_deuterium_min: v})}
+                                    color="green"
+                                    compact
+                                  />
+                                  <ConfigInput
+                                    label="Range"
+                                    configKey="expedition_cruiser_deuterium_range"
+                                    value={editedConfig['expedition_cruiser_deuterium_range'] ?? config['expedition_cruiser_deuterium_range'] ?? '150.0'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_cruiser_deuterium_range: v})}
+                                    color="green"
+                                    compact
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Combat Pirates */}
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-indigo-300 mb-3">Combat Pirates</h4>
+                              <div className="grid grid-cols-3 gap-3">
+                                <ConfigInput
+                                  label="Force Min Pirates"
+                                  configKey="expedition_pirate_strength_min"
+                                  value={editedConfig['expedition_pirate_strength_min'] ?? config['expedition_pirate_strength_min'] ?? '10.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_pirate_strength_min: v})}
+                                  color="red"
+                                  compact
+                                />
+                                <ConfigInput
+                                  label="Force Max Pirates"
+                                  configKey="expedition_pirate_strength_max"
+                                  value={editedConfig['expedition_pirate_strength_max'] ?? config['expedition_pirate_strength_max'] ?? '100.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_pirate_strength_max: v})}
+                                  color="red"
+                                  compact
+                                />
+                                <ConfigInput
+                                  label="Mult. Défense"
+                                  configKey="expedition_defense_multiplier"
+                                  value={editedConfig['expedition_defense_multiplier'] ?? config['expedition_defense_multiplier'] ?? '0.05'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_defense_multiplier: v})}
+                                  color="cyan"
+                                  compact
+                                  step="0.01"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Pertes Combat */}
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-indigo-300 mb-3">Pertes Combat</h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-2">
+                                  <p className="text-[10px] text-green-400 font-bold">VICTOIRE</p>
+                                  <ConfigInput
+                                    label="Perte Min"
+                                    configKey="expedition_victory_loss_min"
+                                    value={editedConfig['expedition_victory_loss_min'] ?? config['expedition_victory_loss_min'] ?? '0.03'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_victory_loss_min: v})}
+                                    color="green"
+                                    compact
+                                    step="0.01"
+                                  />
+                                  <ConfigInput
+                                    label="Perte Max"
+                                    configKey="expedition_victory_loss_max"
+                                    value={editedConfig['expedition_victory_loss_max'] ?? config['expedition_victory_loss_max'] ?? '0.15'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_victory_loss_max: v})}
+                                    color="green"
+                                    compact
+                                    step="0.01"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[10px] text-red-400 font-bold">DÉFAITE</p>
+                                  <ConfigInput
+                                    label="Perte Min"
+                                    configKey="expedition_defeat_loss_min"
+                                    value={editedConfig['expedition_defeat_loss_min'] ?? config['expedition_defeat_loss_min'] ?? '0.25'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_defeat_loss_min: v})}
+                                    color="red"
+                                    compact
+                                    step="0.01"
+                                  />
+                                  <ConfigInput
+                                    label="Perte Max"
+                                    configKey="expedition_defeat_loss_max"
+                                    value={editedConfig['expedition_defeat_loss_max'] ?? config['expedition_defeat_loss_max'] ?? '0.50'}
+                                    onChange={(v) => setEditedConfig({...editedConfig, expedition_defeat_loss_max: v})}
+                                    color="red"
+                                    compact
+                                    step="0.01"
+                                  />
+                                </div>
+                                <ConfigInput
+                                  label="Vulnérabilité Chasseur"
+                                  configKey="expedition_hunter_vulnerability"
+                                  value={editedConfig['expedition_hunter_vulnerability'] ?? config['expedition_hunter_vulnerability'] ?? '1.8'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_hunter_vulnerability: v})}
+                                  color="orange"
+                                  compact
+                                  step="0.1"
+                                />
+                                <ConfigInput
+                                  label="Vulnérabilité Croiseur"
+                                  configKey="expedition_cruiser_vulnerability"
+                                  value={editedConfig['expedition_cruiser_vulnerability'] ?? config['expedition_cruiser_vulnerability'] ?? '1.2'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_cruiser_vulnerability: v})}
+                                  color="purple"
+                                  compact
+                                  step="0.1"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Durée & Bonus */}
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-indigo-300 mb-3">Durée & Bonus</h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                <ConfigInput
+                                  label="Bonus Secteur Calme"
+                                  configKey="expedition_calm_sector_bonus"
+                                  value={editedConfig['expedition_calm_sector_bonus'] ?? config['expedition_calm_sector_bonus'] ?? '1.5'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_calm_sector_bonus: v})}
+                                  color="green"
+                                  compact
+                                  step="0.1"
+                                />
+                                <ConfigInput
+                                  label="Durée de Base (sec)"
+                                  configKey="expedition_base_duration"
+                                  value={editedConfig['expedition_base_duration'] ?? config['expedition_base_duration'] ?? '300.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, expedition_base_duration: v})}
+                                  color="yellow"
+                                  compact
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* SECTION 12: CAPACITÉS STRUCTURES */}
+                      <Card className="bg-slate-900/40 border-orange-500/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-xs font-black uppercase tracking-wider text-orange-400 flex items-center gap-2">
+                            <Warehouse size={14} />
+                            Capacités des Structures
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-orange-300 mb-3">Hangar</h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                <ConfigInput
+                                  label="Capacité de Base"
+                                  configKey="hangar_capacity_base"
+                                  value={editedConfig['hangar_capacity_base'] ?? config['hangar_capacity_base'] ?? '500.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, hangar_capacity_base: v})}
+                                  color="orange"
+                                  compact
+                                />
+                                <ConfigInput
+                                  label="Capacité par Niveau"
+                                  configKey="hangar_capacity_per_level"
+                                  value={editedConfig['hangar_capacity_per_level'] ?? config['hangar_capacity_per_level'] ?? '500.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, hangar_capacity_per_level: v})}
+                                  color="orange"
+                                  compact
+                                />
+                              </div>
+                            </div>
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-orange-300 mb-3">Stockage</h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                <ConfigInput
+                                  label="Capacité de Base"
+                                  configKey="storage_capacity_base"
+                                  value={editedConfig['storage_capacity_base'] ?? config['storage_capacity_base'] ?? '10000.0'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, storage_capacity_base: v})}
+                                  color="cyan"
+                                  compact
+                                />
+                                <ConfigInput
+                                  label="Facteur de Croissance"
+                                  configKey="storage_capacity_growth"
+                                  value={editedConfig['storage_capacity_growth'] ?? config['storage_capacity_growth'] ?? '1.6'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, storage_capacity_growth: v})}
+                                  color="cyan"
+                                  compact
+                                  step="0.1"
+                                />
+                              </div>
+                            </div>
+                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
+                              <h4 className="text-xs font-bold text-orange-300 mb-3">Slots de Ressources</h4>
+                              <div className="grid grid-cols-1 gap-3">
+                                <ConfigInput
+                                  label="Bonus par Slot (%)"
+                                  configKey="slot_bonus_per_slot"
+                                  value={editedConfig['slot_bonus_per_slot'] ?? config['slot_bonus_per_slot'] ?? '0.5'}
+                                  onChange={(v) => setEditedConfig({...editedConfig, slot_bonus_per_slot: v})}
+                                  color="green"
+                                  description="Bonus de production par slot (0.5 = 50%)"
+                                  step="0.1"
                                 />
                               </div>
                             </div>
