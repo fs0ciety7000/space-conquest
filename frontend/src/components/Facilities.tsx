@@ -5,11 +5,36 @@ import {
   Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp, Lock, ShieldCheck, Shield, Package
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { checkPrerequisites } from "@/lib/gameRules"; // Importation de ta règle
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { GameImage } from '@/components/ui/game-image';
 import { getBuildingImage } from '@/lib/images';
+
+interface BuildingRequirement {
+  requirement_type: string;
+  tech_key?: string;
+  tech_name?: string;
+  building_key?: string;
+  building_name?: string;
+  required_level: number;
+  current_level: number;
+  met: boolean;
+}
+
+interface BuildingTypeInfo {
+  id: number;
+  building_key: string;
+  name: string;
+  description: string | null;
+  base_cost_metal: number;
+  base_cost_crystal: number;
+  base_cost_deuterium: number;
+  base_time_seconds: number;
+  cost_multiplier: number;
+  current_level: number;
+  requirements: BuildingRequirement[];
+}
+
 interface FacilitiesProps {
   planet: any;
   onUpgrade: () => void;
@@ -87,80 +112,109 @@ const getFacilityStats = (id: string, level: number) => {
 
 export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
   const [now, setNow] = useState(new Date().getTime());
+  const [buildingTypes, setBuildingTypes] = useState<BuildingTypeInfo[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleUpgrade = async (type: string) => {
-    // Sécurité supplémentaire côté client
-    const { locked } = checkPrerequisites(planet, type);
-    if (locked) {
-        toast.error("Données technologiques manquantes");
+  useEffect(() => {
+    const fetchBuildingTypes = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const response = await fetch(apiUrl(`/planets/${planet.id}/building-types`), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setBuildingTypes(data.building_types || []);
+        }
+      } catch (e) {
+        console.error("Failed to fetch building types:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBuildingTypes();
+  }, [planet.id]);
+
+  const handleUpgrade = async (building_key: string) => {
+    const building = buildingTypes.find(b => b.building_key === building_key);
+    if (!building) return;
+
+    // Check tech requirements
+    const hasUnmetRequirements = building.requirements.some(req => !req.met);
+    if (hasUnmetRequirements) {
+        toast.error("Prérequis technologiques non satisfaits");
         return;
     }
 
     const token = localStorage.getItem('token');
     try {
-      await fetch(apiUrl(`/planets/${planet.id}/upgrade/${type}`), {
+      await fetch(apiUrl(`/planets/${planet.id}/upgrade/${building_key}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
       onUpgrade();
-    } catch (e) { console.error(e); }
+      toast.success(`${building.name} amélioré avec succès`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Erreur lors de l'amélioration");
+    }
   };
 
-  const getCost = (type: string, lv: number) => {
-    const factor = Math.pow(2, lv);
-    if (type === 'shipyard') return { m: 400 * factor, c: 200 * factor, d: 100 * factor };
-    if (type === 'research') return { m: 200 * factor, c: 400 * factor, d: 200 * factor };
-    if (type === 'hangar') return { m: 500 * factor, c: 250 * factor, d: 100 * factor };
-    if (type === 'armour') return { m: 1000 * factor, c: 0, d: 0 };
-    if (type === 'resource_storage') return { m: 1000 * factor, c: 500 * factor, d: 0 };
-    return { m: 0, c: 0, d: 0 };
+  const getCost = (building: BuildingTypeInfo) => {
+    const level = building.current_level;
+    const multiplier = building.cost_multiplier;
+    return {
+      m: Math.floor(building.base_cost_metal * Math.pow(multiplier, level)),
+      c: Math.floor(building.base_cost_crystal * Math.pow(multiplier, level)),
+      d: Math.floor(building.base_cost_deuterium * Math.pow(multiplier, level))
+    };
   };
-
-  const facilities = [
-    { id: 'shipyard', name: 'Chantier Spatial', lv: planet.shipyard_level ?? 0, desc: "Permet la construction de vaisseaux et défenses." },
-    { id: 'research', name: 'Labo de Recherche', lv: planet.research_lab_level ?? 0, desc: "Nécessaire pour débloquer de nouvelles technologies." },
-    { id: 'hangar', name: 'Hangar à Vaisseaux', lv: planet.hangar_level ?? 0, desc: "Augmente la capacité de stockage de la flotte." },
-    { id: 'resource_storage', name: 'Hangar à Ressources', lv: planet.resource_storage_level ?? 0, desc: "Augmente la capacité de stockage des ressources (600k base)." },
-    { id: 'armour', name: 'Technologie de Protection', lv: planet.armour_tech_level ?? 0, desc: "Augmente la coque des vaisseaux de 10% par niveau." },
-  ];
 
   const queue = planet.constructions || [];
   const isQueueFull = queue.length >= 3;
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-slate-400 animate-pulse">Chargement des installations...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in zoom-in-95 duration-500 pb-20">
-      {facilities.map((fac) => {
-        // Utilisation de ta fonction de prérequis
-        const { locked, requirements } = checkPrerequisites(planet, fac.id);
-        
-        const activeItem = queue.find((q: any) => q.building_type === fac.id);
+      {buildingTypes.map((building) => {
+        // Check if requirements are met
+        const locked = building.requirements.some(req => !req.met);
+
+        const activeItem = queue.find((q: any) => q.building_type === building.building_key);
         const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
-        const cost = getCost(fac.id, fac.lv);
-        const stats = getFacilityStats(fac.id, fac.lv);
+        const cost = getCost(building);
+        const stats = getFacilityStats(building.building_key, building.current_level);
         const canAfford = (planet.metal_amount >= cost.m) && (planet.crystal_amount >= cost.c) && (planet.deuterium_amount >= cost.d);
-        const theme = getFacilityTheme(fac.id);
+        const theme = getFacilityTheme(building.building_key);
         const Icon = theme.icon;
         const BgIcon = theme.bgIcon;
 
         return (
-          <Card key={fac.id} className={`relative overflow-hidden border-t-4 ${locked ? 'border-red-900/50 grayscale-[0.5]' : theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group hover:-translate-y-2 hover:shadow-3xl transition-all duration-500 hover-scale card-depth card-depth-hover animate-slide-up`}>
+          <Card key={building.id} className={`relative overflow-hidden border-t-4 ${locked ? 'border-red-900/50 grayscale-[0.5]' : theme.border} bg-gradient-to-b ${theme.gradient} shadow-2xl group hover:-translate-y-2 hover:shadow-3xl transition-all duration-500 hover-scale card-depth card-depth-hover animate-slide-up`}>
              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
              <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent opacity-50 group-hover:opacity-100 transition-all duration-300"></div>
              <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-15 transition-all duration-500 pointer-events-none group-hover:animate-float">
                 <BgIcon size={150} className={theme.color} />
              </div>
              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            
+
             <CardContent className="p-6 relative z-10 flex flex-col h-full justify-between">
               {/* Image du bâtiment */}
               <GameImage
-                src={getBuildingImage(fac.id)}
-                alt={fac.name}
+                src={getBuildingImage(building.building_key)}
+                alt={building.name}
                 className="w-full h-40 mb-4"
                 fallbackIcon={<Icon className={`${theme.color} w-20 h-20`} />}
                 loading="lazy"
@@ -173,11 +227,11 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                             {locked ? <Lock size={24} className="animate-pulse" /> : <Icon size={24} />}
                         </div>
                         <div>
-                            <h3 className="text-lg font-black uppercase tracking-wider text-white">{fac.name}</h3>
-                            <p className="text-xs text-slate-400 h-4 leading-tight">{fac.desc}</p>
+                            <h3 className="text-lg font-black uppercase tracking-wider text-white">{building.name}</h3>
+                            <p className="text-xs text-slate-400 h-4 leading-tight">{building.description || ""}</p>
                         </div>
                     </div>
-                    <span className={`text-2xl font-black font-mono ${locked ? 'text-red-500/50' : theme.color} opacity-80`}>Nv.{fac.lv}</span>
+                    <span className={`text-2xl font-black font-mono ${locked ? 'text-red-500/50' : theme.color} opacity-80`}>Nv.{building.current_level}</span>
                 </div>
 
                 {/* STATS DYNAMIQUES */}
@@ -196,15 +250,22 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                 )}
 
                 {/* PRÉREQUIS SI VERROUILLÉ */}
-                {locked && (
+                {locked && building.requirements.length > 0 && (
                   <div className="mb-4 p-3 bg-red-950/20 rounded border border-red-500/20 space-y-1">
                       <p className="text-[9px] uppercase font-black text-red-500 tracking-tighter mb-2">Transmissions cryptées - Requis :</p>
-                      {requirements.map((req, i) => (
+                      {building.requirements.map((req, i) => {
+                        const label = req.requirement_type === 'tech'
+                          ? `${req.tech_name} (Nv.${req.required_level})`
+                          : `${req.building_name} (Nv.${req.required_level})`;
+                        return (
                           <div key={i} className="flex items-center justify-between text-[10px] font-mono">
-                              <span className={req.met ? "text-green-500" : "text-red-400"}>{req.label}</span>
+                              <span className={req.met ? "text-green-500" : "text-red-400"}>
+                                {label} [{req.current_level}/{req.required_level}]
+                              </span>
                               {req.met ? <Zap size={10} className="text-green-500" /> : <Lock size={10} className="text-red-600" />}
                           </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 )}
 
@@ -225,17 +286,17 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                 </div>
               </div>
 
-              <Button 
-                onClick={() => handleUpgrade(fac.id)}
+              <Button
+                onClick={() => handleUpgrade(building.building_key)}
                 disabled={locked || (isQueueFull && !activeItem) || !canAfford}
                 className={`w-full font-black uppercase tracking-widest transition-all duration-500 ${
-                    activeItem 
-                        ? 'bg-indigo-900/50 border border-indigo-500 text-indigo-300 animate-pulse' 
+                    activeItem
+                        ? 'bg-indigo-900/50 border border-indigo-500 text-indigo-300 animate-pulse'
                         : locked
                             ? 'bg-slate-900 text-slate-600 border border-red-900/20 cursor-not-allowed'
                             : isQueueFull
                                 ? 'bg-slate-800 text-slate-500 border border-white/5 cursor-not-allowed'
-                                : !canAfford 
+                                : !canAfford
                                     ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
                                     : `bg-gradient-to-r from-indigo-950/60 to-purple-950/60 hover:from-indigo-900/80 hover:to-purple-900/80 border border-indigo-500/50 hover:border-cyan-400/80 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]`
                 }`}

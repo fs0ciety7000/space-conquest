@@ -52,6 +52,8 @@ mod m20260125_100003_migrate_planet_data;
 mod m20260125_100004_add_research_tracking_columns;
 mod m20260125_100005_add_build_time_columns;
 mod m20260125_100006_add_ship_building_columns;
+mod m20260125_200001_create_complete_expansion_system;
+mod m20260125_200002_seed_complete_expansion_data;
 
 pub struct Migrator;
 
@@ -111,6 +113,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260125_100004_add_research_tracking_columns::Migration),
             Box::new(m20260125_100005_add_build_time_columns::Migration),
             Box::new(m20260125_100006_add_ship_building_columns::Migration),
+            Box::new(m20260125_200001_create_complete_expansion_system::Migration),
+            Box::new(m20260125_200002_seed_complete_expansion_data::Migration),
         ]
     }
 }
