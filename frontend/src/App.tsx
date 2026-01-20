@@ -4,6 +4,7 @@ import ResourceDisplay from './components/ResourceDisplay';
 import Facilities from './components/Facilities';
 import Shipyard from './components/Shipyard';
 import EmpireBar from './components/EmpireBar';
+import AnnouncementBanner from './components/AnnouncementBanner';
 import TechTree from './components/TechTree';
 import ExpeditionZone from './components/ExpeditionZone';
 import ExpeditionZoneV2 from './components/ExpeditionZoneV2';
@@ -680,6 +681,11 @@ export default function App() {
             speedFactor={speedFactor}
             wsStatus={wsStatus}
           />
+      </div>
+
+      {/* Announcement Banner */}
+      <div className="absolute top-[60px] md:top-[72px] left-0 w-full z-40">
+        <AnnouncementBanner />
       </div>
 
       <div className="flex flex-1 w-full h-full overflow-hidden relative z-30 pt-[60px] md:pt-[72px]">

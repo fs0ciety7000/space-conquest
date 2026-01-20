@@ -259,6 +259,8 @@ async fn main() {
         .route("/market/prices/history", get(get_price_history_handler))
         // Changelog
         .route("/changelog", get(get_changelog_handler))
+        // Announcements (public)
+        .route("/announcements/active", get(admin::get_active_announcements_handler))
         // Admin
         .route("/admin/players", get(admin::get_all_players_handler))
         .route("/admin/planet/:id", get(admin::get_planet_admin_handler))
@@ -271,6 +273,11 @@ async fn main() {
         .route("/admin/user/:id/email", patch(admin::update_email_handler))
         .route("/admin/user/:id/reset-password", post(admin::reset_password_handler))
         .route("/admin/user/:id", delete(admin::delete_user_handler))
+        // Announcements
+        .route("/admin/announcements", get(admin::get_announcements_handler))
+        .route("/admin/announcements", post(admin::create_announcement_handler))
+        .route("/admin/announcements/:id", patch(admin::update_announcement_handler))
+        .route("/admin/announcements/:id", delete(admin::delete_announcement_handler))
         // Game tick system
         .route("/tick", post(tick_handler))
         // Alliance system
