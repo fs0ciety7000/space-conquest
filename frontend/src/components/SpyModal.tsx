@@ -1,4 +1,4 @@
-import { X, Eye, ScanEye, Pickaxe, Hexagon, Droplet, Ship, ShieldAlert, Lock, AlertTriangle } from "lucide-react";
+import { X, Eye, ScanEye, Pickaxe, Hexagon, Droplet, Ship, ShieldAlert, Lock, AlertTriangle, Zap, TrendingDown, Clock, Skull } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -19,9 +19,11 @@ interface SpyReport {
 interface SpyModalProps {
   report: SpyReport | null;
   onClose: () => void;
+  targetPlanetId?: string;
+  onSabotage?: (action: 'disable_mine' | 'steal_tech') => Promise<void>;
 }
 
-export default function SpyModal({ report, onClose }: SpyModalProps) {
+export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }: SpyModalProps) {
   if (!report) return null;
 
   // Définition des niveaux d'accès
@@ -110,6 +112,67 @@ export default function SpyModal({ report, onClose }: SpyModalProps) {
                      </div>
                 ) : null}
             </Section>
+
+            {/* 4. ACTIONS DE SABOTAGE (si espionnage réussi) */}
+            {report.success && report.tech_difference >= 1 && onSabotage && (
+                <>
+                    <Separator className="bg-white/5" />
+                    <Section title="Opérations Clandestines" icon={Zap} isLocked={false} delay={4}>
+                        <div className="space-y-3">
+                            {/* Avertissement */}
+                            <div className="bg-yellow-950/20 border border-yellow-500/30 rounded-lg p-3 flex items-start gap-3">
+                                <AlertTriangle size={20} className="text-yellow-400 shrink-0 mt-0.5" />
+                                <div>
+                                    <div className="text-xs font-bold text-yellow-300 mb-1">Risques Opérationnels</div>
+                                    <div className="text-[10px] text-yellow-200/70 leading-relaxed">
+                                        Si détecté: sonde détruite + Casus Belli (droit d'attaque sans pénalité)
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Option 1: Désactiver mine */}
+                            <button
+                                onClick={() => onSabotage('disable_mine')}
+                                className="w-full bg-orange-950/30 border border-orange-500/30 rounded-lg p-3 hover:bg-orange-950/50 transition-all duration-300 group card-depth hover:-translate-y-1 hover:shadow-lg"
+                            >
+                                <div className="flex items-start gap-3">
+                                    <TrendingDown size={20} className="text-orange-400 shrink-0 group-hover:animate-bounce" />
+                                    <div className="text-left flex-1">
+                                        <div className="text-xs font-bold text-orange-300 mb-1">Saboter Infrastructure</div>
+                                        <div className="text-[10px] text-orange-200/70 leading-relaxed">
+                                            Désactive temporairement une mine (-50% prod pendant 1h)
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-2 text-[9px] text-orange-400/80">
+                                            <Clock size={10} />
+                                            <span>Durée: 1 heure</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+
+                            {/* Option 2: Voler tech */}
+                            <button
+                                onClick={() => onSabotage('steal_tech')}
+                                className="w-full bg-purple-950/30 border border-purple-500/30 rounded-lg p-3 hover:bg-purple-950/50 transition-all duration-300 group card-depth hover:-translate-y-1 hover:shadow-lg"
+                            >
+                                <div className="flex items-start gap-3">
+                                    <Eye size={20} className="text-purple-400 shrink-0 group-hover:animate-pulse" />
+                                    <div className="text-left flex-1">
+                                        <div className="text-xs font-bold text-purple-300 mb-1">Espionnage Industriel</div>
+                                        <div className="text-[10px] text-purple-200/70 leading-relaxed">
+                                            Vole des données techniques (-20% temps recherche suivante)
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-2 text-[9px] text-purple-400/80">
+                                            <Skull size={10} />
+                                            <span>Risque: Élevé</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        </div>
+                    </Section>
+                </>
+            )}
         </div>
 
         <div className="p-4 bg-slate-900 border-t border-white/5">

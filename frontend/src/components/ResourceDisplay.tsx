@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Pickaxe, Gem, Droplets, Zap, Timer, ArrowUpCircle,
-  Box, TrendingUp, Activity, ChevronRight, Lock, Unlock, Power, PowerOff, ChevronDown, Layers, AlertCircle
+  Box, TrendingUp, Activity, ChevronRight, Lock, Unlock, Power, PowerOff, ChevronDown, Layers, AlertCircle, Clock, TrendingDown
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
@@ -211,6 +211,29 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
       const baseFactor = type === 'deuterium' ? 20 : 10;
       return Math.floor(baseFactor * level * Math.pow(1.1, level));
   }
+
+  // Calcul du ROI (Return On Investment) - Temps pour rentabiliser l'upgrade
+  const calculateROI = (cost: { m: number, c: number }, productionGain: number) => {
+    if (productionGain <= 0) return null; // Pas de ROI pour énergie
+
+    // Coût total en équivalent ressource (moyenne métal + cristal)
+    const totalCost = cost.m + cost.c;
+
+    // Heures nécessaires pour rentabiliser
+    const hoursToROI = totalCost / productionGain;
+
+    if (hoursToROI < 1) {
+      return `${Math.ceil(hoursToROI * 60)}min`;
+    } else if (hoursToROI < 24) {
+      const hours = Math.floor(hoursToROI);
+      const minutes = Math.ceil((hoursToROI - hours) * 60);
+      return `${hours}h ${minutes}min`;
+    } else {
+      const days = Math.floor(hoursToROI / 24);
+      const hours = Math.floor(hoursToROI % 24);
+      return `${days}j ${hours}h`;
+    }
+  }
   
   const getNextCost = (type: string, currentLevel: number) => {
     const next = currentLevel + 1;
@@ -299,7 +322,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
                 {/* STATS PANEL (Design Riche Restauré) */}
                 <div className="bg-black/40 p-3 rounded-lg border border-white/5 mb-6 backdrop-blur-sm space-y-3">
-                    
+
                     {/* Ligne Production */}
                     <div>
                         <div className="flex justify-between items-center text-[9px] uppercase font-bold text-slate-500 mb-1">
@@ -316,6 +339,26 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                             <div className={`h-full ${theme.color.replace('text-', 'bg-')} opacity-80 animate-gradient`} style={{ width: '100%' }}></div>
                         </div>
                     </div>
+
+                    {/* ROI Calculator - Rentabilité */}
+                    {!isSolar && diffProd > 0 && (() => {
+                        const roi = calculateROI(cost, diffProd);
+                        return roi ? (
+                            <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-lg p-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Clock size={12} className="text-indigo-400" />
+                                        <span className="text-[9px] uppercase font-bold text-indigo-300">Rentabilisé en</span>
+                                    </div>
+                                    <span className="text-sm font-black font-mono text-indigo-400">{roi}</span>
+                                </div>
+                                <div className="mt-1 text-[8px] text-indigo-300/60 flex items-center gap-1">
+                                    <TrendingDown size={8} />
+                                    Temps pour récupérer l'investissement
+                                </div>
+                            </div>
+                        ) : null;
+                    })()}
 
                     {/* Ligne Énergie (VERSION SIMPLIFIÉE - une seule ligne) */}
                     <div>

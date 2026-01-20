@@ -1,5 +1,137 @@
 # Changelog - Space Conquest
 
+## [2.1.0] - 2026-01-20 - Fonctionnalités Avancées UX & Gameplay
+
+### 🎨 Nouvelles Fonctionnalités UI
+
+#### 📊 Calculateur de Rentabilité (ROI)
+**Description**: Affichage du temps de retour sur investissement pour chaque amélioration de mine
+
+**Détails**:
+- Calcul automatique basé sur le coût et le gain de production
+- Affichage du ROI en minutes, heures ou jours
+- Interface cohérente avec le design global (indigo, subtle)
+- Aide les joueurs à prioriser leurs constructions
+
+**Exemple**:
+- Mine Métal Niv. 5 → 6: Coût 3000M + 750C, Gain +150/h → **ROI: 6h 15min**
+
+**Fichiers**:
+- `frontend/src/components/ResourceDisplay.tsx` (fonction `calculateROI`, UI panel)
+
+---
+
+#### 🌳 Arbre Technologique Visuel (ReactFlow)
+**Description**: Vue interactive des technologies avec dépendances visuelles
+
+**Features**:
+- Graphe interactif avec ReactFlow (zoom, pan, drag)
+- Noeuds personnalisés pour chaque technologie
+- Flèches animées montrant les dépendances
+- Technologies grisées si prérequis non satisfaits
+- Toggle entre vue arbre et vue grille classique
+
+**Dépendances**:
+- Labo de Recherche → Énergie, Laser, Espionnage
+- Flèches colorées et animées selon l'état
+
+**Fichiers**:
+- `frontend/src/components/TechTreeVisual.tsx` (composant ReactFlow)
+- `frontend/src/components/TechTree.tsx` (ajout toggle vue)
+- `package.json` (ajout reactflow ^11.x)
+
+---
+
+#### 🎬 Replay de Combat Animé
+**Description**: Visualisation animée des combats avec barres de vie et explosions
+
+**Features**:
+- Parser automatique des logs de combat
+- Barres de vie animées pour joueur et ennemi
+- Explosions et effets visuels (Framer Motion)
+- Timeline d'événements avec icônes contextuelles
+- Contrôles Play/Pause/Replay
+- Background spatial avec étoiles animées
+
+**Types d'événements**:
+- Rounds de combat
+- Attaques (lasers animés)
+- Dégâts infligés
+- Vaisseaux détruits
+- Fin de combat (victoire/défaite)
+
+**Fichiers**:
+- `frontend/src/components/CombatReplay.tsx` (composant principal)
+- Utilise `framer-motion` pour animations fluides
+
+---
+
+#### 🕵️ Système de Sabotage (Espionnage Avancé)
+**Description**: Actions clandestines après espionnage réussi
+
+**Nouvelles Actions**:
+1. **Saboter Infrastructure**
+   - Désactive temporairement une mine
+   - Baisse de production: -50% pendant 1h
+   - Risque modéré de détection
+
+2. **Espionnage Industriel**
+   - Vole des données techniques
+   - Bonus: -20% temps recherche suivante
+   - Risque élevé de détection
+
+**Mécaniques de Risque**:
+- Si détecté: sonde détruite
+- Casus Belli accordé à la victime (droit d'attaque sans pénalité)
+- Chances basées sur différence de niveau tech espionnage
+
+**Conditions d'accès**:
+- Espionnage réussi (detection_level !== 'none')
+- Avantage tech minimal (tech_difference >= 1)
+
+**Fichiers**:
+- `frontend/src/components/SpyModal.tsx` (UI sabotage)
+- **Backend TODO**: Endpoints `/sabotage/disable_mine` et `/sabotage/steal_tech`
+
+---
+
+### 🎯 Améliorations UX
+
+- **Cohérence Design**: Toutes les nouvelles features suivent la charte graphique (PlanetOverview style)
+- **Animations Fluides**: Utilisation intensive de Framer Motion
+- **Feedback Visuel**: Tooltips, hover effects, transitions harmonisées
+- **Responsive**: Mobile-friendly pour toutes les nouvelles interfaces
+
+---
+
+### 📦 Dépendances Ajoutées
+
+```json
+{
+  "reactflow": "^11.x" // Tech tree interactif
+}
+```
+
+---
+
+### 🚀 Prochaines Étapes (Backend)
+
+**Système de Sabotage** (à implémenter):
+```rust
+// Endpoints à créer
+POST /planets/{id}/sabotage/disable_mine
+POST /planets/{id}/sabotage/steal_tech
+
+// Mécaniques
+- Vérification tech_difference >= 1
+- Calcul probabilité détection
+- Application des effets (debuff mines, bonus recherche)
+- Notification victime si détecté
+- Attribution Casus Belli
+```
+
+---
+
 ## [2.0.5] - 2026-01-20 - Corrections gameplay et équilibrage
 
 ### 🔧 Corrections critiques
