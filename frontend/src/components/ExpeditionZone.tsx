@@ -29,23 +29,13 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
     }
   } | null>(null);
 
-  // Initialisation intelligente des compteurs de vaisseaux
+  // Initialisation des compteurs de vaisseaux à 0 par défaut
   useEffect(() => {
     if (planet && !initialized) {
-      const availableHunters = planet.light_hunter_count || 0;
-      const availableCruisers = planet.cruiser_count || 0;
-      
-      // Initialiser avec le premier type de vaisseau disponible
-      if (availableHunters > 0) {
-        setHunterCount(1);
-        setCruiserCount(0);
-      } else if (availableCruisers > 0) {
-        setHunterCount(0);
-        setCruiserCount(1);
-      } else {
-        setHunterCount(0);
-        setCruiserCount(0);
-      }
+      // Par défaut, tous les compteurs à 0
+      setHunterCount(0);
+      setCruiserCount(0);
+      setRecyclerCount(0);
       setInitialized(true);
     }
   }, [planet, initialized]);
