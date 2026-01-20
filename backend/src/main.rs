@@ -379,7 +379,7 @@ async fn resolve_attack_mission(
     config: &backend::ServerConfigCache,
 ) -> Result<(), StatusCode> {
     let now = Utc::now().naive_utc();
-    
+
     let att_planet = Planet::find_by_id(mission.source_planet_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
     let att_user = User::find_by_id(att_planet.owner_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
     let def_planet_raw = Planet::find_by_id(mission.target_planet_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
@@ -394,7 +394,7 @@ async fn resolve_attack_mission(
         def_planet_raw.deuterium_mine_level,
         config
     );
-    
+
     let mut def_planet = def_planet_raw.clone();
     // Utiliser calculate_resources_with_energy pour prendre en compte le ratio énergétique
     // Note: plasma_tech_level will be 0 until planet model is updated
@@ -431,26 +431,42 @@ async fn resolve_attack_mission(
         config
     );
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NEW: Use dynamic combat system
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Build attacker fleet from mission data (legacy format)
+    let mut attacker_ships = HashMap::new();
     let att_hunters = mission.metal as i32;
     let att_cruisers = mission.crystal as i32;
     let att_transporters = mission.deuterium as i32;
 
-    let att_techs = game_logic::CombatTechs {
-        laser: att_planet.laser_battery_level, energy: att_planet.energy_tech_level, armour: att_planet.armour_tech_level
-    };
-    let def_techs = game_logic::CombatTechs {
-        laser: def_planet.laser_battery_level, energy: def_planet.energy_tech_level, armour: def_planet.armour_tech_level
-    };
+    if att_hunters > 0 {
+        attacker_ships.insert("light_hunter".to_string(), att_hunters);
+    }
+    if att_cruisers > 0 {
+        attacker_ships.insert("cruiser".to_string(), att_cruisers);
+    }
+    if att_transporters > 0 {
+        attacker_ships.insert("transporter".to_string(), att_transporters);
+    }
 
-    let result = game_logic::resolve_pvp(
-        att_hunters, att_cruisers, att_transporters, att_planet.hangar_level, att_techs,
-        def_planet.light_hunter_count, def_planet.cruiser_count, 0,
-        def_planet.missile_launcher_count, def_planet.plasma_turret_count,
-        def_techs,
-        game_logic::Cost { metal: def_planet.metal_amount, crystal: def_planet.crystal_amount, deuterium: def_planet.deuterium_amount }
-    ,
-        config
-    );
+    // Load defender ships from database
+    let defender_ships = load_planet_ships_for_combat(db, mission.target_planet_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Run combat using new dynamic system
+    let result = combat::resolve_pvp_combat(
+        db,
+        attacker_ships.clone(),
+        defender_ships.clone(),
+        (def_planet.metal_amount, def_planet.crystal_amount, def_planet.deuterium_amount)
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Process combat results
+    // ═══════════════════════════════════════════════════════════════════════════
 
     let mut def_active: planet::ActiveModel = def_planet_raw.clone().into();
     let mut planet_conquered = false;
@@ -459,7 +475,7 @@ async fn resolve_attack_mission(
     if result.winner == "attacker" {
         // Calculer le pourcentage de ressources volées
         let total_resources_before = def_planet.metal_amount + def_planet.crystal_amount + def_planet.deuterium_amount;
-        let total_loot = result.loot.metal + result.loot.crystal + result.loot.deuterium;
+        let total_loot = result.loot.0 + result.loot.1 + result.loot.2;
         let loot_percentage = if total_resources_before > 0.0 {
             (total_loot / total_resources_before) * 100.0
         } else {
@@ -492,21 +508,28 @@ async fn resolve_attack_mission(
             }
         }
 
-        def_active.metal_amount = Set((def_planet.metal_amount - result.loot.metal).max(0.0));
-        def_active.crystal_amount = Set((def_planet.crystal_amount - result.loot.crystal).max(0.0));
-        def_active.deuterium_amount = Set((def_planet.deuterium_amount - result.loot.deuterium).max(0.0));
+        def_active.metal_amount = Set((def_planet.metal_amount - result.loot.0).max(0.0));
+        def_active.crystal_amount = Set((def_planet.crystal_amount - result.loot.1).max(0.0));
+        def_active.deuterium_amount = Set((def_planet.deuterium_amount - result.loot.2).max(0.0));
     }
-    def_active.debris_metal = Set(def_planet.debris_metal + result.debris.metal);
-    def_active.debris_crystal = Set(def_planet.debris_crystal + result.debris.crystal);
-    def_active.light_hunter_count = Set((def_planet.light_hunter_count - (result.defender_losses / 2)).max(0));
-    def_active.cruiser_count = Set((def_planet.cruiser_count - (result.defender_losses / 2)).max(0));
-    def_active.missile_launcher_count = Set((def_planet.missile_launcher_count - result.lost_missiles).max(0));
-    def_active.plasma_turret_count = Set((def_planet.plasma_turret_count - result.lost_plasmas).max(0));
+    def_active.debris_metal = Set(def_planet.debris_metal + result.debris.0);
+    def_active.debris_crystal = Set(def_planet.debris_crystal + result.debris.1);
     def_active.last_update = Set(now);
+
+    // Update defender ships in planet_ship table
+    let _ = set_planet_ships(db, mission.target_planet_id, &result.defender_remaining).await;
+
+    // Calculate ship losses for reports
+    let defender_total_lost: i32 = defender_ships.iter()
+        .map(|(key, &count)| count - result.defender_remaining.get(key).copied().unwrap_or(0))
+        .sum();
+    let attacker_total_lost: i32 = attacker_ships.iter()
+        .map(|(key, &count)| count - result.attacker_remaining.get(key).copied().unwrap_or(0))
+        .sum();
 
     // Résultat du point de vue du défenseur (cohérent avec combat_log.result)
     let defender_result = if result.winner == "defender" { "victory" } else { "defeat" };
-    
+
     let def_rep_json = if planet_conquered {
         json!({
             "type": "planet_lost",
@@ -514,22 +537,22 @@ async fn resolve_attack_mission(
             "winner": result.winner,
             "result": defender_result,
             "log": result.log,
-            "loot": result.loot,
-            "debris": result.debris,
-            "losses": { "ships": result.defender_losses, "missiles": result.lost_missiles, "plasmas": result.lost_plasmas },
+            "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
+            "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "losses": { "total_ships": defender_total_lost, "ships": result.defender_remaining.clone() },
             "is_defense": true,
             "opponent_name": att_user.username,
             "conquered": true
         })
     } else {
         json!({
-            "winner": result.winner, 
+            "winner": result.winner,
             "result": defender_result,
-            "log": result.log, 
-            "loot": result.loot, 
-            "debris": result.debris,
-            "losses": { "ships": result.defender_losses, "missiles": result.lost_missiles, "plasmas": result.lost_plasmas },
-            "is_defense": true, 
+            "log": result.log,
+            "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
+            "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "losses": { "total_ships": defender_total_lost, "ships": result.defender_remaining.clone() },
+            "is_defense": true,
             "opponent_name": att_user.username,
             "conquered": false
         })
@@ -539,23 +562,17 @@ async fn resolve_attack_mission(
 
     let mut att_active: planet::ActiveModel = att_planet.clone().into();
     if result.winner == "attacker" {
-        att_active.metal_amount = Set(att_planet.metal_amount + result.loot.metal);
-        att_active.crystal_amount = Set(att_planet.crystal_amount + result.loot.crystal);
-        att_active.deuterium_amount = Set(att_planet.deuterium_amount + result.loot.deuterium);
+        att_active.metal_amount = Set(att_planet.metal_amount + result.loot.0);
+        att_active.crystal_amount = Set(att_planet.crystal_amount + result.loot.1);
+        att_active.deuterium_amount = Set(att_planet.deuterium_amount + result.loot.2);
     }
-    
-    let total_sent = (att_hunters + att_cruisers).max(1);
-    let lost_h = (att_hunters as f64 * (result.attacker_losses as f64 / total_sent as f64)) as i32;
-    let lost_c = result.attacker_losses - lost_h;
 
-    att_active.light_hunter_count = Set(att_planet.light_hunter_count + (att_hunters - lost_h));
-    att_active.cruiser_count = Set(att_planet.cruiser_count + (att_cruisers - lost_c));
-    // Les transporteurs ne participent pas au combat, ils reviennent tous
-    att_active.transporter_count = Set(att_planet.transporter_count + att_transporters);
+    // Return surviving ships to attacker
+    let _ = add_ships_to_planet(db, mission.source_planet_id, &result.attacker_remaining).await;
 
     // Résultat du point de vue de l'attaquant (cohérent avec combat_log.result)
     let attacker_result = if result.winner == "attacker" { "victory" } else { "defeat" };
-    
+
     let att_rep_json = if planet_conquered {
         json!({
             "type": "planet_conquered",
@@ -563,9 +580,9 @@ async fn resolve_attack_mission(
             "winner": result.winner,
             "result": attacker_result,
             "log": result.log,
-            "loot": result.loot,
-            "debris": result.debris,
-            "losses": { "ships": result.attacker_losses },
+            "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
+            "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "losses": { "total_ships": attacker_total_lost, "ships": result.attacker_remaining.clone() },
             "is_defense": false,
             "opponent_name": def_user.username,
             "conquered": true,
@@ -574,13 +591,13 @@ async fn resolve_attack_mission(
         })
     } else {
         json!({
-            "winner": result.winner, 
+            "winner": result.winner,
             "result": attacker_result,
-            "log": result.log, 
-            "loot": result.loot, 
-            "debris": result.debris,
-            "losses": { "ships": result.attacker_losses }, 
-            "is_defense": false, 
+            "log": result.log,
+            "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
+            "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "losses": { "total_ships": attacker_total_lost, "ships": result.attacker_remaining.clone() },
+            "is_defense": false,
             "opponent_name": def_user.username,
             "conquered": false
         })
@@ -596,9 +613,9 @@ async fn resolve_attack_mission(
         opponent_username: Set(Some(att_user.username.clone())),
         mission_type: Set(if planet_conquered { "planet_lost".into() } else { "defense".into() }),
         result: Set(if result.winner == "defender" { "victory".into() } else { "defeat".into() }),
-        loot_metal: Set(-result.loot.metal),
-        loot_crystal: Set(-result.loot.crystal),
-        ships_lost: Set(result.defender_losses),
+        loot_metal: Set(-result.loot.0),
+        loot_crystal: Set(-result.loot.1),
+        ships_lost: Set(defender_total_lost),
         date: Set(now),
         detailed_report: Set(Some(def_rep_json.clone())),
     }.insert(db).await;
@@ -611,9 +628,9 @@ async fn resolve_attack_mission(
         opponent_username: Set(Some(def_user.username.clone())),
         mission_type: Set(if planet_conquered { "planet_conquered".into() } else { "attack".into() }),
         result: Set(if result.winner == "attacker" { "victory".into() } else { "defeat".into() }),
-        loot_metal: Set(result.loot.metal),
-        loot_crystal: Set(result.loot.crystal),
-        ships_lost: Set(result.attacker_losses),
+        loot_metal: Set(result.loot.0),
+        loot_crystal: Set(result.loot.1),
+        ships_lost: Set(attacker_total_lost),
         date: Set(now),
         detailed_report: Set(Some(att_rep_json.clone())),
     }.insert(db).await;
@@ -4312,6 +4329,103 @@ async fn update_planet_ships_after_combat(
                 active.count = Set(new_count);
                 active.update(db).await.map_err(|e| format!("Update error: {:?}", e))?;
             }
+        }
+    }
+
+    Ok(())
+}
+
+/// Add ships back to planet (e.g., returning from mission)
+async fn add_ships_to_planet(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    ships_to_add: &HashMap<String, i32>,
+) -> Result<(), String> {
+    use entities::{prelude::*, ship_type, planet_ship};
+    use sea_orm::ActiveModelTrait;
+
+    for (ship_key, &count) in ships_to_add {
+        if count <= 0 {
+            continue;
+        }
+
+        // Get ship type ID
+        let ship = ShipType::find()
+            .filter(ship_type::Column::ShipKey.eq(ship_key))
+            .one(db)
+            .await
+            .map_err(|e| format!("DB error: {:?}", e))?
+            .ok_or_else(|| format!("Ship type {} not found", ship_key))?;
+
+        // Update or create planet_ship record
+        if let Some(planet_ship_record) = PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(planet_id))
+            .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+            .one(db)
+            .await
+            .map_err(|e| format!("DB error: {:?}", e))?
+        {
+            // Update existing record
+            let mut active: planet_ship::ActiveModel = planet_ship_record.into();
+            let new_count = active.count.as_ref() + count;
+            active.count = Set(new_count);
+            active.update(db).await.map_err(|e| format!("Update error: {:?}", e))?;
+        } else {
+            // Create new record if it doesn't exist
+            let new_record = planet_ship::ActiveModel {
+                planet_id: Set(planet_id),
+                ship_type_id: Set(ship.id),
+                count: Set(count),
+                building_count: Set(None),
+                build_end_time: Set(None),
+            };
+            new_record.insert(db).await.map_err(|e| format!("Insert error: {:?}", e))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Set planet ships to specific counts (for defender after combat)
+async fn set_planet_ships(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    ships: &HashMap<String, i32>,
+) -> Result<(), String> {
+    use entities::{prelude::*, ship_type, planet_ship};
+    use sea_orm::ActiveModelTrait;
+
+    for (ship_key, &count) in ships {
+        // Get ship type ID
+        let ship = ShipType::find()
+            .filter(ship_type::Column::ShipKey.eq(ship_key))
+            .one(db)
+            .await
+            .map_err(|e| format!("DB error: {:?}", e))?
+            .ok_or_else(|| format!("Ship type {} not found", ship_key))?;
+
+        // Update or create planet_ship record
+        if let Some(planet_ship_record) = PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(planet_id))
+            .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+            .one(db)
+            .await
+            .map_err(|e| format!("DB error: {:?}", e))?
+        {
+            // Update existing record
+            let mut active: planet_ship::ActiveModel = planet_ship_record.into();
+            active.count = Set(count);
+            active.update(db).await.map_err(|e| format!("Update error: {:?}", e))?;
+        } else if count > 0 {
+            // Create new record only if count > 0
+            let new_record = planet_ship::ActiveModel {
+                planet_id: Set(planet_id),
+                ship_type_id: Set(ship.id),
+                count: Set(count),
+                building_count: Set(None),
+                build_end_time: Set(None),
+            };
+            new_record.insert(db).await.map_err(|e| format!("Insert error: {:?}", e))?;
         }
     }
 
