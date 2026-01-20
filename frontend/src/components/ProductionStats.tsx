@@ -109,8 +109,20 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
 
   // Calcul de production avec tous les bonus
   const calculateProduction = (resourceType: 'metal' | 'crystal' | 'deuterium', level: number, baseFactor: number, growthFactor: number) => {
+    // Protection contre NaN
+    const safeBaseFactor = Number(baseFactor) || 0;
+    const safeGrowthFactor = Number(growthFactor) || 1;
+    if (safeBaseFactor === 0 || level === 0) return {
+      total: 0,
+      base: 0,
+      techBonus: 0,
+      energyRatio: 0,
+      slotsCount: 0,
+      slotBonus: 1,
+    };
+
     // Calcul de base
-    let prod = baseFactor * level * Math.pow(growthFactor, level);
+    let prod = safeBaseFactor * level * Math.pow(safeGrowthFactor, level);
 
     // Bonus technologie énergie (configurable via config)
     const techLevel = planet.energy_tech_level || 0;
@@ -139,9 +151,9 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
     };
   };
 
-  const prodMetal = calculateProduction('metal', planet.metal_mine_level, config.production_metal_base, config.production_metal_growth);
-  const prodCrystal = calculateProduction('crystal', planet.crystal_mine_level, config.production_crystal_base, config.production_crystal_growth);
-  const prodDeut = calculateProduction('deuterium', planet.deuterium_mine_level, config.production_deuterium_base, config.production_deuterium_growth);
+  const prodMetal = calculateProduction('metal', planet.metal_mine_level || 0, config.production_metal_base || 30, config.production_metal_growth || 1.1);
+  const prodCrystal = calculateProduction('crystal', planet.crystal_mine_level || 0, config.production_crystal_base || 20, config.production_crystal_growth || 1.1);
+  const prodDeut = calculateProduction('deuterium', planet.deuterium_mine_level || 0, config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05);
 
   // Statistiques de combat
   const totalCombats = combatLogs.length;

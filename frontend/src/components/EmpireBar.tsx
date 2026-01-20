@@ -148,8 +148,13 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const calculateProduction = (level: number, baseFactor: number, growthFactor: number, resourceType: 'metal' | 'crystal' | 'deuterium') => {
     if (level === 0) return 0;
 
+    // Protection contre NaN - s'assurer que les valeurs sont des nombres
+    const safeBaseFactor = Number(baseFactor) || 0;
+    const safeGrowthFactor = Number(growthFactor) || 1;
+    if (safeBaseFactor === 0) return 0;
+
     // Production de base
-    let prod = baseFactor * level * Math.pow(growthFactor, level);
+    let prod = safeBaseFactor * level * Math.pow(safeGrowthFactor, level);
 
     // Bonus technologie énergie (configurable)
     const techLevel = planet.energy_tech_level || 0;
@@ -171,9 +176,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     return Math.floor(prod);
   };
 
-  const prodMetal = calculateProduction(planet.metal_mine_level || 0, config.production_metal_base, config.production_metal_growth, 'metal');
-  const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, config.production_crystal_base, config.production_crystal_growth, 'crystal');
-  const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, config.production_deuterium_base, config.production_deuterium_growth, 'deuterium');
+  const prodMetal = calculateProduction(planet.metal_mine_level || 0, config.production_metal_base || 30, config.production_metal_growth || 1.1, 'metal');
+  const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, config.production_crystal_base || 20, config.production_crystal_growth || 1.1, 'crystal');
+  const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05, 'deuterium');
 
   // Calcul de la capacité de stockage (600k base, x1.6 par niveau)
   const storageLevel = planet.resource_storage_level || 0;
