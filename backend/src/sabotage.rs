@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{StatusCode, HeaderMap},
     response::{IntoResponse, Json},
 };
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, DbErr, PaginatorTrait};
@@ -10,6 +10,27 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::entities::{prelude::*, planet, sabotage_effect};
 use crate::AppState;
+
+/// Helper: extraire user_id depuis le header Authorization
+fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<Uuid, StatusCode> {
+    let auth_header = headers
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // Format: "Bearer jwt-{uuid}"
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // Token format: "jwt-{uuid}"
+    let user_id = token
+        .strip_prefix("jwt-")
+        .and_then(|id| Uuid::parse_str(id).ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    Ok(user_id)
+}
 
 #[derive(Deserialize)]
 pub struct SabotagePayload {
@@ -28,14 +49,16 @@ pub struct SabotageResponse {
 
 /// Endpoint pour tenter une action de sabotage
 /// POST /sabotage
-/// TODO: Ajouter authentification JWT
 pub async fn attempt_sabotage(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<SabotagePayload>,
 ) -> impl IntoResponse {
-    // TODO: Vérifier l'authentification (à implémenter avec JWT token)
-    // Pour l'instant, utiliser Uuid::nil() comme placeholder
-    let user_id = Uuid::nil();
+    // Vérifier l'authentification
+    let user_id = match extract_user_id_from_headers(&headers) {
+        Ok(id) => id,
+        Err(status) => return (status, Json(json!({"error": "Non authentifié"}))).into_response(),
+    };
 
     let target_planet_id = match Uuid::parse_str(&payload.target_planet_id) {
         Ok(id) => id,
@@ -145,13 +168,16 @@ pub async fn attempt_sabotage(
 
 /// Récupérer les sabotages actifs sur une planète
 /// GET /planets/:id/sabotages
-/// TODO: Ajouter authentification JWT
 pub async fn get_active_sabotages(
     Path(planet_id): Path<String>,
     State(state): State<AppState>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
-    // TODO: Vérifier l'authentification
-    let user_id = Uuid::nil();
+    // Vérifier l'authentification
+    let user_id = match extract_user_id_from_headers(&headers) {
+        Ok(id) => id,
+        Err(status) => return (status, Json(json!({"error": "Non authentifié"}))).into_response(),
+    };
 
     let planet_uuid = match Uuid::parse_str(&planet_id) {
         Ok(id) => id,
