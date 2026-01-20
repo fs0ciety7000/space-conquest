@@ -24,14 +24,21 @@ NC='\033[0m' # No Color
 # Vérifier si ImageMagick est installé
 if ! command -v convert &> /dev/null; then
     echo -e "${RED}❌ ImageMagick n'est pas installé${NC}"
-    echo "Installation: sudo apt-get install imagemagick"
-    exit 1
+    echo "Installation requise. Tentative d'installation..."
+    if command -v apt-get &> /dev/null; then
+        sudo apt-get update && sudo apt-get install -y imagemagick
+    elif command -v brew &> /dev/null; then
+        brew install imagemagick
+    else
+        echo -e "${RED}Impossible d'installer automatiquement. Installez ImageMagick manuellement.${NC}"
+        exit 1
+    fi
 fi
 
-# Vérifier si cwebp est installé
-if ! command -v cwebp &> /dev/null; then
-    echo -e "${YELLOW}⚠️  cwebp n'est pas installé, installation...${NC}"
-    sudo apt-get update && sudo apt-get install -y webp
+# Vérifier le support WebP dans ImageMagick
+if ! convert -list format | grep -q "WEBP"; then
+    echo -e "${YELLOW}⚠️  Support WebP non détecté dans ImageMagick${NC}"
+    echo -e "${YELLOW}   Les images seront quand même optimisées mais en PNG.${NC}"
 fi
 
 echo -e "${BLUE}📁 Dossier de travail: $IMAGES_DIR${NC}"
@@ -101,17 +108,23 @@ optimize_image() {
 echo -e "${BLUE}🔍 Recherche des images PNG et JPG...${NC}"
 echo ""
 
+# Activer nullglob pour que les patterns qui ne matchent rien retournent une liste vide
+shopt -s nullglob
+
 # Traiter les images dans le dossier racine
-for img in "$IMAGES_DIR"/*.{png,PNG,jpg,JPG,jpeg,JPEG} 2>/dev/null; do
+for img in "$IMAGES_DIR"/*.{png,PNG,jpg,JPG,jpeg,JPEG}; do
     [ -f "$img" ] && optimize_image "$img"
 done
 
 # Traiter les images dans les sous-dossiers
 for subdir in ships buildings resources defenses misc; do
-    for img in "$IMAGES_DIR/$subdir"/*.{png,PNG,jpg,JPG,jpeg,JPEG} 2>/dev/null; do
+    for img in "$IMAGES_DIR/$subdir"/*.{png,PNG,jpg,JPG,jpeg,JPEG}; do
         [ -f "$img" ] && optimize_image "$img"
     done
 done
+
+# Désactiver nullglob
+shopt -u nullglob
 
 # Afficher les statistiques finales
 echo ""

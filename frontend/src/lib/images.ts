@@ -14,7 +14,7 @@ export const getShipImage = (shipType: string): string => {
     transporter: '/images/ships/ship-transporter.webp',
   };
 
-  return images[shipType] || '/images/misc/placeholder.webp';
+  return images[shipType] || '/images/misc/placeholder.svg';
 };
 
 /**
@@ -31,7 +31,7 @@ export const getBuildingImage = (buildingType: string): string => {
     armour: '/images/buildings/building-armour.webp',
   };
 
-  return images[buildingType] || '/images/misc/placeholder.webp';
+  return images[buildingType] || '/images/misc/placeholder.svg';
 };
 
 /**
@@ -45,7 +45,7 @@ export const getResourceImage = (resourceType: string): string => {
     solar_plant: '/images/buildings/building-solar-plant.webp', // Même image que bâtiment
   };
 
-  return images[resourceType] || '/images/misc/placeholder.webp';
+  return images[resourceType] || '/images/misc/placeholder.svg';
 };
 
 /**
@@ -57,7 +57,7 @@ export const getDefenseImage = (defenseType: string): string => {
     plasma_turret: '/images/defenses/defense-plasma-turret.webp',
   };
 
-  return images[defenseType] || '/images/misc/placeholder.webp';
+  return images[defenseType] || '/images/misc/placeholder.svg';
 };
 
 /**
@@ -74,7 +74,7 @@ export const getTechImage = (techType: string): string => {
     espionage_tech: '/images/buildings/tech-espionage.webp',
   };
 
-  return images[techType] || '/images/misc/placeholder.webp';
+  return images[techType] || '/images/misc/placeholder.svg';
 };
 
 /**
