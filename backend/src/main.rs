@@ -85,6 +85,9 @@ struct ColonizePayload {
     galaxy: i32,
     system: i32,
     position: i32,
+    metal: Option<f64>,
+    crystal: Option<f64>,
+    deuterium: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -1957,13 +1960,31 @@ async fn colonize_handler(
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
 
-    let mut att_planet = match Planet::find_by_id(current_id).one(&state.db).await.unwrap() {
-        Some(p) => p.into_active_model(),
+    let att_planet_data = match Planet::find_by_id(current_id).one(&state.db).await.unwrap() {
+        Some(p) => p,
         None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète inconnue"}))).into_response(),
     };
 
-    let ships = att_planet.colony_ship_count.clone().unwrap();
+    let ships = att_planet_data.colony_ship_count;
     if ships < 1 { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucun vaisseau de colonisation disponible"}))).into_response(); }
+
+    // Récupérer les ressources à transporter (optionnelles)
+    let metal_to_transport = payload.metal.unwrap_or(0.0).max(0.0);
+    let crystal_to_transport = payload.crystal.unwrap_or(0.0).max(0.0);
+    let deuterium_to_transport = payload.deuterium.unwrap_or(0.0).max(0.0);
+
+    // Vérifier que la planète source a assez de ressources
+    if metal_to_transport > att_planet_data.metal_amount {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de métal"}))).into_response();
+    }
+    if crystal_to_transport > att_planet_data.crystal_amount {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de cristal"}))).into_response();
+    }
+    if deuterium_to_transport > att_planet_data.deuterium_amount {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de deutérium"}))).into_response();
+    }
+
+    let mut att_planet = att_planet_data.clone().into_active_model();
 
     let exists = Planet::find()
         .filter(planet::Column::Galaxy.eq(payload.galaxy))
@@ -1980,17 +2001,24 @@ async fn colonize_handler(
     let colony_name = generate_colony_name();
     let new_id = Uuid::new_v4();
     
+    // La nouvelle planète commence avec 500 métal/cristal de base + ressources transportées
     let new_planet = planet::ActiveModel {
         id: Set(new_id), owner_id: Set(owner_id), name: Set(colony_name), password: Set(password), galaxy: Set(payload.galaxy), system: Set(payload.system), position: Set(payload.position),
         metal_mine_level: Set(1), crystal_mine_level: Set(1), deuterium_mine_level: Set(1),
         solar_plant_level: Set(3), // Niveau 3 = ~240 énergie, garantit le minimum de 150
-        metal_amount: Set(500.0), crystal_amount: Set(500.0),
+        metal_amount: Set(500.0 + metal_to_transport),
+        crystal_amount: Set(500.0 + crystal_to_transport),
+        deuterium_amount: Set(deuterium_to_transport),
         last_update: Set(Utc::now().naive_utc()),
         created_at: Set(Utc::now().naive_utc()),
         ..Default::default()
     };
 
+    // Déduire le vaisseau et les ressources de la planète source
     att_planet.colony_ship_count = Set(ships - 1);
+    att_planet.metal_amount = Set(att_planet_data.metal_amount - metal_to_transport);
+    att_planet.crystal_amount = Set(att_planet_data.crystal_amount - crystal_to_transport);
+    att_planet.deuterium_amount = Set(att_planet_data.deuterium_amount - deuterium_to_transport);
     let _ = att_planet.update(&state.db).await;
     let _ = new_planet.insert(&state.db).await;
 
@@ -2022,9 +2050,14 @@ async fn colonize_handler(
         let _ = slot.insert(&state.db).await;
     }
 
+    let mut message = format!("Colonisation réussie en [{}:{}:{}]", payload.galaxy, payload.system, payload.position);
+    if metal_to_transport > 0.0 || crystal_to_transport > 0.0 || deuterium_to_transport > 0.0 {
+        message.push_str(&format!(" avec {:.0}M / {:.0}C / {:.0}D", metal_to_transport, crystal_to_transport, deuterium_to_transport));
+    }
+
     (StatusCode::OK, Json(json!({
         "status": "success",
-        "message": format!("Colonisation réussie en [{}:{}:{}]", payload.galaxy, payload.system, payload.position),
+        "message": message,
         "new_planet_id": new_id
     }))).into_response()
 }
