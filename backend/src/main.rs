@@ -45,8 +45,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type
 };
 
 #[derive(Serialize, Clone)]
@@ -4283,14 +4283,12 @@ async fn update_planet_ships_after_combat(
 }
 
 /// POST /planets/:id/expedition-v2 - New expedition handler using dynamic combat system
+#[axum::debug_handler]
 async fn expedition_v2_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
     Json(payload): Json<ExpeditionPayloadV2>,
 ) -> impl IntoResponse {
-    use entities::prelude::*;
-    use entities::{planet_ship, ship_type};
-
     // Get planet
     let planet = match Planet::find_by_id(id).one(&state.db).await {
         Ok(Some(p)) => p,
@@ -4350,7 +4348,7 @@ async fn expedition_v2_handler(
     let speed_factor = config.speed_factor;
 
     // Determine if combat occurs
-    let combat_triggered = rand::thread_rng().gen_bool(combat_chance);
+    let combat_triggered = rand::random::<f64>() < combat_chance;
 
     let mut logs = Vec::new();
     let (final_metal, final_crystal, final_deuterium, winner) = if combat_triggered {
