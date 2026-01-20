@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { 
-    ChevronLeft, ChevronRight, Search, 
-    Crosshair, Eye, Send, Recycle, MapPin, 
+import {
+    ChevronLeft, ChevronRight, Search,
+    Crosshair, Eye, Send, Recycle, MapPin,
     Rocket, User, List, LayoutGrid, Sparkles, X, ShieldCheck, Crown, Flag, Truck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { apiUrl } from '@/config/api';
+import ColonizeModal from './ColonizeModal';
 // --- INTERFACES ---
 
 interface GalaxySlot {
@@ -43,8 +44,10 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const [system, setSystem] = useState(planet.system);
     const [slots, setSlots] = useState<GalaxySlot[]>([]);
     const [loading, setLoading] = useState(false);
-    const [viewMode, setViewMode] = useState<'list' | 'map'>('map'); 
-    const [selectedSlot, setSelectedSlot] = useState<GalaxySlot | null>(null); 
+    const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
+    const [selectedSlot, setSelectedSlot] = useState<GalaxySlot | null>(null);
+    const [showColonizeModal, setShowColonizeModal] = useState(false);
+    const [colonizePosition, setColonizePosition] = useState<number>(0); 
 
     useEffect(() => { fetchSystem(); setSelectedSlot(null); }, [galaxy, system]);
 
@@ -56,20 +59,41 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
         } catch (e) { toast.error("Erreur de radar"); } finally { setLoading(false); }
     };
 
-    const handleColonize = async (position: number) => {
+    const handleColonize = (position: number) => {
+        setColonizePosition(position);
+        setShowColonizeModal(true);
+    };
+
+    const handleConfirmColonize = async (position: number, metal: number, crystal: number, deuterium: number) => {
         const token = localStorage.getItem('token');
         try {
             const res = await fetch(apiUrl(`/colonize?current_planet_id=${planet.id}`), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ galaxy, system, position })
+                body: JSON.stringify({
+                    galaxy,
+                    system,
+                    position,
+                    metal: metal > 0 ? metal : undefined,
+                    crystal: crystal > 0 ? crystal : undefined,
+                    deuterium: deuterium > 0 ? deuterium : undefined
+                })
             });
             const data = await res.json();
             if (res.ok) {
-                toast.success("Vaisseau de colonisation envoyé !");
-                fetchSystem(); 
-            } else { toast.error(data.error); }
-        } catch (e) { toast.error("Erreur réseau"); }
+                toast.success("Vaisseau de colonisation envoyé !", {
+                    description: data.message || `Colonie établie en [${galaxy}:${system}:${position}]`
+                });
+                setShowColonizeModal(false);
+                fetchSystem();
+            } else {
+                toast.error("Erreur de colonisation", {
+                    description: data.error || "Impossible de coloniser cette position"
+                });
+            }
+        } catch (e) {
+            toast.error("Erreur réseau");
+        }
     };
 
     const handleRecycle = async (targetId: string) => {
@@ -317,6 +341,22 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* Modal de Colonisation */}
+            {showColonizeModal && (
+                <ColonizeModal
+                    position={colonizePosition}
+                    galaxy={galaxy}
+                    system={system}
+                    availableResources={{
+                        metal: planet.metal_amount || 0,
+                        crystal: planet.crystal_amount || 0,
+                        deuterium: planet.deuterium_amount || 0
+                    }}
+                    onConfirm={handleConfirmColonize}
+                    onCancel={() => setShowColonizeModal(false)}
+                />
             )}
         </div>
     );

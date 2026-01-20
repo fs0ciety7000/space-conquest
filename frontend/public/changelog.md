@@ -106,6 +106,71 @@ let seconds = (base_time * 100.0) / speed_factor;
 
 ---
 
+#### 🌍 Transport de ressources lors colonisation
+
+**Feature**: Possibilité d'envoyer des ressources avec le vaisseau de colonisation
+
+**Nouvelle interface**:
+- Modal de sélection des ressources au lieu de colonisation directe
+- Sliders pour choisir métal, cristal et deutérium à transporter
+- Affichage des ressources disponibles sur la planète d'origine
+- Calcul en temps réel des ressources totales à l'arrivée :
+  - **500 métal** (base) + métal transporté
+  - **500 cristal** (base) + cristal transporté
+  - **0 deutérium** (base) + deutérium transporté
+- Validation des montants (ne peut pas dépasser les ressources disponibles)
+
+**Impact**: Les nouvelles colonies peuvent démarrer avec bien plus de ressources, accélérant leur développement initial
+
+**Fichiers**:
+- `frontend/src/components/ColonizeModal.tsx` (nouveau composant modal)
+- `frontend/src/components/GalaxyView.tsx` (intégration du modal)
+- `backend/src/main.rs` (handler colonize déjà prêt)
+
+---
+
+#### 📦 Hangar à Ressources + Caps de stockage
+
+**Feature**: Nouveau bâtiment infrastructure avec système de caps exponentiels
+
+**Fonctionnement**:
+- **Niveau 0 (base)**: 600 000 unités de stockage par ressource
+- **Niveau 1**: 960 000 (600k × 1.6)
+- **Niveau 2**: 1 536 000 (600k × 1.6²)
+- **Niveau 3**: 2 457 600 (600k × 1.6³)
+- Formule: `600 000 × 1.6^niveau`
+
+**Coûts de construction**:
+- Métal: 1000 × 2^niveau
+- Cristal: 500 × 2^niveau
+- Deutérium: 0
+- Multiplicateur exponentiel (x2 par niveau comme autres infrastructures)
+
+**Interface utilisateur**:
+- Nouveau bâtiment dans l'onglet Installations (thème jaune)
+- Barre de progression dans EmpireBar montrant remplissage actuel/max
+- Code couleur: vert < 75%, orange 75-90%, jaune > 90%
+- Animation pulse sur l'icône quand proche de la limite (>90%)
+- Tooltip détaillé: "Stockage: 450k / 600k (75%)"
+
+**Protection production**:
+- Les ressources produites ne peuvent pas dépasser le cap
+- Plafond appliqué automatiquement à chaque tick de production
+- Encourage l'upgrade du Hangar pour augmenter la capacité
+
+**Fichiers backend**:
+- `backend/migration/src/m20260120_000001_add_resource_storage.rs` (nouvelle migration)
+- `backend/src/entities/planet.rs` (champ `resource_storage_level`)
+- `backend/src/game_logic.rs` (fonction `get_storage_capacity()`, coûts, caps)
+- `backend/src/main.rs` (handlers upgrade & completion, validation caps)
+
+**Fichiers frontend**:
+- `frontend/src/components/Facilities.tsx` (UI bâtiment)
+- `frontend/src/components/EmpireBar.tsx` (affichage caps avec barre)
+- `frontend/src/components/PlanetOverview.tsx` (label)
+
+---
+
 ### 📝 Notes techniques
 
 **Capacité cargo combat**:
@@ -145,18 +210,26 @@ let metal = base_metal * recycler_bonus * speed_factor;
 
 ---
 
-### 📦 Fichiers modifiés (7 fichiers)
+### 📦 Fichiers modifiés (14 fichiers)
 
-#### Backend (3 fichiers)
-- ✏️ `backend/src/game_logic.rs` - Cargo capacity, flight time, ship capacity functions
-- ✏️ `backend/src/main.rs` - Attack/expedition handlers, transporters/recyclers support, colonization energy
+#### Backend (6 fichiers)
+- ✏️ `backend/src/game_logic.rs` - Cargo capacity, flight time, storage capacity, resource caps
+- ✏️ `backend/src/main.rs` - Attack/expedition handlers, colonization, resource_storage upgrade/completion
 - ✏️ `backend/src/auth.rs` - Solar plant level 3 for first planet
+- ✏️ `backend/src/missions.rs` - Dynamic speed_factor in response
+- ✏️ `backend/src/entities/planet.rs` - Field resource_storage_level
+- ➕ `backend/migration/src/m20260120_000001_add_resource_storage.rs` - NEW: Migration resource storage
+- ✏️ `backend/migration/src/lib.rs` - Register new migration
 
-#### Frontend (4 fichiers)
+#### Frontend (7 fichiers)
 - ✏️ `frontend/src/components/AttackModal.tsx` - Transporters selection + cargo display
 - ✏️ `frontend/src/components/ExpeditionZone.tsx` - Recyclers selection + defaults to 0
+- ✏️ `frontend/src/components/GalaxyView.tsx` - Colonization modal integration
 - ✏️ `frontend/src/App.tsx` - Updated handlers for new payloads
-- ✏️ `frontend/src/lib/gameRules.ts` - Transporter capacity function (already existed)
+- ➕ `frontend/src/components/ColonizeModal.tsx` - NEW: Resource selection modal for colonization
+- ✏️ `frontend/src/components/Facilities.tsx` - Resource storage building UI
+- ✏️ `frontend/src/components/EmpireBar.tsx` - Storage caps display with progress bar
+- ✏️ `frontend/src/components/PlanetOverview.tsx` - Resource storage label
 
 ---
 

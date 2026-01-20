@@ -21,6 +21,7 @@ const getLabel = (id: string | null) => {
         shipyard: "Chantier Spatial",
         research: "Labo de Recherche",
         hangar: "Hangar à Vaisseaux",
+        resource_storage: "Hangar à Ressources",
         energy_tech: "Tech. Énergie",
         laser: "Tech. Laser",
         armour: "Tech. Protection",

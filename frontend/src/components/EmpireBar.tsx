@@ -149,6 +149,10 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, 20, 'crystal');
   const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, 10, 'deuterium');
 
+  // Calcul de la capacité de stockage (600k base, x1.6 par niveau)
+  const storageLevel = planet.resource_storage_level || 0;
+  const storageCapacity = storageLevel === 0 ? 600000 : Math.floor(600000 * Math.pow(1.6, storageLevel));
+
   return (
     <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-slate-950/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-white/10 min-h-[60px] md:h-[72px] w-full shadow-2xl z-50 card-depth glass-card">
       
@@ -348,9 +352,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         
         {/* Ressources - Version desktop (temps réel) */}
         <div className="hidden lg:flex items-center gap-6">
-            <ResourceItem icon={Stone} value={realtimeResources?.metal ?? planet.metal_amount} label="Métal" color="text-orange-300" production={prodMetal} />
-            <ResourceItem icon={Gem} value={realtimeResources?.crystal ?? planet.crystal_amount} label="Cristal" color="text-cyan-300" production={prodCrystal} />
-            <ResourceItem icon={Droplets} value={realtimeResources?.deuterium ?? planet.deuterium_amount} label="Deutérium" color="text-green-300" production={prodDeut} />
+            <ResourceItem icon={Stone} value={realtimeResources?.metal ?? planet.metal_amount} label="Métal" color="text-orange-300" production={prodMetal} max={storageCapacity} />
+            <ResourceItem icon={Gem} value={realtimeResources?.crystal ?? planet.crystal_amount} label="Cristal" color="text-cyan-300" production={prodCrystal} max={storageCapacity} />
+            <ResourceItem icon={Droplets} value={realtimeResources?.deuterium ?? planet.deuterium_amount} label="Deutérium" color="text-green-300" production={prodDeut} max={storageCapacity} />
             
             {/* ÉNERGIE */}
             <TooltipProvider>
@@ -511,29 +515,44 @@ function GlobeIcon() {
     )
 }
 
-function ResourceItem({ icon: Icon, value, label, color, production }: any) {
+function ResourceItem({ icon: Icon, value, label, color, production, max }: any) {
     const format = (n: number) => {
         if(n >= 1000000) return (n/1000000).toFixed(2) + 'M';
         if(n >= 1000) return (n/1000).toFixed(1) + 'k';
         return Math.floor(n).toLocaleString();
     }
+    const percentage = max ? (value / max) * 100 : 0;
+    const isNearFull = percentage >= 90;
     return (
         <TooltipProvider>
             <Tooltip>
                 <TooltipTrigger asChild>
                     <div className="flex items-center gap-3 group cursor-help card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300 px-3 py-1.5 rounded-lg hover:bg-white/5">
-                        <Icon size={18} className={`${color} transition-transform group-hover:scale-110`} />
-                        <span className="font-mono text-sm font-bold text-white min-w-[60px] text-right">
+                        <Icon size={18} className={`${color} transition-transform group-hover:scale-110 ${isNearFull ? 'animate-pulse' : ''}`} />
+                        <span className={`font-mono text-sm font-bold min-w-[60px] text-right ${isNearFull ? 'text-yellow-400' : 'text-white'}`}>
                             {format(value)}
                         </span>
                     </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
-                    <div className="text-xs space-y-1">
+                    <div className="text-xs space-y-2">
                         <p className="text-slate-400">{label}</p>
                         <p className="text-green-400 font-mono font-bold">
                             +{format(production)}/h
                         </p>
+                        {max && (
+                            <>
+                                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                    <div
+                                        className={`h-full transition-all duration-300 ${percentage >= 90 ? 'bg-yellow-500' : percentage >= 75 ? 'bg-orange-500' : 'bg-emerald-500'}`}
+                                        style={{ width: `${Math.min(percentage, 100)}%` }}
+                                    ></div>
+                                </div>
+                                <p className="text-slate-500 font-mono text-[10px]">
+                                    Stockage: {format(value)} / {format(max)} ({percentage.toFixed(0)}%)
+                                </p>
+                            </>
+                        )}
                     </div>
                 </TooltipContent>
             </Tooltip>
