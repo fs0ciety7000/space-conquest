@@ -230,10 +230,11 @@ impl MigrationTrait for Migration {
         ];
 
         for (key, name, category, metal, crystal, deut, mult, desc) in buildings {
+            let time = ((metal + crystal) as f64 / 2500.0 * 3600.0) as i32;
             db.execute_unprepared(&format!(
-                "INSERT INTO building_types (building_key, name, category, base_cost_metal, base_cost_crystal, base_cost_deuterium, cost_multiplier, description) \
-                 VALUES ('{}', '{}', '{}', {}, {}, {}, {}, '{}') ON CONFLICT (building_key) DO NOTHING",
-                key, name.replace("'", "''"), category, metal, crystal, deut, mult, desc.replace("'", "''")
+                "INSERT INTO building_types (building_key, name, category, base_cost_metal, base_cost_crystal, base_cost_deuterium, base_time_seconds, cost_multiplier, description) \
+                 VALUES ('{}', '{}', '{}', {}, {}, {}, {}, {}, '{}') ON CONFLICT (building_key) DO NOTHING",
+                key, name.replace("'", "''"), category, metal, crystal, deut, time, mult, desc.replace("'", "''")
             )).await?;
         }
 
