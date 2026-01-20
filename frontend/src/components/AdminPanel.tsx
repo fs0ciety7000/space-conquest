@@ -194,7 +194,7 @@ export default function AdminPanel() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(editedConfig)
+        body: JSON.stringify({ configs: editedConfig })
       });
 
       if (res.ok) {
