@@ -298,11 +298,13 @@ async fn main() {
         .parse()
         .expect("Invalid bind address");
 
-    // Lancer la tâche périodique de nettoyage des sabotages expirés (toutes les heures)
+    // Lancer la tâche périodique de nettoyage (toutes les heures)
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // 1 heure
         loop {
             interval.tick().await;
+
+            // Nettoyer les sabotages expirés
             match sabotage::cleanup_expired_sabotages(&db_cleanup).await {
                 Ok(count) => {
                     if count > 0 {
@@ -311,9 +313,19 @@ async fn main() {
                 },
                 Err(e) => eprintln!("❌ Erreur lors du nettoyage des sabotages: {:?}", e),
             }
+
+            // Nettoyer les casus belli expirés
+            match sabotage::cleanup_expired_casus_belli(&db_cleanup).await {
+                Ok(count) => {
+                    if count > 0 {
+                        println!("🧹 Nettoyage casus belli: {} droit(s) d'attaque expiré(s)", count);
+                    }
+                },
+                Err(e) => eprintln!("❌ Erreur lors du nettoyage des casus belli: {:?}", e),
+            }
         }
     });
-    println!("🕒 Tâche périodique de nettoyage des sabotages démarrée (intervalle: 1h)");
+    println!("🕒 Tâches périodiques de nettoyage démarrées (intervalle: 1h)");
 
     println!("🚀 SPEED_GAME Backend opérationnel sur http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

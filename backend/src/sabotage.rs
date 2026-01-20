@@ -110,6 +110,12 @@ pub async fn attempt_sabotage(
 
     // Si détecté
     if detected {
+        // Accorder Casus Belli à la victime
+        let reason = format!("Sabotage détecté sur planète {}", target_planet.name);
+        if let Err(e) = grant_casus_belli(&state.db, target_planet.owner_id, user_id, &reason).await {
+            eprintln!("⚠️ Erreur lors de l'attribution du Casus Belli: {:?}", e);
+        }
+
         // TODO: Envoyer notification à la victime via WebSocket ou messaging system
 
         return (StatusCode::OK, Json(SabotageResponse {
@@ -286,4 +292,120 @@ pub async fn apply_research_bonus(
     }
 
     Ok(1.0) // Pas de bonus
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYSTÈME CASUS BELLI
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Créer un casus belli quand un saboteur est détecté
+/// victim_user_id: le joueur qui a détecté le sabotage (qui gagne le droit d'attaque)
+/// aggressor_user_id: le saboteur attrapé
+pub async fn grant_casus_belli(
+    db: &sea_orm::DatabaseConnection,
+    victim_user_id: Uuid,
+    aggressor_user_id: Uuid,
+    reason: &str,
+) -> Result<(), DbErr> {
+    use crate::entities::casus_belli;
+
+    // Durée de validité: 48 heures
+    let expires_at = Utc::now().naive_utc() + Duration::hours(48);
+
+    let casus_belli_model = casus_belli::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        victim_user_id: Set(victim_user_id),
+        aggressor_user_id: Set(aggressor_user_id),
+        reason: Set(reason.to_string()),
+        created_at: Set(Utc::now().naive_utc()),
+        expires_at: Set(expires_at),
+        was_used: Set(false),
+    };
+
+    casus_belli_model.insert(db).await?;
+
+    Ok(())
+}
+
+/// Vérifier si un joueur a le droit d'attaquer un autre (casus belli actif)
+/// attacker: le joueur qui veut attaquer
+/// defender: le joueur ciblé
+pub async fn has_casus_belli(
+    db: &sea_orm::DatabaseConnection,
+    attacker_user_id: Uuid,
+    defender_user_id: Uuid,
+) -> Result<bool, DbErr> {
+    use crate::entities::{prelude::CasusBelli, casus_belli};
+
+    let now = Utc::now().naive_utc();
+
+    // Le casus belli permet à la victime (victim) d'attaquer l'agresseur (aggressor)
+    let count = CasusBelli::find()
+        .filter(casus_belli::Column::VictimUserId.eq(attacker_user_id))
+        .filter(casus_belli::Column::AggressorUserId.eq(defender_user_id))
+        .filter(casus_belli::Column::ExpiresAt.gt(now))
+        .filter(casus_belli::Column::WasUsed.eq(false))
+        .count(db)
+        .await?;
+
+    Ok(count > 0)
+}
+
+/// Marquer un casus belli comme utilisé après une attaque
+pub async fn consume_casus_belli(
+    db: &sea_orm::DatabaseConnection,
+    attacker_user_id: Uuid,
+    defender_user_id: Uuid,
+) -> Result<(), DbErr> {
+    use crate::entities::{prelude::CasusBelli, casus_belli};
+
+    let now = Utc::now().naive_utc();
+
+    // Trouver le premier casus belli actif
+    if let Some(cb) = CasusBelli::find()
+        .filter(casus_belli::Column::VictimUserId.eq(attacker_user_id))
+        .filter(casus_belli::Column::AggressorUserId.eq(defender_user_id))
+        .filter(casus_belli::Column::ExpiresAt.gt(now))
+        .filter(casus_belli::Column::WasUsed.eq(false))
+        .one(db)
+        .await?
+    {
+        // Marquer comme utilisé
+        let mut active_cb: casus_belli::ActiveModel = cb.into();
+        active_cb.was_used = Set(true);
+        active_cb.update(db).await?;
+    }
+
+    Ok(())
+}
+
+/// Nettoyer les casus belli expirés (à appeler périodiquement)
+pub async fn cleanup_expired_casus_belli(db: &sea_orm::DatabaseConnection) -> Result<u64, DbErr> {
+    use crate::entities::{prelude::CasusBelli, casus_belli};
+
+    let now = Utc::now().naive_utc();
+
+    let result = CasusBelli::delete_many()
+        .filter(casus_belli::Column::ExpiresAt.lt(now))
+        .exec(db)
+        .await?;
+
+    Ok(result.rows_affected)
+}
+
+/// Récupérer tous les casus belli actifs pour un joueur (qu'il peut utiliser)
+pub async fn get_active_casus_belli(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+) -> Result<Vec<crate::entities::casus_belli::Model>, DbErr> {
+    use crate::entities::{prelude::CasusBelli, casus_belli};
+
+    let now = Utc::now().naive_utc();
+
+    CasusBelli::find()
+        .filter(casus_belli::Column::VictimUserId.eq(user_id))
+        .filter(casus_belli::Column::ExpiresAt.gt(now))
+        .filter(casus_belli::Column::WasUsed.eq(false))
+        .all(db)
+        .await
 }
