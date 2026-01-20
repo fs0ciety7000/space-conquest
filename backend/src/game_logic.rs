@@ -1,6 +1,7 @@
 use serde::Serialize;
 use rand::Rng;
 use crate::entities::planet;
+use crate::ServerConfigCache;
 
 // ⚡ VITESSE DU JEU (200 = x2, 500 = x5)
 pub const SPEED_FACTOR: f64 = 500.0;
@@ -44,31 +45,39 @@ pub struct UnitStats {
 }
 
 // 📊 DIVISEUR DE COÛT BASÉ SUR VITESSE
-fn cost_scaling() -> f64 {
-    (SPEED_FACTOR / 100.0).max(1.0)
+fn cost_scaling(config: &ServerConfigCache) -> f64 {
+    (config.speed_factor / 100.0).max(1.0)
 }
 
 // --- COÛTS DE BASE DES UNITÉS ---
-pub fn get_unit_cost(unit_type: &str) -> (f64, f64) {
-    let base = match unit_type {
-        // 🚀 Vaisseaux de guerre
-        "light_hunter" => (3000.0, 1000.0),      // Chasseur léger (rapide, fragile)
-        "cruiser" => (20000.0, 7000.0),          // Croiseur (équilibré)
-        
-        // 🛠️ Vaisseaux utilitaires
-        "transporter" => (4000.0, 4000.0),       // Transporteur (capacité)
-        "recycler" => (10000.0, 6000.0),         // Recycleur (débris)
-        "spy_probe" => (1000.0, 0.0),            // Sonde (reconnaissance)
-        "colony_ship" => (10000.0, 20000.0),     // Vaisseau de colonisation
-        
-        // 🛡️ Défenses
-        "missile_launcher" => (10000.0, 2500.0),     // Lance-missiles (bon marché)
-        "plasma_turret" => (50000.0, 50000.0),   // Tourelle plasma (puissante)
-        
-        _ => (0.0, 0.0),
+pub fn get_unit_cost(unit_type: &str, config: &ServerConfigCache) -> (f64, f64) {
+    // Lire les coûts depuis la config
+    let (base_metal, base_crystal) = config.get_unit_cost(unit_type);
+
+    // Si non trouvé dans la config, utiliser les valeurs par défaut
+    let base = if base_metal == 0.0 && base_crystal == 0.0 {
+        match unit_type {
+            // 🚀 Vaisseaux de guerre
+            "light_hunter" => (3000.0, 1000.0),
+            "cruiser" => (20000.0, 7000.0),
+
+            // 🛠️ Vaisseaux utilitaires
+            "transporter" => (4000.0, 4000.0),
+            "recycler" => (10000.0, 6000.0),
+            "spy_probe" => (1000.0, 0.0),
+            "colony_ship" => (10000.0, 20000.0),
+
+            // 🛡️ Défenses
+            "missile_launcher" => (10000.0, 2500.0),
+            "plasma_turret" => (50000.0, 50000.0),
+
+            _ => (0.0, 0.0),
+        }
+    } else {
+        (base_metal, base_crystal)
     };
-    
-    let divider = cost_scaling();
+
+    let divider = cost_scaling(config);
     (base.0 / divider, base.1 / divider)
 }
 
@@ -147,48 +156,69 @@ pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<()
 pub enum ResourceType { Metal, Crystal, Deuterium }
 
 pub fn calculate_resources(
-    res_type: ResourceType, 
-    level: i32, 
-    current_amount: f64, 
+    res_type: ResourceType,
+    level: i32,
+    current_amount: f64,
     last_update: chrono::NaiveDateTime,
-    energy_tech_level: i32
+    energy_tech_level: i32,
+    config: &ServerConfigCache
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
     let duration = now.signed_duration_since(last_update).num_seconds() as f64;
-    
+
     // 💡 Bonus technologie énergie (+1% par niveau)
-    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.01);
-    
-    // 📊 Production de base (ratio 3:2:1)
+    let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
+
+    // 📊 Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
-        ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),      // Base x3
-        ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),    // Base x2
-        ResourceType::Deuterium => 10.0 * (level as f64) * 1.05f64.powi(level), // Base x1 (plus rare)
+        ResourceType::Metal => {
+            let base = config.get_config("production_metal_base", 30.0);
+            let growth = config.get_config("production_metal_growth", 1.1);
+            base * (level as f64) * growth.powi(level)
+        },
+        ResourceType::Crystal => {
+            let base = config.get_config("production_crystal_base", 20.0);
+            let growth = config.get_config("production_crystal_growth", 1.1);
+            base * (level as f64) * growth.powi(level)
+        },
+        ResourceType::Deuterium => {
+            let base = config.get_config("production_deuterium_base", 10.0);
+            let growth = config.get_config("production_deuterium_growth", 1.05);
+            base * (level as f64) * growth.powi(level)
+        },
     };
-    
-    let production_per_sec = (base_production * tech_bonus / 3600.0) * (SPEED_FACTOR / 100.0);
+
+    let production_per_sec = (base_production * tech_bonus / 3600.0) * (config.speed_factor / 100.0) * config.mining_speed;
     current_amount + (production_per_sec * duration)
 }
 
 // --- CALCULS ÉNERGIE ---
 
 /// Calcule la production d'énergie totale du solar plant
-pub fn calculate_energy_production(solar_plant_level: i32, energy_tech_level: i32) -> f64 {
+pub fn calculate_energy_production(solar_plant_level: i32, energy_tech_level: i32, config: &ServerConfigCache) -> f64 {
     if solar_plant_level == 0 {
         return 0.0;
     }
 
-    // Production augmentée x3 pour meilleur équilibre énergétique
-    let base_production = 60.0 * (solar_plant_level as f64) * 1.1f64.powi(solar_plant_level);
-    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.10); // +10% par niveau (augmenté de 5%)
+    let base = config.get_config("energy_solar_base", 60.0);
+    let growth = config.get_config("energy_solar_growth", 1.1);
+    let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.10);
+
+    let base_production = base * (solar_plant_level as f64) * growth.powi(solar_plant_level);
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
     base_production * tech_bonus
 }
 
 /// Calcule la consommation d'énergie totale des mines
-pub fn calculate_energy_consumption(metal_mine_level: i32, crystal_mine_level: i32, deuterium_mine_level: i32) -> f64 {
-    let metal_cons = 10.0 * (metal_mine_level as f64) * 1.1f64.powi(metal_mine_level);
-    let crystal_cons = 10.0 * (crystal_mine_level as f64) * 1.1f64.powi(crystal_mine_level);
-    let deut_cons = 20.0 * (deuterium_mine_level as f64) * 1.1f64.powi(deuterium_mine_level);
+pub fn calculate_energy_consumption(metal_mine_level: i32, crystal_mine_level: i32, deuterium_mine_level: i32, config: &ServerConfigCache) -> f64 {
+    let base_cons = config.get_config("energy_mine_consumption_base", 10.0);
+    let growth = config.get_config("energy_mine_consumption_growth", 1.1);
+    let deut_extra = config.get_config("energy_deuterium_extra_consumption", 20.0);
+
+    let metal_cons = base_cons * (metal_mine_level as f64) * growth.powi(metal_mine_level);
+    let crystal_cons = base_cons * (crystal_mine_level as f64) * growth.powi(crystal_mine_level);
+    let deut_cons = deut_extra * (deuterium_mine_level as f64) * growth.powi(deuterium_mine_level);
     metal_cons + crystal_cons + deut_cons
 }
 
@@ -196,9 +226,9 @@ pub fn calculate_energy_consumption(metal_mine_level: i32, crystal_mine_level: i
 /// Retourne un ratio entre 0.0 et 1.0 (ou plus si surplus)
 pub fn calculate_energy_ratio(solar_plant_level: i32, energy_tech_level: i32,
                                 metal_mine_level: i32, crystal_mine_level: i32,
-                                deuterium_mine_level: i32) -> f64 {
-    let production = calculate_energy_production(solar_plant_level, energy_tech_level);
-    let consumption = calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level);
+                                deuterium_mine_level: i32, config: &ServerConfigCache) -> f64 {
+    let production = calculate_energy_production(solar_plant_level, energy_tech_level, config);
+    let consumption = calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level, config);
 
     if consumption == 0.0 {
         return 1.0; // Pas de consommation = 100%
@@ -212,24 +242,38 @@ pub fn calculate_resource_production(
     res_type: ResourceType,
     level: i32,
     energy_tech_level: i32,
-    energy_ratio: f64
+    energy_ratio: f64,
+    config: &ServerConfigCache
 ) -> f64 {
     if level == 0 {
         return 0.0;
     }
 
     // Bonus technologie énergie (+1% par niveau)
-    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.01);
+    let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
-    // Production de base (ratio 3:2:1)
+    // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
-        ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),
-        ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),
-        ResourceType::Deuterium => 10.0 * (level as f64) * 1.05f64.powi(level),
+        ResourceType::Metal => {
+            let base = config.get_config("production_metal_base", 30.0);
+            let growth = config.get_config("production_metal_growth", 1.1);
+            base * (level as f64) * growth.powi(level)
+        },
+        ResourceType::Crystal => {
+            let base = config.get_config("production_crystal_base", 20.0);
+            let growth = config.get_config("production_crystal_growth", 1.1);
+            base * (level as f64) * growth.powi(level)
+        },
+        ResourceType::Deuterium => {
+            let base = config.get_config("production_deuterium_base", 10.0);
+            let growth = config.get_config("production_deuterium_growth", 1.05);
+            base * (level as f64) * growth.powi(level)
+        },
     };
 
     // Production par heure avec tous les bonus
-    base_production * tech_bonus * energy_ratio * (SPEED_FACTOR / 100.0)
+    base_production * tech_bonus * energy_ratio * (config.speed_factor / 100.0) * config.mining_speed
 }
 
 /// Calcule les ressources avec prise en compte du ratio énergétique
@@ -239,28 +283,42 @@ pub fn calculate_resources_with_energy(
     current_amount: f64,
     last_update: chrono::NaiveDateTime,
     energy_tech_level: i32,
-    energy_ratio: f64 // Entre 0.0 et 1.0
+    energy_ratio: f64, // Entre 0.0 et 1.0
+    config: &ServerConfigCache
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
     let duration = now.signed_duration_since(last_update).num_seconds() as f64;
 
     // Bonus technologie énergie (+1% par niveau)
-    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.01);
+    let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
-    // Production de base (ratio 3:2:1)
+    // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
-        ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),
-        ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),
-        ResourceType::Deuterium => 10.0 * (level as f64) * 1.05f64.powi(level),
+        ResourceType::Metal => {
+            let base = config.get_config("production_metal_base", 30.0);
+            let growth = config.get_config("production_metal_growth", 1.1);
+            base * (level as f64) * growth.powi(level)
+        },
+        ResourceType::Crystal => {
+            let base = config.get_config("production_crystal_base", 20.0);
+            let growth = config.get_config("production_crystal_growth", 1.1);
+            base * (level as f64) * growth.powi(level)
+        },
+        ResourceType::Deuterium => {
+            let base = config.get_config("production_deuterium_base", 10.0);
+            let growth = config.get_config("production_deuterium_growth", 1.05);
+            base * (level as f64) * growth.powi(level)
+        },
     };
 
     // Application du ratio énergétique
-    let production_per_sec = (base_production * tech_bonus * energy_ratio / 3600.0) * (SPEED_FACTOR / 100.0);
+    let production_per_sec = (base_production * tech_bonus * energy_ratio / 3600.0) * (config.speed_factor / 100.0) * config.mining_speed;
     current_amount + (production_per_sec * duration)
 }
 
 // --- COÛTS DES BÂTIMENTS (Exponentiel) ---
-pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
+pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCache) -> Cost {
     let base_cost = match building_type {
         // 🏭 MINES (multiplicateur 1.5)
         "metal" => Cost {
@@ -332,9 +390,9 @@ pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
         
         _ => Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 },
     };
-    
+
     // ✅ Applique le scaling de vitesse
-    let divider = cost_scaling();
+    let divider = cost_scaling(config);
     Cost {
         metal: base_cost.metal / divider,
         crystal: base_cost.crystal / divider,
@@ -343,21 +401,23 @@ pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
 }
 
 // ⏱️ TEMPS DE CONSTRUCTION PROGRESSIF
-pub fn get_build_time(metal_cost: f64, crystal_cost: f64, facility_level: i32) -> i64 {
+pub fn get_build_time(metal_cost: f64, crystal_cost: f64, facility_level: i32, config: &ServerConfigCache) -> i64 {
     let total_resources = metal_cost + crystal_cost;
     let base_time = (total_resources / 2500.0 * 3600.0) as i64; // En secondes
-    
+
     // 🏗️ Réduction selon niveau du chantier (max -50%)
     let time_reduction = 1.0 - (facility_level as f64 * 0.05).min(0.5);
     let final_time = (base_time as f64 * time_reduction) as i64;
-    
-    // ⚡ Ajusté au SPEED_FACTOR
-    std::cmp::max(10, final_time / (SPEED_FACTOR / 100.0) as i64)
+
+    // ⚡ Ajusté au SPEED_FACTOR et construction_speed
+    let speed_factor = (config.speed_factor / 100.0) * config.construction_speed;
+    std::cmp::max(10, (final_time as f64 / speed_factor) as i64)
 }
 
-pub fn get_ship_production_time(qty: i32) -> i64 {
+pub fn get_ship_production_time(qty: i32, config: &ServerConfigCache) -> i64 {
     let base_time = 30 * qty; // 30 secondes par unité
-    std::cmp::max(5, (base_time as f64 / (SPEED_FACTOR / 100.0)) as i64)
+    let speed_factor = (config.speed_factor / 100.0) * config.construction_speed;
+    std::cmp::max(5, (base_time as f64 / speed_factor) as i64)
 }
 
 // 📦 CAPACITÉS
@@ -399,14 +459,14 @@ pub fn get_ship_cargo_capacity(ship_type: &str) -> f64 {
 }
 
 // Helper functions
-pub fn get_light_hunter_stats() -> (f64, f64) { get_unit_cost("light_hunter") }
-pub fn get_cruiser_stats() -> (f64, f64) { get_unit_cost("cruiser") }
-pub fn get_recycler_stats() -> (f64, f64) { get_unit_cost("recycler") }
-pub fn get_spy_probe_stats() -> (f64, f64) { get_unit_cost("spy_probe") }
-pub fn get_missile_launcher_stats() -> (f64, f64) { get_unit_cost("missile_launcher") }
-pub fn get_plasma_turret_stats() -> (f64, f64) { get_unit_cost("plasma_turret") }
-pub fn get_colony_ship_stats() -> (f64, f64) { get_unit_cost("colony_ship") }
-pub fn get_transporter_stats() -> (f64, f64) { get_unit_cost("transporter") }
+pub fn get_light_hunter_stats(config: &ServerConfigCache) -> (f64, f64) { get_unit_cost("light_hunter", config) }
+pub fn get_cruiser_stats(config: &ServerConfigCache) -> (f64, f64) { get_unit_cost("cruiser", config) }
+pub fn get_recycler_stats(config: &ServerConfigCache) -> (f64, f64) { get_unit_cost("recycler", config) }
+pub fn get_spy_probe_stats(config: &ServerConfigCache) -> (f64, f64) { get_unit_cost("spy_probe", config) }
+pub fn get_missile_launcher_stats(config: &ServerConfigCache) -> (f64, f64) { get_unit_cost("missile_launcher", config) }
+pub fn get_plasma_turret_stats(config: &ServerConfigCache) -> (f64, f64) { get_unit_cost("plasma_turret", config) }
+pub fn get_colony_ship_stats(config: &ServerConfigCache) -> (f64, f64) { get_unit_cost("colony_ship", config) }
+pub fn get_transporter_stats(config: &ServerConfigCache) -> (f64, f64) { get_unit_cost("transporter", config) }
 
 // --- MOTEUR DE COMBAT ---
 pub fn get_unit_base_stats(unit_type: &str) -> UnitStats {
@@ -445,7 +505,8 @@ pub fn resolve_pvp(
     _def_lasers: i32,
     def_missiles: i32, def_plasmas: i32,
     def_techs: CombatTechs,
-    def_resources: Cost
+    def_resources: Cost,
+    config: &ServerConfigCache
 ) -> PvpReport {
     let mut log = Vec::new();
     let mut rng = rand::thread_rng();
@@ -535,9 +596,9 @@ pub fn resolve_pvp(
         let total_cargo_capacity = transporter_capacity + combat_ships_capacity;
 
         // Calculer le butin potentiel (50% des ressources avec cap)
-        let potential_metal = (def_resources.metal * 0.5).min(50000.0 * cost_scaling());
-        let potential_crystal = (def_resources.crystal * 0.5).min(50000.0 * cost_scaling());
-        let potential_deuterium = (def_resources.deuterium * 0.5).min(50000.0 * cost_scaling());
+        let potential_metal = (def_resources.metal * 0.5).min(50000.0 * cost_scaling(config));
+        let potential_crystal = (def_resources.crystal * 0.5).min(50000.0 * cost_scaling(config));
+        let potential_deuterium = (def_resources.deuterium * 0.5).min(50000.0 * cost_scaling(config));
         let total_potential_loot = potential_metal + potential_crystal + potential_deuterium;
 
         // Si le butin potentiel dépasse la capacité, le réduire proportionnellement
@@ -567,8 +628,8 @@ pub fn resolve_pvp(
     let def_h_lost = def_hunters - f_def_h;
     let def_c_lost = def_cruisers - f_def_c;
 
-    let (h_m, h_c) = get_unit_cost("light_hunter");
-    let (c_m, c_c) = get_unit_cost("cruiser");
+    let (h_m, h_c) = get_unit_cost("light_hunter", config);
+    let (c_m, c_c) = get_unit_cost("cruiser", config);
 
     let total_metal_lost = (att_h_lost + def_h_lost) as f64 * h_m + (att_c_lost + def_c_lost) as f64 * c_m;
     let total_crystal_lost = (att_h_lost + def_h_lost) as f64 * h_c + (att_c_lost + def_c_lost) as f64 * c_c;
@@ -665,7 +726,7 @@ pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
 
 
 // 📊 CALCUL DES POINTS D'UNE PLANÈTE (utilisé par leaderboard et profil)
-pub fn calculate_planet_points(p: &crate::entities::planet::Model) -> (i32, i32, i32) {
+pub fn calculate_planet_points(p: &crate::entities::planet::Model, config: &ServerConfigCache) -> (i32, i32, i32) {
     // Points économie (bâtiments) - DRASTIQUEMENT réduit
     let buildings =
         (p.metal_mine_level * p.metal_mine_level * 10) +      // 50 → 10
@@ -701,7 +762,8 @@ pub fn calculate_planet_points(p: &crate::entities::planet::Model) -> (i32, i32,
         p.energy_tech_level,
         p.metal_mine_level,
         p.crystal_mine_level,
-        p.deuterium_mine_level
+        p.deuterium_mine_level,
+        config
     );
 
     // Production de base avec bonus tech et énergie (slots non pris en compte ici car on n'a pas accès)
@@ -709,19 +771,22 @@ pub fn calculate_planet_points(p: &crate::entities::planet::Model) -> (i32, i32,
         ResourceType::Metal,
         p.metal_mine_level,
         p.energy_tech_level,
-        energy_ratio
+        energy_ratio,
+        config
     );
     let prod_crystal = calculate_resource_production(
         ResourceType::Crystal,
         p.crystal_mine_level,
         p.energy_tech_level,
-        energy_ratio
+        energy_ratio,
+        config
     );
     let prod_deuterium = calculate_resource_production(
         ResourceType::Deuterium,
         p.deuterium_mine_level,
         p.energy_tech_level,
-        energy_ratio
+        energy_ratio,
+        config
     );
 
     // 1 point par tranche de 1000 ressources produites par heure
@@ -780,7 +845,7 @@ pub fn get_slot_bonus(slots_count: i32) -> f64 {
 }
 
 /// Coût progressif pour débloquer un slot (slot_number de 1 à 4)
-pub fn get_slot_unlock_cost(slot_number: i32) -> Cost {
+pub fn get_slot_unlock_cost(slot_number: i32, config: &ServerConfigCache) -> Cost {
     let base_cost = Cost {
         metal: 5000.0,
         crystal: 3000.0,
@@ -788,7 +853,7 @@ pub fn get_slot_unlock_cost(slot_number: i32) -> Cost {
     };
 
     let multiplier = slot_number as f64; // x1, x2, x3, x4
-    let divider = cost_scaling();
+    let divider = cost_scaling(config);
 
     Cost {
         metal: (base_cost.metal * multiplier) / divider,
@@ -828,13 +893,14 @@ pub fn calculate_resources_with_slots(
     slot_2: &Option<String>,
     slot_3: &Option<String>,
     slot_4: &Option<String>,
-    speed_factor: f64,
+    config: &ServerConfigCache,
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
     let duration = now.signed_duration_since(last_update).num_seconds() as f64;
 
     // Bonus technologie énergie (+1% par niveau)
-    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.01);
+    let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
     // Déterminer le type de ressource pour compter les slots
     let resource_key = match res_type {
@@ -847,15 +913,27 @@ pub fn calculate_resources_with_slots(
     let slots_count = count_slots_for_resource(slot_1, slot_2, slot_3, slot_4, resource_key);
     let slot_bonus = get_slot_bonus(slots_count);
 
-    // Production de base (ratio 3:2:1)
+    // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
-        ResourceType::Metal => 30.0 * (level as f64) * 1.1f64.powi(level),
-        ResourceType::Crystal => 20.0 * (level as f64) * 1.1f64.powi(level),
-        ResourceType::Deuterium => 10.0 * (level as f64) * 1.05f64.powi(level),
+        ResourceType::Metal => {
+            let base = config.get_config("production_metal_base", 30.0);
+            let growth = config.get_config("production_metal_growth", 1.1);
+            base * (level as f64) * growth.powi(level)
+        },
+        ResourceType::Crystal => {
+            let base = config.get_config("production_crystal_base", 20.0);
+            let growth = config.get_config("production_crystal_growth", 1.1);
+            base * (level as f64) * growth.powi(level)
+        },
+        ResourceType::Deuterium => {
+            let base = config.get_config("production_deuterium_base", 10.0);
+            let growth = config.get_config("production_deuterium_growth", 1.05);
+            base * (level as f64) * growth.powi(level)
+        },
     };
 
     // Application du ratio énergétique, slots et speed_factor dynamique
-    let production_per_sec = (base_production * tech_bonus * energy_ratio * slot_bonus / 3600.0) * (speed_factor / 100.0);
+    let production_per_sec = (base_production * tech_bonus * energy_ratio * slot_bonus / 3600.0) * (config.speed_factor / 100.0) * config.mining_speed;
     current_amount + (production_per_sec * duration)
 }
 
@@ -867,6 +945,7 @@ pub fn calculate_energy_production_with_slots(
     slot_2: &Option<String>,
     slot_3: &Option<String>,
     slot_4: &Option<String>,
+    config: &ServerConfigCache
 ) -> f64 {
     if solar_plant_level == 0 {
         return 0.0;
@@ -876,7 +955,11 @@ pub fn calculate_energy_production_with_slots(
     let slots_count = count_slots_for_resource(slot_1, slot_2, slot_3, slot_4, "energy");
     let slot_bonus = get_slot_bonus(slots_count);
 
-    let base_production = 60.0 * (solar_plant_level as f64) * 1.1f64.powi(solar_plant_level);
-    let tech_bonus = 1.0 + (energy_tech_level as f64 * 0.10);
+    let base = config.get_config("energy_solar_base", 60.0);
+    let growth = config.get_config("energy_solar_growth", 1.1);
+    let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.10);
+
+    let base_production = base * (solar_plant_level as f64) * growth.powi(solar_plant_level);
+    let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
     base_production * tech_bonus * slot_bonus
 }

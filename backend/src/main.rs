@@ -153,9 +153,9 @@ pub struct UserResponse {
 
 #[tokio::main]
 async fn main() {
-    let config = Config::from_env();
+    let env_config = Config::from_env();
     
-    let db = Database::connect(&config.database_url)
+    let db = Database::connect(&env_config.database_url)
         .await
         .expect("Failed to connect to database");
 
@@ -169,8 +169,11 @@ async fn main() {
     let config_cache = backend::ServerConfigCache::load_from_db(&db).await;
     println!("✅ Configuration chargée - Speed Factor: {}", config_cache.speed_factor);
 
+    // Wrap config in Arc<RwLock<>> for sharing
+    let config = std::sync::Arc::new(std::sync::RwLock::new(config_cache));
+
     // Créer l'état WebSocket
-    let ws_state = WsState::new(db.clone());
+    let ws_state = WsState::new(db.clone(), config.clone());
     println!("🔌 WebSocket initialisé");
 
     // Cloner la DB pour la tâche de nettoyage périodique avant de la déplacer dans AppState
@@ -178,7 +181,7 @@ async fn main() {
 
     let state = AppState {
         db,
-        config: std::sync::Arc::new(std::sync::RwLock::new(config_cache)),
+        config,
         ws: Some(ws_state.clone()),
     };
     let cors = CorsLayer::permissive();
@@ -297,7 +300,7 @@ async fn main() {
     // Merger les routes et appliquer CORS à l'ensemble
     let app = app.merge(ws_app).layer(cors);
     
-    let addr: SocketAddr = config.bind_address()
+    let addr: SocketAddr = env_config.bind_address()
         .parse()
         .expect("Invalid bind address");
 
@@ -348,6 +351,7 @@ async fn resolve_attack_mission(
     db: &DatabaseConnection,
     mission: fleet_mission::Model,
     ws_state: Option<&websocket::WsState>,
+    config: &backend::ServerConfigCache,
 ) -> Result<(), StatusCode> {
     let now = Utc::now().naive_utc();
     
@@ -362,7 +366,8 @@ async fn resolve_attack_mission(
         def_planet_raw.energy_tech_level,
         def_planet_raw.metal_mine_level,
         def_planet_raw.crystal_mine_level,
-        def_planet_raw.deuterium_mine_level
+        def_planet_raw.deuterium_mine_level,
+        config
     );
     
     let mut def_planet = def_planet_raw.clone();
@@ -373,7 +378,8 @@ async fn resolve_attack_mission(
         def_planet_raw.metal_amount, 
         def_planet_raw.last_update, 
         def_planet_raw.energy_tech_level,
-        def_energy_ratio
+        def_energy_ratio,
+        config
     );
     def_planet.crystal_amount = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Crystal, 
@@ -381,7 +387,8 @@ async fn resolve_attack_mission(
         def_planet_raw.crystal_amount, 
         def_planet_raw.last_update, 
         def_planet_raw.energy_tech_level,
-        def_energy_ratio
+        def_energy_ratio,
+        config
     );
     def_planet.deuterium_amount = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Deuterium, 
@@ -389,7 +396,8 @@ async fn resolve_attack_mission(
         def_planet_raw.deuterium_amount, 
         def_planet_raw.last_update, 
         def_planet_raw.energy_tech_level,
-        def_energy_ratio
+        def_energy_ratio,
+        config
     );
 
     let att_hunters = mission.metal as i32;
@@ -409,6 +417,8 @@ async fn resolve_attack_mission(
         def_planet.missile_launcher_count, def_planet.plasma_turret_count,
         def_techs,
         game_logic::Cost { metal: def_planet.metal_amount, crystal: def_planet.crystal_amount, deuterium: def_planet.deuterium_amount }
+    ,
+        config
     );
 
     let mut def_active: planet::ActiveModel = def_planet_raw.clone().into();
@@ -664,13 +674,14 @@ async fn get_ranking_handler(
     }
 
     // Créer les RankItems (un par joueur)
+    let config = state.config.read().unwrap().clone();
     let mut ranked_users: Vec<RankItem> = user_planets.into_iter().map(|(owner_id, planets)| {
         let mut total_score = 0;
         let mut total_economy = 0;
         let mut total_military = 0;
 
         let planet_infos: Vec<PlanetInfo> = planets.iter().map(|p| {
-            let (total, economy, military) = game_logic::calculate_planet_points(p);
+            let (total, economy, military) = game_logic::calculate_planet_points(p, &config);
             total_score += total;
             total_economy += economy;
             total_military += military;
@@ -746,17 +757,19 @@ async fn get_planet_handler(
     let slot_3: Option<String> = slots.iter().find(|s| s.slot_number == 7).map(|s| s.resource_type.clone());
     let slot_4: Option<String> = slots.iter().find(|s| s.slot_number == 8).map(|s| s.resource_type.clone());
 
+    // Récupérer la configuration
+    let config = state.config.read().unwrap().clone();
+    let speed_factor = config.speed_factor;
+
     // Calculate energy ratio
     let energy_ratio = game_logic::calculate_energy_ratio(
         p.solar_plant_level,
         p.energy_tech_level,
         p.metal_mine_level,
         p.crystal_mine_level,
-        p.deuterium_mine_level
+        p.deuterium_mine_level,
+        &config
     );
-
-    // Récupérer speed_factor dynamique depuis la configuration
-    let speed_factor = state.config.read().unwrap().speed_factor;
 
     let elapsed = now.signed_duration_since(p.last_update).num_seconds();
     if elapsed > 0 {
@@ -768,15 +781,15 @@ async fn get_planet_handler(
         // Calculer les ressources de base
         let base_metal = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
+            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_crystal = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
+            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_deuterium = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
+            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
 
         // Appliquer le multiplicateur de sabotage (50% si sabotage actif, 100% sinon)
@@ -888,7 +901,8 @@ async fn get_planet_handler(
 
     for m in arrived {
         if m.mission_type == "attack" {
-            let _ = resolve_attack_mission(&state.db, m, state.ws.as_ref()).await;
+            let config = state.config.read().unwrap().clone();
+            let _ = resolve_attack_mission(&state.db, m, state.ws.as_ref(), &config).await;
         } else if m.mission_type == "transport" {
             // Récupérer le nom de la planète source pour la notification
             let source_planet_name = if let Ok(Some(sp)) = Planet::find_by_id(m.source_planet_id).one(&state.db).await {
@@ -986,14 +1000,14 @@ async fn get_planet_handler(
     // Calculate energy using new functions with slots
     let energy_prod = game_logic::calculate_energy_production_with_slots(
         updated_model.solar_plant_level, updated_model.energy_tech_level,
-        &slot_1, &slot_2, &slot_3, &slot_4
+        &slot_1, &slot_2, &slot_3, &slot_4, &config
     );
-    let energy_cons = game_logic::calculate_energy_consumption(updated_model.metal_mine_level, updated_model.crystal_mine_level, updated_model.deuterium_mine_level);
+    let energy_cons = game_logic::calculate_energy_consumption(updated_model.metal_mine_level, updated_model.crystal_mine_level, updated_model.deuterium_mine_level, &config);
     let energy_ratio_percent = (energy_ratio * 100.0) as i32; // Convert to percentage
 
     // Calculer les infos sur les slots
     let next_slot = game_logic::get_next_slot_to_unlock(&slot_1, &slot_2, &slot_3, &slot_4);
-    let next_slot_cost = next_slot.map(game_logic::get_slot_unlock_cost);
+    let next_slot_cost = next_slot.map(|slot| game_logic::get_slot_unlock_cost(slot, &config));
 
     // ✅ AJOUT : Calculer les messages non lus
     let unread_messages = count_unread_messages(p.owner_id, &state.db).await;
@@ -1056,6 +1070,7 @@ async fn upgrade_mine_handler(
     State(state): State<AppState>,
 ) -> Result<StatusCode, StatusCode> {
     let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let config = state.config.read().unwrap().clone();
 
     let active_constructions = ConstructionQueue::find()
         .filter(construction_queue::Column::PlanetId.eq(p.id))
@@ -1091,7 +1106,7 @@ async fn upgrade_mine_handler(
     };
 
     let target_level = base_level + (in_queue_count as i32) + 1;
-    let cost = game_logic::get_upgrade_cost(&type_mine, target_level);
+    let cost = game_logic::get_upgrade_cost(&type_mine, target_level, &config);
 
     if p.metal_amount < cost.metal || p.crystal_amount < cost.crystal || p.deuterium_amount < cost.deuterium {
         return Err(StatusCode::BAD_REQUEST);
@@ -1102,7 +1117,7 @@ async fn upgrade_mine_handler(
         _ => p.shipyard_level,
     };
 
-    let mut build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level);
+    let mut build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level, &config);
 
     // Appliquer le bonus de recherche si disponible (vol de technologie via sabotage)
     // Le bonus s'applique seulement aux technologies, pas aux bâtiments
@@ -1138,6 +1153,7 @@ async fn build_fleet_handler(
     State(state): State<AppState>,
 ) -> Result<StatusCode, StatusCode> {
     let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let config = state.config.read().unwrap().clone();
 
     if qty <= 0 { return Err(StatusCode::BAD_REQUEST); }
 
@@ -1180,14 +1196,14 @@ async fn build_fleet_handler(
     if game_logic::check_prerequisites(&p, &type_ship).is_err() { return Err(StatusCode::FORBIDDEN); }
 
     let (cost_m, cost_c) = match type_ship.as_str() {
-        "light_hunter" => game_logic::get_light_hunter_stats(),
-        "cruiser" => game_logic::get_cruiser_stats(),
-        "recycler" => game_logic::get_recycler_stats(),
-        "spy_probe" => game_logic::get_spy_probe_stats(),
-        "missile_launcher" => game_logic::get_missile_launcher_stats(),
-        "plasma_turret" => game_logic::get_plasma_turret_stats(),
-        "colony_ship" => game_logic::get_colony_ship_stats(),
-        "transporter" => game_logic::get_transporter_stats(),
+        "light_hunter" => game_logic::get_light_hunter_stats(&config),
+        "cruiser" => game_logic::get_cruiser_stats(&config),
+        "recycler" => game_logic::get_recycler_stats(&config),
+        "spy_probe" => game_logic::get_spy_probe_stats(&config),
+        "missile_launcher" => game_logic::get_missile_launcher_stats(&config),
+        "plasma_turret" => game_logic::get_plasma_turret_stats(&config),
+        "colony_ship" => game_logic::get_colony_ship_stats(&config),
+        "transporter" => game_logic::get_transporter_stats(&config),
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
@@ -1196,7 +1212,7 @@ async fn build_fleet_handler(
 
     if p.metal_amount < total_m || p.crystal_amount < total_c { return Err(StatusCode::BAD_REQUEST); }
 
-    let build_time = game_logic::get_ship_production_time(qty);
+    let build_time = game_logic::get_ship_production_time(qty, &config);
 
     let mut active: planet::ActiveModel = p.clone().into();
     active.metal_amount = Set(active.metal_amount.unwrap() - total_m);
@@ -2310,38 +2326,39 @@ async fn cancel_construction_handler(
     let item = ConstructionQueue::find_by_id(queue_id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if item.planet_id != planet_id { return Err(StatusCode::FORBIDDEN); }
     let p = Planet::find_by_id(planet_id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let config = state.config.read().unwrap().clone();
 
     let (base_m, base_c, base_d) = match item.building_type.as_str() {
         "light_hunter" | "cruiser" | "recycler" | "spy_probe" | "colony_ship" | "transporter" | "missile_launcher" | "plasma_turret" => {
             let (m, c) = match item.building_type.as_str() {
-                "light_hunter" => game_logic::get_light_hunter_stats(),
-                "cruiser" => game_logic::get_cruiser_stats(),
-                "recycler" => game_logic::get_recycler_stats(),
-                "spy_probe" => game_logic::get_spy_probe_stats(),
-                "colony_ship" => game_logic::get_colony_ship_stats(),
-                "transporter" => game_logic::get_transporter_stats(),
-                "missile_launcher" => game_logic::get_missile_launcher_stats(),
-                "plasma_turret" => game_logic::get_plasma_turret_stats(),
+                "light_hunter" => game_logic::get_light_hunter_stats(&config),
+                "cruiser" => game_logic::get_cruiser_stats(&config),
+                "recycler" => game_logic::get_recycler_stats(&config),
+                "spy_probe" => game_logic::get_spy_probe_stats(&config),
+                "colony_ship" => game_logic::get_colony_ship_stats(&config),
+                "transporter" => game_logic::get_transporter_stats(&config),
+                "missile_launcher" => game_logic::get_missile_launcher_stats(&config),
+                "plasma_turret" => game_logic::get_plasma_turret_stats(&config),
                 _ => (0.0, 0.0),
             };
             (m * item.level as f64, c * item.level as f64, 0.0)
         },
         _ => {
-            let cost = game_logic::get_upgrade_cost(&item.building_type, item.level);
+            let cost = game_logic::get_upgrade_cost(&item.building_type, item.level, &config);
             (cost.metal, cost.crystal, cost.deuterium)
         }
     };
 
     let total_duration = match item.building_type.as_str() {
         "light_hunter" | "cruiser" | "recycler" | "spy_probe" | "colony_ship" | "transporter" | "missile_launcher" | "plasma_turret" => {
-             game_logic::get_ship_production_time(item.level) as f64
+             game_logic::get_ship_production_time(item.level, &config) as f64
         },
         _ => {
             let facility_level = match item.building_type.as_str() {
                 "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level,
                 _ => p.shipyard_level,
             };
-            game_logic::get_build_time(base_m, base_c, facility_level) as f64
+            game_logic::get_build_time(base_m, base_c, facility_level, &config) as f64
         }
     };
 
@@ -2500,7 +2517,8 @@ async fn update_username_handler(
 }
 
 // Handler pour récupérer les coûts des défenses/vaisseaux
-async fn get_unit_costs_handler() -> Result<Json<serde_json::Value>, StatusCode> {
+async fn get_unit_costs_handler(State(state): State<AppState>) -> Result<Json<serde_json::Value>, StatusCode> {
+    let config = state.config.read().unwrap().clone();
     let units = vec![
         "light_hunter",
         "cruiser",
@@ -2515,7 +2533,7 @@ async fn get_unit_costs_handler() -> Result<Json<serde_json::Value>, StatusCode>
     let mut costs = serde_json::Map::new();
     
     for unit in units {
-        let (metal, crystal) = game_logic::get_unit_cost(unit);
+        let (metal, crystal) = game_logic::get_unit_cost(unit, &config);
         costs.insert(
             unit.to_string(),
             json!({
@@ -2533,6 +2551,7 @@ async fn get_player_profile_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
+    let config = state.config.read().unwrap().clone();
     use crate::entities::{prelude::*, user, planet, fleet_mission};
     
     // ✅ Récupérer l'ID de l'utilisateur qui consulte (viewer)
@@ -2577,7 +2596,7 @@ async fn get_player_profile_handler(
     let mut total_military = 0;
     
     for p in &planets {
-        let (pts, eco, mil) = game_logic::calculate_planet_points(p);
+        let (pts, eco, mil) = game_logic::calculate_planet_points(p, &config);
         total_points += pts;
         total_economy += eco;
         total_military += mil;
@@ -2671,7 +2690,7 @@ async fn get_player_profile_handler(
     // Planète principale (= la plus ancienne, planète mère)
     let main_planet_with_points: Option<(&planet::Model, i32, i32, i32)> = planets.iter()
         .map(|p| {
-            let (pts, eco, mil) = game_logic::calculate_planet_points(p);
+            let (pts, eco, mil) = game_logic::calculate_planet_points(p, &config);
             (p, pts, eco, mil)
         })
         .min_by_key(|(p, _, _, _)| p.created_at); // Planète la plus ancienne
@@ -2764,7 +2783,7 @@ async fn get_player_profile_handler(
         
         // Liste des planètes
         "planets": planets.iter().map(|p| {
-            let (points, _, _) = game_logic::calculate_planet_points(p);
+            let (points, _, _) = game_logic::calculate_planet_points(p, &config);
             json!({
                 "name": p.name,
                 "coords": format!("[{}:{}:{}]", p.galaxy, p.system, p.position),

@@ -27,13 +27,16 @@ pub struct WsState {
     pub connections: Arc<DashMap<Uuid, broadcast::Sender<WsEvent>>>,
     /// Connexion à la base de données
     pub db: DatabaseConnection,
+    /// Configuration serveur
+    pub config: Arc<std::sync::RwLock<crate::ServerConfigCache>>,
 }
 
 impl WsState {
-    pub fn new(db: DatabaseConnection) -> Self {
+    pub fn new(db: DatabaseConnection, config: Arc<std::sync::RwLock<crate::ServerConfigCache>>) -> Self {
         Self {
             connections: Arc::new(DashMap::new()),
             db,
+            config,
         }
     }
 
@@ -258,7 +261,8 @@ async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
     match Planet::find_by_id(planet_id).one(&state.db).await {
         Ok(Some(planet)) => {
             println!("✅ WebSocket: Planète trouvée: {}", planet.name);
-            let resources = calculate_current_resources(&planet, &state.db).await;
+            let config = state.config.read().unwrap().clone();
+            let resources = calculate_current_resources(&planet, &state.db, &config).await;
             let msg = serde_json::to_string(&resources).unwrap();
             if sender.send(Message::Text(msg)).await.is_err() {
                 eprintln!("❌ WebSocket: Erreur lors de l'envoi des ressources initiales");
@@ -282,14 +286,16 @@ async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
 
     // Spawner la tâche de mise à jour périodique des ressources
     let db_clone = state.db.clone();
+    let config_clone = state.config.clone();
     let tx_clone = tx.clone();
     let update_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
         loop {
             interval.tick().await;
-            
+
             if let Ok(Some(planet)) = Planet::find_by_id(planet_id).one(&db_clone).await {
-                let resources = calculate_current_resources(&planet, &db_clone).await;
+                let config = config_clone.read().unwrap().clone();
+                let resources = calculate_current_resources(&planet, &db_clone, &config).await;
                 let _ = tx_clone.send(resources);
             }
         }
@@ -367,6 +373,7 @@ async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
 async fn calculate_current_resources(
     planet: &crate::entities::planet::Model,
     db: &DatabaseConnection,
+    config: &crate::ServerConfigCache,
 ) -> WsEvent {
     // Récupérer les slots de ressources
     let slots = ResourceSlot::find()
@@ -396,12 +403,14 @@ async fn calculate_current_resources(
         planet.solar_plant_level,
         planet.energy_tech_level,
         &slot_1, &slot_2, &slot_3, &slot_4,
+        config,
     );
-    
+
     let energy_consumed = game_logic::calculate_energy_consumption(
         planet.metal_mine_level,
         planet.crystal_mine_level,
         planet.deuterium_mine_level,
+        config,
     );
 
     // Calculer le ratio énergétique pour l'affichage (en pourcentage 0-100)
@@ -414,10 +423,7 @@ async fn calculate_current_resources(
     // Ratio énergétique pour les calculs (en décimal 0.0-1.0)
     let energy_ratio_decimal = energy_ratio_percent / 100.0;
 
-    // Calculer les ressources actuelles avec le speed_factor par défaut
-    // TODO: Récupérer le speed_factor depuis server_config
-    let speed_factor = game_logic::SPEED_FACTOR;
-
+    // Calculer les ressources actuelles avec le config
     let metal = game_logic::calculate_resources_with_slots(
         game_logic::ResourceType::Metal,
         planet.metal_mine_level,
@@ -426,7 +432,7 @@ async fn calculate_current_resources(
         planet.energy_tech_level,
         energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
-        speed_factor,
+        config,
     );
 
     let crystal = game_logic::calculate_resources_with_slots(
@@ -437,7 +443,7 @@ async fn calculate_current_resources(
         planet.energy_tech_level,
         energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
-        speed_factor,
+        config,
     );
 
     let deuterium = game_logic::calculate_resources_with_slots(
@@ -448,7 +454,7 @@ async fn calculate_current_resources(
         planet.energy_tech_level,
         energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
-        speed_factor,
+        config,
     );
 
     WsEvent::ResourcesUpdate {
