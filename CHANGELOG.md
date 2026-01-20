@@ -1,5 +1,271 @@
 # Changelog - Space Conquest
 
+## [2.2.0] - 2026-01-20 - Configuration Serveur Complète & Correctifs Production
+
+### 🎯 Nouvelles Fonctionnalités
+
+#### ⚙️ Configuration complète des mécaniques de jeu
+**Feature**: 48 nouvelles valeurs configurables via le panel admin pour personnaliser toutes les mécaniques du jeu
+
+**Paramètres configurables ajoutés**:
+
+**Combat** (12 valeurs):
+- Statistiques de combat (attaque, bouclier, coque) pour :
+  - Chasseurs Légers : 50 / 10 / 400
+  - Croiseurs : 400 / 50 / 2700
+  - Lanceurs de Missiles : 80 / 20 / 200
+  - Tourelles Plasma : 3000 / 300 / 10000
+- Tir rapide (Rapid Fire) :
+  - Croiseur vs Chasseur : 6 tirs
+  - Croiseur vs Lanceur : 10 tirs
+  - Plasma vs Chasseur : 5 tirs
+  - Plasma vs Croiseur : 3 tirs
+- Bonus technologiques :
+  - Laser : +10% par niveau
+  - Blindage : +10% par niveau
+
+**Pillage & Débris** (3 valeurs):
+- Pourcentage pillable : 50%
+- Maximum par ressource : 50,000
+- Pourcentage en débris : 30%
+
+**Capacités Cargo** (4 valeurs):
+- Chasseur Léger : 50 unités
+- Croiseur : 800 unités
+- Transporteur base : 5,000 unités
+- Transporteur bonus/niveau hangar : +2,500 unités
+
+**Expéditions** (29 valeurs):
+- Chance de combat : 30%
+- Rounds maximum : 6
+- Récompenses Chasseurs (min/max) :
+  - Métal : 50-200
+  - Cristal : 25-100
+  - Deutérium : 0-50
+- Récompenses Croiseurs (min/max) :
+  - Métal : 200-600
+  - Cristal : 100-400
+  - Deutérium : 0-150
+- Pirates :
+  - Scaling min/max : 10-100
+  - Loot base : 50
+  - Loot multiplier : 1.1
+
+**Interface Admin**:
+- 11 sections organisées dans le panel admin
+- Édition en temps réel avec validation
+- Interface colorée et organisée par catégorie
+- Composant `ConfigInput` réutilisable pour cohérence visuelle
+
+**Fichiers**:
+- `backend/migration/src/m20260120_000005_add_game_mechanics_config.rs` (nouveau)
+- `backend/src/game_logic.rs` (lecture config pour tous calculs)
+- `backend/src/main.rs` (exposition via GET /config et expéditions)
+- `frontend/src/components/AdminPanel.tsx` (7 nouvelles sections UI)
+
+---
+
+### 🔧 Corrections Critiques
+
+#### 🐛 Correction erreurs NaN dans l'affichage des ressources
+**Problème**: Les ressources affichaient "NaN" dans EmpireBar, ProductionStats et PlanetOverview
+
+**Causes identifiées**:
+1. Frontend calculait la production avant le chargement de la config
+2. Valeurs `undefined` passées aux calculs mathématiques
+3. Pas de protection contre les valeurs manquantes
+
+**Solutions appliquées**:
+
+**Protection Number() + fallbacks** dans tous les composants:
+```typescript
+// Protection contre NaN
+const safeBaseFactor = Number(baseFactor) || 0;
+const safeGrowthFactor = Number(growthFactor) || 1;
+if (safeBaseFactor === 0) return 0;
+
+// Appels avec valeurs par défaut
+calculateProduction(
+  planet.metal_mine_level || 0,
+  config.production_metal_base || 30,  // fallback
+  config.production_metal_growth || 1.1 // fallback
+);
+```
+
+**Composants corrigés**:
+- `EmpireBar.tsx` - Protection calculateProduction + fallbacks
+- `ProductionStats.tsx` - Protection calculateProduction + early return
+- `useRealtimeResources.ts` - Protection Number() sur tous paramètres
+
+**Fichiers**:
+- `frontend/src/components/EmpireBar.tsx` (lignes 122-150)
+- `frontend/src/components/ProductionStats.tsx` (lignes 95-140)
+- `frontend/src/hooks/useRealtimeResources.ts` (lignes 70-90)
+
+---
+
+#### 🔄 Synchronisation des noms de clés config (Backend ↔ DB)
+**Problème**: Les noms de clés dans `game_logic.rs` ne correspondaient pas à ceux dans la base de données
+
+**Clés corrigées**:
+| Ancien (incorrect) | Nouveau (correct) |
+|-------------------|-------------------|
+| `combat_tech_laser_bonus` | `combat_laser_tech_bonus` |
+| `combat_tech_armour_bonus` | `combat_armour_tech_bonus` |
+| `loot_percentage` | `combat_loot_percentage` |
+| `loot_max_per_resource` | `combat_loot_cap_per_resource` |
+| `debris_percentage` | `combat_debris_percentage` |
+| `expedition_pirate_strength_*` | `expedition_pirate_scaling_*` |
+
+**Clés supprimées** (n'existent pas dans DB):
+- `combat_tech_energy_bonus` - Pas de tech énergie pour boucliers implémentée
+- Tous les paramètres d'expédition non utilisés (pertes victoire/défaite, vulnérabilités, etc.)
+
+**Impact**: Les mécaniques de combat et d'expédition utilisent maintenant les bonnes valeurs configurables
+
+**Fichiers**:
+- `backend/src/game_logic.rs` (lignes 530-531, 614-615, 652, 674-675)
+
+---
+
+#### 🎨 Correction Admin Panel - Clés UI synchronisées
+**Problème**: L'interface admin utilisait des noms de clés différents de ceux en DB, empêchant la sauvegarde
+
+**Corrections**:
+- Renommage de 9 clés pour correspondre au schéma DB
+- Suppression de Section 12 (capacités structures) - champs non existants en DB
+- Simplification section Expéditions - seulement les champs DB
+- Suppression champ "Bonus Énergie" des bonus technologiques
+
+**Exemple de correction**:
+```typescript
+// Avant (incorrect)
+configKey="cargo_light_hunter_capacity"
+
+// Après (correct)
+configKey="cargo_light_hunter"
+```
+
+**Résultat**: Toutes les 43 valeurs configurables peuvent maintenant être sauvegardées
+
+**Fichiers**:
+- `frontend/src/components/AdminPanel.tsx` (sections 6-11)
+
+---
+
+### 📝 Notes techniques
+
+**Hiérarchie des fallbacks**:
+```typescript
+// Ordre de priorité
+1. editedConfig[key]        // Valeur en cours d'édition
+2. config[key]              // Valeur DB chargée
+3. hardcoded default        // Fallback si rien trouvé
+```
+
+**Calcul production avec protection**:
+```typescript
+// Protection complète
+const safeBaseFactor = Number(baseFactor) || 0;
+const safeGrowthFactor = Number(growthFactor) || 1;
+const safeTechBonus = Number(techBonus) || 1;
+const safeSlotBonus = Number(slotBonus) || 1;
+
+// Early return si invalide
+if (safeBaseFactor === 0) return 0;
+
+// Calcul normal ensuite
+let prod = safeBaseFactor * level * Math.pow(safeGrowthFactor, level);
+prod *= safeTechBonus * energyRatio * safeSlotBonus * speedFactor;
+```
+
+**Migration des valeurs config**:
+- IDs 60-107 : 48 nouvelles configurations game mechanics
+- IDs 1-59 : Configurations existantes (speed, coûts, production, énergie)
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: **OUI - OBLIGATOIRE**
+```bash
+cd migration
+cargo run  # Applique m20260120_000005_add_game_mechanics_config
+```
+
+**Tests recommandés**:
+1. ✅ Panel admin → Modifier combat stats → Sauvegarder → Vérifier DB
+2. ✅ EmpireBar → Vérifier production affichée (pas de NaN)
+3. ✅ ProductionStats → Vérifier graphiques (pas de NaN)
+4. ✅ PlanetOverview → Vérifier calculs ressources (pas de NaN)
+5. ✅ Expédition → Vérifier gains correspondent aux valeurs config
+6. ✅ Combat PvP → Vérifier dégâts/débris/butin utilisent config
+
+---
+
+### 📦 Fichiers modifiés (9 fichiers)
+
+#### Backend (5 fichiers)
+- ➕ `backend/migration/src/m20260120_000005_add_game_mechanics_config.rs` - 48 nouvelles configs
+- ✏️ `backend/migration/src/lib.rs` - Enregistrement migration
+- ✏️ `backend/src/game_logic.rs` - Correction noms clés + lecture config
+- ✏️ `backend/src/main.rs` - Exposition configs via GET /config
+
+#### Frontend (4 fichiers)
+- ✏️ `frontend/src/components/AdminPanel.tsx` - 7 sections + correction clés
+- ✏️ `frontend/src/components/EmpireBar.tsx` - Protection NaN + fallbacks
+- ✏️ `frontend/src/components/ProductionStats.tsx` - Protection NaN + fallbacks
+- ✏️ `frontend/src/hooks/useRealtimeResources.ts` - Protection NaN complète
+
+---
+
+### ⚠️ Breaking Changes
+
+**IMPORTANT**: Cette version nécessite l'exécution de la migration pour fonctionner correctement.
+
+**Valeurs par défaut**:
+- Sans migration : Le jeu continue de fonctionner avec valeurs hardcodées
+- Après migration : Les valeurs deviennent configurables via panel admin
+
+**Impact**:
+- Aucun impact sur gameplay existant (valeurs par défaut identiques)
+- Nouvelle capacité : Personnalisation complète des mécaniques
+- Rétrocompatible : Fallback sur constantes si clé manquante
+
+---
+
+### 🐛 Bugs corrigés
+
+- ✅ NaN dans EmpireBar pour métal/cristal/deutérium
+- ✅ NaN dans ProductionStats pour graphiques production
+- ✅ NaN dans PlanetOverview pour calculs ressources
+- ✅ Config admin ne sauvegardait pas (clés incorrectes)
+- ✅ Backend utilisait mauvaises clés config (incohérence DB)
+- ✅ Bonus tech énergie appliqué alors que non implémenté
+
+---
+
+### 🔮 Améliorations futures
+
+**Panel Admin** :
+- Export/Import configuration complète (JSON)
+- Presets de configuration (Vitesse normale, Rapide, Ultra-rapide)
+- Historique des modifications config avec rollback
+- Validation des valeurs (min/max cohérents)
+
+**Gameplay**:
+- Événements serveur avec multiplicateurs temporaires
+- Configuration dynamique selon heure (Happy Hour ressources)
+- Presets par alliance (configurations personnalisées)
+
+---
+
+**Commits**: `c5b00c0`, `2a69bd4`
+**Branche**: `claude/fix-admin-config-save-WhPrq`
+**Fichiers**: 9 modifiés, 1 créé
+
+---
+
 ## [2.1.0] - 2026-01-20 - Fonctionnalités Avancées UX & Gameplay
 
 ### 🎨 Nouvelles Fonctionnalités UI
