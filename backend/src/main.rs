@@ -4470,8 +4470,14 @@ async fn expedition_v2_handler(
             .await
         {
             Ok(Some(s)) => s,
-            Ok(None) => return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Unknown ship type: {}", ship_key)}))).into_response(),
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+            Ok(None) => {
+                eprintln!("❌ Unknown ship type: {}", ship_key);
+                return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Unknown ship type: {}", ship_key)}))).into_response();
+            }
+            Err(e) => {
+                eprintln!("❌ Database error loading ship type {}: {:?}", ship_key, e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Database error: {:?}", e)}))).into_response();
+            }
         };
 
         // Check if planet has enough of this ship
