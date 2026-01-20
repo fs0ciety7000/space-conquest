@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 
 interface PlanetData {
   metal_amount: number;
@@ -105,7 +106,7 @@ export function useRealtimeResources(
     }
 
     // Calculer les bonus
-    const techLevel = planet.energy_tech_level || 0;
+    const techLevel = getTechLevel(planet, 'energy_tech');
     const techBonus = 1.0 + (techLevel * safeConfig.energy_tech_bonus);
     const energyRatio = planet.energy_ratio || 100;
 

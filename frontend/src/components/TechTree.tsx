@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 import { Card, CardContent } from "@/components/ui/card";
 import { Zap, Target, Atom, Microscope, Cpu, ArrowUpCircle, Sparkles, Eye, ScanLine, Lock, Loader2, AlertTriangle, ChevronRight, Box, Gem, Droplets, TrendingUp, Network, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -64,9 +65,9 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
 
   const techs = [
     { id: 'research', name: 'Labo de Recherche', lv: planet.research_lab_level ?? 0 },
-    { id: 'energy_tech', name: 'Technologie Énergie', lv: planet.energy_tech_level ?? 0 },
-    { id: 'laser', name: 'Batterie Laser', lv: planet.laser_battery_level ?? 0 },
-    { id: 'espionage', name: 'Tech. Espionnage', lv: planet.espionage_tech_level ?? 0 }
+    { id: 'energy_tech', name: 'Technologie Énergie', lv: getTechLevel(planet, 'energy_tech') ?? 0 },
+    { id: 'laser', name: 'Batterie Laser', lv: getTechLevel(planet, 'laser_tech') ?? 0 },
+    { id: 'espionage', name: 'Tech. Espionnage', lv: getTechLevel(planet, 'espionage') ?? 0 }
   ];
 
   // --- LOGIQUE FILE D'ATTENTE MULTIPLE ---

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getShipCount } from './utils/techTreeCompat';
 import ResourceDisplay from './components/ResourceDisplay';
 import Facilities from './components/Facilities';
 import Shipyard from './components/Shipyard';
@@ -617,7 +618,7 @@ export default function App() {
       {/* Modals */}
       <div className="relative z-50">
         {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
-        {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count, transporters: planet.transporter_count }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
+        {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: getShipCount(planet, 'light_hunter'), cruisers: getShipCount(planet, 'cruiser'), transporters: getShipCount(planet, 'transporter') }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
      
         {transportTarget && (
             <TransportModal 

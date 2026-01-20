@@ -28,7 +28,7 @@ export const checkPrerequisites = (planet: any, type: string): { locked: boolean
             break;
         case 'laser_tech':
             check("Laboratoire de Recherche (1)", (planet.research_lab_level || 0) >= 1);
-            check("Tech. Énergie (2)", (planet.energy_tech_level || 0) >= 2);
+            check("Tech. Énergie (2)", (getTechLevel(planet, 'energy_tech')) >= 2);
             break;
         case 'espionage':
             check("Laboratoire de Recherche (3)", (planet.research_lab_level || 0) >= 3);
@@ -40,18 +40,18 @@ export const checkPrerequisites = (planet: any, type: string): { locked: boolean
         // --- RECHERCHES AVANCÉES - EXPANSION 2.0 ---
         case 'ion_tech':
             check("Laboratoire de Recherche (4)", (planet.research_lab_level || 0) >= 4);
-            check("Tech. Énergie (4)", (planet.energy_tech_level || 0) >= 4);
-            check("Tech. Laser (5)", (planet.laser_battery_level || 0) >= 5);
+            check("Tech. Énergie (4)", (getTechLevel(planet, 'energy_tech')) >= 4);
+            check("Tech. Laser (5)", (getTechLevel(planet, 'laser_tech')) >= 5);
             break;
         case 'plasma_tech':
             check("Laboratoire de Recherche (4)", (planet.research_lab_level || 0) >= 4);
-            check("Tech. Énergie (8)", (planet.energy_tech_level || 0) >= 8);
-            check("Tech. Laser (10)", (planet.laser_battery_level || 0) >= 10);
+            check("Tech. Énergie (8)", (getTechLevel(planet, 'energy_tech')) >= 8);
+            check("Tech. Laser (10)", (getTechLevel(planet, 'laser_tech')) >= 10);
             check("Tech. Ion (5)", (planet.ion_tech_level || 0) >= 5);
             break;
         case 'shield_tech':
             check("Laboratoire de Recherche (6)", (planet.research_lab_level || 0) >= 6);
-            check("Tech. Énergie (3)", (planet.energy_tech_level || 0) >= 3);
+            check("Tech. Énergie (3)", (getTechLevel(planet, 'energy_tech')) >= 3);
             break;
         case 'weapons_tech':
             check("Laboratoire de Recherche (4)", (planet.research_lab_level || 0) >= 4);
@@ -63,20 +63,20 @@ export const checkPrerequisites = (planet: any, type: string): { locked: boolean
         // --- PROPULSION - EXPANSION 2.0 ---
         case 'combustion_drive':
             check("Laboratoire de Recherche (1)", (planet.research_lab_level || 0) >= 1);
-            check("Tech. Énergie (1)", (planet.energy_tech_level || 0) >= 1);
+            check("Tech. Énergie (1)", (getTechLevel(planet, 'energy_tech')) >= 1);
             break;
         case 'impulse_drive':
             check("Laboratoire de Recherche (2)", (planet.research_lab_level || 0) >= 2);
-            check("Tech. Énergie (1)", (planet.energy_tech_level || 0) >= 1);
+            check("Tech. Énergie (1)", (getTechLevel(planet, 'energy_tech')) >= 1);
             break;
         case 'hyperspace_drive':
             check("Laboratoire de Recherche (7)", (planet.research_lab_level || 0) >= 7);
-            check("Tech. Énergie (5)", (planet.energy_tech_level || 0) >= 5);
+            check("Tech. Énergie (5)", (getTechLevel(planet, 'energy_tech')) >= 5);
             check("Tech. Bouclier (5)", (planet.shield_tech_level || 0) >= 5);
             break;
         case 'astrophysics':
             check("Laboratoire de Recherche (3)", (planet.research_lab_level || 0) >= 3);
-            check("Tech. Espionnage (4)", (planet.espionage_tech_level || 0) >= 4);
+            check("Tech. Espionnage (4)", (getTechLevel(planet, 'espionage')) >= 4);
             check("Propulsion à Impulsion (3)", (planet.impulse_drive_level || 0) >= 3);
             break;
 
@@ -86,14 +86,14 @@ export const checkPrerequisites = (planet: any, type: string): { locked: boolean
             break;
         case 'cruiser':
             check("Chantier Spatial (5)", (planet.shipyard_level || 0) >= 5);
-            check("Tech. Énergie (3)", (planet.energy_tech_level || 0) >= 3);
+            check("Tech. Énergie (3)", (getTechLevel(planet, 'energy_tech')) >= 3);
             break;
         case 'recycler':
             check("Chantier Spatial (4)", (planet.shipyard_level || 0) >= 4);
             break;
         case 'spy_probe':
             check("Chantier Spatial (1)", (planet.shipyard_level || 0) >= 1);
-            check("Tech. Espionnage (1)", (planet.espionage_tech_level || 0) >= 1);
+            check("Tech. Espionnage (1)", (getTechLevel(planet, 'espionage')) >= 1);
             break;
         case 'colony_ship':
             check("Chantier Spatial (4)", (planet.shipyard_level || 0) >= 4);
@@ -105,7 +105,7 @@ export const checkPrerequisites = (planet: any, type: string): { locked: boolean
         // --- FLOTTE AVANCÉE - EXPANSION 2.0 ---
         case 'heavy_hunter':
             check("Chantier Spatial (3)", (planet.shipyard_level || 0) >= 3);
-            check("Tech. Blindage (3)", (planet.armour_tech_level || 0) >= 3);
+            check("Tech. Blindage (3)", (getTechLevel(planet, 'armour_tech')) >= 3);
             check("Propulsion à Impulsion (1)", (planet.impulse_drive_level || 0) >= 1);
             break;
         case 'battleship':
@@ -129,8 +129,8 @@ export const checkPrerequisites = (planet: any, type: string): { locked: boolean
             break;
         case 'plasma_turret':
             check("Chantier Spatial (8)", (planet.shipyard_level || 0) >= 8);
-            check("Tech. Énergie (6)", (planet.energy_tech_level || 0) >= 6);
-            check("Tech. Laser (5)", (planet.laser_battery_level || 0) >= 5);
+            check("Tech. Énergie (6)", (getTechLevel(planet, 'energy_tech')) >= 6);
+            check("Tech. Laser (5)", (getTechLevel(planet, 'laser_tech')) >= 5);
             break;
     }
 

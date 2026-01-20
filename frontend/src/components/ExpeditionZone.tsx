@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 import { Compass, Timer, Send, AlertTriangle, Database, Rocket, Map, Radar, ScanLine, Minus, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -107,9 +108,9 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
   };
 
   const isInMission = (timeLeft !== null && timeLeft > 0) || isLaunching;
-  const hasShips = (planet.light_hunter_count || 0) > 0 || (planet.cruiser_count || 0) > 0;
-  const availableHunters = planet.light_hunter_count || 0;
-  const availableCruisers = planet.cruiser_count || 0;
+  const hasShips = (getShipCount(planet, 'light_hunter')) > 0 || (getShipCount(planet, 'cruiser')) > 0;
+  const availableHunters = getShipCount(planet, 'light_hunter');
+  const availableCruisers = getShipCount(planet, 'cruiser');
 
   // Thème de couleur pour cette section (Cyan/Exploration)
   const theme = {
@@ -157,7 +158,7 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                 </div>
                 <div className="flex items-end gap-2">
                    <span className={`text-3xl font-mono font-black ${hasShips ? 'text-white' : 'text-red-500'}`}>
-                     {planet.light_hunter_count || 0}
+                     {getShipCount(planet, 'light_hunter')}
                    </span>
                    <span className="text-[10px] text-slate-500 uppercase font-bold mb-1">Chasseurs MK-I</span>
                 </div>
@@ -270,7 +271,7 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                   )}
 
                   {/* Recycleurs */}
-                  {planet.recycler_count > 0 && (
+                  {getShipCount(planet, 'recycler') > 0 && (
                     <div className="mt-4">
                       <div className="text-[9px] text-slate-400 uppercase mb-2">Recycleurs (Collecte x2 bonus)</div>
                       <div className="flex items-center gap-4">
@@ -283,11 +284,11 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                         </Button>
                         <div className="flex-1 text-center">
                           <div className="text-3xl font-mono font-black text-yellow-400">{recyclerCount}</div>
-                          <div className="text-[9px] text-slate-500">/ {planet.recycler_count}</div>
+                          <div className="text-[9px] text-slate-500">/ {getShipCount(planet, 'recycler')}</div>
                         </div>
                         <Button
-                          onClick={() => setRecyclerCount(Math.min(planet.recycler_count, recyclerCount + 1))}
-                          disabled={recyclerCount >= planet.recycler_count}
+                          onClick={() => setRecyclerCount(Math.min(getShipCount(planet, 'recycler'), recyclerCount + 1))}
+                          disabled={recyclerCount >= getShipCount(planet, 'recycler')}
                           className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
                         >
                           <Plus size={16} />
@@ -295,13 +296,13 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                       </div>
                       <div className="mt-2 flex gap-2">
                         <Button
-                          onClick={() => setRecyclerCount(Math.floor(planet.recycler_count / 2))}
+                          onClick={() => setRecyclerCount(Math.floor(getShipCount(planet, 'recycler') / 2))}
                           className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
                         >
                           50%
                         </Button>
                         <Button
-                          onClick={() => setRecyclerCount(planet.recycler_count)}
+                          onClick={() => setRecyclerCount(getShipCount(planet, 'recycler'))}
                           className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
                         >
                           MAX
