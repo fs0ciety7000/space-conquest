@@ -370,6 +370,16 @@ pub fn get_transporter_capacity(hangar_level: i32) -> f64 {
 
 pub const TRANSPORTER_CAPACITY: f64 = 10000.0; // Deprecated: utilisez get_transporter_capacity()
 
+// Capacité de cargo des vaisseaux de combat (pour le butin des attaques)
+pub fn get_ship_cargo_capacity(ship_type: &str) -> f64 {
+    match ship_type {
+        "light_hunter" => 50.0,    // Chasseur léger: peu de cargo
+        "cruiser" => 800.0,        // Croiseur: cargo modéré
+        "transporter" => 10000.0,  // Transporteur: cargo maximum
+        _ => 0.0,
+    }
+}
+
 // Helper functions
 pub fn get_light_hunter_stats() -> (f64, f64) { get_unit_cost("light_hunter") }
 pub fn get_cruiser_stats() -> (f64, f64) { get_unit_cost("cruiser") }
@@ -412,12 +422,12 @@ fn apply_losses(fleet: &mut Vec<(&str, i32, UnitStats)>, damage: f64) {
 }
 
 pub fn resolve_pvp(
-    att_hunters: i32, att_cruisers: i32, att_techs: CombatTechs,
-    def_hunters: i32, def_cruisers: i32, 
-    _def_lasers: i32, 
-    def_missiles: i32, def_plasmas: i32, 
+    att_hunters: i32, att_cruisers: i32, att_transporters: i32, att_hangar_level: i32, att_techs: CombatTechs,
+    def_hunters: i32, def_cruisers: i32,
+    _def_lasers: i32,
+    def_missiles: i32, def_plasmas: i32,
     def_techs: CombatTechs,
-    def_resources: Cost   
+    def_resources: Cost
 ) -> PvpReport {
     let mut log = Vec::new();
     let mut rng = rand::thread_rng();
@@ -493,17 +503,44 @@ pub fn resolve_pvp(
     let f_miss = defender_fleet.iter().find(|(t,_,_)| *t=="missile_launcher").map(|f| f.1).unwrap_or(0);
     let f_plas = defender_fleet.iter().find(|(t,_,_)| *t=="plasma_turret").map(|f| f.1).unwrap_or(0);
 
-    let winner = if f_def_h+f_def_c+f_miss+f_plas <= 0 { "attacker".into() } 
-                 else if f_att_h+f_att_c <= 0 { "defender".into() } 
+    let winner = if f_def_h+f_def_c+f_miss+f_plas <= 0 { "attacker".into() }
+                 else if f_att_h+f_att_c <= 0 { "defender".into() }
                  else { "draw".into() };
 
-    // 💰 BUTIN (50% des ressources)
+    // 💰 BUTIN (50% des ressources, limité par la capacité de cargo des vaisseaux survivants)
     let loot = if winner == "attacker" {
-        Cost { 
-            metal: (def_resources.metal * 0.5).min(50000.0 * cost_scaling()), 
-            crystal: (def_resources.crystal * 0.5).min(50000.0 * cost_scaling()), 
-            deuterium: (def_resources.deuterium * 0.5).min(50000.0 * cost_scaling()) 
+        // Calculer la capacité de cargo totale des vaisseaux survivants
+        // Les transporteurs ne participent pas au combat, donc ils survivent tous
+        let transporter_capacity = att_transporters as f64 * get_transporter_capacity(att_hangar_level);
+        let combat_ships_capacity = (f_att_h as f64 * get_ship_cargo_capacity("light_hunter"))
+                                   + (f_att_c as f64 * get_ship_cargo_capacity("cruiser"));
+        let total_cargo_capacity = transporter_capacity + combat_ships_capacity;
+
+        // Calculer le butin potentiel (50% des ressources avec cap)
+        let potential_metal = (def_resources.metal * 0.5).min(50000.0 * cost_scaling());
+        let potential_crystal = (def_resources.crystal * 0.5).min(50000.0 * cost_scaling());
+        let potential_deuterium = (def_resources.deuterium * 0.5).min(50000.0 * cost_scaling());
+        let total_potential_loot = potential_metal + potential_crystal + potential_deuterium;
+
+        // Si le butin potentiel dépasse la capacité, le réduire proportionnellement
+        let actual_loot_ratio = if total_potential_loot > total_cargo_capacity && total_cargo_capacity > 0.0 {
+            log.push(format!("⚠️ Cargo insuffisant ! Capacité: {:.0} / Butin disponible: {:.0}", total_cargo_capacity, total_potential_loot));
+            total_cargo_capacity / total_potential_loot
+        } else {
+            1.0
+        };
+
+        let final_loot = Cost {
+            metal: (potential_metal * actual_loot_ratio).min(def_resources.metal),
+            crystal: (potential_crystal * actual_loot_ratio).min(def_resources.crystal),
+            deuterium: (potential_deuterium * actual_loot_ratio).min(def_resources.deuterium)
+        };
+
+        if final_loot.metal > 0.0 || final_loot.crystal > 0.0 || final_loot.deuterium > 0.0 {
+            log.push(format!("💰 Butin récupéré : {:.0}M / {:.0}C / {:.0}D", final_loot.metal, final_loot.crystal, final_loot.deuterium));
         }
+
+        final_loot
     } else { Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 } };
 
     // 🛠️ CHAMP DE DÉBRIS (30% des pertes)
@@ -591,7 +628,19 @@ pub fn calculate_distance(start: (i32, i32, i32), end: (i32, i32, i32)) -> f64 {
 }
 
 pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
-    let base_time = 10.0 + (dist.sqrt() / 2.0);
+    // Calculate base time based on distance ranges for more realistic travel times
+    let base_time = if dist < 1000.0 {
+        // Same system, different position: 30s to 2 minutes
+        dist / 10.0 + 30.0
+    } else if dist < 10000.0 {
+        // Same galaxy, different system: 5-15 minutes
+        dist / 5.0 + 200.0
+    } else {
+        // Different galaxy: 30 minutes to 1+ hour
+        dist / 2.0 + 500.0
+    };
+
+    // Apply speed factor (typically 500 = 5x speed)
     let seconds = (base_time * 100.0) / speed_factor;
     seconds.max(5.0) as i64
 }

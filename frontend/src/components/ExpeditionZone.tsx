@@ -6,11 +6,12 @@ import { toast } from "sonner";
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-export default function ExpeditionZone({ planet, onAction }: { planet: any, onAction: (hunters: number, cruisers: number) => void }) {
+export default function ExpeditionZone({ planet, onAction }: { planet: any, onAction: (hunters: number, cruisers: number, recyclers: number) => void }) {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
   const [hunterCount, setHunterCount] = useState(0);
   const [cruiserCount, setCruiserCount] = useState(0);
+  const [recyclerCount, setRecyclerCount] = useState(0);
   const [initialized, setInitialized] = useState(false);
   const [scouting, setScouting] = useState(false);
   const [scoutResult, setScoutResult] = useState<{
@@ -28,23 +29,13 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
     }
   } | null>(null);
 
-  // Initialisation intelligente des compteurs de vaisseaux
+  // Initialisation des compteurs de vaisseaux à 0 par défaut
   useEffect(() => {
     if (planet && !initialized) {
-      const availableHunters = planet.light_hunter_count || 0;
-      const availableCruisers = planet.cruiser_count || 0;
-      
-      // Initialiser avec le premier type de vaisseau disponible
-      if (availableHunters > 0) {
-        setHunterCount(1);
-        setCruiserCount(0);
-      } else if (availableCruisers > 0) {
-        setHunterCount(0);
-        setCruiserCount(1);
-      } else {
-        setHunterCount(0);
-        setCruiserCount(0);
-      }
+      // Par défaut, tous les compteurs à 0
+      setHunterCount(0);
+      setCruiserCount(0);
+      setRecyclerCount(0);
       setInitialized(true);
     }
   }, [planet, initialized]);
@@ -91,7 +82,7 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ hunters: hunterCount, cruisers: cruiserCount })
+        body: JSON.stringify({ hunters: hunterCount, cruisers: cruiserCount, recyclers: recyclerCount })
       });
 
       if (res.ok) {
@@ -112,7 +103,7 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
 
   const handleLaunch = () => {
     setIsLaunching(true);
-    onAction(hunterCount, cruiserCount); // On passe les deux types de vaisseaux
+    onAction(hunterCount, cruiserCount, recyclerCount); // On passe les trois types de vaisseaux
   };
 
   const isInMission = (timeLeft !== null && timeLeft > 0) || isLaunching;
@@ -270,6 +261,47 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
                         </Button>
                         <Button
                           onClick={() => setCruiserCount(availableCruisers)}
+                          className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
+                        >
+                          MAX
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recycleurs */}
+                  {planet.recycler_count > 0 && (
+                    <div className="mt-4">
+                      <div className="text-[9px] text-slate-400 uppercase mb-2">Recycleurs (Collecte x2 bonus)</div>
+                      <div className="flex items-center gap-4">
+                        <Button
+                          onClick={() => setRecyclerCount(Math.max(0, recyclerCount - 1))}
+                          disabled={recyclerCount <= 0}
+                          className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
+                        >
+                          <Minus size={16} />
+                        </Button>
+                        <div className="flex-1 text-center">
+                          <div className="text-3xl font-mono font-black text-yellow-400">{recyclerCount}</div>
+                          <div className="text-[9px] text-slate-500">/ {planet.recycler_count}</div>
+                        </div>
+                        <Button
+                          onClick={() => setRecyclerCount(Math.min(planet.recycler_count, recyclerCount + 1))}
+                          disabled={recyclerCount >= planet.recycler_count}
+                          className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 border border-white/10"
+                        >
+                          <Plus size={16} />
+                        </Button>
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          onClick={() => setRecyclerCount(Math.floor(planet.recycler_count / 2))}
+                          className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
+                        >
+                          50%
+                        </Button>
+                        <Button
+                          onClick={() => setRecyclerCount(planet.recycler_count)}
                           className="flex-1 h-8 text-[9px] bg-slate-800 hover:bg-slate-700 border border-white/10"
                         >
                           MAX

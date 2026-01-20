@@ -342,7 +342,7 @@ export default function App() {
     }
   }, [planetId, token, playSound]);
 
-  const launchExpedition = async (hunters: number, cruisers: number) => {
+  const launchExpedition = async (hunters: number, cruisers: number, recyclers: number) => {
     if (!planetId || !token) return;
     try {
       const res = await fetch(apiUrl(`/planets/${planetId}/expedition`), {
@@ -351,7 +351,7 @@ export default function App() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ hunters, cruisers })
+        body: JSON.stringify({ hunters, cruisers, recyclers })
       });
       if (res.ok) {
         const data = await res.json();
@@ -408,20 +408,21 @@ export default function App() {
     }
   };
 
-  const handleConfirmAttack = async (hunters: number, cruisers: number) => {
+  const handleConfirmAttack = async (hunters: number, cruisers: number, transporters: number) => {
     if (!planetId || !targetPlanet) return;
 
     try {
         const res = await fetch(apiUrl(`/attack?current_planet_id=${planetId}`), {
             method: 'POST',
-            headers: { 
+            headers: {
               'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 target_planet_id: targetPlanet.id,
                 hunters: hunters,
-                cruisers: cruisers
+                cruisers: cruisers,
+                transporters: transporters
             })
         });
 
@@ -552,7 +553,7 @@ export default function App() {
       {/* Modals */}
       <div className="relative z-50">
         {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
-        {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
+        {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: planet.light_hunter_count, cruisers: planet.cruiser_count, transporters: planet.transporter_count }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
      
         {transportTarget && (
             <TransportModal 
