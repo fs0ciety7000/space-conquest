@@ -3,6 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Zap, Target, Atom, Microscope, Cpu, ArrowUpCircle, Sparkles, Eye, ScanLine, Lock, Loader2, AlertTriangle, ChevronRight, Box, Gem, Droplets, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiUrl } from '@/config/api';
+import { GameImage } from '@/components/ui/game-image';
+import { getTechImage } from '@/lib/images';
 // --- CONFIGURATION VISUELLE (Design Riche) ---
 const getTechConfig = (id: string, level: number) => {
   const tier = Math.floor(level / 5) + 1; 
@@ -116,7 +118,16 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
               <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
               <CardContent className="pt-6 px-6 pb-6 space-y-6 relative z-10 flex flex-col h-full justify-between">
-                
+
+                {/* Image de la technologie */}
+                <GameImage
+                  src={getTechImage(t.id)}
+                  alt={t.name}
+                  className="w-full h-36 mb-4"
+                  fallbackIcon={<Icon className={`${style.color} w-20 h-20`} />}
+                  loading="lazy"
+                />
+
                 {/* --- HEADER CARTE --- */}
                 <div>
                     <div className="flex justify-between items-start mb-4">
