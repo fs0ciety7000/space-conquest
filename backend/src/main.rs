@@ -36,7 +36,7 @@ use sea_orm_migration::MigratorTrait;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin,
-    messaging, market, websocket, alliance, missions, officers, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, AppState
 };
 use config::Config;
 use websocket::WsState;
@@ -725,19 +725,34 @@ async fn get_planet_handler(
 
     let elapsed = now.signed_duration_since(p.last_update).num_seconds();
     if elapsed > 0 {
-        // Utiliser la nouvelle fonction avec prise en compte des slots ET speed_factor dynamique
-        active.metal_amount = Set(game_logic::calculate_resources_with_slots(
+        // Vérifier si la planète est affectée par un sabotage "disable_mine"
+        let production_multiplier = sabotage::get_production_multiplier(&state.db, id)
+            .await
+            .unwrap_or(1.0); // Défaut à 1.0 en cas d'erreur
+
+        // Calculer les ressources de base
+        let base_metal = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update,
             p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
-        ));
-        active.crystal_amount = Set(game_logic::calculate_resources_with_slots(
+        );
+        let base_crystal = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update,
             p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
-        ));
-        active.deuterium_amount = Set(game_logic::calculate_resources_with_slots(
+        );
+        let base_deuterium = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
             p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
-        ));
+        );
+
+        // Appliquer le multiplicateur de sabotage (50% si sabotage actif, 100% sinon)
+        // Le multiplicateur affecte seulement la production générée, pas les ressources existantes
+        let production_metal = base_metal - p.metal_amount;
+        let production_crystal = base_crystal - p.crystal_amount;
+        let production_deuterium = base_deuterium - p.deuterium_amount;
+
+        active.metal_amount = Set(p.metal_amount + (production_metal * production_multiplier));
+        active.crystal_amount = Set(p.crystal_amount + (production_crystal * production_multiplier));
+        active.deuterium_amount = Set(p.deuterium_amount + (production_deuterium * production_multiplier));
 
         // Appliquer les caps de stockage (SOFT CAP)
         // Si déjà au-dessus du cap, on arrête la production (garde ressources existantes)
@@ -1052,7 +1067,17 @@ async fn upgrade_mine_handler(
         _ => p.shipyard_level,
     };
 
-    let build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level);
+    let mut build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level);
+
+    // Appliquer le bonus de recherche si disponible (vol de technologie via sabotage)
+    // Le bonus s'applique seulement aux technologies, pas aux bâtiments
+    let is_research = matches!(type_mine.as_str(), "research" | "energy_tech" | "laser" | "espionage" | "armour");
+    if is_research {
+        let research_bonus = sabotage::apply_research_bonus(&state.db, p.user_id)
+            .await
+            .unwrap_or(1.0); // Défaut à 1.0 en cas d'erreur
+        build_time = (build_time as f64 * research_bonus) as i64;
+    }
     
     let mut active: planet::ActiveModel = p.clone().into();
     active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
