@@ -65,9 +65,35 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
+  const [config, setConfig] = useState<any>({
+    production_metal_base: 30,
+    production_crystal_base: 20,
+    production_deuterium_base: 10,
+    production_metal_growth: 1.1,
+    production_crystal_growth: 1.1,
+    production_deuterium_growth: 1.05,
+    energy_tech_bonus: 0.01
+  });
 
   // Hook pour ressources en temps réel
-  const realtimeResources = useRealtimeResources(planet, speedFactor);
+  const realtimeResources = useRealtimeResources(planet, speedFactor, config);
+
+  // Récupérer la configuration serveur
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch(apiUrl('/config'));
+        if (res.ok) {
+          const data = await res.json();
+          setConfig(data);
+        }
+      } catch (e) {
+        console.error("Erreur chargement config", e);
+      }
+    };
+
+    fetchConfig();
+  }, []);
 
   // Récupérer la liste des planètes
   useEffect(() => {
@@ -119,15 +145,15 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const energyRatio = planet.energy_ratio ?? 100; // percentage
 
   // Calculs production avec tous les bonus (tech, énergie, slots, speed)
-  const calculateProduction = (level: number, baseFactor: number, resourceType: 'metal' | 'crystal' | 'deuterium') => {
+  const calculateProduction = (level: number, baseFactor: number, growthFactor: number, resourceType: 'metal' | 'crystal' | 'deuterium') => {
     if (level === 0) return 0;
 
     // Production de base
-    let prod = baseFactor * level * Math.pow(1.1, level);
+    let prod = baseFactor * level * Math.pow(growthFactor, level);
 
-    // Bonus technologie énergie (+1% par niveau)
+    // Bonus technologie énergie (configurable)
     const techLevel = planet.energy_tech_level || 0;
-    const techBonus = 1.0 + (techLevel * 0.01);
+    const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
     prod *= techBonus;
 
     // Ratio énergétique
@@ -145,9 +171,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     return Math.floor(prod);
   };
 
-  const prodMetal = calculateProduction(planet.metal_mine_level || 0, 30, 'metal');
-  const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, 20, 'crystal');
-  const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, 10, 'deuterium');
+  const prodMetal = calculateProduction(planet.metal_mine_level || 0, config.production_metal_base, config.production_metal_growth, 'metal');
+  const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, config.production_crystal_base, config.production_crystal_growth, 'crystal');
+  const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, config.production_deuterium_base, config.production_deuterium_growth, 'deuterium');
 
   // Calcul de la capacité de stockage (600k base, x1.6 par niveau)
   const storageLevel = planet.resource_storage_level || 0;

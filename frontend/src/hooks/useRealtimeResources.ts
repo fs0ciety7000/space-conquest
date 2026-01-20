@@ -22,24 +22,48 @@ interface RealtimeResources {
   deuterium: number;
 }
 
+interface ServerConfig {
+  production_metal_base: number;
+  production_crystal_base: number;
+  production_deuterium_base: number;
+  production_metal_growth: number;
+  production_crystal_growth: number;
+  production_deuterium_growth: number;
+  energy_tech_bonus: number;
+}
+
 /**
  * Hook pour calculer les ressources en temps réel entre les polls du backend
  * @param planet - Données de la planète depuis le backend
  * @param speedFactor - Facteur de vitesse normalisé (5 pour x5, 10 pour x10, etc.)
+ * @param config - Configuration serveur pour les paramètres de production
  * @returns Ressources calculées en temps réel
  */
 export function useRealtimeResources(
   planet: PlanetData | null,
-  speedFactor: number
+  speedFactor: number,
+  config?: ServerConfig
 ): RealtimeResources | null {
   const [resources, setResources] = useState<RealtimeResources | null>(null);
   const lastUpdateRef = useRef<number>(Date.now());
   const baseResourcesRef = useRef<RealtimeResources | null>(null);
 
+  // Valeurs par défaut si config n'est pas fournie
+  const safeConfig = config || {
+    production_metal_base: 30,
+    production_crystal_base: 20,
+    production_deuterium_base: 10,
+    production_metal_growth: 1.1,
+    production_crystal_growth: 1.1,
+    production_deuterium_growth: 1.05,
+    energy_tech_bonus: 0.01
+  };
+
   // Calculer la production par seconde
   const calculateProductionPerSecond = (
     level: number,
     baseFactor: number,
+    growthFactor: number,
     energyRatio: number,
     techBonus: number,
     slotBonus: number
@@ -47,7 +71,7 @@ export function useRealtimeResources(
     if (level === 0) return 0;
 
     // Production de base
-    let prod = baseFactor * level * Math.pow(1.1, level);
+    let prod = baseFactor * level * Math.pow(growthFactor, level);
 
     // Bonus tech énergie
     prod *= techBonus;
@@ -75,7 +99,7 @@ export function useRealtimeResources(
 
     // Calculer les bonus
     const techLevel = planet.energy_tech_level || 0;
-    const techBonus = 1.0 + (techLevel * 0.01);
+    const techBonus = 1.0 + (techLevel * safeConfig.energy_tech_bonus);
     const energyRatio = planet.energy_ratio || 100;
 
     // Calculer bonus slots
@@ -99,7 +123,8 @@ export function useRealtimeResources(
     // Calculer les productions par seconde
     const metalProdPerSec = calculateProductionPerSecond(
       planet.metal_mine_level || 0,
-      30,
+      safeConfig.production_metal_base,
+      safeConfig.production_metal_growth,
       energyRatio,
       techBonus,
       metalSlotBonus
@@ -107,7 +132,8 @@ export function useRealtimeResources(
 
     const crystalProdPerSec = calculateProductionPerSecond(
       planet.crystal_mine_level || 0,
-      20,
+      safeConfig.production_crystal_base,
+      safeConfig.production_crystal_growth,
       energyRatio,
       techBonus,
       crystalSlotBonus
@@ -115,7 +141,8 @@ export function useRealtimeResources(
 
     const deutProdPerSec = calculateProductionPerSecond(
       planet.deuterium_mine_level || 0,
-      10,
+      safeConfig.production_deuterium_base,
+      safeConfig.production_deuterium_growth,
       energyRatio,
       techBonus,
       deutSlotBonus
@@ -149,7 +176,7 @@ export function useRealtimeResources(
     }, 100); // Mise à jour toutes les 100ms pour fluidité
 
     return () => clearInterval(interval);
-  }, [planet, speedFactor]);
+  }, [planet, speedFactor, safeConfig]);
 
   return resources;
 }

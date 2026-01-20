@@ -58,13 +58,39 @@ interface ResourceSlot {
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
   const [, setTick] = useState(0);
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
+  const [config, setConfig] = useState<any>({
+    production_metal_base: 30,
+    production_crystal_base: 20,
+    production_deuterium_base: 10,
+    production_metal_growth: 1.1,
+    production_crystal_growth: 1.1,
+    production_deuterium_growth: 1.05,
+    energy_tech_bonus: 0.01
+  });
 
   // Hook pour ressources en temps réel
-  const realtimeResources = useRealtimeResources(planet, speedFactor);
+  const realtimeResources = useRealtimeResources(planet, speedFactor, config);
 
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Récupérer la configuration serveur
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch(apiUrl('/config'));
+        if (res.ok) {
+          const data = await res.json();
+          setConfig(data);
+        }
+      } catch (e) {
+        console.error("Erreur chargement config", e);
+      }
+    };
+
+    fetchConfig();
   }, []);
 
   // Charger les slots actifs
@@ -115,13 +141,13 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   };
 
   // --- CALCULS PRODUCTION (avec slots, tech et énergie) ---
-  const calculateProduction = (resourceType: 'metal' | 'crystal' | 'deuterium', level: number, baseFactor: number) => {
+  const calculateProduction = (resourceType: 'metal' | 'crystal' | 'deuterium', level: number, baseFactor: number, growthFactor: number) => {
     // Calcul de base
-    let prod = baseFactor * level * Math.pow(1.1, level);
+    let prod = baseFactor * level * Math.pow(growthFactor, level);
 
-    // Bonus technologie énergie (+1% par niveau)
+    // Bonus technologie énergie (configurable)
     const techLevel = planet.energy_tech_level || 0;
-    const techBonus = 1.0 + (techLevel * 0.01);
+    const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
     prod *= techBonus;
 
     // Ratio énergétique (récupéré du backend)
@@ -139,9 +165,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     return Math.floor(prod);
   };
 
-  const prodMetal = calculateProduction('metal', planet.metal_mine_level, 30);
-  const prodCrystal = calculateProduction('crystal', planet.crystal_mine_level, 20);
-  const prodDeut = calculateProduction('deuterium', planet.deuterium_mine_level, 10);
+  const prodMetal = calculateProduction('metal', planet.metal_mine_level, config.production_metal_base, config.production_metal_growth);
+  const prodCrystal = calculateProduction('crystal', planet.crystal_mine_level, config.production_crystal_base, config.production_crystal_growth);
+  const prodDeut = calculateProduction('deuterium', planet.deuterium_mine_level, config.production_deuterium_base, config.production_deuterium_growth);
 
   // Energy data from backend
   const energyProd = planet.energy_production || 0;
