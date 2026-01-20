@@ -63,8 +63,8 @@ pub async fn load_rapid_fire_cache(db: &DatabaseConnection) -> Result<RapidFireC
     for rule in all_rules {
         // Get ship keys from ship_type_id
         if let (Some(attacker), Some(target)) = (
-            ShipType::find_by_id(rule.attacker_ship_id).one(db).await?,
-            ShipType::find_by_id(rule.target_id).one(db).await?,
+            ShipType::find_by_id(rule.attacker_ship_type_id).one(db).await?,
+            ShipType::find_by_id(rule.target_ship_type_id).one(db).await?,
         ) {
             cache.insert(
                 (attacker.ship_key, target.ship_key),
