@@ -398,12 +398,63 @@ export default function App() {
           toast.success("📡 Sonde d'espionnage envoyée", {
             description: "Les données ont été collectées avec succès"
           });
-      } else { 
-          toast.error(data.error || "Échec de l'espionnage"); 
+      } else {
+          toast.error(data.error || "Échec de l'espionnage");
           playSound('error');
       }
-    } catch(e) { 
-        toast.error("Erreur réseau"); 
+    } catch(e) {
+        toast.error("Erreur réseau");
+        playSound('error');
+    }
+  };
+
+  const handleSabotage = async (action: 'disable_mine' | 'steal_tech') => {
+    if (!spyReport?.target_planet_id) return;
+
+    try {
+        const res = await fetch(apiUrl('/sabotage'), {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              target_planet_id: spyReport.target_planet_id,
+              action_type: action
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          if (data.detected) {
+            // Sabotage détecté
+            toast.error("🚨 SABOTAGE DÉTECTÉ !", {
+              description: data.message + " La cible peut maintenant vous attaquer sans pénalité.",
+              duration: 6000
+            });
+            playSound('error');
+          } else {
+            // Sabotage réussi
+            const actionLabels = {
+              'disable_mine': '⚙️ MINE DÉSACTIVÉE',
+              'steal_tech': '📖 TECHNOLOGIE VOLÉE'
+            };
+            toast.success(actionLabels[action], {
+              description: data.message,
+              duration: 5000
+            });
+            playSound('success');
+          }
+
+          setSpyReport(null); // Fermer le modal
+          fetchPlanet(); // Refresh la planète
+        } else {
+          toast.error(data.error || "Échec du sabotage");
+          playSound('error');
+        }
+    } catch(e) {
+        toast.error("Erreur réseau");
         playSound('error');
     }
   };
@@ -568,9 +619,11 @@ export default function App() {
         )}
      
         {spyReport && (
-          <SpyModal 
-              report={spyReport} 
-              onClose={() => setSpyReport(null)} 
+          <SpyModal
+              report={spyReport}
+              onClose={() => setSpyReport(null)}
+              targetPlanetId={spyReport.target_planet_id}
+              onSabotage={handleSabotage}
           />
         )}
 
