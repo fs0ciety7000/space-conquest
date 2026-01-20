@@ -17,7 +17,7 @@ impl MigrationTrait for Migration {
                 .columns([
                     Alias::new("planet_id"),
                     Alias::new("tech_id"),
-                    Alias::new("current_level"),
+                    Alias::new("level"),
                 ])
                 .select_from(
                     Query::select()
@@ -39,7 +39,7 @@ impl MigrationTrait for Migration {
                 .columns([
                     Alias::new("planet_id"),
                     Alias::new("tech_id"),
-                    Alias::new("current_level"),
+                    Alias::new("level"),
                 ])
                 .select_from(
                     Query::select()
@@ -61,7 +61,7 @@ impl MigrationTrait for Migration {
                 .columns([
                     Alias::new("planet_id"),
                     Alias::new("tech_id"),
-                    Alias::new("current_level"),
+                    Alias::new("level"),
                 ])
                 .select_from(
                     Query::select()
@@ -83,7 +83,7 @@ impl MigrationTrait for Migration {
                 .columns([
                     Alias::new("planet_id"),
                     Alias::new("tech_id"),
-                    Alias::new("current_level"),
+                    Alias::new("level"),
                 ])
                 .select_from(
                     Query::select()
