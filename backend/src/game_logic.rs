@@ -527,14 +527,13 @@ pub fn resolve_pvp(
     let mut rng = rand::thread_rng();
 
     // Tech bonuses from config
-    let laser_bonus = config.get_config("combat_tech_laser_bonus", 0.1);
-    let energy_bonus = config.get_config("combat_tech_energy_bonus", 0.1);
-    let armour_bonus = config.get_config("combat_tech_armour_bonus", 0.1);
+    let laser_bonus = config.get_config("combat_laser_tech_bonus", 0.1);
+    let armour_bonus = config.get_config("combat_armour_tech_bonus", 0.1);
 
     let apply_techs = |base: UnitStats, techs: &CombatTechs| -> UnitStats {
         UnitStats {
             attack: base.attack * (1.0 + techs.laser as f64 * laser_bonus),
-            shield: base.shield * (1.0 + techs.energy as f64 * energy_bonus),
+            shield: base.shield, // Pas de tech bouclier pour l'instant
             hull: base.hull * (1.0 + techs.armour as f64 * armour_bonus),
         }
     };
@@ -616,8 +615,8 @@ pub fn resolve_pvp(
         let total_cargo_capacity = transporter_capacity + combat_ships_capacity;
 
         // Lire les paramètres de butin depuis la config
-        let loot_percentage = config.get_config("loot_percentage", 0.5);
-        let loot_max_per_resource = config.get_config("loot_max_per_resource", 50000.0);
+        let loot_percentage = config.get_config("combat_loot_percentage", 0.5);
+        let loot_max_per_resource = config.get_config("combat_loot_cap_per_resource", 50000.0);
 
         // Calculer le butin potentiel avec les valeurs configurables
         let potential_metal = (def_resources.metal * loot_percentage).min(loot_max_per_resource * cost_scaling(config));
@@ -658,7 +657,7 @@ pub fn resolve_pvp(
     let total_metal_lost = (att_h_lost + def_h_lost) as f64 * h_m + (att_c_lost + def_c_lost) as f64 * c_m;
     let total_crystal_lost = (att_h_lost + def_h_lost) as f64 * h_c + (att_c_lost + def_c_lost) as f64 * c_c;
 
-    let debris_percentage = config.get_config("debris_percentage", 0.3);
+    let debris_percentage = config.get_config("combat_debris_percentage", 0.3);
     let debris_m = total_metal_lost * debris_percentage;
     let debris_c = total_crystal_lost * debris_percentage;
 
@@ -680,8 +679,8 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32, config: &ServerConfi
     let mut rng = rand::thread_rng();
 
     // Niveau pirate aléatoire (configurable)
-    let pirate_min = config.get_config("expedition_pirate_strength_min", 10.0) as i32;
-    let pirate_max = config.get_config("expedition_pirate_strength_max", 100.0) as i32;
+    let pirate_min = config.get_config("expedition_pirate_scaling_min", 10.0) as i32;
+    let pirate_max = config.get_config("expedition_pirate_scaling_max", 100.0) as i32;
     let pirate_strength = rng.gen_range(pirate_min..pirate_max);
 
     let defense_multiplier = config.get_config("expedition_defense_bonus_multiplier", 5.0);

@@ -70,17 +70,24 @@ export function useRealtimeResources(
   ): number => {
     if (level === 0) return 0;
 
+    // Protection contre NaN
+    const safeBaseFactor = Number(baseFactor) || 0;
+    const safeGrowthFactor = Number(growthFactor) || 1;
+    const safeTechBonus = Number(techBonus) || 1;
+    const safeSlotBonus = Number(slotBonus) || 1;
+    if (safeBaseFactor === 0) return 0;
+
     // Production de base
-    let prod = baseFactor * level * Math.pow(growthFactor, level);
+    let prod = safeBaseFactor * level * Math.pow(safeGrowthFactor, level);
 
     // Bonus tech énergie
-    prod *= techBonus;
+    prod *= safeTechBonus;
 
     // Ratio énergétique
     prod *= (energyRatio / 100);
 
     // Bonus slots
-    prod *= slotBonus;
+    prod *= safeSlotBonus;
 
     // Speed factor
     prod *= speedFactor;
