@@ -106,6 +106,29 @@ let seconds = (base_time * 100.0) / speed_factor;
 
 ---
 
+#### 🌍 Transport de ressources lors colonisation
+
+**Feature**: Possibilité d'envoyer des ressources avec le vaisseau de colonisation
+
+**Nouvelle interface**:
+- Modal de sélection des ressources au lieu de colonisation directe
+- Sliders pour choisir métal, cristal et deutérium à transporter
+- Affichage des ressources disponibles sur la planète d'origine
+- Calcul en temps réel des ressources totales à l'arrivée :
+  - **500 métal** (base) + métal transporté
+  - **500 cristal** (base) + cristal transporté
+  - **0 deutérium** (base) + deutérium transporté
+- Validation des montants (ne peut pas dépasser les ressources disponibles)
+
+**Impact**: Les nouvelles colonies peuvent démarrer avec bien plus de ressources, accélérant leur développement initial
+
+**Fichiers**:
+- `frontend/src/components/ColonizeModal.tsx` (nouveau composant modal)
+- `frontend/src/components/GalaxyView.tsx` (intégration du modal)
+- `backend/src/main.rs` (handler colonize déjà prêt)
+
+---
+
 ### 📝 Notes techniques
 
 **Capacité cargo combat**:
@@ -145,18 +168,20 @@ let metal = base_metal * recycler_bonus * speed_factor;
 
 ---
 
-### 📦 Fichiers modifiés (7 fichiers)
+### 📦 Fichiers modifiés (9 fichiers)
 
-#### Backend (3 fichiers)
+#### Backend (4 fichiers)
 - ✏️ `backend/src/game_logic.rs` - Cargo capacity, flight time, ship capacity functions
-- ✏️ `backend/src/main.rs` - Attack/expedition handlers, transporters/recyclers support, colonization energy
+- ✏️ `backend/src/main.rs` - Attack/expedition handlers, transporters/recyclers support, colonization resources
 - ✏️ `backend/src/auth.rs` - Solar plant level 3 for first planet
+- ✏️ `backend/src/missions.rs` - Dynamic speed_factor in response
 
-#### Frontend (4 fichiers)
+#### Frontend (5 fichiers)
 - ✏️ `frontend/src/components/AttackModal.tsx` - Transporters selection + cargo display
 - ✏️ `frontend/src/components/ExpeditionZone.tsx` - Recyclers selection + defaults to 0
+- ✏️ `frontend/src/components/GalaxyView.tsx` - Colonization modal integration
 - ✏️ `frontend/src/App.tsx` - Updated handlers for new payloads
-- ✏️ `frontend/src/lib/gameRules.ts` - Transporter capacity function (already existed)
+- ➕ `frontend/src/components/ColonizeModal.tsx` - NEW: Resource selection modal for colonization
 
 ---
 
