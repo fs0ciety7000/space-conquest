@@ -642,6 +642,9 @@ async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResp
     // Normaliser speed_factor pour le frontend (500 → 5, 1000 → 10, etc.)
     let normalized_speed_factor = config.speed_factor / 100.0;
 
+    // Diviser les coûts par le cost_scaling (basé sur speed_factor)
+    let cost_divider = (config.speed_factor / 100.0).max(1.0);
+
     // Renvoyer toutes les config nécessaires pour les calculs frontend
     Json(json!({
         "speed_factor": normalized_speed_factor,
@@ -658,7 +661,26 @@ async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResp
         "energy_mine_consumption_growth": config.get_config("energy_mine_consumption_growth", 1.1),
         "energy_deuterium_extra_consumption": config.get_config("energy_deuterium_extra_consumption", 20.0),
         "mining_speed_multiplier": config.mining_speed,
-        "construction_speed_multiplier": config.construction_speed
+        "construction_speed_multiplier": config.construction_speed,
+        "cost_divider": cost_divider,
+        // Coûts des vaisseaux (déjà divisés par cost_scaling)
+        "ship_light_hunter_metal": config.get_config("ship_light_hunter_metal", 3000.0) / cost_divider,
+        "ship_light_hunter_crystal": config.get_config("ship_light_hunter_crystal", 1000.0) / cost_divider,
+        "ship_cruiser_metal": config.get_config("ship_cruiser_metal", 20000.0) / cost_divider,
+        "ship_cruiser_crystal": config.get_config("ship_cruiser_crystal", 7000.0) / cost_divider,
+        "ship_transporter_metal": config.get_config("ship_transporter_metal", 4000.0) / cost_divider,
+        "ship_transporter_crystal": config.get_config("ship_transporter_crystal", 4000.0) / cost_divider,
+        "ship_recycler_metal": config.get_config("ship_recycler_metal", 10000.0) / cost_divider,
+        "ship_recycler_crystal": config.get_config("ship_recycler_crystal", 6000.0) / cost_divider,
+        "ship_spy_probe_metal": config.get_config("ship_spy_probe_metal", 1000.0) / cost_divider,
+        "ship_spy_probe_crystal": config.get_config("ship_spy_probe_crystal", 0.0) / cost_divider,
+        "ship_colony_ship_metal": config.get_config("ship_colony_ship_metal", 10000.0) / cost_divider,
+        "ship_colony_ship_crystal": config.get_config("ship_colony_ship_crystal", 20000.0) / cost_divider,
+        // Coûts des défenses (déjà divisés par cost_scaling)
+        "defense_missile_launcher_metal": config.get_config("defense_missile_launcher_metal", 10000.0) / cost_divider,
+        "defense_missile_launcher_crystal": config.get_config("defense_missile_launcher_crystal", 2500.0) / cost_divider,
+        "defense_plasma_turret_metal": config.get_config("defense_plasma_turret_metal", 50000.0) / cost_divider,
+        "defense_plasma_turret_crystal": config.get_config("defense_plasma_turret_crystal", 50000.0) / cost_divider,
     }))
 }
 
