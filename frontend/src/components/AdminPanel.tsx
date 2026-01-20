@@ -78,10 +78,103 @@ interface ServerStats {
 }
 
 interface ServerConfig {
+  speed_factor: string;
+  construction_speed_multiplier: string;
+  mining_speed_multiplier: string;
+  // Les autres configs seront chargées dynamiquement
   [key: string]: string;
 }
 
-type AdminTab = 'players' | 'stats' | 'users';
+type AdminTab = 'players' | 'stats' | 'users' | 'config';
+
+interface ConfigCategory {
+  id: string;
+  title: string;
+  icon: any;
+  color: string;
+  configs: ConfigItem[];
+}
+
+interface ConfigItem {
+  key: string;
+  label: string;
+  description: string;
+  defaultValue: string;
+}
+
+const CONFIG_CATEGORIES: ConfigCategory[] = [
+  {
+    id: 'speed',
+    title: 'Multiplicateurs de Vitesse',
+    icon: Zap,
+    color: 'indigo',
+    configs: [
+      { key: 'speed_factor', label: 'Speed Factor Global', description: 'Multiplicateur général (x5 = 500)', defaultValue: '500.0' },
+      { key: 'construction_speed_multiplier', label: 'Vitesse Construction', description: 'Multiplie les temps de construction', defaultValue: '1.0' },
+      { key: 'mining_speed_multiplier', label: 'Vitesse Minage', description: 'Multiplie la production de ressources', defaultValue: '1.0' },
+    ]
+  },
+  {
+    id: 'ships',
+    title: 'Coûts des Vaisseaux',
+    icon: Rocket,
+    color: 'cyan',
+    configs: [
+      { key: 'ship_light_hunter_metal', label: 'Chasseur - Métal', description: 'Coût métal chasseur léger', defaultValue: '3000.0' },
+      { key: 'ship_light_hunter_crystal', label: 'Chasseur - Cristal', description: 'Coût cristal chasseur léger', defaultValue: '1000.0' },
+      { key: 'ship_cruiser_metal', label: 'Croiseur - Métal', description: 'Coût métal croiseur', defaultValue: '20000.0' },
+      { key: 'ship_cruiser_crystal', label: 'Croiseur - Cristal', description: 'Coût cristal croiseur', defaultValue: '7000.0' },
+      { key: 'ship_transporter_metal', label: 'Transporteur - Métal', description: 'Coût métal transporteur', defaultValue: '4000.0' },
+      { key: 'ship_transporter_crystal', label: 'Transporteur - Cristal', description: 'Coût cristal transporteur', defaultValue: '4000.0' },
+      { key: 'ship_recycler_metal', label: 'Recycleur - Métal', description: 'Coût métal recycleur', defaultValue: '10000.0' },
+      { key: 'ship_recycler_crystal', label: 'Recycleur - Cristal', description: 'Coût cristal recycleur', defaultValue: '6000.0' },
+      { key: 'ship_spy_probe_metal', label: 'Sonde - Métal', description: 'Coût métal sonde espionnage', defaultValue: '1000.0' },
+      { key: 'ship_spy_probe_crystal', label: 'Sonde - Cristal', description: 'Coût cristal sonde espionnage', defaultValue: '0.0' },
+      { key: 'ship_colony_ship_metal', label: 'Colon - Métal', description: 'Coût métal vaisseau colonisation', defaultValue: '10000.0' },
+      { key: 'ship_colony_ship_crystal', label: 'Colon - Cristal', description: 'Coût cristal vaisseau colonisation', defaultValue: '20000.0' },
+    ]
+  },
+  {
+    id: 'defenses',
+    title: 'Coûts des Défenses',
+    icon: Shield,
+    color: 'red',
+    configs: [
+      { key: 'defense_missile_launcher_metal', label: 'Missile - Métal', description: 'Coût métal lanceur de missiles', defaultValue: '10000.0' },
+      { key: 'defense_missile_launcher_crystal', label: 'Missile - Cristal', description: 'Coût cristal lanceur de missiles', defaultValue: '2500.0' },
+      { key: 'defense_plasma_turret_metal', label: 'Plasma - Métal', description: 'Coût métal tourelle plasma', defaultValue: '50000.0' },
+      { key: 'defense_plasma_turret_crystal', label: 'Plasma - Cristal', description: 'Coût cristal tourelle plasma', defaultValue: '50000.0' },
+    ]
+  },
+  {
+    id: 'production',
+    title: 'Facteurs de Production',
+    icon: TrendingUp,
+    color: 'green',
+    configs: [
+      { key: 'production_metal_base', label: 'Métal - Base', description: 'Production base métal (ratio 3:2:1)', defaultValue: '30.0' },
+      { key: 'production_metal_growth', label: 'Métal - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
+      { key: 'production_crystal_base', label: 'Cristal - Base', description: 'Production base cristal (ratio 3:2:1)', defaultValue: '20.0' },
+      { key: 'production_crystal_growth', label: 'Cristal - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
+      { key: 'production_deuterium_base', label: 'Deutérium - Base', description: 'Production base deutérium (ratio 3:2:1)', defaultValue: '10.0' },
+      { key: 'production_deuterium_growth', label: 'Deutérium - Croissance', description: 'Facteur croissance exponentielle (plus rare)', defaultValue: '1.05' },
+    ]
+  },
+  {
+    id: 'energy',
+    title: 'Facteurs Énergétiques',
+    icon: Battery,
+    color: 'yellow',
+    configs: [
+      { key: 'energy_solar_base', label: 'Production Solaire - Base', description: 'Production base centrale solaire', defaultValue: '60.0' },
+      { key: 'energy_solar_growth', label: 'Production Solaire - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
+      { key: 'energy_tech_bonus', label: 'Bonus Tech Énergie', description: 'Bonus par niveau tech énergie (+10%)', defaultValue: '0.10' },
+      { key: 'energy_mine_consumption_base', label: 'Consommation Mine - Base', description: 'Consommation base des mines', defaultValue: '10.0' },
+      { key: 'energy_mine_consumption_growth', label: 'Consommation Mine - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
+      { key: 'energy_deuterium_extra_consumption', label: 'Deutérium - Consommation Extra', description: 'Consommation supplémentaire deutérium', defaultValue: '20.0' },
+    ]
+  },
+];
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState<AdminTab>('stats');
@@ -99,7 +192,7 @@ export default function AdminPanel() {
 
   const token = localStorage.getItem('token');
   const currentUsername = localStorage.getItem('username');
-  const userId = localStorage.getItem('user_id'); // ✅ RÉCUPÉRATION user_id
+  const userId = localStorage.getItem('user_id');
 
   // Vérification sécurité
   if (currentUsername !== 'phantomhex') {
@@ -121,9 +214,9 @@ export default function AdminPanel() {
     fetchPlayers();
   }, []);
 
-  // Charger les stats quand on passe sur l'onglet stats
+  // Charger les stats quand on passe sur l'onglet stats ou config
   useEffect(() => {
-    if (activeTab === 'stats') {
+    if (activeTab === 'stats' || activeTab === 'config') {
       fetchStats();
       fetchConfig();
     }
@@ -131,7 +224,6 @@ export default function AdminPanel() {
 
   const fetchPlayers = async () => {
     try {
-      // ✅ AJOUT user_id dans l'URL
       const res = await fetch(apiUrl(`/admin/players?user_id=${userId}`), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -211,7 +303,7 @@ export default function AdminPanel() {
           description: 'Les paramètres ont été modifiés avec succès'
         });
         fetchConfig();
-        fetchStats(); // Rafraîchir les stats pour voir le nouveau SPEED_FACTOR
+        fetchStats();
       } else {
         toast.error('Erreur lors de la sauvegarde');
       }
@@ -226,7 +318,6 @@ export default function AdminPanel() {
   const fetchPlanetData = async (planetId: string) => {
     setLoading(true);
     try {
-      // ✅ AJOUT user_id dans l'URL
       const res = await fetch(apiUrl(`/admin/planet/${planetId}?user_id=${userId}`), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -251,19 +342,18 @@ export default function AdminPanel() {
 
   const handleSaveChanges = async () => {
     if (!planetData) return;
-    
+
     setLoading(true);
     try {
-      // ✅ AJOUT user_id dans l'URL
       const res = await fetch(apiUrl(`/admin/planet/${planetData.id}?user_id=${userId}`), {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(editedData)
       });
-      
+
       if (res.ok) {
         toast.success('✅ Modifications enregistrées', {
           description: 'last_update mis à jour automatiquement'
@@ -280,7 +370,7 @@ export default function AdminPanel() {
     }
   };
 
-  const filteredPlayers = players.filter(p => 
+  const filteredPlayers = players.filter(p =>
     p.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.id.includes(searchTerm)
   );
@@ -288,7 +378,7 @@ export default function AdminPanel() {
   return (
     <div className="space-y-6 pb-20">
       {/* Header */}
-      <Card className="bg-gradient-to-r from-red-950/20 to-orange-950/20 border-red-500/30">
+      <Card className="bg-gradient-to-r from-red-950/20 to-orange-950/20 border-red-500/30 card-depth">
         <CardHeader>
           <CardTitle className="flex items-center gap-3 text-red-400">
             <Database size={24} />
@@ -301,25 +391,37 @@ export default function AdminPanel() {
       </Card>
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Button
           variant={activeTab === 'stats' ? 'default' : 'outline'}
           onClick={() => setActiveTab('stats')}
-          className={`flex items-center gap-2 ${
+          className={`flex items-center gap-2 transition-all duration-300 ${
             activeTab === 'stats'
-              ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              ? 'bg-indigo-600 hover:bg-indigo-500 text-white card-depth shadow-lg'
               : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
           }`}
         >
           <BarChart3 size={16} />
-          Statistiques Serveur
+          Statistiques
+        </Button>
+        <Button
+          variant={activeTab === 'config' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('config')}
+          className={`flex items-center gap-2 transition-all duration-300 ${
+            activeTab === 'config'
+              ? 'bg-purple-600 hover:bg-purple-500 text-white card-depth shadow-lg'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <Settings size={16} />
+          Configuration Jeu
         </Button>
         <Button
           variant={activeTab === 'players' ? 'default' : 'outline'}
           onClick={() => setActiveTab('players')}
-          className={`flex items-center gap-2 ${
+          className={`flex items-center gap-2 transition-all duration-300 ${
             activeTab === 'players'
-              ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              ? 'bg-cyan-600 hover:bg-cyan-500 text-white card-depth shadow-lg'
               : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
           }`}
         >
@@ -329,17 +431,18 @@ export default function AdminPanel() {
         <Button
           variant={activeTab === 'users' ? 'default' : 'outline'}
           onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 ${
+          className={`flex items-center gap-2 transition-all duration-300 ${
             activeTab === 'users'
-              ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              ? 'bg-orange-600 hover:bg-orange-500 text-white card-depth shadow-lg'
               : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
           }`}
         >
-          <Settings size={16} />
+          <Users size={16} />
           Gestion Utilisateurs
         </Button>
       </div>
 
+      {/* TAB STATS */}
       {activeTab === 'stats' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {loadingStats ? (
@@ -348,7 +451,7 @@ export default function AdminPanel() {
             </div>
           ) : stats ? (
             <>
-              <Card className="bg-gradient-to-br from-blue-950/40 to-blue-900/20 border-blue-500/30">
+              <Card className="bg-gradient-to-br from-blue-950/40 to-blue-900/20 border-blue-500/30 card-depth hover:-translate-y-1 transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -360,7 +463,7 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-purple-950/40 to-purple-900/20 border-purple-500/30">
+              <Card className="bg-gradient-to-br from-purple-950/40 to-purple-900/20 border-purple-500/30 card-depth hover:-translate-y-1 transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -372,7 +475,7 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-cyan-950/40 to-cyan-900/20 border-cyan-500/30">
+              <Card className="bg-gradient-to-br from-cyan-950/40 to-cyan-900/20 border-cyan-500/30 card-depth hover:-translate-y-1 transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -384,7 +487,7 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-red-950/40 to-red-900/20 border-red-500/30">
+              <Card className="bg-gradient-to-br from-red-950/40 to-red-900/20 border-red-500/30 card-depth hover:-translate-y-1 transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -396,7 +499,7 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
 
-              <Card className="col-span-full bg-slate-950 border-white/10">
+              <Card className="col-span-full bg-slate-950 border-white/10 card-depth">
                 <CardHeader>
                   <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-400">
                     Ressources Totales
@@ -404,306 +507,110 @@ export default function AdminPanel() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-orange-950/20 border border-orange-500/30 rounded-lg p-4">
+                    <div className="bg-orange-950/20 border border-orange-500/30 rounded-lg p-4 hover:-translate-y-1 transition-all duration-300 card-depth">
                       <p className="text-xs text-orange-400 font-bold mb-1">MÉTAL</p>
                       <p className="text-2xl font-mono font-black text-white">{Math.floor(stats.total_metal).toLocaleString()}</p>
                     </div>
-                    <div className="bg-cyan-950/20 border border-cyan-500/30 rounded-lg p-4">
+                    <div className="bg-cyan-950/20 border border-cyan-500/30 rounded-lg p-4 hover:-translate-y-1 transition-all duration-300 card-depth">
                       <p className="text-xs text-cyan-400 font-bold mb-1">CRISTAL</p>
                       <p className="text-2xl font-mono font-black text-white">{Math.floor(stats.total_crystal).toLocaleString()}</p>
                     </div>
-                    <div className="bg-green-950/20 border border-green-500/30 rounded-lg p-4">
+                    <div className="bg-green-950/20 border border-green-500/30 rounded-lg p-4 hover:-translate-y-1 transition-all duration-300 card-depth">
                       <p className="text-xs text-green-400 font-bold mb-1">DEUTÉRIUM</p>
                       <p className="text-2xl font-mono font-black text-white">{Math.floor(stats.total_deuterium).toLocaleString()}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
+            </>
+          ) : (
+            <div className="col-span-full text-center py-12 text-slate-600">
+              <Database size={48} className="mx-auto mb-4 opacity-20" />
+              <p className="text-sm">Aucune statistique disponible</p>
+            </div>
+          )}
+        </div>
+      )}
 
-              {/* CONFIGURATION SERVEUR - NOUVEAU DESIGN */}
-              <Card className="col-span-full bg-gradient-to-br from-slate-950 to-indigo-950/20 border-indigo-500/30 overflow-hidden">
-                <CardHeader className="border-b border-white/5">
-                  <CardTitle className="text-sm font-black uppercase tracking-[0.3em] flex items-center gap-2 text-indigo-300">
-                    <Settings size={18} />
-                    Configuration Serveur (Éditable)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {loadingConfig || !config ? (
-                    <div className="text-center py-12 text-slate-500">
-                      <Settings size={48} className="mx-auto mb-4 opacity-20 animate-spin" />
-                      <p className="text-sm">Chargement de la configuration...</p>
+      {/* TAB CONFIG */}
+      {activeTab === 'config' && (
+        <div className="space-y-6">
+          {loadingConfig || !config ? (
+            <div className="text-center py-12 text-slate-500">
+              <Database size={48} className="mx-auto mb-4 opacity-20 animate-pulse" />
+              <p>Chargement de la configuration...</p>
+            </div>
+          ) : (
+            <>
+              {/* Avertissement */}
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-400 flex items-start gap-3 card-depth">
+                <AlertTriangle size={20} className="shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold mb-1">⚠️ Modifications en Temps Réel</p>
+                  <p className="text-yellow-200/80">Les changements prennent effet immédiatement pour toutes les nouvelles opérations. Les opérations en cours conservent leur configuration initiale.</p>
+                </div>
+              </div>
+
+              {/* Categories */}
+              {CONFIG_CATEGORIES.map((category, idx) => {
+                const Icon = category.icon;
+                return (
+                  <Card
+                    key={category.id}
+                    className={`bg-gradient-to-br from-${category.color}-950/30 to-${category.color}-900/10 border-${category.color}-500/30 card-depth animate-slide-up overflow-hidden relative`}
+                    style={{ animationDelay: `${idx * 100}ms` }}
+                  >
+                    {/* Decoration Icon */}
+                    <div className="absolute top-0 right-0 p-6 opacity-5">
+                      <Icon size={120} />
                     </div>
-                  ) : (
-                    <div className="space-y-6">
 
-                      {/* SECTION 1: MULTIPLICATEURS DE VITESSE */}
-                      <Card className="bg-slate-900/40 border-indigo-500/30">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-xs font-black uppercase tracking-wider text-indigo-400 flex items-center gap-2">
-                            <Zap size={14} />
-                            Multiplicateurs de Vitesse
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <ConfigInput
-                              label="Speed Factor"
-                              configKey="speed_factor"
-                              value={editedConfig['speed_factor'] ?? config['speed_factor'] ?? '500.0'}
-                              onChange={(v) => setEditedConfig({...editedConfig, speed_factor: v})}
-                              color="indigo"
-                              description="Multiplicateur vitesse général"
-                            />
-                            <ConfigInput
-                              label="Construction Speed"
-                              configKey="construction_speed_multiplier"
-                              value={editedConfig['construction_speed_multiplier'] ?? config['construction_speed_multiplier'] ?? '1.0'}
-                              onChange={(v) => setEditedConfig({...editedConfig, construction_speed_multiplier: v})}
-                              color="purple"
-                              description="Vitesse construction bâtiments"
-                            />
-                            <ConfigInput
-                              label="Mining Speed"
-                              configKey="mining_speed_multiplier"
-                              value={editedConfig['mining_speed_multiplier'] ?? config['mining_speed_multiplier'] ?? '1.0'}
-                              onChange={(v) => setEditedConfig({...editedConfig, mining_speed_multiplier: v})}
-                              color="green"
-                              description="Vitesse production ressources"
-                            />
-                          </div>
-                        </CardContent>
-                      </Card>
+                    <CardHeader className="relative z-10">
+                      <CardTitle className={`flex items-center gap-3 text-${category.color}-400`}>
+                        <Icon size={20} />
+                        <span className="text-sm font-black uppercase tracking-wider">{category.title}</span>
+                        <span className="ml-auto text-xs text-slate-500 font-normal">{category.configs.length} paramètres</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {category.configs.map((item) => {
+                          const currentValue = config[item.key] || item.defaultValue;
+                          const editedValue = editedConfig[item.key] ?? currentValue;
+                          const hasChanged = editedValue !== currentValue;
 
-                      {/* SECTION 2: COÛTS DES VAISSEAUX */}
-                      <Card className="bg-slate-900/40 border-cyan-500/30">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-xs font-black uppercase tracking-wider text-cyan-400 flex items-center gap-2">
-                            <Rocket size={14} />
-                            Coûts des Vaisseaux
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            {[
-                              { ship: 'light_hunter', label: 'Chasseur Léger' },
-                              { ship: 'cruiser', label: 'Croiseur' },
-                              { ship: 'transporter', label: 'Transporteur' },
-                              { ship: 'recycler', label: 'Recycleur' },
-                              { ship: 'spy_probe', label: 'Sonde Espionnage' },
-                              { ship: 'colony_ship', label: 'Vaisseau de Colonisation' }
-                            ].map(({ ship, label }) => (
-                              <div key={ship} className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
-                                <h4 className="text-xs font-bold text-cyan-300 mb-3">{label}</h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                  <ConfigInput
-                                    label="Métal"
-                                    configKey={`ship_${ship}_metal`}
-                                    value={editedConfig[`ship_${ship}_metal`] ?? config[`ship_${ship}_metal`] ?? '0'}
-                                    onChange={(v) => setEditedConfig({...editedConfig, [`ship_${ship}_metal`]: v})}
-                                    color="orange"
-                                    compact
-                                  />
-                                  <ConfigInput
-                                    label="Cristal"
-                                    configKey={`ship_${ship}_crystal`}
-                                    value={editedConfig[`ship_${ship}_crystal`] ?? config[`ship_${ship}_crystal`] ?? '0'}
-                                    onChange={(v) => setEditedConfig({...editedConfig, [`ship_${ship}_crystal`]: v})}
-                                    color="cyan"
-                                    compact
-                                  />
+                          return (
+                            <div
+                              key={item.key}
+                              className={`bg-black/30 border rounded-lg p-4 transition-all duration-300 ${
+                                hasChanged
+                                  ? `border-${category.color}-500/50 shadow-lg shadow-${category.color}-500/20`
+                                  : 'border-white/10 hover:border-white/20'
+                              }`}
+                            >
+                              <label className={`text-xs font-bold mb-1 block ${
+                                hasChanged ? `text-${category.color}-300` : 'text-slate-400'
+                              }`}>
+                                {item.label}
+                              </label>
+                              <Input
+                                type="number"
+                                step="0.1"
+                                value={editedValue}
+                                onChange={(e) => setEditedConfig({...editedConfig, [item.key]: e.target.value})}
+                                className={`bg-black/40 text-white font-mono text-lg transition-all ${
+                                  hasChanged
+                                    ? `border-${category.color}-500/50`
+                                    : 'border-white/10'
+                                }`}
+                              />
+                              <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">{item.description}</p>
+                              {hasChanged && (
+                                <div className={`mt-2 text-[10px] text-${category.color}-400 flex items-center gap-1`}>
+                                  <Edit size={10} />
+                                  <span>Modifié: {currentValue} → {editedValue}</span>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* SECTION 3: COÛTS DES DÉFENSES */}
-                      <Card className="bg-slate-900/40 border-red-500/30">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-xs font-black uppercase tracking-wider text-red-400 flex items-center gap-2">
-                            <Shield size={14} />
-                            Coûts des Défenses
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            {[
-                              { defense: 'missile_launcher', label: 'Lanceur de Missiles' },
-                              { defense: 'plasma_turret', label: 'Tourelle Plasma' }
-                            ].map(({ defense, label }) => (
-                              <div key={defense} className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
-                                <h4 className="text-xs font-bold text-red-300 mb-3">{label}</h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                  <ConfigInput
-                                    label="Métal"
-                                    configKey={`defense_${defense}_metal`}
-                                    value={editedConfig[`defense_${defense}_metal`] ?? config[`defense_${defense}_metal`] ?? '0'}
-                                    onChange={(v) => setEditedConfig({...editedConfig, [`defense_${defense}_metal`]: v})}
-                                    color="orange"
-                                    compact
-                                  />
-                                  <ConfigInput
-                                    label="Cristal"
-                                    configKey={`defense_${defense}_crystal`}
-                                    value={editedConfig[`defense_${defense}_crystal`] ?? config[`defense_${defense}_crystal`] ?? '0'}
-                                    onChange={(v) => setEditedConfig({...editedConfig, [`defense_${defense}_crystal`]: v})}
-                                    color="cyan"
-                                    compact
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* SECTION 4: FACTEURS DE PRODUCTION */}
-                      <Card className="bg-slate-900/40 border-green-500/30">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-xs font-black uppercase tracking-wider text-green-400 flex items-center gap-2">
-                            <TrendingUp size={14} />
-                            Facteurs de Production
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
-                              <h4 className="text-xs font-bold text-green-300 mb-3">Production de Base</h4>
-                              <div className="grid grid-cols-3 gap-3">
-                                <ConfigInput
-                                  label="Métal Base"
-                                  configKey="production_metal_base"
-                                  value={editedConfig['production_metal_base'] ?? config['production_metal_base'] ?? '30.0'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, production_metal_base: v})}
-                                  color="orange"
-                                  compact
-                                />
-                                <ConfigInput
-                                  label="Cristal Base"
-                                  configKey="production_crystal_base"
-                                  value={editedConfig['production_crystal_base'] ?? config['production_crystal_base'] ?? '20.0'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, production_crystal_base: v})}
-                                  color="cyan"
-                                  compact
-                                />
-                                <ConfigInput
-                                  label="Deutérium Base"
-                                  configKey="production_deuterium_base"
-                                  value={editedConfig['production_deuterium_base'] ?? config['production_deuterium_base'] ?? '10.0'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, production_deuterium_base: v})}
-                                  color="green"
-                                  compact
-                                />
-                              </div>
-                            </div>
-                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
-                              <h4 className="text-xs font-bold text-green-300 mb-3">Facteurs de Croissance</h4>
-                              <div className="grid grid-cols-3 gap-3">
-                                <ConfigInput
-                                  label="Croissance Métal"
-                                  configKey="production_metal_growth"
-                                  value={editedConfig['production_metal_growth'] ?? config['production_metal_growth'] ?? '1.1'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, production_metal_growth: v})}
-                                  color="orange"
-                                  compact
-                                  step="0.01"
-                                />
-                                <ConfigInput
-                                  label="Croissance Cristal"
-                                  configKey="production_crystal_growth"
-                                  value={editedConfig['production_crystal_growth'] ?? config['production_crystal_growth'] ?? '1.1'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, production_crystal_growth: v})}
-                                  color="cyan"
-                                  compact
-                                  step="0.01"
-                                />
-                                <ConfigInput
-                                  label="Croissance Deutérium"
-                                  configKey="production_deuterium_growth"
-                                  value={editedConfig['production_deuterium_growth'] ?? config['production_deuterium_growth'] ?? '1.05'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, production_deuterium_growth: v})}
-                                  color="green"
-                                  compact
-                                  step="0.01"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* SECTION 5: FACTEURS ÉNERGÉTIQUES */}
-                      <Card className="bg-slate-900/40 border-yellow-500/30">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-xs font-black uppercase tracking-wider text-yellow-400 flex items-center gap-2">
-                            <Zap size={14} />
-                            Facteurs Énergétiques
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
-                              <h4 className="text-xs font-bold text-yellow-300 mb-3">Centrale Solaire</h4>
-                              <div className="grid grid-cols-3 gap-3">
-                                <ConfigInput
-                                  label="Production Base"
-                                  configKey="energy_solar_base"
-                                  value={editedConfig['energy_solar_base'] ?? config['energy_solar_base'] ?? '60.0'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, energy_solar_base: v})}
-                                  color="yellow"
-                                  compact
-                                />
-                                <ConfigInput
-                                  label="Croissance"
-                                  configKey="energy_solar_growth"
-                                  value={editedConfig['energy_solar_growth'] ?? config['energy_solar_growth'] ?? '1.1'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, energy_solar_growth: v})}
-                                  color="yellow"
-                                  compact
-                                  step="0.01"
-                                />
-                                <ConfigInput
-                                  label="Bonus Tech (%)"
-                                  configKey="energy_tech_bonus"
-                                  value={editedConfig['energy_tech_bonus'] ?? config['energy_tech_bonus'] ?? '0.10'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, energy_tech_bonus: v})}
-                                  color="yellow"
-                                  compact
-                                  step="0.01"
-                                />
-                              </div>
-                            </div>
-                            <div className="bg-slate-950/50 border border-white/5 rounded-lg p-4">
-                              <h4 className="text-xs font-bold text-yellow-300 mb-3">Consommation des Mines</h4>
-                              <div className="grid grid-cols-3 gap-3">
-                                <ConfigInput
-                                  label="Consommation Base"
-                                  configKey="energy_mine_consumption_base"
-                                  value={editedConfig['energy_mine_consumption_base'] ?? config['energy_mine_consumption_base'] ?? '10.0'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, energy_mine_consumption_base: v})}
-                                  color="orange"
-                                  compact
-                                />
-                                <ConfigInput
-                                  label="Croissance Conso."
-                                  configKey="energy_mine_consumption_growth"
-                                  value={editedConfig['energy_mine_consumption_growth'] ?? config['energy_mine_consumption_growth'] ?? '1.1'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, energy_mine_consumption_growth: v})}
-                                  color="orange"
-                                  compact
-                                  step="0.01"
-                                />
-                                <ConfigInput
-                                  label="Extra Deutérium"
-                                  configKey="energy_deuterium_extra_consumption"
-                                  value={editedConfig['energy_deuterium_extra_consumption'] ?? config['energy_deuterium_extra_consumption'] ?? '20.0'}
-                                  onChange={(v) => setEditedConfig({...editedConfig, energy_deuterium_extra_consumption: v})}
-                                  color="green"
-                                  compact
-                                />
-                              </div>
+                              )}
                             </div>
                           </div>
                         </CardContent>
@@ -1320,32 +1227,40 @@ export default function AdminPanel() {
                           Annuler
                         </Button>
                       </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
 
-                      <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-300 flex items-start gap-3">
-                        <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold mb-1">⚠️ ATTENTION - Modifications en temps réel</p>
-                          <p className="text-yellow-400/80">Les modifications prennent effet immédiatement pour toutes les opérations futures. Les opérations en cours conservent leur vitesse d'origine. Assurez-vous de bien tester les nouvelles valeurs.</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {/* Action Buttons */}
+              <div className="flex gap-3 sticky bottom-4 z-10">
+                <Button
+                  onClick={updateConfig}
+                  disabled={loadingConfig}
+                  className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold uppercase tracking-wider card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                >
+                  <Save size={16} className="mr-2" />
+                  Enregistrer toutes les modifications
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setEditedConfig(config)}
+                  className="border-white/10 bg-white/5 hover:bg-white/10 card-depth"
+                >
+                  <X size={16} className="mr-2" />
+                  Annuler
+                </Button>
+              </div>
             </>
-          ) : (
-            <div className="col-span-full text-center py-12 text-slate-600">
-              <Database size={48} className="mx-auto mb-4 opacity-20" />
-              <p className="text-sm">Aucune statistique disponible</p>
-            </div>
           )}
         </div>
       )}
 
+      {/* TAB PLAYERS (unchanged) */}
       {activeTab === 'players' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Liste des joueurs */}
-        <Card className="lg:col-span-1 bg-slate-950 border-white/10">
+        <Card className="lg:col-span-1 bg-slate-950 border-white/10 card-depth">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-400">
               <Users size={16} /> Joueurs ({players.length})
@@ -1354,7 +1269,7 @@ export default function AdminPanel() {
           <CardContent className="space-y-3">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <Input 
+              <Input
                 placeholder="Rechercher..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -1362,9 +1277,9 @@ export default function AdminPanel() {
               />
             </div>
 
-            <div className="space-y-2 max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
+            <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
               {filteredPlayers.map(player => (
-                <div key={player.id} className="bg-slate-900/50 border border-white/5 rounded-lg overflow-hidden">
+                <div key={player.id} className="bg-slate-900/50 border border-white/5 rounded-lg overflow-hidden hover:-translate-y-1 transition-all duration-300">
                   <div className="p-3 border-b border-white/5">
                     <div className="font-bold text-white text-sm">{player.username}</div>
                     <div className="text-xs text-slate-600 mt-1">{player.total_points.toLocaleString()} pts • {player.planets.length} planète(s)</div>
@@ -1399,7 +1314,7 @@ export default function AdminPanel() {
         </Card>
 
         {/* Panneau d'édition */}
-        <Card className="lg:col-span-2 bg-slate-950 border-white/10">
+        <Card className="lg:col-span-2 bg-slate-950 border-white/10 card-depth">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-400">
@@ -1658,7 +1573,7 @@ export default function AdminPanel() {
                   <Button
                     onClick={handleSaveChanges}
                     disabled={loading}
-                    className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold uppercase tracking-wider"
+                    className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold uppercase tracking-wider card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
                   >
                     <Save size={16} className="mr-2" />
                     Enregistrer les modifications
@@ -1666,7 +1581,7 @@ export default function AdminPanel() {
                   <Button
                     variant="outline"
                     onClick={() => setEditedData(planetData)}
-                    className="border-white/10 bg-white/5 hover:bg-white/10"
+                    className="border-white/10 bg-white/5 hover:bg-white/10 card-depth"
                   >
                     Annuler
                   </Button>
@@ -1678,9 +1593,9 @@ export default function AdminPanel() {
       </div>
       )}
 
-      {/* ONGLET GESTION UTILISATEURS */}
+      {/* ONGLET GESTION UTILISATEURS (unchanged) */}
       {activeTab === 'users' && (
-        <Card className="bg-gradient-to-br from-slate-950 to-indigo-950/20 border-indigo-500/30">
+        <Card className="bg-gradient-to-br from-slate-950 to-indigo-950/20 border-indigo-500/30 card-depth">
           <CardHeader>
             <CardTitle className="flex items-center gap-3 text-indigo-300">
               <Settings size={20} />
@@ -1694,7 +1609,7 @@ export default function AdminPanel() {
                 {players.map((player) => (
                   <div
                     key={player.id}
-                    className="bg-slate-900/40 border border-white/10 rounded-lg p-4 hover:bg-slate-900/60 transition-colors"
+                    className="bg-slate-900/40 border border-white/10 rounded-lg p-4 hover:bg-slate-900/60 transition-all duration-300 hover:-translate-y-1 card-depth"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
@@ -1859,58 +1774,6 @@ export default function AdminPanel() {
             </div>
           </CardContent>
         </Card>
-      )}
-    </div>
-  );
-}
-
-// Composant helper pour les inputs de configuration
-interface ConfigInputProps {
-  label: string;
-  configKey: string;
-  value: string;
-  onChange: (value: string) => void;
-  color: 'indigo' | 'purple' | 'green' | 'cyan' | 'orange' | 'red' | 'yellow';
-  description?: string;
-  compact?: boolean;
-  step?: string;
-}
-
-function ConfigInput({ label, value, onChange, color, description, compact, step = "0.1" }: ConfigInputProps) {
-  const colorClasses = {
-    indigo: 'bg-indigo-950/20 border-indigo-500/30 text-indigo-400',
-    purple: 'bg-purple-950/20 border-purple-500/30 text-purple-400',
-    green: 'bg-green-950/20 border-green-500/30 text-green-400',
-    cyan: 'bg-cyan-950/20 border-cyan-500/30 text-cyan-400',
-    orange: 'bg-orange-950/20 border-orange-500/30 text-orange-400',
-    red: 'bg-red-950/20 border-red-500/30 text-red-400',
-    yellow: 'bg-yellow-950/20 border-yellow-500/30 text-yellow-400',
-  };
-
-  const inputColorClasses = {
-    indigo: 'border-indigo-500/30 focus:border-indigo-500',
-    purple: 'border-purple-500/30 focus:border-purple-500',
-    green: 'border-green-500/30 focus:border-green-500',
-    cyan: 'border-cyan-500/30 focus:border-cyan-500',
-    orange: 'border-orange-500/30 focus:border-orange-500',
-    red: 'border-red-500/30 focus:border-red-500',
-    yellow: 'border-yellow-500/30 focus:border-yellow-500',
-  };
-
-  return (
-    <div className={`${colorClasses[color]} rounded-lg p-${compact ? '3' : '4'}`}>
-      <label className={`text-${compact ? '[10px]' : 'xs'} ${colorClasses[color].split(' ')[2]} font-bold mb-2 block uppercase tracking-wider`}>
-        {label}
-      </label>
-      <Input
-        type="number"
-        step={step}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`bg-black/40 ${inputColorClasses[color]} text-white font-mono ${compact ? 'text-sm' : 'text-lg'} transition-all`}
-      />
-      {description && !compact && (
-        <p className="text-xs text-slate-500 mt-1">{description}</p>
       )}
     </div>
   );
