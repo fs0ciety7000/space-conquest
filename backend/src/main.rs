@@ -637,10 +637,23 @@ async fn resolve_attack_mission(
 // --- GAME HANDLERS ---
 
 async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let speed_factor = state.config.read().unwrap().speed_factor;
-    // Normaliser pour le frontend (500 → 5, 1000 → 10, etc.)
-    let normalized_speed_factor = speed_factor / 100.0;
-    Json(json!({ "speed_factor": normalized_speed_factor }))
+    let config = state.config.read().unwrap().clone();
+
+    // Normaliser speed_factor pour le frontend (500 → 5, 1000 → 10, etc.)
+    let normalized_speed_factor = config.speed_factor / 100.0;
+
+    // Renvoyer toutes les config nécessaires pour les calculs frontend
+    Json(json!({
+        "speed_factor": normalized_speed_factor,
+        "production_metal_base": config.get_config("production_metal_base", 30.0),
+        "production_crystal_base": config.get_config("production_crystal_base", 20.0),
+        "production_deuterium_base": config.get_config("production_deuterium_base", 10.0),
+        "production_metal_growth": config.get_config("production_metal_growth", 1.1),
+        "production_crystal_growth": config.get_config("production_crystal_growth", 1.1),
+        "production_deuterium_growth": config.get_config("production_deuterium_growth", 1.05),
+        "energy_tech_bonus": config.get_config("energy_tech_bonus", 0.01),
+        "mining_speed_multiplier": config.mining_speed
+    }))
 }
 
 async fn get_ranking_handler(

@@ -51,12 +51,28 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
   const [combatLogs, setCombatLogs] = useState<CombatLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<any>({
+    production_metal_base: 30,
+    production_crystal_base: 20,
+    production_deuterium_base: 10,
+    production_metal_growth: 1.1,
+    production_crystal_growth: 1.1,
+    production_deuterium_growth: 1.05,
+    energy_tech_bonus: 0.01
+  });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('token');
+
+        // Récupérer la configuration serveur
+        const configRes = await fetch(apiUrl('/config'));
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          setConfig(configData);
+        }
 
         // Récupérer les slots
         const slotsRes = await fetch(apiUrl(`/planets/${planet.id}/resource-slots`), {
@@ -92,13 +108,13 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
   }, [planet?.id]);
 
   // Calcul de production avec tous les bonus
-  const calculateProduction = (resourceType: 'metal' | 'crystal' | 'deuterium', level: number, baseFactor: number) => {
+  const calculateProduction = (resourceType: 'metal' | 'crystal' | 'deuterium', level: number, baseFactor: number, growthFactor: number) => {
     // Calcul de base
-    let prod = baseFactor * level * Math.pow(1.1, level);
+    let prod = baseFactor * level * Math.pow(growthFactor, level);
 
-    // Bonus technologie énergie (+1% par niveau)
+    // Bonus technologie énergie (configurable via config)
     const techLevel = planet.energy_tech_level || 0;
-    const techBonus = 1.0 + (techLevel * 0.01);
+    const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
     prod *= techBonus;
 
     // Ratio énergétique
@@ -115,7 +131,7 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
 
     return {
       total: Math.floor(prod),
-      base: Math.floor(baseFactor * level * Math.pow(1.1, level) * speedFactor),
+      base: Math.floor(baseFactor * level * Math.pow(growthFactor, level) * speedFactor),
       techBonus: techLevel,
       energyRatio: energyRatio,
       slotsCount: activeSlots.length,
@@ -123,9 +139,9 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
     };
   };
 
-  const prodMetal = calculateProduction('metal', planet.metal_mine_level, 30);
-  const prodCrystal = calculateProduction('crystal', planet.crystal_mine_level, 20);
-  const prodDeut = calculateProduction('deuterium', planet.deuterium_mine_level, 10);
+  const prodMetal = calculateProduction('metal', planet.metal_mine_level, config.production_metal_base, config.production_metal_growth);
+  const prodCrystal = calculateProduction('crystal', planet.crystal_mine_level, config.production_crystal_base, config.production_crystal_growth);
+  const prodDeut = calculateProduction('deuterium', planet.deuterium_mine_level, config.production_deuterium_base, config.production_deuterium_growth);
 
   // Statistiques de combat
   const totalCombats = combatLogs.length;
