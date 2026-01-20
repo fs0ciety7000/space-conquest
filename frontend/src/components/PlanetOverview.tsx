@@ -1,8 +1,8 @@
-import { 
-  Stone, Gem, MapPin, Shield, Rocket, Globe, Scan, 
-  Zap, Hammer, Clock, TrendingUp, AlertTriangle, 
+import {
+  Stone, Gem, MapPin, Shield, Rocket, Globe, Scan,
+  Zap, Hammer, Clock, TrendingUp, AlertTriangle,
   Droplets, Microscope, Warehouse, Activity, ChevronRight, List, XCircle, ShieldCheck, Sword,
-  Radar, Radio, Navigation, Target, Recycle, Satellite, Truck, Ship
+  Radar, Radio, Navigation, Target, Recycle, Satellite, Truck, Ship, Sparkles
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -906,27 +906,42 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </Card>
 
         <div className="md:col-span-3 min-w-0">
-            <Card className="bg-gradient-to-br from-slate-900/80 to-green-950/20 border border-green-500/30 hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
-                <CardHeader className="pb-3">
+            <Card className="bg-gradient-to-br from-slate-950 via-emerald-950/20 to-slate-950 border-2 border-emerald-500/40 relative overflow-hidden hover:-translate-y-1 hover:shadow-[0_0_40px_rgba(16,185,129,0.3)] transition-all duration-500 card-depth animate-slide-up">
+                {/* Effets de fond animés */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 bg-emerald-500 animate-pulse"></div>
+                    <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 bg-cyan-500 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5"></div>
+                    <div className="absolute inset-0 opacity-10">
+                        <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse"></div>
+                        <div className="absolute top-2/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse" style={{ animationDelay: '0.7s' }}></div>
+                    </div>
+                </div>
+
+                <CardHeader className="pb-3 relative z-10 border-b border-emerald-500/20">
                     <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-green-400">
-                            <TrendingUp size={16} /> Production Industrielle
+                        <span className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.2em] text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]">
+                            <div className="relative">
+                                <TrendingUp size={18} className="animate-pulse" />
+                                <TrendingUp size={18} className="absolute inset-0 animate-ping opacity-30" />
+                            </div>
+                            Production Industrielle
                         </span>
                         <div className="flex items-center gap-2">
                             {energyRatio < 100 && (
-                                <span className="text-[10px] text-red-400 bg-red-500/20 px-2 py-1 rounded flex items-center gap-1">
+                                <span className="text-[10px] text-red-400 bg-red-500/20 px-3 py-1.5 rounded-lg border border-red-500/40 flex items-center gap-1.5 font-black shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse">
                                     <AlertTriangle size={10} /> -{100 - energyRatio}%
                                 </span>
                             )}
-                            <span className="text-xs bg-green-500/20 px-2 py-1 rounded text-green-300 font-mono">
+                            <span className="text-xs bg-emerald-500/20 px-3 py-1.5 rounded-lg text-emerald-300 font-mono font-black border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.3)]">
                                 {energyRatio}% efficacité
                             </span>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 relative z-10">
                     {/* Graphique comparatif */}
-                    <div className="bg-black/30 rounded-lg p-3 border border-white/5">
+                    <div className="bg-black/40 rounded-xl p-4 border border-emerald-500/30 shadow-inner backdrop-blur-sm">
                         <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold">Répartition Production /h</div>
                         <div className="space-y-2">
                             {(() => {
@@ -970,9 +985,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     </div>
 
                     {/* Détails par ressource */}
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-3">
                         {/* Métal */}
-                        <div className="bg-gradient-to-b from-orange-950/30 to-slate-900/50 p-3 rounded-lg border border-orange-500/30 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth group/res animate-fade-in">
+                        <div className="bg-gradient-to-b from-orange-950/40 to-slate-900/60 p-3 rounded-xl border-2 border-orange-500/40 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(251,146,60,0.3)] transition-all duration-300 card-depth group/res animate-fade-in relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover/res:opacity-100 transition-opacity"></div>
                             <div className="flex items-center gap-1.5 mb-2">
                                 <Stone size={14} className="text-orange-400" />
                                 <span className="text-orange-300 font-bold text-xs uppercase">Métal</span>
@@ -993,7 +1009,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             )}
                         </div>
                         {/* Cristal */}
-                        <div className="bg-gradient-to-b from-cyan-950/30 to-slate-900/50 p-3 rounded-lg border border-cyan-500/30 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth group/res animate-fade-in">
+                        <div className="bg-gradient-to-b from-cyan-950/40 to-slate-900/60 p-3 rounded-xl border-2 border-cyan-500/40 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(6,182,212,0.3)] transition-all duration-300 card-depth group/res animate-fade-in relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover/res:opacity-100 transition-opacity"></div>
                             <div className="flex items-center gap-1.5 mb-2">
                                 <Gem size={14} className="text-cyan-400" />
                                 <span className="text-cyan-300 font-bold text-xs uppercase">Cristal</span>
@@ -1014,7 +1031,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             )}
                         </div>
                         {/* Deutérium */}
-                        <div className="bg-gradient-to-b from-emerald-950/30 to-slate-900/50 p-3 rounded-lg border border-emerald-500/30 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth group/res animate-fade-in">
+                        <div className="bg-gradient-to-b from-emerald-950/40 to-slate-900/60 p-3 rounded-xl border-2 border-emerald-500/40 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(16,185,129,0.3)] transition-all duration-300 card-depth group/res animate-fade-in relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover/res:opacity-100 transition-opacity"></div>
                             <div className="flex items-center gap-1.5 mb-2">
                                 <Droplets size={14} className="text-emerald-400" />
                                 <span className="text-emerald-300 font-bold text-xs uppercase">Deutérium</span>
@@ -1037,13 +1055,17 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     </div>
 
                     {/* Total journalier */}
-                    <div className="bg-gradient-to-r from-yellow-950/20 to-green-950/20 rounded-lg p-3 border border-yellow-500/20">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Production totale /jour</span>
-                            <div className="flex items-center gap-4 text-xs font-mono font-bold">
-                                <span className="text-orange-400">+{fmt(prodMetal * 24)} M</span>
-                                <span className="text-cyan-400">+{fmt(prodCrystal * 24)} C</span>
-                                <span className="text-emerald-400">+{fmt(prodDeut * 24)} D</span>
+                    <div className="bg-gradient-to-r from-yellow-950/40 to-emerald-950/40 rounded-xl p-4 border-2 border-yellow-500/30 shadow-inner relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 via-emerald-500/5 to-cyan-500/5 animate-gradient"></div>
+                        <div className="flex items-center justify-between relative z-10">
+                            <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black flex items-center gap-2">
+                                <Sparkles size={12} className="text-yellow-400 animate-pulse" />
+                                Production Totale /jour
+                            </span>
+                            <div className="flex items-center gap-4 text-xs font-mono font-black">
+                                <span className="text-orange-400 drop-shadow-[0_0_6px_rgba(251,146,60,0.5)]">+{fmt(prodMetal * 24)} M</span>
+                                <span className="text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]">+{fmt(prodCrystal * 24)} C</span>
+                                <span className="text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.5)]">+{fmt(prodDeut * 24)} D</span>
                             </div>
                         </div>
                     </div>

@@ -59,14 +59,23 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanets
         const data = await res.json();
         // Vérifier si on a reçu des données valides avec tous les champs nécessaires
         if (Array.isArray(data) && data.length > 0 && data[0].metal_amount !== undefined) {
-          setPlanets(data.map((p: Planet) => ({
+          const planetsWithMeta = data.map((p: Planet) => ({
             ...p,
             is_current: p.id === currentPlanetId
-          })));
+          }));
+          // Trier: planète mère (1:1:1) en premier, puis le reste
+          const sortedPlanets = planetsWithMeta.sort((a: Planet, b: Planet) => {
+            const aIsHome = a.galaxy === 1 && a.system === 1 && a.position === 1;
+            const bIsHome = b.galaxy === 1 && b.system === 1 && b.position === 1;
+            if (aIsHome) return -1;
+            if (bIsHome) return 1;
+            return 0;
+          });
+          setPlanets(sortedPlanets);
         } else if (Array.isArray(data) && data.length > 0) {
           // Le backend retourne des données partielles, on doit récupérer les détails complets
           // Pour l'instant, on affiche ce qu'on a
-          setPlanets(data.map((p: any) => ({
+          const planetsWithDefaults = data.map((p: any) => ({
             ...p,
             is_current: p.id === currentPlanetId,
             // Valeurs par défaut si manquantes
@@ -89,7 +98,16 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanets
             missile_launcher_count: p.missile_launcher_count ?? 0,
             plasma_turret_count: p.plasma_turret_count ?? 0,
             energy_tech_level: p.energy_tech_level ?? 0,
-          })));
+          }));
+          // Trier: planète mère (1:1:1) en premier, puis le reste
+          const sortedPlanets = planetsWithDefaults.sort((a: any, b: any) => {
+            const aIsHome = a.galaxy === 1 && a.system === 1 && a.position === 1;
+            const bIsHome = b.galaxy === 1 && b.system === 1 && b.position === 1;
+            if (aIsHome) return -1;
+            if (bIsHome) return 1;
+            return 0;
+          });
+          setPlanets(sortedPlanets);
         } else {
           setPlanets([]);
         }
@@ -225,22 +243,36 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanets
           const totalDefense = getTotalDefense(planet);
           const score = getPlanetScore(planet);
           const isCurrent = planet.id === currentPlanetId;
+          const isHomePlanet = planet.galaxy === 1 && planet.system === 1 && planet.position === 1;
 
           return (
-            <Card 
+            <Card
               key={planet.id}
               className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${
-                isCurrent 
-                  ? 'border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.2)]' 
-                  : 'border-white/10 hover:border-indigo-500/30'
+                isHomePlanet
+                  ? 'border-yellow-500/60 shadow-[0_0_40px_rgba(234,179,8,0.25)] animate-glow-pulse'
+                  : isCurrent
+                    ? 'border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.2)]'
+                    : 'border-white/10 hover:border-indigo-500/30'
               } overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up glass-card cursor-pointer group`}
               style={{ animationDelay: `${index * 100}ms` }}
               onClick={() => setSelectedPlanet(selectedPlanet?.id === planet.id ? null : planet)}
             >
               {/* Effets de fond */}
               <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className={`absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 ${isCurrent ? 'bg-indigo-400 animate-pulse' : 'bg-slate-600'}`}></div>
-                <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 bg-purple-500"></div>
+                <div className={`absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 ${
+                  isHomePlanet
+                    ? 'bg-yellow-400 animate-pulse'
+                    : isCurrent
+                      ? 'bg-indigo-400 animate-pulse'
+                      : 'bg-slate-600'
+                }`}></div>
+                <div className={`absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 ${isHomePlanet ? 'bg-orange-500' : 'bg-purple-500'}`}></div>
+                {isHomePlanet && (
+                  <div className="absolute top-4 right-4 opacity-10">
+                    <Crown size={80} className="text-yellow-400" />
+                  </div>
+                )}
               </div>
 
               <CardHeader className="pb-2 relative z-10">
@@ -257,12 +289,18 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanets
                       )}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-lg font-black text-white uppercase tracking-wider">{planet.name}</h3>
+                        {/* Badge planète mère */}
+                        {isHomePlanet && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-500/20 border border-yellow-500/50 rounded-full text-[8px] font-black uppercase text-yellow-300 shadow-[0_0_10px_rgba(234,179,8,0.3)] animate-pulse">
+                            <Crown size={10} className="drop-shadow-[0_0_4px_rgba(234,179,8,0.8)]" /> Planète Mère
+                          </span>
+                        )}
                         {/* Badge planète actuelle - intégré au titre */}
-                        {isCurrent && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/50 rounded-full text-[8px] font-black uppercase text-indigo-300 animate-glow-pulse">
-                            <Crown size={8} /> Actuelle
+                        {isCurrent && !isHomePlanet && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/50 rounded-full text-[8px] font-black uppercase text-indigo-300">
+                            <Star size={8} /> Actuelle
                           </span>
                         )}
                       </div>

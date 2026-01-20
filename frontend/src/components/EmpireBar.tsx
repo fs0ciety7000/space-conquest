@@ -13,7 +13,8 @@ import {
   Menu,
   Search,
   Wifi,
-  WifiOff
+  WifiOff,
+  Crown
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -283,25 +284,44 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                          </div>
                        )}
                        {grouped[galaxyNum]
-                         .sort((a, b) => a.system - b.system || a.position - b.position)
-                         .map((p) => (
-                           <DropdownMenuItem
-                             key={p.id}
-                             onClick={() => {
-                               onSwitchPlanet(p.id);
-                               setSearchQuery("");
-                             }}
-                             className={`flex justify-between items-center py-2 px-4 cursor-pointer focus:bg-white/10 focus:text-white transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg animate-fade-in ${
-                               p.is_current ? 'bg-indigo-600/20 text-indigo-300 border-l-2 border-indigo-400 animate-glow-pulse' : 'text-slate-300 hover:bg-white/5'
-                             }`}
-                           >
-                             <div className="flex items-center gap-2 flex-1 min-w-0">
-                               <MapPin size={14} className={p.is_current ? "text-indigo-400 shrink-0" : "text-slate-500 shrink-0"} />
-                               <span className="font-bold text-sm truncate">{p.name}</span>
-                             </div>
-                             <span className="font-mono text-xs opacity-60 ml-2 shrink-0">[{p.galaxy}:{p.system}:{p.position}]</span>
-                           </DropdownMenuItem>
-                         ))}
+                         .sort((a, b) => {
+                           // Planète mère (1:1:1) toujours en premier
+                           const aIsHome = a.galaxy === 1 && a.system === 1 && a.position === 1;
+                           const bIsHome = b.galaxy === 1 && b.system === 1 && b.position === 1;
+                           if (aIsHome) return -1;
+                           if (bIsHome) return 1;
+                           // Sinon tri par système puis position
+                           return a.system - b.system || a.position - b.position;
+                         })
+                         .map((p) => {
+                           const isHomePlanet = p.galaxy === 1 && p.system === 1 && p.position === 1;
+                           return (
+                             <DropdownMenuItem
+                               key={p.id}
+                               onClick={() => {
+                                 onSwitchPlanet(p.id);
+                                 setSearchQuery("");
+                               }}
+                               className={`flex justify-between items-center py-2 px-4 cursor-pointer focus:bg-white/10 focus:text-white transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg animate-fade-in ${
+                                 isHomePlanet
+                                   ? 'bg-yellow-600/20 text-yellow-300 border-l-2 border-yellow-400 hover:bg-yellow-600/30'
+                                   : p.is_current
+                                     ? 'bg-indigo-600/20 text-indigo-300 border-l-2 border-indigo-400 animate-glow-pulse'
+                                     : 'text-slate-300 hover:bg-white/5'
+                               }`}
+                             >
+                               <div className="flex items-center gap-2 flex-1 min-w-0">
+                                 {isHomePlanet ? (
+                                   <Crown size={14} className="text-yellow-400 shrink-0 drop-shadow-[0_0_4px_rgba(234,179,8,0.8)] animate-pulse" />
+                                 ) : (
+                                   <MapPin size={14} className={p.is_current ? "text-indigo-400 shrink-0" : "text-slate-500 shrink-0"} />
+                                 )}
+                                 <span className="font-bold text-sm truncate">{p.name}</span>
+                               </div>
+                               <span className="font-mono text-xs opacity-60 ml-2 shrink-0">[{p.galaxy}:{p.system}:{p.position}]</span>
+                             </DropdownMenuItem>
+                           );
+                         })}
                      </div>
                    ));
                  })()

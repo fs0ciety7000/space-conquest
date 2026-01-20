@@ -268,7 +268,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
           break;
 
         case 'connected':
-          console.log('✅ WebSocket connecté à la planète:', data.payload?.planet_id);
+          // console.log('✅ WebSocket connecté à la planète:', data.payload?.planet_id);
           break;
 
         case 'pong':
@@ -280,7 +280,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
           break;
 
         default:
-          console.log('Unknown WebSocket event:', data);
+          // console.log('Unknown WebSocket event:', data);
       }
     } catch (e) {
       console.error('Error parsing WebSocket message:', e);
@@ -298,14 +298,14 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
 
     setStatus('connecting');
     const wsUrl = getWsUrl();
-    console.log('🔌 Connexion WebSocket:', wsUrl);
+    // console.log('🔌 Connexion WebSocket:', wsUrl);
 
     try {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('✅ WebSocket connecté');
+        // console.log('✅ WebSocket connecté');
         setStatus('connected');
         reconnectAttemptsRef.current = 0;
       };
@@ -318,14 +318,14 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
       };
 
       ws.onclose = (event) => {
-        console.log('🔌 WebSocket fermé:', event.code, event.reason);
+        // console.log('🔌 WebSocket fermé:', event.code, event.reason);
         setStatus('disconnected');
         wsRef.current = null;
 
         // Reconnexion automatique si pas fermé volontairement
         if (event.code !== 1000 && enabled && reconnectAttemptsRef.current < maxReconnectAttempts) {
           const delay = baseReconnectDelay * Math.pow(2, reconnectAttemptsRef.current);
-          console.log(`🔄 Reconnexion dans ${delay}ms (tentative ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
+          // console.log(`🔄 Reconnexion dans ${delay}ms (tentative ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttemptsRef.current++;
