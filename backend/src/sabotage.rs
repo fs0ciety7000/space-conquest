@@ -103,6 +103,12 @@ pub async fn attempt_sabotage(
         }))).into_response();
     }
 
+    // Récupérer le nom d'utilisateur de l'attaquant pour les notifications
+    let attacker_user = match User::find_by_id(user_id).one(&state.db).await {
+        Ok(Some(u)) => u,
+        _ => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Utilisateur non trouvé"}))).into_response(),
+    };
+
     // Calculer la probabilité de détection
     // Base: 30%, -5% par niveau de différence (minimum 5%)
     let detection_chance = (30.0_f64 - (tech_difference as f64 * 5.0)).max(5.0_f64);
@@ -116,7 +122,25 @@ pub async fn attempt_sabotage(
             eprintln!("⚠️ Erreur lors de l'attribution du Casus Belli: {:?}", e);
         }
 
-        // TODO: Envoyer notification à la victime via WebSocket ou messaging system
+        // Notifier via WebSocket: sabotage détecté + casus belli accordé
+        if let Some(ref ws) = state.ws {
+            // 1. Notifier la victime que son système de défense a détecté un sabotage
+            crate::websocket::notify_sabotage_detected(
+                ws,
+                target_planet_id,
+                &attacker_user.username, // Nom de l'attaquant révélé car détecté
+                &target_planet.name,
+                &payload.action_type,
+            );
+
+            // 2. Notifier la victime qu'elle a obtenu un Casus Belli
+            crate::websocket::notify_casus_belli_granted(
+                ws,
+                target_planet.owner_id,
+                &attacker_user.username,
+                &reason,
+            ).await;
+        }
 
         return (StatusCode::OK, Json(SabotageResponse {
             success: false,
@@ -506,5 +530,73 @@ pub async fn get_casus_belli_handler(
 
     (StatusCode::OK, Json(json!({
         "casus_belli": casus_belli_with_info
+    }))).into_response()
+}
+
+/// Endpoint: Récupérer tous les sabotages subis (sur mes planètes)
+/// GET /sabotage/suffered
+pub async fn get_sabotages_suffered_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    // Vérifier l'authentification
+    let user_id = match extract_user_id_from_headers(&headers) {
+        Ok(id) => id,
+        Err(status) => return (status, Json(json!({"error": "Non authentifié"}))).into_response(),
+    };
+
+    // Récupérer toutes mes planètes
+    let my_planets = match Planet::find()
+        .filter(planet::Column::OwnerId.eq(user_id))
+        .all(&state.db)
+        .await
+    {
+        Ok(planets) => planets,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+    };
+
+    let planet_ids: Vec<String> = my_planets.iter().map(|p| p.id.clone()).collect();
+
+    // Récupérer tous les sabotages actifs et expirés sur mes planètes (historique complet)
+    let sabotages = match SabotageEffect::find()
+        .filter(sabotage_effect::Column::TargetPlanetId.is_in(planet_ids.clone()))
+        .order_by_desc(sabotage_effect::Column::CreatedAt)
+        .all(&state.db)
+        .await
+    {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+    };
+
+    // Pour chaque sabotage, récupérer les informations de l'attaquant et de la planète
+    use crate::entities::prelude::User;
+    let mut sabotages_with_info = Vec::new();
+
+    for sabotage in sabotages {
+        let planet = my_planets.iter().find(|p| p.id == sabotage.target_planet_id);
+        let attacker = match User::find_by_id(sabotage.attacker_user_id).one(&state.db).await {
+            Ok(Some(u)) => u,
+            _ => continue, // Utilisateur supprimé, skip
+        };
+
+        let now = Utc::now().naive_utc();
+        let is_active = sabotage.expires_at > now;
+
+        sabotages_with_info.push(json!({
+            "id": sabotage.id,
+            "attacker_user_id": sabotage.attacker_user_id,
+            "attacker_username": attacker.username,
+            "target_planet_id": sabotage.target_planet_id,
+            "target_planet_name": planet.map(|p| p.name.as_str()).unwrap_or("Planète inconnue"),
+            "effect_type": sabotage.effect_type,
+            "created_at": sabotage.created_at,
+            "expires_at": sabotage.expires_at,
+            "was_detected": sabotage.was_detected,
+            "is_active": is_active,
+        }));
+    }
+
+    (StatusCode::OK, Json(json!({
+        "sabotages": sabotages_with_info
     }))).into_response()
 }

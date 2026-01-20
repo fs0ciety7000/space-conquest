@@ -113,64 +113,81 @@ export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }
                 ) : null}
             </Section>
 
-            {/* 4. ACTIONS DE SABOTAGE (si espionnage réussi) */}
-            {report.success && report.tech_difference >= 1 && onSabotage && (
+            {/* 4. ACTIONS DE SABOTAGE */}
+            {report.success && onSabotage && (
                 <>
                     <Separator className="bg-white/5" />
-                    <Section title="Opérations Clandestines" icon={Zap} isLocked={false} delay={4}>
-                        <div className="space-y-3">
-                            {/* Avertissement */}
-                            <div className="bg-yellow-950/20 border border-yellow-500/30 rounded-lg p-3 flex items-start gap-3">
-                                <AlertTriangle size={20} className="text-yellow-400 shrink-0 mt-0.5" />
+                    {report.tech_difference >= 1 ? (
+                        <Section title="Opérations Clandestines" icon={Zap} isLocked={false} delay={4}>
+                            <div className="space-y-3">
+                                {/* Avertissement */}
+                                <div className="bg-yellow-950/20 border border-yellow-500/30 rounded-lg p-3 flex items-start gap-3">
+                                    <AlertTriangle size={20} className="text-yellow-400 shrink-0 mt-0.5" />
+                                    <div>
+                                        <div className="text-xs font-bold text-yellow-300 mb-1">Risques Opérationnels</div>
+                                        <div className="text-[10px] text-yellow-200/70 leading-relaxed">
+                                            Si détecté: sonde détruite + Casus Belli (droit d'attaque sans pénalité)
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Option 1: Désactiver mine */}
+                                <button
+                                    onClick={() => onSabotage('disable_mine')}
+                                    className="w-full bg-orange-950/30 border border-orange-500/30 rounded-lg p-3 hover:bg-orange-950/50 transition-all duration-300 group card-depth hover:-translate-y-1 hover:shadow-lg"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <TrendingDown size={20} className="text-orange-400 shrink-0 group-hover:animate-bounce" />
+                                        <div className="text-left flex-1">
+                                            <div className="text-xs font-bold text-orange-300 mb-1">Saboter Infrastructure</div>
+                                            <div className="text-[10px] text-orange-200/70 leading-relaxed">
+                                                Désactive temporairement une mine (-50% prod pendant 1h)
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-2 text-[9px] text-orange-400/80">
+                                                <Clock size={10} />
+                                                <span>Durée: 1 heure</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </button>
+
+                                {/* Option 2: Voler tech */}
+                                <button
+                                    onClick={() => onSabotage('steal_tech')}
+                                    className="w-full bg-purple-950/30 border border-purple-500/30 rounded-lg p-3 hover:bg-purple-950/50 transition-all duration-300 group card-depth hover:-translate-y-1 hover:shadow-lg"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <Eye size={20} className="text-purple-400 shrink-0 group-hover:animate-pulse" />
+                                        <div className="text-left flex-1">
+                                            <div className="text-xs font-bold text-purple-300 mb-1">Espionnage Industriel</div>
+                                            <div className="text-[10px] text-purple-200/70 leading-relaxed">
+                                                Vole des données techniques (-20% temps recherche suivante)
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-2 text-[9px] text-purple-400/80">
+                                                <Skull size={10} />
+                                                <span>Risque: Élevé</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </button>
+                            </div>
+                        </Section>
+                    ) : (
+                        <Section title="Opérations Clandestines" icon={Zap} isLocked={true} delay={4}>
+                            <div className="bg-red-950/20 border border-red-500/30 rounded-lg p-3 flex items-start gap-3">
+                                <Lock size={20} className="text-red-400 shrink-0 mt-0.5" />
                                 <div>
-                                    <div className="text-xs font-bold text-yellow-300 mb-1">Risques Opérationnels</div>
-                                    <div className="text-[10px] text-yellow-200/70 leading-relaxed">
-                                        Si détecté: sonde détruite + Casus Belli (droit d'attaque sans pénalité)
+                                    <div className="text-xs font-bold text-red-300 mb-1">Avantage Technologique Insuffisant</div>
+                                    <div className="text-[10px] text-red-200/70 leading-relaxed">
+                                        Votre niveau d'espionnage doit être supérieur d'au moins <span className="font-bold text-red-300">1 niveau</span> à la cible pour effectuer des sabotages.
+                                    </div>
+                                    <div className="mt-2 text-[10px] text-slate-400">
+                                        Delta Tech actuel: <span className={report.tech_difference >= 0 ? "text-amber-400" : "text-red-400"}>{report.tech_difference}</span> (minimum requis: +1)
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Option 1: Désactiver mine */}
-                            <button
-                                onClick={() => onSabotage('disable_mine')}
-                                className="w-full bg-orange-950/30 border border-orange-500/30 rounded-lg p-3 hover:bg-orange-950/50 transition-all duration-300 group card-depth hover:-translate-y-1 hover:shadow-lg"
-                            >
-                                <div className="flex items-start gap-3">
-                                    <TrendingDown size={20} className="text-orange-400 shrink-0 group-hover:animate-bounce" />
-                                    <div className="text-left flex-1">
-                                        <div className="text-xs font-bold text-orange-300 mb-1">Saboter Infrastructure</div>
-                                        <div className="text-[10px] text-orange-200/70 leading-relaxed">
-                                            Désactive temporairement une mine (-50% prod pendant 1h)
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-2 text-[9px] text-orange-400/80">
-                                            <Clock size={10} />
-                                            <span>Durée: 1 heure</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </button>
-
-                            {/* Option 2: Voler tech */}
-                            <button
-                                onClick={() => onSabotage('steal_tech')}
-                                className="w-full bg-purple-950/30 border border-purple-500/30 rounded-lg p-3 hover:bg-purple-950/50 transition-all duration-300 group card-depth hover:-translate-y-1 hover:shadow-lg"
-                            >
-                                <div className="flex items-start gap-3">
-                                    <Eye size={20} className="text-purple-400 shrink-0 group-hover:animate-pulse" />
-                                    <div className="text-left flex-1">
-                                        <div className="text-xs font-bold text-purple-300 mb-1">Espionnage Industriel</div>
-                                        <div className="text-[10px] text-purple-200/70 leading-relaxed">
-                                            Vole des données techniques (-20% temps recherche suivante)
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-2 text-[9px] text-purple-400/80">
-                                            <Skull size={10} />
-                                            <span>Risque: Élevé</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </button>
-                        </div>
-                    </Section>
+                        </Section>
+                    )}
                 </>
             )}
         </div>

@@ -27,6 +27,7 @@ import AllianceView from './components/AllianceView';
 import MissionsView from './components/MissionsView';
 import Officers from './components/Officers';
 import { SabotagesDashboard } from './components/SabotagesDashboard';
+import { SabotagesSufferedDashboard } from './components/SabotagesSufferedDashboard';
 import { CasusBelliList } from './components/CasusBelliList';
 import { Sidebar, type MenuItem } from './components/Sidebar';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
@@ -41,7 +42,7 @@ import { Toaster, toast } from "sonner";
 import {
   LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert
 } from "lucide-react";
 
 interface CombatReport {
@@ -76,6 +77,7 @@ export default function App() {
   const [transportTarget, setTransportTarget] = useState<{id: string, name: string, galaxy: number, system: number, position: number} | null>(null);
   const [spyReport, setSpyReport] = useState<any>(null);
   const [showSabotagesDashboard, setShowSabotagesDashboard] = useState(false);
+  const [showSabotagesSufferedDashboard, setShowSabotagesSufferedDashboard] = useState(false);
   const [showCasusBelliList, setShowCasusBelliList] = useState(false);
   const prevPlanetRef = useRef<any>(null);
   const processingReportRef = useRef(false);
@@ -579,6 +581,7 @@ export default function App() {
     { id: 'expedition', label: 'Expéditions', icon: Telescope, category: 'MILITAIRE' },
 
     { id: 'sabotages', label: 'Mes Sabotages', icon: Eye, category: 'ESPIONNAGE', onClick: () => setShowSabotagesDashboard(true) },
+    { id: 'sabotages-suffered', label: 'Sabotages Subis', icon: ShieldAlert, category: 'ESPIONNAGE', onClick: () => setShowSabotagesSufferedDashboard(true) },
     { id: 'casus-belli', label: 'Casus Belli', icon: Swords, category: 'ESPIONNAGE', onClick: () => setShowCasusBelliList(true) },
 
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
@@ -639,6 +642,13 @@ export default function App() {
           <SabotagesDashboard
             token={token}
             onClose={() => setShowSabotagesDashboard(false)}
+          />
+        )}
+
+        {showSabotagesSufferedDashboard && token && (
+          <SabotagesSufferedDashboard
+            token={token}
+            onClose={() => setShowSabotagesSufferedDashboard(false)}
           />
         )}
 

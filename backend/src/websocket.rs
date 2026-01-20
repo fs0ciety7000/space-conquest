@@ -126,6 +126,21 @@ pub enum WsEvent {
         from: String,
     },
 
+    /// Sabotage détecté sur ma planète
+    #[serde(rename = "sabotage_detected")]
+    SabotageDetected {
+        attacker_name: String,
+        planet_name: String,
+        effect_type: String, // "disable_mine" | "steal_tech"
+    },
+
+    /// Casus Belli accordé (droit d'attaque)
+    #[serde(rename = "casus_belli_granted")]
+    CasusBelliGranted {
+        target_name: String,
+        reason: String,
+    },
+
     /// Planète conquise ou perdue
     #[serde(rename = "planet_status")]
     PlanetStatus {
@@ -521,6 +536,23 @@ pub fn notify_spy_alert(state: &WsState, planet_id: Uuid, from: &str) {
     state.broadcast_to_planet(planet_id, WsEvent::SpyAlert {
         from: from.to_string(),
     });
+}
+
+/// Notifie qu'un sabotage a été détecté sur une planète
+pub fn notify_sabotage_detected(state: &WsState, planet_id: Uuid, attacker_name: &str, planet_name: &str, effect_type: &str) {
+    state.broadcast_to_planet(planet_id, WsEvent::SabotageDetected {
+        attacker_name: attacker_name.to_string(),
+        planet_name: planet_name.to_string(),
+        effect_type: effect_type.to_string(),
+    });
+}
+
+/// Notifie qu'un Casus Belli a été accordé à un utilisateur
+pub async fn notify_casus_belli_granted(state: &WsState, user_id: Uuid, target_name: &str, reason: &str) {
+    state.broadcast_to_user(user_id, WsEvent::CasusBelliGranted {
+        target_name: target_name.to_string(),
+        reason: reason.to_string(),
+    }).await;
 }
 
 /// Notifie un changement de statut de planète (conquise/perdue)

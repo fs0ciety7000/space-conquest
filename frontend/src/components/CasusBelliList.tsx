@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Card } from './ui/card';
-import { Swords, Clock, User } from 'lucide-react';
+import { Card, CardContent } from './ui/card';
+import { Swords, Clock, User, Target, AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface CasusBelli {
@@ -62,117 +62,164 @@ export function CasusBelliList({ token, onClose }: CasusBelliListProps) {
     if (hours >= 24) {
       const days = Math.floor(hours / 24);
       const remainingHours = hours % 24;
-      return `${days}j ${remainingHours}h restantes`;
+      return `${days}j ${remainingHours}h`;
     }
     if (hours > 0) {
-      return `${hours}h ${minutes}min restantes`;
+      return `${hours}h ${minutes}min`;
     }
-    return `${minutes}min restantes`;
+    return `${minutes}min`;
   };
 
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-        <Card className="bg-slate-900 border-indigo-500/30 p-6">
-          <p className="text-cyan-400 animate-pulse">Chargement...</p>
+        <Card className="bg-slate-950 border-red-500/30 p-6 card-depth">
+          <p className="text-cyan-400 animate-pulse font-mono text-sm">Chargement...</p>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="bg-slate-900 border-red-500/30 w-full max-w-4xl max-h-[90vh] overflow-auto">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+      <Card className="bg-slate-950 border border-red-500/30 w-full max-w-5xl max-h-[90vh] overflow-hidden card-depth shadow-[0_0_50px_rgba(239,68,68,0.2)] animate-slide-up">
         {/* Header */}
-        <div className="border-b border-red-500/30 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Swords className="w-6 h-6 text-red-500" />
-              <h2 className="text-2xl font-bold text-red-400">Casus Belli - Droits d'Attaque</h2>
+        <div className="relative border-b border-red-500/30 p-6 bg-gradient-to-r from-red-950/50 to-orange-950/30 overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+            <Swords size={120} className="animate-pulse" />
+          </div>
+
+          <div className="relative z-10 flex justify-between items-start">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.3em] text-red-400">Justice Militaire</h3>
+              </div>
+              <h2 className="text-3xl font-black uppercase tracking-wider text-white">Casus Belli</h2>
+              <p className="text-sm text-slate-400 mt-2 font-mono">
+                {casusBelli.length} droit{casusBelli.length !== 1 ? 's' : ''} d'attaque légitime disponible{casusBelli.length !== 1 ? 's' : ''}
+              </p>
             </div>
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-red-400 transition-colors text-2xl font-bold"
+              className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-all duration-300 hover:scale-110 card-depth hover:shadow-lg text-slate-400 hover:text-white"
             >
-              ×
+              <X size={20} />
             </button>
           </div>
-          <p className="text-slate-400 mt-2">
-            Vous avez {casusBelli.length} droit{casusBelli.length !== 1 ? 's' : ''} d'attaque légitime
-          </p>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4">
+        <div className="p-6 max-h-[calc(90vh-280px)] overflow-y-auto custom-scrollbar">
           {casusBelli.length === 0 ? (
-            <div className="text-center py-12">
-              <Swords className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400 text-lg">Aucun Casus Belli actif</p>
-              <p className="text-slate-500 text-sm mt-2">
+            <div className="text-center py-16">
+              <Swords className="w-20 h-20 text-slate-700 mx-auto mb-4 opacity-50" />
+              <p className="text-slate-400 text-lg font-bold uppercase tracking-wider">Aucun Casus Belli actif</p>
+              <p className="text-slate-600 text-sm mt-3 font-mono">
                 Les Casus Belli sont accordés quand vos ennemis sont pris en flagrant délit de sabotage.
               </p>
             </div>
           ) : (
             <>
-              <div className="bg-yellow-950/30 border border-yellow-600/50 rounded-lg p-4 mb-6">
-                <p className="text-yellow-300 text-sm">
-                  ⚔️ <strong>Casus Belli</strong> : Vous pouvez attaquer ces joueurs sans pénalité.
-                  Ces droits expirent après 48h ou après utilisation.
-                </p>
+              {/* Info Banner */}
+              <div className="bg-yellow-950/30 border border-yellow-500/30 rounded-lg p-4 mb-6 flex items-start gap-3">
+                <AlertTriangle size={20} className="text-yellow-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-yellow-300 mb-1 uppercase tracking-wider">Droit de Représailles</p>
+                  <p className="text-[10px] text-yellow-200/80 leading-relaxed">
+                    Vous pouvez attaquer ces joueurs sans pénalité. Ces droits expirent après <span className="font-bold text-yellow-300">48 heures</span> ou après utilisation.
+                  </p>
+                </div>
               </div>
 
-              {casusBelli.map((cb) => (
-                <Card
-                  key={cb.id}
-                  className="p-4 border border-red-500/50 bg-gradient-to-br from-red-950/20 to-orange-950/20 hover:border-red-400/70 transition-colors"
-                >
-                  <div className="space-y-3">
-                    {/* Target */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <User className="w-5 h-5 text-red-400" />
-                        <span className="text-xl font-bold text-white">
-                          {cb.aggressor_username}
-                        </span>
-                        <span className="px-2 py-1 bg-red-600/30 border border-red-500 text-red-300 text-xs rounded uppercase font-bold">
-                          🎯 CIBLE LÉGALE
-                        </span>
-                      </div>
+              {/* Casus Belli Cards */}
+              <div className="space-y-4">
+                {casusBelli.map((cb) => (
+                  <Card
+                    key={cb.id}
+                    className="bg-black/40 border border-red-500/30 overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                  >
+                    <div className="absolute top-0 right-0 p-2 opacity-5">
+                      <Target size={80} />
                     </div>
 
-                    {/* Reason */}
-                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
-                      <p className="text-sm text-slate-300">
-                        <span className="text-orange-400 font-semibold">Raison :</span> {cb.reason}
-                      </p>
-                    </div>
+                    <CardContent className="p-4 relative z-10">
+                      <div className="space-y-4">
+                        {/* Target Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-red-500/20 border border-red-500/30 relative">
+                              <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75"></div>
+                              <User className="w-5 h-5 text-red-400 relative z-10" />
+                            </div>
+                            <div>
+                              <span className="text-xl font-black text-white">
+                                {cb.aggressor_username}
+                              </span>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/30 text-red-300 text-[9px] rounded uppercase font-black tracking-wider">
+                                  🎯 Cible Légale
+                                </span>
+                              </div>
+                            </div>
+                          </div>
 
-                    {/* Time remaining */}
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <Clock className="w-4 h-4" />
-                        <span>{getTimeRemaining(cb.expires_at)}</span>
+                          {/* Time Badge */}
+                          <div className="text-right">
+                            <div className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5">
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                <span className="font-mono text-white font-bold">
+                                  {getTimeRemaining(cb.expires_at)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reason */}
+                        <div className="bg-slate-900/50 rounded-lg p-3 border border-white/5">
+                          <div className="flex items-start gap-2">
+                            <Swords className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-[10px] font-bold text-orange-400 uppercase tracking-wider mb-1">
+                                Motif du Casus Belli
+                              </p>
+                              <p className="text-sm text-slate-300 leading-relaxed">
+                                {cb.reason}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Status Bar */}
+                        <div className="flex items-center justify-between p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                              Attaque autorisée sans pénalité
+                            </span>
+                          </div>
+                          <Swords className="w-4 h-4 text-emerald-400" />
+                        </div>
                       </div>
-                      <div className="text-emerald-400 font-semibold">
-                        ✓ Attaque autorisée
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </>
           )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-red-500/30 p-6 space-y-3">
-          <div className="bg-slate-800/50 rounded-lg p-3 text-sm text-slate-400">
-            💡 <strong>Astuce :</strong> Les Casus Belli vous permettent d'attaquer sans risque de pénalité.
+        <div className="border-t border-red-500/30 p-4 bg-slate-900/50">
+          <div className="bg-slate-800/50 rounded-lg p-3 text-xs text-slate-400 mb-3 border border-white/5">
+            <span className="text-slate-300 font-bold">💡 Astuce :</span> Les Casus Belli vous permettent d'attaquer sans risque de pénalité.
             Utilisez-les stratégiquement avant qu'ils n'expirent !
           </div>
           <button
             onClick={onClose}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 uppercase tracking-widest text-sm card-depth hover:-translate-y-1 hover:shadow-lg"
           >
             Fermer
           </button>
