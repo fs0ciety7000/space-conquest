@@ -736,11 +736,31 @@ async fn get_planet_handler(
             p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
         ));
 
-        // Appliquer les caps de stockage
+        // Appliquer les caps de stockage (SOFT CAP)
+        // Si déjà au-dessus du cap, on arrête la production (garde ressources existantes)
+        // Sinon on produit mais plafonne au cap
         let storage_cap = game_logic::get_storage_capacity(p.resource_storage_level);
-        active.metal_amount = Set(active.metal_amount.clone().unwrap().min(storage_cap));
-        active.crystal_amount = Set(active.crystal_amount.clone().unwrap().min(storage_cap));
-        active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap().min(storage_cap));
+        let new_metal = active.metal_amount.clone().unwrap();
+        let new_crystal = active.crystal_amount.clone().unwrap();
+        let new_deuterium = active.deuterium_amount.clone().unwrap();
+
+        active.metal_amount = Set(if p.metal_amount >= storage_cap {
+            p.metal_amount  // Arrêt production, garde ressources actuelles
+        } else {
+            new_metal.min(storage_cap)  // Production plafonnée au cap
+        });
+
+        active.crystal_amount = Set(if p.crystal_amount >= storage_cap {
+            p.crystal_amount
+        } else {
+            new_crystal.min(storage_cap)
+        });
+
+        active.deuterium_amount = Set(if p.deuterium_amount >= storage_cap {
+            p.deuterium_amount
+        } else {
+            new_deuterium.min(storage_cap)
+        });
 
         active.last_update = Set(now);
     }
