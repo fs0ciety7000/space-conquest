@@ -327,9 +327,8 @@ pub async fn get_server_config_handler(
 
 #[derive(Deserialize)]
 pub struct ConfigUpdate {
-    pub speed_factor: Option<String>,
-    pub construction_speed_multiplier: Option<String>,
-    pub mining_speed_multiplier: Option<String>,
+    #[serde(flatten)]
+    pub configs: HashMap<String, String>,
 }
 
 // PATCH /admin/config - Mettre à jour une ou plusieurs configurations
@@ -338,97 +337,84 @@ pub async fn update_server_config_handler(
     Query(params): Query<HashMap<String, String>>,
     Json(updates): Json<ConfigUpdate>,
 ) -> impl IntoResponse {
+    println!("🚀 [ADMIN CONFIG] Handler called!");
+    println!("🚀 [ADMIN CONFIG] Query params: {:?}", params);
+
     let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    println!("🚀 [ADMIN CONFIG] User ID: {}", user_id_str);
+
     if check_admin(user_id_str, &state).await.is_err() {
+        println!("❌ [ADMIN CONFIG] Access denied for user: {}", user_id_str);
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
 
+    println!("🔧 [ADMIN CONFIG] Received {} config updates", updates.configs.len());
+
     let now = Utc::now().naive_utc();
+    let mut updated_count = 0;
+    let mut not_found_keys = Vec::new();
 
-    // Mettre à jour speed_factor si fourni
-    if let Some(value) = updates.speed_factor {
-        if let Ok(config) = ServerConfig::find()
-            .filter(server_config::Column::ConfigKey.eq("speed_factor"))
+    // Mettre à jour toutes les configurations fournies
+    for (config_key, config_value) in updates.configs.iter() {
+        println!("  📝 Updating '{}' = '{}'", config_key, config_value);
+
+        match ServerConfig::find()
+            .filter(server_config::Column::ConfigKey.eq(config_key))
             .one(&state.db)
             .await
         {
-            if let Some(c) = config {
+            Ok(Some(c)) => {
                 let mut active: server_config::ActiveModel = c.into();
-                active.config_value = Set(value);
+                active.config_value = Set(config_value.clone());
                 active.updated_at = Set(now);
-                let _ = active.update(&state.db).await;
+
+                match active.update(&state.db).await {
+                    Ok(_) => {
+                        println!("    ✅ Successfully updated '{}'", config_key);
+                        updated_count += 1;
+                    }
+                    Err(e) => {
+                        println!("    ❌ Failed to update '{}': {:?}", config_key, e);
+                    }
+                }
+            }
+            Ok(None) => {
+                println!("    ⚠️  Config key '{}' not found in database", config_key);
+                not_found_keys.push(config_key.clone());
+            }
+            Err(e) => {
+                println!("    ❌ Database error for '{}': {:?}", config_key, e);
             }
         }
     }
 
-    // Mettre à jour construction_speed_multiplier si fourni
-    if let Some(value) = updates.construction_speed_multiplier {
-        if let Ok(config) = ServerConfig::find()
-            .filter(server_config::Column::ConfigKey.eq("construction_speed_multiplier"))
-            .one(&state.db)
-            .await
-        {
-            if let Some(c) = config {
-                let mut active: server_config::ActiveModel = c.into();
-                active.config_value = Set(value);
-                active.updated_at = Set(now);
-                let _ = active.update(&state.db).await;
-            }
-        }
-    }
-
-    // Mettre à jour mining_speed_multiplier si fourni
-    if let Some(value) = updates.mining_speed_multiplier {
-        if let Ok(config) = ServerConfig::find()
-            .filter(server_config::Column::ConfigKey.eq("mining_speed_multiplier"))
-            .one(&state.db)
-            .await
-        {
-            if let Some(c) = config {
-                let mut active: server_config::ActiveModel = c.into();
-                active.config_value = Set(value);
-                active.updated_at = Set(now);
-                let _ = active.update(&state.db).await;
-            }
-        }
+    println!("✅ Updated {}/{} configs successfully", updated_count, updates.configs.len());
+    if !not_found_keys.is_empty() {
+        println!("⚠️  Keys not found in DB: {:?}", not_found_keys);
     }
 
     // Recharger le cache de configuration depuis la DB
     let mut new_speed_factor = game_logic::SPEED_FACTOR;
     let mut new_construction_speed = 1.0;
     let mut new_mining_speed = 1.0;
+    let mut all_configs = HashMap::new();
 
-    // Recharger speed_factor
-    if let Ok(Some(config)) = ServerConfig::find()
-        .filter(server_config::Column::ConfigKey.eq("speed_factor"))
-        .one(&state.db)
-        .await
-    {
-        if let Ok(val) = config.config_value.parse::<f64>() {
-            new_speed_factor = val;
-        }
-    }
+    // Recharger toutes les configs depuis la DB
+    if let Ok(configs) = ServerConfig::find().all(&state.db).await {
+        for config in configs {
+            // Parser les valeurs numériques
+            if let Ok(val) = config.config_value.parse::<f64>() {
+                all_configs.insert(config.config_key.clone(), val);
 
-    // Recharger construction_speed_multiplier
-    if let Ok(Some(config)) = ServerConfig::find()
-        .filter(server_config::Column::ConfigKey.eq("construction_speed_multiplier"))
-        .one(&state.db)
-        .await
-    {
-        if let Ok(val) = config.config_value.parse::<f64>() {
-            new_construction_speed = val;
-        }
-    }
-
-    // Recharger mining_speed_multiplier
-    if let Ok(Some(config)) = ServerConfig::find()
-        .filter(server_config::Column::ConfigKey.eq("mining_speed_multiplier"))
-        .one(&state.db)
-        .await
-    {
-        if let Ok(val) = config.config_value.parse::<f64>() {
-            new_mining_speed = val;
+                // Mettre à jour les valeurs du cache
+                match config.config_key.as_str() {
+                    "speed_factor" => new_speed_factor = val,
+                    "construction_speed_multiplier" => new_construction_speed = val,
+                    "mining_speed_multiplier" => new_mining_speed = val,
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -437,11 +423,17 @@ pub async fn update_server_config_handler(
         cache.speed_factor = new_speed_factor;
         cache.construction_speed = new_construction_speed;
         cache.mining_speed = new_mining_speed;
+        cache.configs = all_configs.clone();
+        println!("🔄 Cache reloaded with {} configs", all_configs.len());
+    } else {
+        println!("❌ Failed to acquire write lock on config cache");
     }
 
     Json(json!({
         "success": true,
-        "message": "Configuration mise à jour et rechargée"
+        "message": format!("✅ {} configurations mises à jour", updated_count),
+        "updated_count": updated_count,
+        "not_found": not_found_keys
     })).into_response()
 }
 
