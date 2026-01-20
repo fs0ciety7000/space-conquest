@@ -9,6 +9,7 @@ import ReactFlow, {
   useEdgesState,
   MarkerType,
   ConnectionLineType,
+  MiniMap,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,28 +49,28 @@ interface TechInfo {
 
 // Configuration visuelle des technologies
 const getTechConfig = (tech_key: string) => {
-  const configs: Record<string, { icon: any; color: string; border: string; bg: string; category: string }> = {
+  const configs: Record<string, { icon: any; color: string; hexColor: string; border: string; bg: string; category: string }> = {
     // Base Technologies
-    energy_tech: { icon: Zap, color: 'text-yellow-400', border: 'border-yellow-500/50', bg: 'bg-yellow-950/30', category: 'Base' },
-    laser_tech: { icon: Target, color: 'text-red-400', border: 'border-red-500/50', bg: 'bg-red-950/30', category: 'Base' },
-    espionage_tech: { icon: Eye, color: 'text-emerald-400', border: 'border-emerald-500/50', bg: 'bg-emerald-950/30', category: 'Base' },
-    armour_tech: { icon: Shield, color: 'text-slate-400', border: 'border-slate-500/50', bg: 'bg-slate-950/30', category: 'Base' },
+    energy_tech: { icon: Zap, color: 'text-yellow-400', hexColor: '#facc15', border: 'border-yellow-500/50', bg: 'bg-yellow-950/30', category: 'Base' },
+    laser_tech: { icon: Target, color: 'text-red-400', hexColor: '#f87171', border: 'border-red-500/50', bg: 'bg-red-950/30', category: 'Base' },
+    espionage_tech: { icon: Eye, color: 'text-emerald-400', hexColor: '#34d399', border: 'border-emerald-500/50', bg: 'bg-emerald-950/30', category: 'Base' },
+    armour_tech: { icon: Shield, color: 'text-slate-400', hexColor: '#94a3b8', border: 'border-slate-500/50', bg: 'bg-slate-950/30', category: 'Base' },
 
     // Advanced Technologies
-    ion_tech: { icon: Atom, color: 'text-cyan-400', border: 'border-cyan-500/50', bg: 'bg-cyan-950/30', category: 'Advanced' },
-    plasma_tech: { icon: Zap, color: 'text-pink-400', border: 'border-pink-500/50', bg: 'bg-pink-950/30', category: 'Advanced' },
-    shield_tech: { icon: Shield, color: 'text-blue-400', border: 'border-blue-500/50', bg: 'bg-blue-950/30', category: 'Advanced' },
-    weapons_tech: { icon: Target, color: 'text-orange-400', border: 'border-orange-500/50', bg: 'bg-orange-950/30', category: 'Advanced' },
-    computer_tech: { icon: Cpu, color: 'text-purple-400', border: 'border-purple-500/50', bg: 'bg-purple-950/30', category: 'Advanced' },
+    ion_tech: { icon: Atom, color: 'text-cyan-400', hexColor: '#22d3ee', border: 'border-cyan-500/50', bg: 'bg-cyan-950/30', category: 'Advanced' },
+    plasma_tech: { icon: Zap, color: 'text-pink-400', hexColor: '#f472b6', border: 'border-pink-500/50', bg: 'bg-pink-950/30', category: 'Advanced' },
+    shield_tech: { icon: Shield, color: 'text-blue-400', hexColor: '#60a5fa', border: 'border-blue-500/50', bg: 'bg-blue-950/30', category: 'Advanced' },
+    weapons_tech: { icon: Target, color: 'text-orange-400', hexColor: '#fb923c', border: 'border-orange-500/50', bg: 'bg-orange-950/30', category: 'Advanced' },
+    computer_tech: { icon: Cpu, color: 'text-purple-400', hexColor: '#c084fc', border: 'border-purple-500/50', bg: 'bg-purple-950/30', category: 'Advanced' },
 
     // Propulsion
-    combustion_drive: { icon: Rocket, color: 'text-amber-400', border: 'border-amber-500/50', bg: 'bg-amber-950/30', category: 'Propulsion' },
-    impulse_drive: { icon: Gauge, color: 'text-indigo-400', border: 'border-indigo-500/50', bg: 'bg-indigo-950/30', category: 'Propulsion' },
-    hyperspace_drive: { icon: Orbit, color: 'text-violet-400', border: 'border-violet-500/50', bg: 'bg-violet-950/30', category: 'Propulsion' },
-    astrophysics: { icon: Telescope, color: 'text-teal-400', border: 'border-teal-500/50', bg: 'bg-teal-950/30', category: 'Science' },
+    combustion_drive: { icon: Rocket, color: 'text-amber-400', hexColor: '#fbbf24', border: 'border-amber-500/50', bg: 'bg-amber-950/30', category: 'Propulsion' },
+    impulse_drive: { icon: Gauge, color: 'text-indigo-400', hexColor: '#818cf8', border: 'border-indigo-500/50', bg: 'bg-indigo-950/30', category: 'Propulsion' },
+    hyperspace_drive: { icon: Orbit, color: 'text-violet-400', hexColor: '#a78bfa', border: 'border-violet-500/50', bg: 'bg-violet-950/30', category: 'Propulsion' },
+    astrophysics: { icon: Telescope, color: 'text-teal-400', hexColor: '#2dd4bf', border: 'border-teal-500/50', bg: 'bg-teal-950/30', category: 'Science' },
   };
 
-  return configs[tech_key] || { icon: Microscope, color: 'text-gray-400', border: 'border-gray-500/50', bg: 'bg-gray-950/30', category: 'Other' };
+  return configs[tech_key] || { icon: Microscope, color: 'text-gray-400', hexColor: '#9ca3af', border: 'border-gray-500/50', bg: 'bg-gray-950/30', category: 'Other' };
 };
 
 // Calcul du coût pour le prochain niveau
@@ -364,6 +365,10 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
       tech.requirements.forEach(req => {
         const config = getTechConfig(req.required_tech_key);
 
+        // Color coding: satisfied = tech color, unsatisfied = red
+        const edgeColor = req.met ? config.hexColor : '#ef4444'; // red-500
+        const edgeOpacity = req.met ? 0.9 : 0.6;
+
         edges.push({
           id: `${req.required_tech_key}-${tech.tech_key}`,
           source: req.required_tech_key,
@@ -371,12 +376,27 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
           type: ConnectionLineType.SmoothStep,
           animated: req.met,
           style: {
-            stroke: req.met ? config.color.replace('text-', '#') : '#475569',
-            strokeWidth: req.met ? 2 : 1,
+            stroke: edgeColor,
+            strokeWidth: req.met ? 3 : 2,
+            opacity: edgeOpacity,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: req.met ? config.color.replace('text-', '#') : '#475569',
+            color: edgeColor,
+            width: 20,
+            height: 20,
+          },
+          label: req.met ? '✓' : `Niv. ${req.required_level}`,
+          labelStyle: {
+            fill: edgeColor,
+            fontSize: 10,
+            fontWeight: 700,
+          },
+          labelBgStyle: {
+            fill: '#0f172a',
+            fillOpacity: 0.9,
+            stroke: edgeColor,
+            strokeWidth: 1,
           },
         });
       });
@@ -403,7 +423,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   }
 
   return (
-    <div className="h-[700px] bg-slate-950 rounded-lg border border-white/10 overflow-hidden card-depth">
+    <div className="h-[700px] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 rounded-lg border border-purple-500/20 overflow-hidden card-depth shadow-2xl">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -414,19 +434,24 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
         minZoom={0.3}
         maxZoom={1.2}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-        className="bg-slate-950"
+        className="bg-transparent"
         proOptions={{ hideAttribution: true }}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          color="#334155"
-          className="bg-slate-950"
-        />
+        {/* Removed Background grid for cleaner skill tree look */}
         <Controls
-          className="bg-slate-900 border-white/10"
+          className="bg-slate-900/80 border-purple-500/30 backdrop-blur-sm"
           showInteractive={false}
+        />
+        <MiniMap
+          className="bg-slate-900/80 border border-purple-500/30 rounded-lg backdrop-blur-sm"
+          nodeColor={(node) => {
+            const config = getTechConfig(node.id);
+            return node.data.allRequirementsMet ? config.hexColor : '#475569';
+          }}
+          maskColor="rgba(15, 23, 42, 0.8)"
+          style={{
+            backgroundColor: '#0f172a',
+          }}
         />
       </ReactFlow>
     </div>

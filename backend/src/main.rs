@@ -1211,8 +1211,9 @@ async fn get_planet_handler(
             obj.insert("technologies".into(), json!(tech_levels));
         }
 
-        if let Ok(ship_counts) = tech_tree::get_all_planet_ship_counts(&state.db, updated_model.id).await {
-            obj.insert("ships".into(), json!(ship_counts));
+        // Use detailed ship info for frontend display (includes count, display_name, stats)
+        if let Ok(ship_details) = tech_tree::get_all_planet_ship_details(&state.db, updated_model.id).await {
+            obj.insert("ships".into(), json!(ship_details));
         }
     }
 

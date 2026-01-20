@@ -257,6 +257,37 @@ pub async fn get_all_planet_ship_counts(
     Ok(result)
 }
 
+/// Get all ship counts with detailed info for a planet (for frontend display)
+pub async fn get_all_planet_ship_details(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> Result<HashMap<String, serde_json::Value>, sea_orm::DbErr> {
+    let planet_ships = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await?;
+
+    let mut result = HashMap::new();
+
+    for ps in planet_ships {
+        // Get ship_key and display_name from ship_type_id
+        if let Some(ship_type) = ShipType::find_by_id(ps.ship_type_id).one(db).await? {
+            result.insert(
+                ship_type.ship_key.clone(),
+                serde_json::json!({
+                    "count": ps.count,
+                    "display_name": ship_type.display_name,
+                    "attack": ship_type.attack,
+                    "shield": ship_type.shield,
+                    "hull": ship_type.hull
+                })
+            );
+        }
+    }
+
+    Ok(result)
+}
+
 /// Get all ship types with their requirements for a planet
 pub async fn get_ship_types_for_planet(
     db: &DatabaseConnection,
