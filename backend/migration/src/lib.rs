@@ -43,6 +43,8 @@ mod m20260120_000002_create_sabotage_system;
 mod m20260120_000003_create_casus_belli;
 mod m20260120_000004_populate_server_config;
 mod m20260120_000005_add_game_mechanics_config;
+mod m20260125_000001_expansion_update;
+mod m20260125_000002_expansion_config;
 
 pub struct Migrator;
 
@@ -93,6 +95,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260120_000003_create_casus_belli::Migration),
             Box::new(m20260120_000004_populate_server_config::Migration),
             Box::new(m20260120_000005_add_game_mechanics_config::Migration),
+            Box::new(m20260125_000001_expansion_update::Migration),
+            Box::new(m20260125_000002_expansion_config::Migration),
         ]
     }
 }

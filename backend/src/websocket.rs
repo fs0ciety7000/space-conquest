@@ -424,12 +424,16 @@ async fn calculate_current_resources(
     let energy_ratio_decimal = energy_ratio_percent / 100.0;
 
     // Calculer les ressources actuelles avec le config
+    // Note: plasma_tech_level will be 0 until planet model is updated
+    let plasma_tech_level = 0; // TODO: Get from planet model once migration is applied
+
     let metal = game_logic::calculate_resources_with_slots(
         game_logic::ResourceType::Metal,
         planet.metal_mine_level,
         planet.metal_amount,
         planet.last_update,
         planet.energy_tech_level,
+        plasma_tech_level,
         energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
         config,
@@ -441,6 +445,7 @@ async fn calculate_current_resources(
         planet.crystal_amount,
         planet.last_update,
         planet.energy_tech_level,
+        plasma_tech_level,
         energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
         config,
@@ -452,6 +457,7 @@ async fn calculate_current_resources(
         planet.deuterium_amount,
         planet.last_update,
         planet.energy_tech_level,
+        plasma_tech_level,
         energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
         config,

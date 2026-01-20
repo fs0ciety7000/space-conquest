@@ -374,30 +374,36 @@ async fn resolve_attack_mission(
     
     let mut def_planet = def_planet_raw.clone();
     // Utiliser calculate_resources_with_energy pour prendre en compte le ratio énergétique
+    // Note: plasma_tech_level will be 0 until planet model is updated
+    let plasma_tech_level = 0;
+
     def_planet.metal_amount = game_logic::calculate_resources_with_energy(
-        game_logic::ResourceType::Metal, 
-        def_planet_raw.metal_mine_level, 
-        def_planet_raw.metal_amount, 
-        def_planet_raw.last_update, 
+        game_logic::ResourceType::Metal,
+        def_planet_raw.metal_mine_level,
+        def_planet_raw.metal_amount,
+        def_planet_raw.last_update,
         def_planet_raw.energy_tech_level,
+        plasma_tech_level,
         def_energy_ratio,
         config
     );
     def_planet.crystal_amount = game_logic::calculate_resources_with_energy(
-        game_logic::ResourceType::Crystal, 
-        def_planet_raw.crystal_mine_level, 
-        def_planet_raw.crystal_amount, 
-        def_planet_raw.last_update, 
+        game_logic::ResourceType::Crystal,
+        def_planet_raw.crystal_mine_level,
+        def_planet_raw.crystal_amount,
+        def_planet_raw.last_update,
         def_planet_raw.energy_tech_level,
+        plasma_tech_level,
         def_energy_ratio,
         config
     );
     def_planet.deuterium_amount = game_logic::calculate_resources_with_energy(
-        game_logic::ResourceType::Deuterium, 
-        def_planet_raw.deuterium_mine_level, 
-        def_planet_raw.deuterium_amount, 
-        def_planet_raw.last_update, 
+        game_logic::ResourceType::Deuterium,
+        def_planet_raw.deuterium_mine_level,
+        def_planet_raw.deuterium_amount,
+        def_planet_raw.last_update,
         def_planet_raw.energy_tech_level,
+        plasma_tech_level,
         def_energy_ratio,
         config
     );
@@ -888,17 +894,20 @@ async fn get_planet_handler(
             .unwrap_or(1.0); // Défaut à 1.0 en cas d'erreur
 
         // Calculer les ressources de base
+        // Note: plasma_tech_level will be 0 until planet model is updated
+        let plasma_tech_level = 0;
+
         let base_metal = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
+            p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_crystal = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
+            p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_deuterium = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
-            p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
+            p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
 
         // Appliquer le multiplicateur de sabotage (50% si sabotage actif, 100% sinon)

@@ -42,6 +42,14 @@ pub struct UnitStats {
     pub attack: f64,
     pub shield: f64,
     pub hull: f64,
+    pub cargo_capacity: f64,
+}
+
+pub struct TechBonuses {
+    pub weapons_multiplier: f64,  // 1.0 + (weapons_tech * 0.1)
+    pub shield_multiplier: f64,   // 1.0 + (shield_tech * 0.1)
+    pub armour_multiplier: f64,   // 1.0 + (armour_tech * 0.1)
+    pub cargo_multiplier: f64,    // 1.0 + (logistics_tech * 0.05)
 }
 
 // 📊 DIVISEUR DE COÛT BASÉ SUR VITESSE
@@ -60,6 +68,12 @@ pub fn get_unit_cost(unit_type: &str, config: &ServerConfigCache) -> (f64, f64) 
             // 🚀 Vaisseaux de guerre
             "light_hunter" => (3000.0, 1000.0),
             "cruiser" => (20000.0, 7000.0),
+
+            // 🚀 Vaisseaux avancés - EXPANSION 2.0
+            "heavy_hunter" => (6000.0, 4000.0),
+            "battleship" => (45000.0, 15000.0),
+            "bomber" => (50000.0, 25000.0),
+            "destroyer" => (60000.0, 50000.0),
 
             // 🛠️ Vaisseaux utilitaires
             "transporter" => (4000.0, 4000.0),
@@ -84,69 +98,177 @@ pub fn get_unit_cost(unit_type: &str, config: &ServerConfigCache) -> (f64, f64) 
 // --- VÉRIFICATION DES PRÉREQUIS ---
 pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<(), String> {
     match item_type {
-        // 🔬 Technologies
+        // 🔬 Technologies de Base
         "energy_tech" => {
-            if planet.research_lab_level < 1 { 
-                return Err("Laboratoire de Recherche niveau 1 requis".to_string()); 
+            if planet.research_lab_level < 1 {
+                return Err("Laboratoire de Recherche niveau 1 requis".to_string());
             }
         },
         "laser" => {
-            if planet.research_lab_level < 1 { 
-                return Err("Laboratoire de Recherche niveau 1 requis".to_string()); 
+            if planet.research_lab_level < 1 {
+                return Err("Laboratoire de Recherche niveau 1 requis".to_string());
             }
-            if planet.energy_tech_level < 2 { 
-                return Err("Technologie Énergie niveau 2 requise".to_string()); 
+            if planet.energy_tech_level < 2 {
+                return Err("Technologie Énergie niveau 2 requise".to_string());
             }
         },
         "espionage" => {
-            if planet.research_lab_level < 3 { 
-                return Err("Laboratoire de Recherche niveau 3 requis".to_string()); 
+            if planet.research_lab_level < 3 {
+                return Err("Laboratoire de Recherche niveau 3 requis".to_string());
             }
         },
         "armour" => {
-            if planet.research_lab_level < 2 { 
-                return Err("Laboratoire de Recherche niveau 2 requis".to_string()); 
+            if planet.research_lab_level < 2 {
+                return Err("Laboratoire de Recherche niveau 2 requis".to_string());
             }
         },
-        
-        // 🚀 Vaisseaux
+
+        // 🔥 Technologies Avancées - EXPANSION 2.0
+        "ion_tech" => {
+            if planet.research_lab_level < 4 {
+                return Err("Laboratoire de Recherche niveau 4 requis".to_string());
+            }
+            if planet.energy_tech_level < 4 {
+                return Err("Technologie Énergie niveau 4 requise".to_string());
+            }
+            if planet.laser_battery_level < 5 {
+                return Err("Technologie Laser niveau 5 requise".to_string());
+            }
+        },
+        "plasma_tech" => {
+            if planet.research_lab_level < 4 {
+                return Err("Laboratoire de Recherche niveau 4 requis".to_string());
+            }
+            if planet.energy_tech_level < 8 {
+                return Err("Technologie Énergie niveau 8 requise".to_string());
+            }
+            if planet.laser_battery_level < 10 {
+                return Err("Technologie Laser niveau 10 requise".to_string());
+            }
+            // Note: ion_tech_level will be checked when planet model is updated
+        },
+        "shield_tech" => {
+            if planet.research_lab_level < 6 {
+                return Err("Laboratoire de Recherche niveau 6 requis".to_string());
+            }
+            if planet.energy_tech_level < 3 {
+                return Err("Technologie Énergie niveau 3 requise".to_string());
+            }
+        },
+        "weapons_tech" => {
+            if planet.research_lab_level < 4 {
+                return Err("Laboratoire de Recherche niveau 4 requis".to_string());
+            }
+        },
+        "computer_tech" => {
+            if planet.research_lab_level < 1 {
+                return Err("Laboratoire de Recherche niveau 1 requis".to_string());
+            }
+        },
+
+        // 🚀 Technologies de Propulsion - EXPANSION 2.0
+        "combustion_drive" => {
+            if planet.research_lab_level < 1 {
+                return Err("Laboratoire de Recherche niveau 1 requis".to_string());
+            }
+            if planet.energy_tech_level < 1 {
+                return Err("Technologie Énergie niveau 1 requise".to_string());
+            }
+        },
+        "impulse_drive" => {
+            if planet.research_lab_level < 2 {
+                return Err("Laboratoire de Recherche niveau 2 requis".to_string());
+            }
+            if planet.energy_tech_level < 1 {
+                return Err("Technologie Énergie niveau 1 requise".to_string());
+            }
+        },
+        "hyperspace_drive" => {
+            if planet.research_lab_level < 7 {
+                return Err("Laboratoire de Recherche niveau 7 requis".to_string());
+            }
+            if planet.energy_tech_level < 5 {
+                return Err("Technologie Énergie niveau 5 requise".to_string());
+            }
+            // Note: shield_tech_level will be checked when planet model is updated
+        },
+        "astrophysics" => {
+            if planet.research_lab_level < 3 {
+                return Err("Laboratoire de Recherche niveau 3 requis".to_string());
+            }
+            if planet.espionage_tech_level < 4 {
+                return Err("Technologie Espionnage niveau 4 requise".to_string());
+            }
+            // Note: impulse_drive_level will be checked when planet model is updated
+        },
+
+        // 🚀 Vaisseaux de Base
         "light_hunter" => {
-            if planet.shipyard_level < 1 { 
-                return Err("Chantier Spatial niveau 1 requis".to_string()); 
+            if planet.shipyard_level < 1 {
+                return Err("Chantier Spatial niveau 1 requis".to_string());
             }
         },
         "cruiser" => {
-            if planet.shipyard_level < 5 { 
-                return Err("Chantier Spatial niveau 5 requis".to_string()); 
+            if planet.shipyard_level < 5 {
+                return Err("Chantier Spatial niveau 5 requis".to_string());
             }
-            if planet.energy_tech_level < 3 { 
-                return Err("Technologie Énergie niveau 3 requise".to_string()); 
+            if planet.energy_tech_level < 3 {
+                return Err("Technologie Énergie niveau 3 requise".to_string());
             }
         },
         "colony_ship" => {
-            if planet.shipyard_level < 4 { 
-                return Err("Chantier Spatial niveau 4 requis".to_string()); 
+            if planet.shipyard_level < 4 {
+                return Err("Chantier Spatial niveau 4 requis".to_string());
             }
         },
         "recycler" => {
-            if planet.shipyard_level < 4 { 
-                return Err("Chantier Spatial niveau 4 requis".to_string()); 
+            if planet.shipyard_level < 4 {
+                return Err("Chantier Spatial niveau 4 requis".to_string());
             }
         },
-        
+
+        // 🚀 Vaisseaux Avancés - EXPANSION 2.0
+        "heavy_hunter" => {
+            if planet.shipyard_level < 3 {
+                return Err("Chantier Spatial niveau 3 requis".to_string());
+            }
+            if planet.armour_tech_level < 3 {
+                return Err("Technologie Blindage niveau 3 requise".to_string());
+            }
+            // Note: impulse_drive_level will be checked when planet model is updated
+        },
+        "battleship" => {
+            if planet.shipyard_level < 7 {
+                return Err("Chantier Spatial niveau 7 requis".to_string());
+            }
+            // Note: hyperspace_drive_level will be checked when planet model is updated
+        },
+        "bomber" => {
+            if planet.shipyard_level < 8 {
+                return Err("Chantier Spatial niveau 8 requis".to_string());
+            }
+            // Note: plasma_tech_level and impulse_drive_level will be checked when planet model is updated
+        },
+        "destroyer" => {
+            if planet.shipyard_level < 9 {
+                return Err("Chantier Spatial niveau 9 requis".to_string());
+            }
+            // Note: hyperspace_drive_level and astrophysics_level will be checked when planet model is updated
+        },
+
         // 🛡️ Défenses
         "plasma_turret" => {
-            if planet.shipyard_level < 8 { 
-                return Err("Chantier Spatial niveau 8 requis".to_string()); 
+            if planet.shipyard_level < 8 {
+                return Err("Chantier Spatial niveau 8 requis".to_string());
             }
-            if planet.energy_tech_level < 6 { 
-                return Err("Technologie Énergie niveau 6 requise".to_string()); 
+            if planet.energy_tech_level < 6 {
+                return Err("Technologie Énergie niveau 6 requise".to_string());
             }
-            if planet.laser_battery_level < 5 { 
-                return Err("Technologie Laser niveau 5 requise".to_string()); 
+            if planet.laser_battery_level < 5 {
+                return Err("Technologie Laser niveau 5 requise".to_string());
             }
         },
-        
+
         _ => {},
     }
     Ok(())
@@ -161,6 +283,11 @@ pub fn calculate_resources(
     current_amount: f64,
     last_update: chrono::NaiveDateTime,
     energy_tech_level: i32,
+    plasma_tech_level: i32,
+    solar_plant_level: i32,
+    metal_mine_level: i32,
+    crystal_mine_level: i32,
+    deuterium_mine_level: i32,
     config: &ServerConfigCache
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
@@ -170,26 +297,41 @@ pub fn calculate_resources(
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
+    // 🔥 Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
+    let plasma_bonus_factor = config.get_config("tech_bonus_plasma_prod", 0.01);
+    let plasma_bonus = 1.0 + (plasma_tech_level as f64 * plasma_bonus_factor);
+
+    // ⚡ CALCUL DU RATIO ÉNERGÉTIQUE
+    let energy_production = calculate_energy_production(solar_plant_level, energy_tech_level, config);
+    let energy_consumption = calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level, config);
+
+    let efficiency = if energy_consumption == 0.0 {
+        1.0
+    } else {
+        (energy_production / energy_consumption).min(1.0).max(0.0)
+    };
+
     // 📊 Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
         ResourceType::Metal => {
             let base = config.get_config("production_metal_base", 30.0);
             let growth = config.get_config("production_metal_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Crystal => {
             let base = config.get_config("production_crystal_base", 20.0);
             let growth = config.get_config("production_crystal_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Deuterium => {
             let base = config.get_config("production_deuterium_base", 10.0);
-            let growth = config.get_config("production_deuterium_growth", 1.05);
+            let growth = config.get_config("production_deuterium_growth", 1.1);
             base * (level as f64) * growth.powi(level)
         },
     };
 
-    let production_per_sec = (base_production * tech_bonus / 3600.0) * (config.speed_factor / 100.0) * config.mining_speed;
+    // Production avec bonus tech, plasma, et efficacité énergétique
+    let production_per_sec = (base_production * tech_bonus * efficiency / 3600.0) * (config.speed_factor / 100.0) * config.mining_speed;
     current_amount + (production_per_sec * duration)
 }
 
@@ -242,6 +384,7 @@ pub fn calculate_resource_production(
     res_type: ResourceType,
     level: i32,
     energy_tech_level: i32,
+    plasma_tech_level: i32,
     energy_ratio: f64,
     config: &ServerConfigCache
 ) -> f64 {
@@ -253,21 +396,25 @@ pub fn calculate_resource_production(
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
+    // 🔥 Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
+    let plasma_bonus_factor = config.get_config("tech_bonus_plasma_prod", 0.01);
+    let plasma_bonus = 1.0 + (plasma_tech_level as f64 * plasma_bonus_factor);
+
     // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
         ResourceType::Metal => {
             let base = config.get_config("production_metal_base", 30.0);
             let growth = config.get_config("production_metal_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Crystal => {
             let base = config.get_config("production_crystal_base", 20.0);
             let growth = config.get_config("production_crystal_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Deuterium => {
             let base = config.get_config("production_deuterium_base", 10.0);
-            let growth = config.get_config("production_deuterium_growth", 1.05);
+            let growth = config.get_config("production_deuterium_growth", 1.1);
             base * (level as f64) * growth.powi(level)
         },
     };
@@ -283,6 +430,7 @@ pub fn calculate_resources_with_energy(
     current_amount: f64,
     last_update: chrono::NaiveDateTime,
     energy_tech_level: i32,
+    plasma_tech_level: i32,
     energy_ratio: f64, // Entre 0.0 et 1.0
     config: &ServerConfigCache
 ) -> f64 {
@@ -293,21 +441,25 @@ pub fn calculate_resources_with_energy(
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
+    // 🔥 Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
+    let plasma_bonus_factor = config.get_config("tech_bonus_plasma_prod", 0.01);
+    let plasma_bonus = 1.0 + (plasma_tech_level as f64 * plasma_bonus_factor);
+
     // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
         ResourceType::Metal => {
             let base = config.get_config("production_metal_base", 30.0);
             let growth = config.get_config("production_metal_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Crystal => {
             let base = config.get_config("production_crystal_base", 20.0);
             let growth = config.get_config("production_crystal_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Deuterium => {
             let base = config.get_config("production_deuterium_base", 10.0);
-            let growth = config.get_config("production_deuterium_growth", 1.05);
+            let growth = config.get_config("production_deuterium_growth", 1.1);
             base * (level as f64) * growth.powi(level)
         },
     };
@@ -366,7 +518,7 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
             deuterium: 0.0,
         },
 
-        // 🔬 TECHNOLOGIES (multiplicateur 2.0)
+        // 🔬 TECHNOLOGIES DE BASE (multiplicateur 2.0)
         "energy_tech" => Cost {
             metal: 0.0,
             crystal: 800.0 * 2.0f64.powi(level - 1),
@@ -386,6 +538,58 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
             metal: 1000.0 * 2.0f64.powi(level - 1),
             crystal: 0.0,
             deuterium: 0.0,
+        },
+
+        // 🔬 TECHNOLOGIES AVANCÉES - EXPANSION 2.0 (multiplicateur 2.0)
+        "ion_tech" => Cost {
+            metal: 1000.0 * 2.0f64.powi(level - 1),
+            crystal: 300.0 * 2.0f64.powi(level - 1),
+            deuterium: 100.0 * 2.0f64.powi(level - 1),
+        },
+        "plasma_tech" => Cost {
+            metal: 2000.0 * 2.0f64.powi(level - 1),
+            crystal: 4000.0 * 2.0f64.powi(level - 1),
+            deuterium: 1000.0 * 2.0f64.powi(level - 1),
+        },
+        "shield_tech" => Cost {
+            metal: 200.0 * 2.0f64.powi(level - 1),
+            crystal: 600.0 * 2.0f64.powi(level - 1),
+            deuterium: 0.0,
+        },
+        "weapons_tech" => Cost {
+            metal: 800.0 * 2.0f64.powi(level - 1),
+            crystal: 200.0 * 2.0f64.powi(level - 1),
+            deuterium: 0.0,
+        },
+        "computer_tech" => Cost {
+            metal: 0.0,
+            crystal: 400.0 * 2.0f64.powi(level - 1),
+            deuterium: 600.0 * 2.0f64.powi(level - 1),
+        },
+        "combustion_drive" => Cost {
+            metal: 400.0 * 2.0f64.powi(level - 1),
+            crystal: 0.0,
+            deuterium: 600.0 * 2.0f64.powi(level - 1),
+        },
+        "impulse_drive" => Cost {
+            metal: 2000.0 * 2.0f64.powi(level - 1),
+            crystal: 4000.0 * 2.0f64.powi(level - 1),
+            deuterium: 600.0 * 2.0f64.powi(level - 1),
+        },
+        "hyperspace_drive" => Cost {
+            metal: 10000.0 * 2.0f64.powi(level - 1),
+            crystal: 20000.0 * 2.0f64.powi(level - 1),
+            deuterium: 6000.0 * 2.0f64.powi(level - 1),
+        },
+        "astrophysics" => Cost {
+            metal: 4000.0 * 2.0f64.powi(level - 1),
+            crystal: 8000.0 * 2.0f64.powi(level - 1),
+            deuterium: 4000.0 * 2.0f64.powi(level - 1),
+        },
+        "logistics_tech" => Cost {
+            metal: 1000.0 * 2.0f64.powi(level - 1),
+            crystal: 1000.0 * 2.0f64.powi(level - 1),
+            deuterium: 1000.0 * 2.0f64.powi(level - 1),
         },
         
         _ => Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 },
@@ -452,6 +656,10 @@ pub fn get_ship_cargo_capacity(ship_type: &str, config: &ServerConfigCache) -> f
     match ship_type {
         "light_hunter" => config.get_config("cargo_light_hunter", 50.0),
         "cruiser" => config.get_config("cargo_cruiser", 800.0),
+        "heavy_hunter" => config.get_config("cargo_heavy_hunter", 100.0),
+        "battleship" => config.get_config("cargo_battleship", 1500.0),
+        "bomber" => config.get_config("cargo_bomber", 500.0),
+        "destroyer" => config.get_config("cargo_destroyer", 2000.0),
         "transporter" => config.get_config("cargo_transporter_base", 10000.0),
         _ => 0.0,
     }
@@ -470,36 +678,125 @@ pub fn get_transporter_stats(config: &ServerConfigCache) -> (f64, f64) { get_uni
 // --- MOTEUR DE COMBAT ---
 pub fn get_unit_base_stats(unit_type: &str, config: &ServerConfigCache) -> UnitStats {
     match unit_type {
+        // Vaisseaux de Base
         "light_hunter" => UnitStats {
             attack: config.get_config("combat_light_hunter_attack", 50.0),
             shield: config.get_config("combat_light_hunter_shield", 10.0),
             hull: config.get_config("combat_light_hunter_hull", 400.0),
+            cargo_capacity: config.get_config("cargo_light_hunter", 50.0),
         },
         "cruiser" => UnitStats {
             attack: config.get_config("combat_cruiser_attack", 400.0),
             shield: config.get_config("combat_cruiser_shield", 50.0),
             hull: config.get_config("combat_cruiser_hull", 2700.0),
+            cargo_capacity: config.get_config("cargo_cruiser", 800.0),
         },
+
+        // Vaisseaux Avancés - EXPANSION 2.0
+        "heavy_hunter" => UnitStats {
+            attack: config.get_config("combat_heavy_hunter_attack", 150.0),
+            shield: config.get_config("combat_heavy_hunter_shield", 25.0),
+            hull: config.get_config("combat_heavy_hunter_hull", 1000.0),
+            cargo_capacity: config.get_config("cargo_heavy_hunter", 100.0),
+        },
+        "battleship" => UnitStats {
+            attack: config.get_config("combat_battleship_attack", 1000.0),
+            shield: config.get_config("combat_battleship_shield", 200.0),
+            hull: config.get_config("combat_battleship_hull", 6000.0),
+            cargo_capacity: config.get_config("cargo_battleship", 1500.0),
+        },
+        "bomber" => UnitStats {
+            attack: config.get_config("combat_bomber_attack", 1000.0),
+            shield: config.get_config("combat_bomber_shield", 500.0),
+            hull: config.get_config("combat_bomber_hull", 7500.0),
+            cargo_capacity: config.get_config("cargo_bomber", 500.0),
+        },
+        "destroyer" => UnitStats {
+            attack: config.get_config("combat_destroyer_attack", 2000.0),
+            shield: config.get_config("combat_destroyer_shield", 500.0),
+            hull: config.get_config("combat_destroyer_hull", 11000.0),
+            cargo_capacity: config.get_config("cargo_destroyer", 2000.0),
+        },
+
+        // Défenses
         "missile_launcher" => UnitStats {
             attack: config.get_config("combat_missile_launcher_attack", 80.0),
             shield: config.get_config("combat_missile_launcher_shield", 20.0),
             hull: config.get_config("combat_missile_launcher_hull", 200.0),
+            cargo_capacity: 0.0,
         },
         "plasma_turret" => UnitStats {
             attack: config.get_config("combat_plasma_turret_attack", 3000.0),
             shield: config.get_config("combat_plasma_turret_shield", 300.0),
             hull: config.get_config("combat_plasma_turret_hull", 10000.0),
+            cargo_capacity: 0.0,
         },
-        _ => UnitStats { attack: 1.0, shield: 1.0, hull: 10.0 },
+
+        // Default
+        _ => UnitStats {
+            attack: 1.0,
+            shield: 1.0,
+            hull: 10.0,
+            cargo_capacity: 0.0,
+        },
+    }
+}
+
+/// Apply tech bonuses to base stats
+pub fn apply_tech_bonuses(base_stats: UnitStats, bonuses: &TechBonuses) -> UnitStats {
+    UnitStats {
+        attack: base_stats.attack * bonuses.weapons_multiplier,
+        shield: base_stats.shield * bonuses.shield_multiplier,
+        hull: base_stats.hull * bonuses.armour_multiplier,
+        cargo_capacity: base_stats.cargo_capacity * bonuses.cargo_multiplier,
+    }
+}
+
+/// Create tech bonuses from tech levels
+pub fn create_tech_bonuses(
+    weapons_tech: i32,
+    shield_tech: i32,
+    armour_tech: i32,
+    logistics_tech: i32,
+    config: &ServerConfigCache
+) -> TechBonuses {
+    let weapons_bonus = config.get_config("tech_bonus_weapons", 0.1);
+    let shield_bonus = config.get_config("tech_bonus_shield", 0.1);
+    let armour_bonus = config.get_config("combat_armour_tech_bonus", 0.1);
+    let cargo_bonus = config.get_config("tech_bonus_cargo", 0.05);
+
+    TechBonuses {
+        weapons_multiplier: 1.0 + (weapons_tech as f64 * weapons_bonus),
+        shield_multiplier: 1.0 + (shield_tech as f64 * shield_bonus),
+        armour_multiplier: 1.0 + (armour_tech as f64 * armour_bonus),
+        cargo_multiplier: 1.0 + (logistics_tech as f64 * cargo_bonus),
     }
 }
 
 pub fn get_rapid_fire(attacker: &str, target: &str, config: &ServerConfigCache) -> i32 {
     match (attacker, target) {
+        // Existing Rapid Fire
         ("cruiser", "light_hunter") => config.get_config("combat_rf_cruiser_vs_light_hunter", 6.0) as i32,
         ("cruiser", "missile_launcher") => config.get_config("combat_rf_cruiser_vs_missile_launcher", 10.0) as i32,
         ("plasma_turret", "light_hunter") => config.get_config("combat_rf_plasma_vs_light_hunter", 5.0) as i32,
         ("plasma_turret", "cruiser") => config.get_config("combat_rf_plasma_vs_cruiser", 3.0) as i32,
+
+        // NEW SHIPS RAPID FIRE - EXPANSION 2.0
+        // Heavy Hunter
+        ("heavy_hunter", "spy_probe") => config.get_config("combat_rf_heavy_hunter_vs_spy_probe", 5.0) as i32,
+
+        // Battleship
+        ("battleship", "light_hunter") => config.get_config("combat_rf_battleship_vs_light_hunter", 4.0) as i32,
+        ("battleship", "heavy_hunter") => config.get_config("combat_rf_battleship_vs_heavy_hunter", 3.0) as i32,
+
+        // Bomber (anti-defense specialist)
+        ("bomber", "missile_launcher") => config.get_config("combat_rf_bomber_vs_missile_launcher", 20.0) as i32,
+        ("bomber", "plasma_turret") => config.get_config("combat_rf_bomber_vs_plasma_turret", 10.0) as i32,
+
+        // Destroyer (anti-large-ship)
+        ("destroyer", "battleship") => config.get_config("combat_rf_destroyer_vs_battleship", 2.0) as i32,
+        ("destroyer", "bomber") => config.get_config("combat_rf_destroyer_vs_bomber", 5.0) as i32,
+
         _ => 0,
     }
 }
@@ -535,6 +832,7 @@ pub fn resolve_pvp(
             attack: base.attack * (1.0 + techs.laser as f64 * laser_bonus),
             shield: base.shield, // Pas de tech bouclier pour l'instant
             hull: base.hull * (1.0 + techs.armour as f64 * armour_bonus),
+            cargo_capacity: base.cargo_capacity, // Cargo not affected by these techs
         }
     };
 
@@ -803,10 +1101,12 @@ pub fn calculate_planet_points(p: &crate::entities::planet::Model, config: &Serv
     );
 
     // Production de base avec bonus tech et énergie (slots non pris en compte ici car on n'a pas accès)
+    // Note: plasma_tech_level set to 0 as it's not in the current planet model yet
     let prod_metal = calculate_resource_production(
         ResourceType::Metal,
         p.metal_mine_level,
         p.energy_tech_level,
+        0, // plasma_tech_level - will be added to planet model
         energy_ratio,
         config
     );
@@ -814,6 +1114,7 @@ pub fn calculate_planet_points(p: &crate::entities::planet::Model, config: &Serv
         ResourceType::Crystal,
         p.crystal_mine_level,
         p.energy_tech_level,
+        0, // plasma_tech_level - will be added to planet model
         energy_ratio,
         config
     );
@@ -821,6 +1122,7 @@ pub fn calculate_planet_points(p: &crate::entities::planet::Model, config: &Serv
         ResourceType::Deuterium,
         p.deuterium_mine_level,
         p.energy_tech_level,
+        0, // plasma_tech_level - will be added to planet model
         energy_ratio,
         config
     );
@@ -925,6 +1227,7 @@ pub fn calculate_resources_with_slots(
     current_amount: f64,
     last_update: chrono::NaiveDateTime,
     energy_tech_level: i32,
+    plasma_tech_level: i32,
     energy_ratio: f64,
     slot_1: &Option<String>,
     slot_2: &Option<String>,
@@ -938,6 +1241,10 @@ pub fn calculate_resources_with_slots(
     // Bonus technologie énergie (+1% par niveau)
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
+
+    // 🔥 Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
+    let plasma_bonus_factor = config.get_config("tech_bonus_plasma_prod", 0.01);
+    let plasma_bonus = 1.0 + (plasma_tech_level as f64 * plasma_bonus_factor);
 
     // Déterminer le type de ressource pour compter les slots
     let resource_key = match res_type {
@@ -955,16 +1262,16 @@ pub fn calculate_resources_with_slots(
         ResourceType::Metal => {
             let base = config.get_config("production_metal_base", 30.0);
             let growth = config.get_config("production_metal_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Crystal => {
             let base = config.get_config("production_crystal_base", 20.0);
             let growth = config.get_config("production_crystal_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Deuterium => {
             let base = config.get_config("production_deuterium_base", 10.0);
-            let growth = config.get_config("production_deuterium_growth", 1.05);
+            let growth = config.get_config("production_deuterium_growth", 1.1);
             base * (level as f64) * growth.powi(level)
         },
     };
