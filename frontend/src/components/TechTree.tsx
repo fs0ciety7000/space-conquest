@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
-import { Zap, Target, Atom, Microscope, Cpu, ArrowUpCircle, Sparkles, Eye, ScanLine, Lock, Loader2, AlertTriangle, ChevronRight, Box, Gem, Droplets, TrendingUp } from "lucide-react";
+import { Zap, Target, Atom, Microscope, Cpu, ArrowUpCircle, Sparkles, Eye, ScanLine, Lock, Loader2, AlertTriangle, ChevronRight, Box, Gem, Droplets, TrendingUp, Network, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiUrl } from '@/config/api';
 import { GameImage } from '@/components/ui/game-image';
 import { getTechImage } from '@/lib/images';
+import TechTreeVisual from './TechTreeVisual';
 // --- CONFIGURATION VISUELLE (Design Riche) ---
 const getTechConfig = (id: string, level: number) => {
   const tier = Math.floor(level / 5) + 1; 
@@ -44,6 +45,7 @@ const getCost = (type: string, level: number) => {
 export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: () => void }) {
   // Timer unique pour rafraîchir l'affichage toutes les secondes
   const [now, setNow] = useState(new Date().getTime());
+  const [viewMode, setViewMode] = useState<'grid' | 'tree'>('tree'); // 'tree' par défaut pour montrer la nouvelle feature
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
@@ -77,23 +79,53 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
       {/* HEADER (Design Riche) */}
       <header className="relative pl-6 py-2 overflow-hidden rounded-r-xl border-l-4 border-purple-500 bg-gradient-to-r from-purple-900/20 to-transparent">
         <div className="absolute -left-2 top-0 bottom-0 w-1 bg-purple-400 blur-[2px]"></div>
-        <div className="flex items-center gap-3">
-            <Atom className={`text-purple-400 animate-spin-slow`} size={32} />
-            <div>
-                <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
-                    Centre de <span className="text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.8)]">R&D</span>
-                </h2>
-                {/* Affichage des slots utilisés */}
-                <div className="flex items-center gap-2 mt-1">
-                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${isQueueFull ? 'border-red-500/50 bg-red-950/30 text-red-400' : 'border-purple-500/50 bg-purple-950/30 text-purple-400'}`}>
-                        SLOTS UTILISÉS : {queue.length} / 3
-                    </span>
+        <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+                <Atom className={`text-purple-400 animate-spin-slow`} size={32} />
+                <div>
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
+                        Centre de <span className="text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.8)]">R&D</span>
+                    </h2>
+                    {/* Affichage des slots utilisés */}
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${isQueueFull ? 'border-red-500/50 bg-red-950/30 text-red-400' : 'border-purple-500/50 bg-purple-950/30 text-purple-400'}`}>
+                            SLOTS UTILISÉS : {queue.length} / 3
+                        </span>
+                    </div>
                 </div>
+            </div>
+
+            {/* Toggle View Mode */}
+            <div className="flex gap-2 mr-4">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setViewMode('tree')}
+                    className={`gap-2 ${viewMode === 'tree' ? 'bg-purple-950/50 text-purple-400 border border-purple-500/30' : 'text-slate-400 hover:text-purple-400'}`}
+                >
+                    <Network size={16} />
+                    <span className="hidden sm:inline text-xs">Arbre</span>
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setViewMode('grid')}
+                    className={`gap-2 ${viewMode === 'grid' ? 'bg-purple-950/50 text-purple-400 border border-purple-500/30' : 'text-slate-400 hover:text-purple-400'}`}
+                >
+                    <LayoutGrid size={16} />
+                    <span className="hidden sm:inline text-xs">Grille</span>
+                </Button>
             </div>
         </div>
       </header>
 
-      {/* GRID */}
+      {/* Vue Arbre Interactif */}
+      {viewMode === 'tree' && (
+        <TechTreeVisual planet={planet} onUpdate={onUpdate} />
+      )}
+
+      {/* GRID Vue classique */}
+      {viewMode === 'grid' && (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {techs.map(t => {
           const style = getTechConfig(t.id, t.lv);
@@ -223,6 +255,7 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
           );
         })}
       </div>
+      )}
     </div>
   );
 }
