@@ -199,7 +199,6 @@ pub async fn resolve_expedition_combat(
     db: &DatabaseConnection,
     player_ships: HashMap<String, i32>,
 ) -> Result<CombatReport, sea_orm::DbErr> {
-    let mut rng = rand::thread_rng();
     let mut logs = Vec::new();
 
     // Load ship stats and rapid fire rules from database
@@ -213,7 +212,7 @@ pub async fn resolve_expedition_combat(
     }
 
     // 2. Generate pirate fleet (scaling factor 50% to 110% of player strength)
-    let scaling_factor = rng.gen_range(0.5..1.1);
+    let scaling_factor = 0.5 + (rand::random::<f64>() * 0.6); // Random value between 0.5 and 1.1
     let mut pirate_fleet = Fleet::new();
 
     // Pirates mirror player fleet composition with scaling
@@ -236,7 +235,8 @@ pub async fn resolve_expedition_combat(
 
     // Ensure pirates always have at least some ships
     if pirate_fleet.is_destroyed() {
-        pirate_fleet.set_ship_count("light_hunter", rng.gen_range(1..3));
+        let count = 1 + (rand::random::<f64>() * 2.0).floor() as i32; // Random 1 or 2
+        pirate_fleet.set_ship_count("light_hunter", count);
     }
 
     logs.push(format!(
