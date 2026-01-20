@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 use axum::{
     extract::{Path, State, Query},
     http::StatusCode,
@@ -681,6 +683,72 @@ async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResp
         "defense_missile_launcher_crystal": config.get_config("defense_missile_launcher_crystal", 2500.0) / cost_divider,
         "defense_plasma_turret_metal": config.get_config("defense_plasma_turret_metal", 50000.0) / cost_divider,
         "defense_plasma_turret_crystal": config.get_config("defense_plasma_turret_crystal", 50000.0) / cost_divider,
+        // Combat stats
+        "combat_light_hunter_attack": config.get_config("combat_light_hunter_attack", 50.0),
+        "combat_light_hunter_shield": config.get_config("combat_light_hunter_shield", 10.0),
+        "combat_light_hunter_hull": config.get_config("combat_light_hunter_hull", 400.0),
+        "combat_cruiser_attack": config.get_config("combat_cruiser_attack", 400.0),
+        "combat_cruiser_shield": config.get_config("combat_cruiser_shield", 50.0),
+        "combat_cruiser_hull": config.get_config("combat_cruiser_hull", 2700.0),
+        "combat_missile_launcher_attack": config.get_config("combat_missile_launcher_attack", 80.0),
+        "combat_missile_launcher_shield": config.get_config("combat_missile_launcher_shield", 20.0),
+        "combat_missile_launcher_hull": config.get_config("combat_missile_launcher_hull", 200.0),
+        "combat_plasma_turret_attack": config.get_config("combat_plasma_turret_attack", 3000.0),
+        "combat_plasma_turret_shield": config.get_config("combat_plasma_turret_shield", 300.0),
+        "combat_plasma_turret_hull": config.get_config("combat_plasma_turret_hull", 10000.0),
+        // Rapid fire
+        "combat_rf_cruiser_vs_light_hunter": config.get_config("combat_rf_cruiser_vs_light_hunter", 6.0),
+        "combat_rf_cruiser_vs_missile_launcher": config.get_config("combat_rf_cruiser_vs_missile_launcher", 10.0),
+        "combat_rf_plasma_vs_light_hunter": config.get_config("combat_rf_plasma_vs_light_hunter", 5.0),
+        "combat_rf_plasma_vs_cruiser": config.get_config("combat_rf_plasma_vs_cruiser", 3.0),
+        // Tech bonuses
+        "combat_tech_laser_bonus": config.get_config("combat_tech_laser_bonus", 0.1),
+        "combat_tech_energy_bonus": config.get_config("combat_tech_energy_bonus", 0.1),
+        "combat_tech_armour_bonus": config.get_config("combat_tech_armour_bonus", 0.1),
+        // Loot mechanics
+        "loot_percentage": config.get_config("loot_percentage", 0.5),
+        "loot_max_per_resource": config.get_config("loot_max_per_resource", 50000.0),
+        "debris_percentage": config.get_config("debris_percentage", 0.3),
+        // Cargo capacities
+        "cargo_light_hunter": config.get_config("cargo_light_hunter", 50.0),
+        "cargo_cruiser": config.get_config("cargo_cruiser", 800.0),
+        "cargo_transporter_base": config.get_config("cargo_transporter_base", 10000.0),
+        "cargo_transporter_bonus_per_hangar": config.get_config("cargo_transporter_bonus_per_hangar", 0.05),
+        // Expedition mechanics
+        "expedition_combat_chance": config.get_config("expedition_combat_chance", 0.3),
+        "expedition_deuterium_chance": config.get_config("expedition_deuterium_chance", 0.5),
+        "expedition_recycler_bonus_multiplier": config.get_config("expedition_recycler_bonus_multiplier", 2.0),
+        "expedition_calm_sector_bonus": config.get_config("expedition_calm_sector_bonus", 1.2),
+        "expedition_base_duration": config.get_config("expedition_base_duration", 600.0),
+        "expedition_hunter_metal_min": config.get_config("expedition_hunter_metal_min", 50.0),
+        "expedition_hunter_metal_range": config.get_config("expedition_hunter_metal_range", 50.0),
+        "expedition_hunter_crystal_min": config.get_config("expedition_hunter_crystal_min", 20.0),
+        "expedition_hunter_crystal_range": config.get_config("expedition_hunter_crystal_range", 30.0),
+        "expedition_hunter_deut_min": config.get_config("expedition_hunter_deut_min", 10.0),
+        "expedition_hunter_deut_range": config.get_config("expedition_hunter_deut_range", 15.0),
+        "expedition_cruiser_metal_min": config.get_config("expedition_cruiser_metal_min", 150.0),
+        "expedition_cruiser_metal_range": config.get_config("expedition_cruiser_metal_range", 100.0),
+        "expedition_cruiser_crystal_min": config.get_config("expedition_cruiser_crystal_min", 60.0),
+        "expedition_cruiser_crystal_range": config.get_config("expedition_cruiser_crystal_range", 40.0),
+        "expedition_cruiser_deut_min": config.get_config("expedition_cruiser_deut_min", 30.0),
+        "expedition_cruiser_deut_range": config.get_config("expedition_cruiser_deut_range", 30.0),
+        "expedition_pirate_strength_min": config.get_config("expedition_pirate_strength_min", 10.0),
+        "expedition_pirate_strength_max": config.get_config("expedition_pirate_strength_max", 100.0),
+        "expedition_defense_bonus_multiplier": config.get_config("expedition_defense_bonus_multiplier", 5.0),
+        "expedition_victory_loss_min": config.get_config("expedition_victory_loss_min", 0.03),
+        "expedition_victory_loss_max": config.get_config("expedition_victory_loss_max", 0.15),
+        "expedition_victory_loss_variation": config.get_config("expedition_victory_loss_variation", 0.1),
+        "expedition_defeat_loss_min": config.get_config("expedition_defeat_loss_min", 0.30),
+        "expedition_defeat_loss_max": config.get_config("expedition_defeat_loss_max", 0.60),
+        "expedition_defeat_loss_variation": config.get_config("expedition_defeat_loss_variation", 0.15),
+        "expedition_hunter_vulnerability": config.get_config("expedition_hunter_vulnerability", 1.0),
+        "expedition_cruiser_vulnerability": config.get_config("expedition_cruiser_vulnerability", 0.5),
+        // Structure capacities
+        "hangar_capacity_base": config.get_config("hangar_capacity_base", 500.0),
+        "hangar_capacity_per_level": config.get_config("hangar_capacity_per_level", 500.0),
+        "storage_capacity_base": config.get_config("storage_capacity_base", 600000.0),
+        "storage_capacity_growth": config.get_config("storage_capacity_growth", 1.6),
+        "slot_bonus_per_slot": config.get_config("slot_bonus_per_slot", 0.5),
     }))
 }
 
@@ -846,7 +914,7 @@ async fn get_planet_handler(
         // Appliquer les caps de stockage (SOFT CAP)
         // Si déjà au-dessus du cap, on arrête la production (garde ressources existantes)
         // Sinon on produit mais plafonne au cap
-        let storage_cap = game_logic::get_storage_capacity(p.resource_storage_level);
+        let storage_cap = game_logic::get_storage_capacity(p.resource_storage_level, &config);
         let new_metal = active.metal_amount.clone().unwrap();
         let new_crystal = active.crystal_amount.clone().unwrap();
         let new_deuterium = active.deuterium_amount.clone().unwrap();
@@ -1215,9 +1283,9 @@ async fn build_fleet_handler(
     }
 
     if !is_defense {
-        let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count 
+        let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count
                                + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
-        let max_capacity = game_logic::get_fleet_capacity(p.hangar_level);
+        let max_capacity = game_logic::get_fleet_capacity(p.hangar_level, &config);
         
         let pending_in_queue: i32 = ConstructionQueue::find()
             .filter(construction_queue::Column::PlanetId.eq(p.id))
@@ -1320,8 +1388,10 @@ async fn attack_handler(
         (att_planet.galaxy, att_planet.system, att_planet.position),
         (target_planet.galaxy, target_planet.system, target_planet.position)
     );
-    let travel_time = game_logic::calculate_flight_time(dist, game_logic::SPEED_FACTOR);
+    let config = state.config.read().unwrap();
+    let travel_time = game_logic::calculate_flight_time(dist, config.speed_factor);
     let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time);
+    drop(config);
 
     let mut att_active: planet::ActiveModel = att_planet.into();
     att_active.light_hunter_count = Set(att_active.light_hunter_count.unwrap() - payload.hunters);
@@ -1420,37 +1490,59 @@ async fn expedition_handler(
     let mut lost_hunters = 0;
     let mut lost_cruisers = 0;
 
-    let combat_triggered = rand::thread_rng().gen_bool(0.3);
+    // Lire la config pour tous les paramètres d'expédition
+    let config = state.config.read().unwrap();
 
-    // Calcul des gains basé sur la taille et type de flotte
-    // Chasseurs: 50-100 métal, 20-50 cristal, 10-25 deutérium (50% chance)
-    // Croiseurs: 150-250 métal, 60-100 cristal, 30-60 deutérium (50% chance)
-    let base_metal_per_hunter = 50.0 + rand::thread_rng().gen_range(0.0..=50.0);
-    let base_crystal_per_hunter = 20.0 + rand::thread_rng().gen_range(0.0..=30.0);
-    let base_deut_per_hunter = 10.0 + rand::thread_rng().gen_range(0.0..=15.0);
-    let base_metal_per_cruiser = 150.0 + rand::thread_rng().gen_range(0.0..=100.0);
-    let base_crystal_per_cruiser = 60.0 + rand::thread_rng().gen_range(0.0..=40.0);
-    let base_deut_per_cruiser = 30.0 + rand::thread_rng().gen_range(0.0..=30.0);
+    let combat_chance = config.get_config("expedition_combat_chance", 0.3);
+    let combat_triggered = rand::thread_rng().gen_bool(combat_chance);
 
-    // 50% de chance de trouver du deutérium
-    let found_deuterium = rand::thread_rng().gen_bool(0.5);
+    // Calcul des gains basé sur la taille et type de flotte (configurable)
+    let hunter_metal_min = config.get_config("expedition_hunter_metal_min", 50.0);
+    let hunter_metal_range = config.get_config("expedition_hunter_metal_range", 50.0);
+    let hunter_crystal_min = config.get_config("expedition_hunter_crystal_min", 20.0);
+    let hunter_crystal_range = config.get_config("expedition_hunter_crystal_range", 30.0);
+    let hunter_deut_min = config.get_config("expedition_hunter_deut_min", 10.0);
+    let hunter_deut_range = config.get_config("expedition_hunter_deut_range", 15.0);
+
+    let cruiser_metal_min = config.get_config("expedition_cruiser_metal_min", 150.0);
+    let cruiser_metal_range = config.get_config("expedition_cruiser_metal_range", 100.0);
+    let cruiser_crystal_min = config.get_config("expedition_cruiser_crystal_min", 60.0);
+    let cruiser_crystal_range = config.get_config("expedition_cruiser_crystal_range", 40.0);
+    let cruiser_deut_min = config.get_config("expedition_cruiser_deut_min", 30.0);
+    let cruiser_deut_range = config.get_config("expedition_cruiser_deut_range", 30.0);
+
+    let base_metal_per_hunter = hunter_metal_min + rand::thread_rng().gen_range(0.0..=hunter_metal_range);
+    let base_crystal_per_hunter = hunter_crystal_min + rand::thread_rng().gen_range(0.0..=hunter_crystal_range);
+    let base_deut_per_hunter = hunter_deut_min + rand::thread_rng().gen_range(0.0..=hunter_deut_range);
+    let base_metal_per_cruiser = cruiser_metal_min + rand::thread_rng().gen_range(0.0..=cruiser_metal_range);
+    let base_crystal_per_cruiser = cruiser_crystal_min + rand::thread_rng().gen_range(0.0..=cruiser_crystal_range);
+    let base_deut_per_cruiser = cruiser_deut_min + rand::thread_rng().gen_range(0.0..=cruiser_deut_range);
+
+    let deuterium_chance = config.get_config("expedition_deuterium_chance", 0.5);
+    let found_deuterium = rand::thread_rng().gen_bool(deuterium_chance);
 
     let total_ships = hunters + cruisers;
 
-    // Recycleurs augmentent la capacité de collecte de ressources (bonus x2 par recycleur)
-    let recycler_bonus = 1.0 + (recyclers as f64 * 2.0);
+    // Recycleurs augmentent la capacité de collecte de ressources (configurable)
+    let recycler_multiplier = config.get_config("expedition_recycler_bonus_multiplier", 2.0);
+    let recycler_bonus = 1.0 + (recyclers as f64 * recycler_multiplier);
+
+    // Vulnerability multipliers used for both victory and defeat
+    let hunter_vuln_mult = config.get_config("expedition_hunter_vulnerability", 1.0);
+    let cruiser_vuln_mult = config.get_config("expedition_cruiser_vulnerability", 0.5);
 
     let (loot_metal, loot_crystal, loot_deuterium) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
-        let combat_res = game_logic::simulate_combat(total_ships, p.laser_battery_level);
+        let combat_res = game_logic::simulate_combat(total_ships, p.laser_battery_level, &config);
 
         if combat_res.victory {
             winner = "victory";
             // Gains proportionnels au nombre et type de vaisseaux + bonus recycleur
-            let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * recycler_bonus * (game_logic::SPEED_FACTOR / 100.0);
-            let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * recycler_bonus * (game_logic::SPEED_FACTOR / 100.0);
+            let speed_multiplier = config.speed_factor / 100.0;
+            let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * recycler_bonus * speed_multiplier;
+            let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * recycler_bonus * speed_multiplier;
             let deuterium = if found_deuterium {
-                (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * recycler_bonus * (game_logic::SPEED_FACTOR / 100.0)
+                (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * recycler_bonus * speed_multiplier
             } else {
                 0.0
             };
@@ -1473,10 +1565,10 @@ async fn expedition_handler(
                     logs.push("PERTES : 1 Croiseur (expédition risquée avec flotte minimale)".to_string());
                 }
             } else {
-                // Répartir les pertes : les croiseurs sont plus résistants (50% moins de pertes)
+                // Répartir les pertes : les croiseurs sont plus résistants (configurable)
                 // On distribue les pertes en tenant compte de la résistance de chaque type
-                let hunter_vulnerability = hunters as f64 * 1.0; // Chasseurs: vulnérabilité normale
-                let cruiser_vulnerability = cruisers as f64 * 0.5; // Croiseurs: 2x plus résistants
+                let hunter_vulnerability = hunters as f64 * hunter_vuln_mult;
+                let cruiser_vulnerability = cruisers as f64 * cruiser_vuln_mult;
                 let total_vulnerability = hunter_vulnerability + cruiser_vulnerability;
 
                 if total_vulnerability > 0.0 {
@@ -1521,8 +1613,8 @@ async fn expedition_handler(
                 }
             } else {
                 // En cas de défaite, pertes très lourdes avec même distribution
-                let hunter_vulnerability = hunters as f64 * 1.0;
-                let cruiser_vulnerability = cruisers as f64 * 0.5; // Croiseurs toujours plus résistants
+                let hunter_vulnerability = hunters as f64 * hunter_vuln_mult;
+                let cruiser_vulnerability = cruisers as f64 * cruiser_vuln_mult;
                 let total_vulnerability = hunter_vulnerability + cruiser_vulnerability;
 
                 if total_vulnerability > 0.0 {
@@ -1549,11 +1641,13 @@ async fn expedition_handler(
         }
     } else {
         winner = "calm";
-        // Gains proportionnels au nombre et type de vaisseaux (bonus pour secteur calme: x1.2) + bonus recycleur
-        let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * recycler_bonus * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
-        let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * recycler_bonus * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
+        // Gains proportionnels au nombre et type de vaisseaux (bonus pour secteur calme configurable) + bonus recycleur
+        let calm_bonus = config.get_config("expedition_calm_sector_bonus", 1.2);
+        let speed_multiplier = config.speed_factor / 100.0;
+        let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * recycler_bonus * calm_bonus * speed_multiplier;
+        let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * recycler_bonus * calm_bonus * speed_multiplier;
         let deuterium = if found_deuterium {
-            (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * recycler_bonus * 1.2 * (game_logic::SPEED_FACTOR / 100.0)
+            (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * recycler_bonus * calm_bonus * speed_multiplier
         } else {
             0.0
         };
@@ -1633,9 +1727,13 @@ async fn expedition_handler(
     // Les recycleurs ne participent pas au combat, ils ne sont pas perdus
     // Mais ils sont temporairement indisponibles pendant l'expédition
 
-    let duration = std::cmp::max(1, (600.0 / game_logic::SPEED_FACTOR) as i64);
+    let base_duration = config.get_config("expedition_base_duration", 600.0);
+    let duration = std::cmp::max(1, (base_duration / config.speed_factor) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
-    
+
+    // Drop the config guard before awaiting
+    drop(config);
+
     if active.update(&state.db).await.is_err() {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB Update Error"}))).into_response();
     }
@@ -1752,27 +1850,44 @@ async fn scout_expedition_handler(
     };
 
     // Calcul des gains estimés (basé sur le même calcul que l'expédition réelle)
-    // Chasseurs: 50-100 métal (moy 75), 20-50 cristal (moy 35), 10-25 deutérium (moy 17.5, 50% chance)
-    // Croiseurs: 150-250 métal (moy 200), 60-100 cristal (moy 80), 30-60 deutérium (moy 45, 50% chance)
-    let avg_metal_per_hunter = 75.0;
-    let avg_crystal_per_hunter = 35.0;
-    let avg_deut_per_hunter = 17.5 * 0.5; // 50% chance, donc moyenne divisée par 2
-    let avg_metal_per_cruiser = 200.0;
-    let avg_crystal_per_cruiser = 80.0;
-    let avg_deut_per_cruiser = 45.0 * 0.5; // 50% chance
+    let config = state.config.read().unwrap();
+
+    let hunter_metal_min = config.get_config("expedition_hunter_metal_min", 50.0);
+    let hunter_metal_range = config.get_config("expedition_hunter_metal_range", 50.0);
+    let hunter_crystal_min = config.get_config("expedition_hunter_crystal_min", 20.0);
+    let hunter_crystal_range = config.get_config("expedition_hunter_crystal_range", 30.0);
+    let hunter_deut_min = config.get_config("expedition_hunter_deut_min", 10.0);
+    let hunter_deut_range = config.get_config("expedition_hunter_deut_range", 15.0);
+
+    let cruiser_metal_min = config.get_config("expedition_cruiser_metal_min", 150.0);
+    let cruiser_metal_range = config.get_config("expedition_cruiser_metal_range", 100.0);
+    let cruiser_crystal_min = config.get_config("expedition_cruiser_crystal_min", 60.0);
+    let cruiser_crystal_range = config.get_config("expedition_cruiser_crystal_range", 40.0);
+    let cruiser_deut_min = config.get_config("expedition_cruiser_deut_min", 30.0);
+    let cruiser_deut_range = config.get_config("expedition_cruiser_deut_range", 30.0);
+
+    let deuterium_chance = config.get_config("expedition_deuterium_chance", 0.5);
+
+    let avg_metal_per_hunter = hunter_metal_min + (hunter_metal_range / 2.0);
+    let avg_crystal_per_hunter = hunter_crystal_min + (hunter_crystal_range / 2.0);
+    let avg_deut_per_hunter = (hunter_deut_min + (hunter_deut_range / 2.0)) * deuterium_chance;
+    let avg_metal_per_cruiser = cruiser_metal_min + (cruiser_metal_range / 2.0);
+    let avg_crystal_per_cruiser = cruiser_crystal_min + (cruiser_crystal_range / 2.0);
+    let avg_deut_per_cruiser = (cruiser_deut_min + (cruiser_deut_range / 2.0)) * deuterium_chance;
 
     // Min/Max avec variation de ±30%
     let base_metal = avg_metal_per_hunter * hunters as f64 + avg_metal_per_cruiser * cruisers as f64;
     let base_crystal = avg_crystal_per_hunter * hunters as f64 + avg_crystal_per_cruiser * cruisers as f64;
     let base_deut = avg_deut_per_hunter * hunters as f64 + avg_deut_per_cruiser * cruisers as f64;
 
-    let estimated_metal_min = (base_metal * 0.7) * (game_logic::SPEED_FACTOR / 100.0);
-    let estimated_metal_max = (base_metal * 1.5) * (game_logic::SPEED_FACTOR / 100.0);
-    let estimated_crystal_min = (base_crystal * 0.7) * (game_logic::SPEED_FACTOR / 100.0);
-    let estimated_crystal_max = (base_crystal * 1.5) * (game_logic::SPEED_FACTOR / 100.0);
+    let speed_multiplier = config.speed_factor / 100.0;
+    let estimated_metal_min = (base_metal * 0.7) * speed_multiplier;
+    let estimated_metal_max = (base_metal * 1.5) * speed_multiplier;
+    let estimated_crystal_min = (base_crystal * 0.7) * speed_multiplier;
+    let estimated_crystal_max = (base_crystal * 1.5) * speed_multiplier;
     // Pour deutérium: min à 0 (50% chance de rien), max basé sur la formule normale
     let estimated_deut_min = 0;
-    let estimated_deut_max = (base_deut * 3.0) * (game_logic::SPEED_FACTOR / 100.0); // x3 car la moyenne inclut 50% de 0
+    let estimated_deut_max = (base_deut * 3.0) * speed_multiplier; // x3 car la moyenne inclut 50% de 0
 
     Json(json!({
         "danger": danger_level,
@@ -2303,7 +2418,8 @@ async fn transport_handler(
 
     let total_load = payload.metal + payload.crystal + payload.deuterium;
     // Capacité évolutive: +5% par niveau de hangar
-    let transporter_capacity = game_logic::get_transporter_capacity(source_model.hangar_level);
+    let config = state.config.read().unwrap();
+    let transporter_capacity = game_logic::get_transporter_capacity(source_model.hangar_level, &config);
     let capacity = payload.transporters as f64 * transporter_capacity;
     if total_load > capacity { return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Surcharge ! Capacité max: {:.0}", capacity)}))).into_response(); }
 
@@ -2312,8 +2428,9 @@ async fn transport_handler(
         (source_model.galaxy, source_model.system, source_model.position),
         (target_model.galaxy, target_model.system, target_model.position)
     );
-    let flight_duration = game_logic::calculate_flight_time(dist, game_logic::SPEED_FACTOR);
+    let flight_duration = game_logic::calculate_flight_time(dist, config.speed_factor);
     let arrival = Utc::now().naive_utc() + Duration::seconds(flight_duration);
+    drop(config);
 
     let mut source: planet::ActiveModel = source_model.into();
     source.metal_amount = Set(source.metal_amount.unwrap() - payload.metal);

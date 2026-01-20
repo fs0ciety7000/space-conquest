@@ -421,39 +421,38 @@ pub fn get_ship_production_time(qty: i32, config: &ServerConfigCache) -> i64 {
 }
 
 // 📦 CAPACITÉS
-pub fn get_fleet_capacity(hangar_level: i32) -> i32 {
-    500 + (hangar_level * 500)
+pub fn get_fleet_capacity(hangar_level: i32, config: &ServerConfigCache) -> i32 {
+    let base = config.get_config("hangar_capacity_base", 500.0) as i32;
+    let per_level = config.get_config("hangar_capacity_per_level", 500.0) as i32;
+    base + (hangar_level * per_level)
 }
 
 // Capacité transporteur évolutive basée sur niveau hangar
-// Base: 10000, +5% par niveau de hangar
-pub fn get_transporter_capacity(hangar_level: i32) -> f64 {
-    let base_capacity = 10000.0;
-    let bonus_per_level = 0.05; // +5% par niveau
+pub fn get_transporter_capacity(hangar_level: i32, config: &ServerConfigCache) -> f64 {
+    let base_capacity = config.get_config("cargo_transporter_base", 10000.0);
+    let bonus_per_level = config.get_config("cargo_transporter_bonus_per_hangar", 0.05);
     base_capacity * (1.0 + (hangar_level as f64 * bonus_per_level))
 }
 
 pub const TRANSPORTER_CAPACITY: f64 = 10000.0; // Deprecated: utilisez get_transporter_capacity()
 
-// Capacité de stockage des ressources (exponentielle par niveau de Hangar à Ressources)
-// Niveau 0: 600 000 (base sans hangar)
-// Niveau 1: 600 000 * 1.6 = 960 000
-// Niveau 2: 600 000 * 1.6^2 = 1 536 000, etc.
-pub fn get_storage_capacity(storage_level: i32) -> f64 {
-    let base_capacity = 600000.0;
+// Capacité de stockage des ressources (exponentielle par niveau)
+pub fn get_storage_capacity(storage_level: i32, config: &ServerConfigCache) -> f64 {
+    let base_capacity = config.get_config("storage_capacity_base", 600000.0);
     if storage_level == 0 {
         base_capacity
     } else {
-        base_capacity * 1.6f64.powi(storage_level)
+        let growth = config.get_config("storage_capacity_growth", 1.6);
+        base_capacity * growth.powi(storage_level)
     }
 }
 
 // Capacité de cargo des vaisseaux de combat (pour le butin des attaques)
-pub fn get_ship_cargo_capacity(ship_type: &str) -> f64 {
+pub fn get_ship_cargo_capacity(ship_type: &str, config: &ServerConfigCache) -> f64 {
     match ship_type {
-        "light_hunter" => 50.0,    // Chasseur léger: peu de cargo
-        "cruiser" => 800.0,        // Croiseur: cargo modéré
-        "transporter" => 10000.0,  // Transporteur: cargo maximum
+        "light_hunter" => config.get_config("cargo_light_hunter", 50.0),
+        "cruiser" => config.get_config("cargo_cruiser", 800.0),
+        "transporter" => config.get_config("cargo_transporter_base", 10000.0),
         _ => 0.0,
     }
 }
@@ -469,22 +468,38 @@ pub fn get_colony_ship_stats(config: &ServerConfigCache) -> (f64, f64) { get_uni
 pub fn get_transporter_stats(config: &ServerConfigCache) -> (f64, f64) { get_unit_cost("transporter", config) }
 
 // --- MOTEUR DE COMBAT ---
-pub fn get_unit_base_stats(unit_type: &str) -> UnitStats {
+pub fn get_unit_base_stats(unit_type: &str, config: &ServerConfigCache) -> UnitStats {
     match unit_type {
-        "light_hunter" => UnitStats { attack: 50.0, shield: 10.0, hull: 400.0 },
-        "cruiser" => UnitStats { attack: 400.0, shield: 50.0, hull: 2700.0 },
-        "missile_launcher" => UnitStats { attack: 80.0, shield: 20.0, hull: 200.0 },
-        "plasma_turret" => UnitStats { attack: 3000.0, shield: 300.0, hull: 10000.0 },
+        "light_hunter" => UnitStats {
+            attack: config.get_config("combat_light_hunter_attack", 50.0),
+            shield: config.get_config("combat_light_hunter_shield", 10.0),
+            hull: config.get_config("combat_light_hunter_hull", 400.0),
+        },
+        "cruiser" => UnitStats {
+            attack: config.get_config("combat_cruiser_attack", 400.0),
+            shield: config.get_config("combat_cruiser_shield", 50.0),
+            hull: config.get_config("combat_cruiser_hull", 2700.0),
+        },
+        "missile_launcher" => UnitStats {
+            attack: config.get_config("combat_missile_launcher_attack", 80.0),
+            shield: config.get_config("combat_missile_launcher_shield", 20.0),
+            hull: config.get_config("combat_missile_launcher_hull", 200.0),
+        },
+        "plasma_turret" => UnitStats {
+            attack: config.get_config("combat_plasma_turret_attack", 3000.0),
+            shield: config.get_config("combat_plasma_turret_shield", 300.0),
+            hull: config.get_config("combat_plasma_turret_hull", 10000.0),
+        },
         _ => UnitStats { attack: 1.0, shield: 1.0, hull: 10.0 },
     }
 }
 
-pub fn get_rapid_fire(attacker: &str, target: &str) -> i32 {
+pub fn get_rapid_fire(attacker: &str, target: &str, config: &ServerConfigCache) -> i32 {
     match (attacker, target) {
-        ("cruiser", "light_hunter") => 6,
-        ("cruiser", "missile_launcher") => 10,
-        ("plasma_turret", "light_hunter") => 5,
-        ("plasma_turret", "cruiser") => 3,
+        ("cruiser", "light_hunter") => config.get_config("combat_rf_cruiser_vs_light_hunter", 6.0) as i32,
+        ("cruiser", "missile_launcher") => config.get_config("combat_rf_cruiser_vs_missile_launcher", 10.0) as i32,
+        ("plasma_turret", "light_hunter") => config.get_config("combat_rf_plasma_vs_light_hunter", 5.0) as i32,
+        ("plasma_turret", "cruiser") => config.get_config("combat_rf_plasma_vs_cruiser", 3.0) as i32,
         _ => 0,
     }
 }
@@ -511,24 +526,29 @@ pub fn resolve_pvp(
     let mut log = Vec::new();
     let mut rng = rand::thread_rng();
 
+    // Tech bonuses from config
+    let laser_bonus = config.get_config("combat_tech_laser_bonus", 0.1);
+    let energy_bonus = config.get_config("combat_tech_energy_bonus", 0.1);
+    let armour_bonus = config.get_config("combat_tech_armour_bonus", 0.1);
+
     let apply_techs = |base: UnitStats, techs: &CombatTechs| -> UnitStats {
         UnitStats {
-            attack: base.attack * (1.0 + techs.laser as f64 * 0.1),
-            shield: base.shield * (1.0 + techs.energy as f64 * 0.1),
-            hull: base.hull * (1.0 + techs.armour as f64 * 0.1),
+            attack: base.attack * (1.0 + techs.laser as f64 * laser_bonus),
+            shield: base.shield * (1.0 + techs.energy as f64 * energy_bonus),
+            hull: base.hull * (1.0 + techs.armour as f64 * armour_bonus),
         }
     };
 
     let mut attacker_fleet = vec![
-        ("light_hunter", att_hunters, apply_techs(get_unit_base_stats("light_hunter"), &att_techs)),
-        ("cruiser", att_cruisers, apply_techs(get_unit_base_stats("cruiser"), &att_techs)),
+        ("light_hunter", att_hunters, apply_techs(get_unit_base_stats("light_hunter", config), &att_techs)),
+        ("cruiser", att_cruisers, apply_techs(get_unit_base_stats("cruiser", config), &att_techs)),
     ];
 
     let mut defender_fleet = vec![
-        ("light_hunter", def_hunters, apply_techs(get_unit_base_stats("light_hunter"), &def_techs)),
-        ("cruiser", def_cruisers, apply_techs(get_unit_base_stats("cruiser"), &def_techs)),
-        ("missile_launcher", def_missiles, apply_techs(get_unit_base_stats("missile_launcher"), &def_techs)),
-        ("plasma_turret", def_plasmas, apply_techs(get_unit_base_stats("plasma_turret"), &def_techs)),
+        ("light_hunter", def_hunters, apply_techs(get_unit_base_stats("light_hunter", config), &def_techs)),
+        ("cruiser", def_cruisers, apply_techs(get_unit_base_stats("cruiser", config), &def_techs)),
+        ("missile_launcher", def_missiles, apply_techs(get_unit_base_stats("missile_launcher", config), &def_techs)),
+        ("plasma_turret", def_plasmas, apply_techs(get_unit_base_stats("plasma_turret", config), &def_techs)),
     ];
 
     log.push("⚔️ Début de l'engagement orbital".to_string());
@@ -546,7 +566,7 @@ pub fn resolve_pvp(
                     let (d_type, d_qty, d_stats) = &defender_fleet[target_idx];
                     if *d_qty > 0 {
                         att_dmg += (a_stats.attack - d_stats.shield).max(a_stats.attack * 0.01);
-                        let rf = get_rapid_fire(a_type, d_type);
+                        let rf = get_rapid_fire(a_type, d_type, config);
                         re_fire = rf > 0 && rng.gen_range(0..rf) > 0;
                     } else { re_fire = false; }
                 }
@@ -562,7 +582,7 @@ pub fn resolve_pvp(
                     let (a_type, a_qty, a_stats) = &attacker_fleet[target_idx];
                     if *a_qty > 0 {
                         def_dmg += (d_stats.attack - a_stats.shield).max(d_stats.attack * 0.01);
-                        let rf = get_rapid_fire(d_type, a_type);
+                        let rf = get_rapid_fire(d_type, a_type, config);
                         re_fire = rf > 0 && rng.gen_range(0..rf) > 0;
                     } else { re_fire = false; }
                 }
@@ -586,19 +606,23 @@ pub fn resolve_pvp(
                  else if f_att_h+f_att_c <= 0 { "defender".into() }
                  else { "draw".into() };
 
-    // 💰 BUTIN (50% des ressources, limité par la capacité de cargo des vaisseaux survivants)
+    // 💰 BUTIN (configurable % des ressources, limité par la capacité de cargo des vaisseaux survivants)
     let loot = if winner == "attacker" {
         // Calculer la capacité de cargo totale des vaisseaux survivants
         // Les transporteurs ne participent pas au combat, donc ils survivent tous
-        let transporter_capacity = att_transporters as f64 * get_transporter_capacity(att_hangar_level);
-        let combat_ships_capacity = (f_att_h as f64 * get_ship_cargo_capacity("light_hunter"))
-                                   + (f_att_c as f64 * get_ship_cargo_capacity("cruiser"));
+        let transporter_capacity = att_transporters as f64 * get_transporter_capacity(att_hangar_level, config);
+        let combat_ships_capacity = (f_att_h as f64 * get_ship_cargo_capacity("light_hunter", config))
+                                   + (f_att_c as f64 * get_ship_cargo_capacity("cruiser", config));
         let total_cargo_capacity = transporter_capacity + combat_ships_capacity;
 
-        // Calculer le butin potentiel (50% des ressources avec cap)
-        let potential_metal = (def_resources.metal * 0.5).min(50000.0 * cost_scaling(config));
-        let potential_crystal = (def_resources.crystal * 0.5).min(50000.0 * cost_scaling(config));
-        let potential_deuterium = (def_resources.deuterium * 0.5).min(50000.0 * cost_scaling(config));
+        // Lire les paramètres de butin depuis la config
+        let loot_percentage = config.get_config("loot_percentage", 0.5);
+        let loot_max_per_resource = config.get_config("loot_max_per_resource", 50000.0);
+
+        // Calculer le butin potentiel avec les valeurs configurables
+        let potential_metal = (def_resources.metal * loot_percentage).min(loot_max_per_resource * cost_scaling(config));
+        let potential_crystal = (def_resources.crystal * loot_percentage).min(loot_max_per_resource * cost_scaling(config));
+        let potential_deuterium = (def_resources.deuterium * loot_percentage).min(loot_max_per_resource * cost_scaling(config));
         let total_potential_loot = potential_metal + potential_crystal + potential_deuterium;
 
         // Si le butin potentiel dépasse la capacité, le réduire proportionnellement
@@ -622,7 +646,7 @@ pub fn resolve_pvp(
         final_loot
     } else { Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 } };
 
-    // 🛠️ CHAMP DE DÉBRIS (30% des pertes)
+    // 🛠️ CHAMP DE DÉBRIS (configurable % des pertes)
     let att_h_lost = att_hunters - f_att_h;
     let att_c_lost = att_cruisers - f_att_c;
     let def_h_lost = def_hunters - f_def_h;
@@ -634,8 +658,9 @@ pub fn resolve_pvp(
     let total_metal_lost = (att_h_lost + def_h_lost) as f64 * h_m + (att_c_lost + def_c_lost) as f64 * c_m;
     let total_crystal_lost = (att_h_lost + def_h_lost) as f64 * h_c + (att_c_lost + def_c_lost) as f64 * c_c;
 
-    let debris_m = total_metal_lost * 0.3;
-    let debris_c = total_crystal_lost * 0.3;
+    let debris_percentage = config.get_config("debris_percentage", 0.3);
+    let debris_m = total_metal_lost * debris_percentage;
+    let debris_c = total_crystal_lost * debris_percentage;
 
     if debris_m > 0.0 {
         log.push(format!("🛠️ Débris : {:.0}M / {:.0}C", debris_m, debris_c));
@@ -651,21 +676,29 @@ pub fn resolve_pvp(
     }
 }
 
-pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
+pub fn simulate_combat(fleet_size: i32, defense_bonus: i32, config: &ServerConfigCache) -> CombatResult {
     let mut rng = rand::thread_rng();
 
-    // Niveau pirate aléatoire (10-100) avec forte variation
-    let pirate_strength = rng.gen_range(10..100);
-    let player_strength = fleet_size + (defense_bonus * 5);
+    // Niveau pirate aléatoire (configurable)
+    let pirate_min = config.get_config("expedition_pirate_strength_min", 10.0) as i32;
+    let pirate_max = config.get_config("expedition_pirate_strength_max", 100.0) as i32;
+    let pirate_strength = rng.gen_range(pirate_min..pirate_max);
+
+    let defense_multiplier = config.get_config("expedition_defense_bonus_multiplier", 5.0);
+    let player_strength = fleet_size + ((defense_bonus as f64 * defense_multiplier) as i32);
 
     if player_strength > pirate_strength {
-        // VICTOIRE : Pertes réduites (3-15% avec variation ±10%)
-        let base_loss_rate = rng.gen_range(0.03..0.15);
-        let variation = rng.gen_range(-0.1..0.1);
+        // VICTOIRE : Pertes réduites (configurable)
+        let loss_min = config.get_config("expedition_victory_loss_min", 0.03);
+        let loss_max = config.get_config("expedition_victory_loss_max", 0.15);
+        let loss_var = config.get_config("expedition_victory_loss_variation", 0.1);
+
+        let base_loss_rate = rng.gen_range(loss_min..loss_max);
+        let variation = rng.gen_range(-loss_var..loss_var);
         let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.01_f64, 0.20_f64);
 
-        let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1 si fleet > 0
-        let lost = lost.max(0).min(fleet_size); // Clamp entre 0 et fleet_size
+        let lost = (fleet_size as f64 * loss_rate).ceil() as i32;
+        let lost = lost.max(0).min(fleet_size);
 
         CombatResult {
             victory: true,
@@ -673,13 +706,17 @@ pub fn simulate_combat(fleet_size: i32, defense_bonus: i32) -> CombatResult {
             ships_lost: lost
         }
     } else {
-        // DÉFAITE : Pertes modérées (30-60% avec variation ±15%)
-        let base_loss_rate = rng.gen_range(0.30..0.60);
-        let variation = rng.gen_range(-0.15..0.15);
+        // DÉFAITE : Pertes modérées (configurable)
+        let loss_min = config.get_config("expedition_defeat_loss_min", 0.30);
+        let loss_max = config.get_config("expedition_defeat_loss_max", 0.60);
+        let loss_var = config.get_config("expedition_defeat_loss_variation", 0.15);
+
+        let base_loss_rate = rng.gen_range(loss_min..loss_max);
+        let variation = rng.gen_range(-loss_var..loss_var);
         let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.25_f64, 0.70_f64);
 
-        let lost = (fleet_size as f64 * loss_rate).ceil() as i32; // ceil() garantit au moins 1
-        let lost = lost.max(1).min(fleet_size); // Minimum 1 perte en cas de défaite
+        let lost = (fleet_size as f64 * loss_rate).ceil() as i32;
+        let lost = lost.max(1).min(fleet_size);
 
         CombatResult {
             victory: false,
@@ -839,9 +876,10 @@ pub fn count_slots_for_resource(
         .count() as i32
 }
 
-/// Calcule le bonus de production basé sur les slots (+50% par slot)
-pub fn get_slot_bonus(slots_count: i32) -> f64 {
-    1.0 + (slots_count as f64 * 0.5) // +50% par slot
+/// Calcule le bonus de production basé sur les slots (configurable)
+pub fn get_slot_bonus(slots_count: i32, config: &ServerConfigCache) -> f64 {
+    let bonus_per_slot = config.get_config("slot_bonus_per_slot", 0.5);
+    1.0 + (slots_count as f64 * bonus_per_slot)
 }
 
 /// Coût progressif pour débloquer un slot (slot_number de 1 à 4)
@@ -911,7 +949,7 @@ pub fn calculate_resources_with_slots(
 
     // Bonus des slots (+50% par slot assigné)
     let slots_count = count_slots_for_resource(slot_1, slot_2, slot_3, slot_4, resource_key);
-    let slot_bonus = get_slot_bonus(slots_count);
+    let slot_bonus = get_slot_bonus(slots_count, config);
 
     // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
@@ -953,7 +991,7 @@ pub fn calculate_energy_production_with_slots(
 
     // Bonus des slots énergie
     let slots_count = count_slots_for_resource(slot_1, slot_2, slot_3, slot_4, "energy");
-    let slot_bonus = get_slot_bonus(slots_count);
+    let slot_bonus = get_slot_bonus(slots_count, config);
 
     let base = config.get_config("energy_solar_base", 60.0);
     let growth = config.get_config("energy_solar_growth", 1.1);
