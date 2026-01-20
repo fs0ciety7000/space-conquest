@@ -3,7 +3,7 @@
 use axum::{
     extract::{Path, State, Query},
     http::StatusCode,
-    response::{IntoResponse, Json},
+    response::{IntoResponse, Json, Response},
     routing::{get, post, delete, patch},
     Router,
 };
@@ -213,8 +213,7 @@ async fn main() {
         .route("/planets/:id/tech-tree", get(get_tech_tree_handler))
         .route("/planets/:id/ship-types", get(get_ship_types_handler))
         .route("/planets/:id/research/:tech_key", post(start_research_handler))
-        // TODO: Fix build_ships_handler trait bound issue
-        // .route("/planets/:id/build-ships/:ship_key/:quantity", post(build_ships_handler))
+        .route("/planets/:id/build-ships/:ship_key/:quantity", post(build_ships_handler))
         .route("/tech/:tech_key", get(get_tech_details_handler))
         .route("/ship/:ship_key", get(get_ship_details_handler))
         // Actions
@@ -4085,10 +4084,11 @@ async fn start_research_handler(
 }
 
 /// POST /planets/:id/build-ships/:ship_key/:quantity - Build ships using relational system
+#[axum::debug_handler]
 async fn build_ships_handler(
-    State(state): State<AppState>,
     Path((planet_id, ship_key, quantity)): Path<(Uuid, String, i32)>,
-) -> impl IntoResponse {
+    State(state): State<AppState>,
+) -> Response {
     use entities::{prelude::*, ship_type, planet_ship};
     use sea_orm::ActiveModelTrait;
 
@@ -4163,7 +4163,7 @@ async fn build_ships_handler(
     }
 
     // Calculate build time (total time for all ships)
-    let config = state.config.read().unwrap();
+    let config = state.config.read().unwrap().clone();
     let build_time_per_ship = ship.build_time_seconds as f64 * config.construction_speed;
     let total_build_time = (build_time_per_ship * quantity as f64) as i64;
     let end_time = Utc::now().naive_utc() + Duration::seconds(total_build_time);
