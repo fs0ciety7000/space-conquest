@@ -153,10 +153,13 @@ let seconds = (base_time * 100.0) / speed_factor;
 - Animation pulse sur l'icône quand proche de la limite (>90%)
 - Tooltip détaillé: "Stockage: 450k / 600k (75%)"
 
-**Protection production**:
-- Les ressources produites ne peuvent pas dépasser le cap
-- Plafond appliqué automatiquement à chaque tick de production
-- Encourage l'upgrade du Hangar pour augmenter la capacité
+**Protection production (SOFT CAP)**:
+- **IMPORTANT** : Les ressources existantes ne sont JAMAIS réduites (protection des joueurs)
+- Si ressources < cap : production normale plafonnée au cap
+- Si ressources >= cap : production ARRÊTÉE (garde les ressources actuelles)
+- Permet de dépenser au-dessus du cap, mais pas de produire plus
+- Encourage l'upgrade du Hangar pour reprendre la production
+- **Exemple** : Joueur avec 2M métal et cap 600k → garde 2M, mais ne produit plus jusqu'à upgrade hangar
 
 **Fichiers backend**:
 - `backend/migration/src/m20260120_000001_add_resource_storage.rs` (nouvelle migration)
