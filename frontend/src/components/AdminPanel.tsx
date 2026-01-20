@@ -188,14 +188,23 @@ export default function AdminPanel() {
   const updateConfig = async () => {
     setLoadingConfig(true);
     try {
+      // Le backend utilise #[serde(flatten)] donc on envoie directement editedConfig
+      console.log('🚀 [ADMIN] Sending config update');
+      console.log('🚀 [ADMIN] editedConfig keys:', Object.keys(editedConfig));
+      console.log('🚀 [ADMIN] editedConfig values:', editedConfig);
+
       const res = await fetch(apiUrl(`/admin/config?user_id=${userId}`), {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ configs: editedConfig })
+        body: JSON.stringify(editedConfig)
       });
+
+      console.log('🚀 [ADMIN] Response status:', res.status);
+      const responseData = await res.json();
+      console.log('🚀 [ADMIN] Response data:', responseData);
 
       if (res.ok) {
         toast.success('✅ Configuration mise à jour', {
@@ -207,6 +216,7 @@ export default function AdminPanel() {
         toast.error('Erreur lors de la sauvegarde');
       }
     } catch (e) {
+      console.error('🚀 [ADMIN] Error:', e);
       toast.error('Erreur réseau');
     } finally {
       setLoadingConfig(false);

@@ -337,8 +337,14 @@ pub async fn update_server_config_handler(
     Query(params): Query<HashMap<String, String>>,
     Json(updates): Json<ConfigUpdate>,
 ) -> impl IntoResponse {
+    println!("🚀 [ADMIN CONFIG] Handler called!");
+    println!("🚀 [ADMIN CONFIG] Query params: {:?}", params);
+
     let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    println!("🚀 [ADMIN CONFIG] User ID: {}", user_id_str);
+
     if check_admin(user_id_str, &state).await.is_err() {
+        println!("❌ [ADMIN CONFIG] Access denied for user: {}", user_id_str);
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
