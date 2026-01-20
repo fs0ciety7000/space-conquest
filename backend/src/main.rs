@@ -38,7 +38,7 @@ use sea_orm_migration::MigratorTrait;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin,
-    messaging, market, websocket, alliance, missions, officers, sabotage, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, AppState
 };
 use config::Config;
 use websocket::WsState;
@@ -209,6 +209,11 @@ async fn main() {
         .route("/planets/:id/resource-slots/:slot_number", patch(update_resource_slot_handler))
         .route("/planets/:id/resource-slots/:slot_number/toggle", post(toggle_resource_slot_handler))
         .route("/my-planets", get(get_my_planets_handler))
+        // Tech Tree (Expansion 2.0)
+        .route("/planets/:id/tech-tree", get(get_tech_tree_handler))
+        .route("/planets/:id/ship-types", get(get_ship_types_handler))
+        .route("/tech/:tech_key", get(get_tech_details_handler))
+        .route("/ship/:ship_key", get(get_ship_details_handler))
         // Actions
         .route("/attack", post(attack_handler))
         .route("/spy", post(spy_handler))
@@ -3890,5 +3895,60 @@ async fn toggle_resource_slot_handler(
             })).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la mise à jour"}))).into_response(),
+    }
+}
+
+// ========== TECH TREE ENDPOINTS (Expansion 2.0) ==========
+
+/// GET /planets/:id/tech-tree - Get all technologies with requirements for a planet
+async fn get_tech_tree_handler(
+    State(state): State<AppState>,
+    Path(planet_id): Path<i32>,
+) -> impl IntoResponse {
+    match tech_tree::get_tech_tree_for_planet(&state.db, planet_id).await {
+        Ok(tech_tree_data) => Json(json!({ "technologies": tech_tree_data })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch tech tree"}))).into_response(),
+    }
+}
+
+/// GET /planets/:id/ship-types - Get all ship types with requirements for a planet
+async fn get_ship_types_handler(
+    State(state): State<AppState>,
+    Path(planet_id): Path<i32>,
+) -> impl IntoResponse {
+    match tech_tree::get_ship_types_for_planet(&state.db, planet_id).await {
+        Ok(ship_types) => Json(json!({ "ship_types": ship_types })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch ship types"}))).into_response(),
+    }
+}
+
+/// GET /tech/:tech_key - Get details for a specific technology
+async fn get_tech_details_handler(
+    State(state): State<AppState>,
+    Path(tech_key): Path<String>,
+) -> impl IntoResponse {
+    use entities::prelude::Technology;
+    use entities::technology;
+
+    match Technology::find()
+        .filter(technology::Column::TechKey.eq(&tech_key))
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(tech)) => Json(json!({ "technology": tech })).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Technology not found"}))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    }
+}
+
+/// GET /ship/:ship_key - Get details for a specific ship type
+async fn get_ship_details_handler(
+    State(state): State<AppState>,
+    Path(ship_key): Path<String>,
+) -> impl IntoResponse {
+    match tech_tree::get_ship_stats(&state.db, &ship_key).await {
+        Ok(Some(ship)) => Json(json!({ "ship": ship })).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Ship type not found"}))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
     }
 }
