@@ -735,6 +735,13 @@ async fn get_planet_handler(
             game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
             p.energy_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, speed_factor
         ));
+
+        // Appliquer les caps de stockage
+        let storage_cap = game_logic::get_storage_capacity(p.resource_storage_level);
+        active.metal_amount = Set(active.metal_amount.clone().unwrap().min(storage_cap));
+        active.crystal_amount = Set(active.crystal_amount.clone().unwrap().min(storage_cap));
+        active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap().min(storage_cap));
+
         active.last_update = Set(now);
     }
 
@@ -755,6 +762,7 @@ async fn get_planet_handler(
             "shipyard" => active.shipyard_level = Set(item.level),
             "research" => active.research_lab_level = Set(item.level),
             "hangar" => active.hangar_level = Set(item.level),
+            "resource_storage" => active.resource_storage_level = Set(item.level),
             "energy_tech" => active.energy_tech_level = Set(item.level),
             "laser" => active.laser_battery_level = Set(item.level),
             "espionage" => active.espionage_tech_level = Set(item.level),
@@ -1005,6 +1013,7 @@ async fn upgrade_mine_handler(
         "espionage" => p.espionage_tech_level,
         "armour" => p.armour_tech_level,
         "hangar" => p.hangar_level,
+        "resource_storage" => p.resource_storage_level,
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 

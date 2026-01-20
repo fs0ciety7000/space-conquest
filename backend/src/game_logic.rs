@@ -302,7 +302,12 @@ pub fn get_upgrade_cost(building_type: &str, level: i32) -> Cost {
             crystal: 200.0 * 2.0f64.powi(level - 1),
             deuterium: 100.0 * 2.0f64.powi(level - 1),
         },
-        
+        "resource_storage" => Cost {
+            metal: 1000.0 * 2.0f64.powi(level - 1),
+            crystal: 500.0 * 2.0f64.powi(level - 1),
+            deuterium: 0.0,
+        },
+
         // 🔬 TECHNOLOGIES (multiplicateur 2.0)
         "energy_tech" => Cost {
             metal: 0.0,
@@ -369,6 +374,19 @@ pub fn get_transporter_capacity(hangar_level: i32) -> f64 {
 }
 
 pub const TRANSPORTER_CAPACITY: f64 = 10000.0; // Deprecated: utilisez get_transporter_capacity()
+
+// Capacité de stockage des ressources (exponentielle par niveau de Hangar à Ressources)
+// Niveau 0: 600 000 (base sans hangar)
+// Niveau 1: 600 000 * 1.6 = 960 000
+// Niveau 2: 600 000 * 1.6^2 = 1 536 000, etc.
+pub fn get_storage_capacity(storage_level: i32) -> f64 {
+    let base_capacity = 600000.0;
+    if storage_level == 0 {
+        base_capacity
+    } else {
+        base_capacity * 1.6f64.powi(storage_level)
+    }
+}
 
 // Capacité de cargo des vaisseaux de combat (pour le butin des attaques)
 pub fn get_ship_cargo_capacity(ship_type: &str) -> f64 {

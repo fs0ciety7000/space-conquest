@@ -1,8 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  Hammer, Microscope, Timer, ArrowUpCircle, 
-  Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp, Lock, ShieldCheck, Shield 
+import {
+  Hammer, Microscope, Timer, ArrowUpCircle,
+  Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp, Lock, ShieldCheck, Shield, Package
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { checkPrerequisites } from "@/lib/gameRules"; // Importation de ta règle
@@ -49,6 +49,15 @@ const getFacilityTheme = (type: string) => {
       gradient: "from-slate-950 to-orange-950/20",
       icon: Warehouse,
       bgIcon: Warehouse
+    },
+    resource_storage: {
+      color: "text-yellow-400",
+      border: "border-yellow-500/50",
+      bg: "bg-yellow-500/10",
+      glow: "shadow-yellow-500/20",
+      gradient: "from-slate-950 to-yellow-950/20",
+      icon: Package,
+      bgIcon: Package
     }
   };
   return themes[type] || themes.shipyard;
@@ -64,7 +73,11 @@ const getFacilityStats = (id: string, level: number) => {
         case 'research':
             return { label: "Vitesse Recherche", current: `x${1 + level}`, next: `x${1 + next}` };
         case 'armour':
-            return { label: "Bonus Structure", current: `+${level * 10}%`, next: `+${next * 10}%` }; // Nouveau label
+            return { label: "Bonus Structure", current: `+${level * 10}%`, next: `+${next * 10}%` };
+        case 'resource_storage':
+            const currentCap = level === 0 ? 600000 : Math.floor(600000 * Math.pow(1.6, level));
+            const nextCap = Math.floor(600000 * Math.pow(1.6, next));
+            return { label: "Stockage Max", current: (currentCap / 1000).toFixed(0) + "k", next: (nextCap / 1000).toFixed(0) + "k" };
         default:
             return { label: "Niveau", current: level, next: next };
     }
@@ -102,6 +115,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     if (type === 'research') return { m: 200 * factor, c: 400 * factor, d: 200 * factor };
     if (type === 'hangar') return { m: 500 * factor, c: 250 * factor, d: 100 * factor };
     if (type === 'armour') return { m: 1000 * factor, c: 0, d: 0 };
+    if (type === 'resource_storage') return { m: 1000 * factor, c: 500 * factor, d: 0 };
     return { m: 0, c: 0, d: 0 };
   };
 
@@ -109,6 +123,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     { id: 'shipyard', name: 'Chantier Spatial', lv: planet.shipyard_level ?? 0, desc: "Permet la construction de vaisseaux et défenses." },
     { id: 'research', name: 'Labo de Recherche', lv: planet.research_lab_level ?? 0, desc: "Nécessaire pour débloquer de nouvelles technologies." },
     { id: 'hangar', name: 'Hangar à Vaisseaux', lv: planet.hangar_level ?? 0, desc: "Augmente la capacité de stockage de la flotte." },
+    { id: 'resource_storage', name: 'Hangar à Ressources', lv: planet.resource_storage_level ?? 0, desc: "Augmente la capacité de stockage des ressources (600k base)." },
     { id: 'armour', name: 'Technologie de Protection', lv: planet.armour_tech_level ?? 0, desc: "Augmente la coque des vaisseaux de 10% par niveau." },
   ];
 

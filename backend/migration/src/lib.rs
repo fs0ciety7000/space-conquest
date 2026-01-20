@@ -38,6 +38,7 @@ mod m20260119_200000_create_alliance_system;
 mod m20260119_300000_create_missions_achievements;
 mod m20260119_400000_create_officers_system;
 mod m20260119_400001_seed_officers;
+mod m20260120_000001_add_resource_storage;
 
 pub struct Migrator;
 
@@ -83,6 +84,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260119_300000_create_missions_achievements::Migration),
             Box::new(m20260119_400000_create_officers_system::Migration),
             Box::new(m20260119_400001_seed_officers::Migration),
+            Box::new(m20260120_000001_add_resource_storage::Migration),
         ]
     }
 }
