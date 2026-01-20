@@ -187,7 +187,7 @@ let (system, position) = {
         metal_mine_level: Set(1),
         crystal_mine_level: Set(1),
         deuterium_mine_level: Set(1),
-        solar_plant_level: Set(1),
+        solar_plant_level: Set(3), // Niveau 3 = ~240 énergie, garantit le minimum de 150
         shipyard_level: Set(1),
         metal_amount: Set(2000.0),
         crystal_amount: Set(1000.0),

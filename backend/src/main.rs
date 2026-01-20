@@ -1982,7 +1982,10 @@ async fn colonize_handler(
     
     let new_planet = planet::ActiveModel {
         id: Set(new_id), owner_id: Set(owner_id), name: Set(colony_name), password: Set(password), galaxy: Set(payload.galaxy), system: Set(payload.system), position: Set(payload.position),
-        metal_mine_level: Set(1), crystal_mine_level: Set(1), deuterium_mine_level: Set(1), metal_amount: Set(500.0), crystal_amount: Set(500.0), last_update: Set(Utc::now().naive_utc()),
+        metal_mine_level: Set(1), crystal_mine_level: Set(1), deuterium_mine_level: Set(1),
+        solar_plant_level: Set(3), // Niveau 3 = ~240 énergie, garantit le minimum de 150
+        metal_amount: Set(500.0), crystal_amount: Set(500.0),
+        last_update: Set(Utc::now().naive_utc()),
         created_at: Set(Utc::now().naive_utc()),
         ..Default::default()
     };
