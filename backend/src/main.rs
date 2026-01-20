@@ -283,6 +283,8 @@ async fn main() {
         // Sabotage
         .route("/sabotage", post(sabotage::attempt_sabotage))
         .route("/planets/:id/sabotages", get(sabotage::get_active_sabotages))
+        .route("/sabotage/my-sabotages", get(sabotage::get_my_sabotages_handler))
+        .route("/casus-belli/active", get(sabotage::get_casus_belli_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -1233,6 +1235,23 @@ async fn attack_handler(
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible introuvable"}))).into_response(),
     };
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // ═══════════════════════════════════════════════════════════════════════════
+    let attacker_owner_id = att_planet.owner_id;
+    let defender_owner_id = target_planet.owner_id;
+
+    let mut used_casus_belli = false;
+    if let Ok(has_cb) = sabotage::has_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {
+        if has_cb {
+            // Consommer le casus belli
+            if let Ok(_) = sabotage::consume_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {
+                used_casus_belli = true;
+                println!("⚔️ Casus Belli consommé: attacker {} vs defender {}", attacker_owner_id, defender_owner_id);
+            }
+        }
+    }
+
     if payload.hunters > att_planet.light_hunter_count
         || payload.cruisers > att_planet.cruiser_count
         || payload.transporters > att_planet.transporter_count {
@@ -1294,10 +1313,11 @@ async fn attack_handler(
         }
     }
 
-    (StatusCode::OK, Json(json!({ 
-        "status": "success", 
+    (StatusCode::OK, Json(json!({
+        "status": "success",
         "message": "Flotte en route",
-        "arrival": arrival 
+        "arrival": arrival,
+        "used_casus_belli": used_casus_belli
     }))).into_response()
 }
 
