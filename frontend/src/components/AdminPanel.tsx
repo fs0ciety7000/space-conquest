@@ -1758,3 +1758,55 @@ export default function AdminPanel() {
     </div>
   );
 }
+
+// Composant helper pour les inputs de configuration
+interface ConfigInputProps {
+  label: string;
+  configKey: string;
+  value: string;
+  onChange: (value: string) => void;
+  color: 'indigo' | 'purple' | 'green' | 'cyan' | 'orange' | 'red' | 'yellow';
+  description?: string;
+  compact?: boolean;
+  step?: string;
+}
+
+function ConfigInput({ label, value, onChange, color, description, compact, step = "0.1" }: ConfigInputProps) {
+  const colorClasses = {
+    indigo: 'bg-indigo-950/20 border-indigo-500/30 text-indigo-400',
+    purple: 'bg-purple-950/20 border-purple-500/30 text-purple-400',
+    green: 'bg-green-950/20 border-green-500/30 text-green-400',
+    cyan: 'bg-cyan-950/20 border-cyan-500/30 text-cyan-400',
+    orange: 'bg-orange-950/20 border-orange-500/30 text-orange-400',
+    red: 'bg-red-950/20 border-red-500/30 text-red-400',
+    yellow: 'bg-yellow-950/20 border-yellow-500/30 text-yellow-400',
+  };
+
+  const inputColorClasses = {
+    indigo: 'border-indigo-500/30 focus:border-indigo-500',
+    purple: 'border-purple-500/30 focus:border-purple-500',
+    green: 'border-green-500/30 focus:border-green-500',
+    cyan: 'border-cyan-500/30 focus:border-cyan-500',
+    orange: 'border-orange-500/30 focus:border-orange-500',
+    red: 'border-red-500/30 focus:border-red-500',
+    yellow: 'border-yellow-500/30 focus:border-yellow-500',
+  };
+
+  return (
+    <div className={`${colorClasses[color]} rounded-lg p-${compact ? '3' : '4'}`}>
+      <label className={`text-${compact ? '[10px]' : 'xs'} ${colorClasses[color].split(' ')[2]} font-bold mb-2 block uppercase tracking-wider`}>
+        {label}
+      </label>
+      <Input
+        type="number"
+        step={step}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`bg-black/40 ${inputColorClasses[color]} text-white font-mono ${compact ? 'text-sm' : 'text-lg'} transition-all`}
+      />
+      {description && !compact && (
+        <p className="text-xs text-slate-500 mt-1">{description}</p>
+      )}
+    </div>
+  );
+}
