@@ -157,7 +157,7 @@ export default function ExpeditionZone({ planet, onAction }: { planet: any, onAc
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               
               {/* Module Flotte */}
-              <div className={`p-4 rounded-xl border border-white/5 bg-black/40 relative overflow-hidden glass-card hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth animate-fade-in ${hasShips ? '' : 'border-red-900/50 animate-glow-pulse'}`}>
+              <div className={`p-4 rounded-xl border border-white/5 bg-black/40 relative overflow-hidden glass-card hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth animate-fade-in ${hasShips ? '' : 'border-red-900/50'}`}>
                 <div className="flex justify-between items-start mb-2">
                    <h4 className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2">
                       <Rocket size={12} className="animate-bounce-subtle"/> Disponibilité Flotte

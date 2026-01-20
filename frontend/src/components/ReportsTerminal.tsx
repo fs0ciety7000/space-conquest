@@ -79,13 +79,13 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
         <div className="flex bg-slate-900/50 p-1 rounded-lg card-depth">
             <button
                 onClick={() => setView('combat')}
-                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'combat' ? 'bg-red-500/20 text-red-400 shadow-[0_0_10px_rgba(248,113,113,0.2)] animate-glow-pulse' : 'text-slate-500 hover:text-white'}`}
+                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'combat' ? 'bg-red-500/20 text-red-400 shadow-[0_0_10px_rgba(248,113,113,0.2)]' : 'text-slate-500 hover:text-white'}`}
             >
                 <Swords size={12} /> Opérations Militaires
             </button>
             <button
                 onClick={() => setView('transport')}
-                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'transport' ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.2)] animate-glow-pulse' : 'text-slate-500 hover:text-white'}`}
+                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'transport' ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.2)]' : 'text-slate-500 hover:text-white'}`}
             >
                 <Truck size={12} /> Logistique
             </button>
@@ -157,7 +157,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                             <div
                                 key={log.id}
                                 onClick={() => handleReportClick(log.id)}
-                                className="bg-gradient-to-r from-red-950/30 to-orange-950/30 border border-red-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-red-950/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer animate-fade-in card-depth animate-glow-pulse"
+                                className="bg-gradient-to-r from-red-950/30 to-orange-950/30 border border-red-500/50 p-3 rounded-lg flex items-center justify-between group hover:bg-red-950/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer animate-fade-in card-depth"
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 rounded-lg bg-red-500/20 text-red-400">

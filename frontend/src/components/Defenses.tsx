@@ -136,7 +136,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                 key={id}
                 onClick={() => setSelected(id)}
                 className={`relative group overflow-hidden rounded-xl border transition-all duration-500 p-4 text-left h-32 flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl card-depth animate-fade-in
-                  ${isSelected ? `${config.bg} ${config.border} ${config.glow} scale-105 z-10 animate-glow-pulse` : 'bg-black/40 border-white/10 opacity-70 hover:opacity-100'}`}
+                  ${isSelected ? `${config.bg} ${config.border} ${config.glow} scale-105 z-10` : 'bg-black/40 border-white/10 opacity-70 hover:opacity-100'}`}
               >
                  <div className="flex justify-between items-start">
                     <div>
