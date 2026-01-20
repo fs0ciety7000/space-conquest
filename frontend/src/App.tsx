@@ -28,6 +28,7 @@ import MissionsView from './components/MissionsView';
 import Officers from './components/Officers';
 import { SabotagesDashboard } from './components/SabotagesDashboard';
 import { CasusBelliList } from './components/CasusBelliList';
+import { Sidebar, type MenuItem } from './components/Sidebar';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
@@ -562,7 +563,7 @@ export default function App() {
   // Vérifier si l'utilisateur est admin
   const isAdmin = username === 'phantomhex';
 
-  const MENU_ITEMS = [
+  const MENU_ITEMS: MenuItem[] = [
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
     { id: 'galaxy', label: 'Galaxie', icon: Globe, category: 'COMMANDEMENT' },
     { id: 'myplanets', label: 'Mes Planètes', icon: Map, category: 'COMMANDEMENT' },
@@ -675,172 +676,78 @@ export default function App() {
         <aside className="w-64 bg-slate-950/80 backdrop-blur-xl border-r border-indigo-500/10 flex-col h-full overflow-y-auto hidden md:flex scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent relative">
           {/* Ligne lumineuse décorative */}
           <div className="absolute top-0 right-0 w-px h-full bg-gradient-to-b from-cyan-500/20 via-purple-500/10 to-transparent"></div>
-             <div className="p-4 space-y-8 mt-4">
-                {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'ÉCONOMIE', 'MILITAIRE', 'ESPIONNAGE', 'DONNÉES', 'SYSTÈME'].map(cat => (
 
-                    <div key={cat} className="space-y-2">
-                        <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
-                        <div className="space-y-0.5">
-                            {MENU_ITEMS.filter(item => item.category === cat).map(item => (
-                                <motion.button
-                                    key={item.id}
-                                    data-tour={item.id}
-                                    onClick={() => {
-                                      if ('onClick' in item && item.onClick) {
-                                        item.onClick();
-                                        setSidebarOpen(false);
-                                        playSound('click');
-                                      } else {
-                                        handleTabChange(item.id as any);
-                                      }
-                                    }}
-                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-300 group relative overflow-hidden ${activeTab === item.id ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
-                                    whileHover={{ x: 4 }}
-                                    whileTap={{ scale: 0.98 }}
-                                >
-                                    <item.icon size={16} className={`transition-all duration-300 ${activeTab === item.id ? 'scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : 'group-hover:scale-110 group-hover:text-cyan-400'}`} /> 
-                                    <span className="relative z-10">{item.label}</span>
-                                    {activeTab === item.id && (
-                                      <>
-                                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-400/15 to-indigo-500/0 opacity-50 animate-shimmer"></div>
-                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-400 rounded-r shadow-[0_0_10px_rgba(0,245,255,0.8)]"></div>
-                                      </>
-                                    )}
-                                </motion.button>
-                            ))}
-                        </div>
-                    </div>
-                ))}
+          <Sidebar
+            menuItems={MENU_ITEMS}
+            activeTab={activeTab}
+            unreadMessagesCount={unreadMessagesCount}
+            onTabChange={handleTabChange}
+            onShowShortcuts={() => setShowShortcutsHelp(true)}
+            playSound={playSound}
+            isMobile={false}
+          />
+
+          {/* Boutons supplémentaires */}
+          <div className="px-4 pb-3">
+            <a
+              href="https://scissue.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-purple-950/30 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300 transition-colors text-xs font-bold uppercase border border-purple-900/30"
+            >
+              <MessageSquarePlus size={16} /> Signaler un problème
+            </a>
+          </div>
+
+          <div className="p-4 border-t border-white/5">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors text-xs font-bold uppercase border border-red-900/20"
+            >
+              <LogOut size={16} /> Déconnexion
+            </button>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-auto px-4 pb-4 pt-3 border-t border-white/5">
+            <div className="text-center space-y-1.5">
+              <p className="text-[10px] text-slate-400">
+                Développé avec <span className="text-red-500">❤️</span> par{' '}
+                <span className="font-bold text-white">Nicolas Dessenius</span>
+              </p>
             </div>
-
-           {/* Bouton aide raccourcis */}
-<div className="px-4 pb-3">
-  <button
-    onClick={() => setShowShortcutsHelp(true)}
-    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-indigo-950/30 text-indigo-400 hover:bg-indigo-900/40 hover:text-indigo-300 transition-colors text-xs font-bold uppercase border border-indigo-900/30"
-  >
-    <Keyboard size={16} /> Raccourcis (?)
-  </button>
-</div>
-
-{/* ✨ Bouton Soumettre un bug / Amélioration */}
-<div className="px-4 pb-3">
-  <a
-    href="https://scissue.netlify.app/"
-    target="_blank"
-    rel="noopener noreferrer"
-    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-purple-950/30 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300 transition-colors text-xs font-bold uppercase border border-purple-900/30"
-  >
-    <MessageSquarePlus size={16} /> Signaler un problème
-  </a>
-</div>
-
-<div className="p-4 border-t border-white/5">
-  <button 
-    onClick={handleLogout} 
-    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors text-xs font-bold uppercase border border-red-900/20"
-  >
-    <LogOut size={16} /> Déconnexion
-  </button>
-</div>
-
-{/* ✨ Footer */}
-<div className="mt-auto px-4 pb-4 pt-3 border-t border-white/5">
-  <div className="text-center space-y-1.5">
-    <p className="text-[10px] text-slate-400">
-      Développé avec <span className="text-red-500">❤️</span> par{' '}
-      <span className="font-bold text-white">Nicolas Dessenius</span>
-    </p>
-    <p className="text-[10px] text-slate-500">
-      Propulsé par <span className="font-bold text-orange-400">🦀 Rust</span>
-    </p>
-  </div>
-</div>
-</aside>
+          </div>
+        </aside>
 
         {/* Sidebar Mobile */}
         {sidebarOpen && (
           <>
             {/* Overlay */}
-            <div 
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" 
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
               onClick={() => setSidebarOpen(false)}
             />
-            
+
             {/* Drawer */}
             <aside className="fixed top-[60px] left-0 h-[calc(100vh-60px)] w-72 bg-slate-950/95 backdrop-blur-xl border-r border-white/10 flex flex-col overflow-y-auto z-50 md:hidden shadow-2xl animate-in slide-in-from-left duration-300">
-              <div className="flex items-center justify-between p-4 border-b border-white/10">
-                <h2 className="text-sm font-black text-white uppercase tracking-widest">Menu</h2>
-                <button 
-                  onClick={() => setSidebarOpen(false)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  <X size={18} className="text-slate-400" />
-                </button>
-              </div>
-
-              <div className="p-4 space-y-6 mt-2">
-               {['COMMANDEMENT', 'COMMUNICATION', 'DÉVELOPPEMENT', 'ÉCONOMIE', 'MILITAIRE', 'ESPIONNAGE', 'DONNÉES', 'SYSTÈME'].map(cat => (
-
-                    <div key={cat} className="space-y-2">
-                        <h3 className="text-[10px] font-black text-indigo-500/50 uppercase tracking-[0.2em] pl-3 border-l-2 border-indigo-500/20">{cat}</h3>
-                        <div className="space-y-1">
-                            {MENU_ITEMS.filter(item => item.category === cat).map(item => (
-    <button
-        key={item.id}
-        data-tour={item.id}
-        onClick={() => {
-          if ('onClick' in item && item.onClick) {
-            item.onClick();
-            setSidebarOpen(false);
-            playSound('click');
-          } else {
-            handleTabChange(item.id as any);
-          }
-        }}
-        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-200 group relative overflow-hidden ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
-    >
-        <div className="relative">
-            <item.icon size={16} className={`transition-transform duration-300 ${activeTab === item.id ? 'scale-110' : 'group-hover:scale-110'}`} />
-            
-            {/* ✅ AJOUT : Badge avec pulse si messages non lus */}
-            {item.id === 'messages' && unreadMessagesCount > 0 && (
-                <>
-                    <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-                    </span>
-                </>
-            )}
-        </div>
-        
-        <span className="relative z-10 flex-1 text-left">{item.label}</span>
-        
-        {/* ✅ Badge avec le nombre de messages */}
-        {item.id === 'messages' && unreadMessagesCount > 0 && (
-            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                {unreadMessagesCount}
-            </span>
-        )}
-        
-        {activeTab === item.id && <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-400/15 to-indigo-500/0 opacity-30 animate-shimmer"></div>}
-    </button>
-))}
-                        </div>
-                    </div>
-                ))}
-              </div>
+              <Sidebar
+                menuItems={MENU_ITEMS}
+                activeTab={activeTab}
+                unreadMessagesCount={unreadMessagesCount}
+                onTabChange={handleTabChange}
+                onShowShortcuts={() => setShowShortcutsHelp(true)}
+                playSound={playSound}
+                isMobile={true}
+                onClose={() => setSidebarOpen(false)}
+              />
 
               <div className="mt-auto p-4 space-y-3 border-t border-white/5">
-                 <button 
-                   onClick={() => { setShowShortcutsHelp(true); setSidebarOpen(false); }}
-                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-950/30 text-indigo-400 hover:bg-indigo-900/40 transition-colors text-sm font-bold uppercase border border-indigo-900/30"
-                 >
-                   <Keyboard size={18}/> Raccourcis
-                 </button>
-                 <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors text-sm font-bold uppercase border border-red-900/20">
-                     <LogOut size={18}/> Déconnexion
-                 </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors text-sm font-bold uppercase border border-red-900/20"
+                >
+                  <LogOut size={18} /> Déconnexion
+                </button>
               </div>
             </aside>
           </>
