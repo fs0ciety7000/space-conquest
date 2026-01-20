@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Crosshair, Shield, Rocket, AlertTriangle, X } from "lucide-react";
+import { Crosshair, Shield, Rocket, AlertTriangle, X, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -8,22 +8,24 @@ interface AttackModalProps {
   myFleet: {
     hunters: number;
     cruisers: number;
+    transporters: number;
   };
-  onConfirm: (hunters: number, cruisers: number) => void;
+  onConfirm: (hunters: number, cruisers: number, transporters: number) => void;
   onCancel: () => void;
 }
 
 export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }: AttackModalProps) {
   const [hunters, setHunters] = useState(0);
   const [cruisers, setCruisers] = useState(0);
-  
+  const [transporters, setTransporters] = useState(0);
 
   // Calcul de la puissance estimée (juste pour l'UI)
   const power = (hunters * 10) + (cruisers * 50);
+  const cargo = (hunters * 50) + (cruisers * 800) + (transporters * 10000);
 
   const handleSubmit = () => {
     if (hunters === 0 && cruisers === 0) return;
-    onConfirm(hunters, cruisers);
+    onConfirm(hunters, cruisers, transporters);
   };
 
   return (
@@ -77,26 +79,73 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
             </div>
 
             {/* Sélection Croiseurs */}
-            <div className="space-y-2 opacity-50 pointer-events-none grayscale"> {/* Grisé pour l'instant si pas implémenté */}
+            <div className="space-y-2">
                 <div className="flex justify-between text-xs uppercase font-bold text-slate-400">
-                    <span>Croiseurs (Bientôt)</span>
+                    <span>Croiseurs</span>
                     <span className="text-white">Dispo: {myFleet.cruisers}</span>
                 </div>
                 <div className="flex gap-4 items-center">
                     <Shield size={20} className="text-slate-500 animate-bounce-subtle" />
-                    <Input disabled type="range" value={0} className="flex-1 h-2 bg-slate-800" />
-                    <Input disabled type="number" value={0} className="w-20 bg-black border-slate-800 text-slate-500 text-right font-mono"/>
+                    <Input
+                        type="range"
+                        min="0"
+                        max={myFleet.cruisers}
+                        value={cruisers}
+                        onChange={(e) => setCruisers(parseInt(e.target.value))}
+                        className="flex-1 h-2 bg-slate-800 accent-red-500 cursor-pointer"
+                    />
+                    <Input
+                        type="number"
+                        min="0"
+                        max={myFleet.cruisers}
+                        value={cruisers}
+                        onChange={(e) => setCruisers(Math.min(myFleet.cruisers, parseInt(e.target.value) || 0))}
+                        className="w-20 bg-black border-red-900/50 text-white text-right font-mono"
+                    />
+                </div>
+            </div>
+
+            {/* Sélection Transporteurs */}
+            <div className="space-y-2">
+                <div className="flex justify-between text-xs uppercase font-bold text-slate-400">
+                    <span>Transporteurs (Cargo)</span>
+                    <span className="text-white">Dispo: {myFleet.transporters}</span>
+                </div>
+                <div className="flex gap-4 items-center">
+                    <Truck size={20} className="text-yellow-500 animate-bounce-subtle" />
+                    <Input
+                        type="range"
+                        min="0"
+                        max={myFleet.transporters}
+                        value={transporters}
+                        onChange={(e) => setTransporters(parseInt(e.target.value))}
+                        className="flex-1 h-2 bg-slate-800 accent-yellow-500 cursor-pointer"
+                    />
+                    <Input
+                        type="number"
+                        min="0"
+                        max={myFleet.transporters}
+                        value={transporters}
+                        onChange={(e) => setTransporters(Math.min(myFleet.transporters, parseInt(e.target.value) || 0))}
+                        className="w-20 bg-black border-yellow-900/50 text-white text-right font-mono"
+                    />
                 </div>
             </div>
 
             {/* Résumé */}
-            <div className="bg-red-900/10 border border-red-900/30 p-4 rounded-xl flex items-center justify-between glass-card hover:-translate-y-0.5 transition-all duration-300 card-depth">
-                <div className="flex items-center gap-2 text-red-500 text-xs font-bold uppercase">
+            <div className="bg-red-900/10 border border-red-900/30 p-4 rounded-xl glass-card hover:-translate-y-0.5 transition-all duration-300 card-depth">
+                <div className="flex items-center gap-2 text-red-500 text-xs font-bold uppercase mb-3">
                     <AlertTriangle size={14} className="animate-bounce-subtle" /> Zone de Guerre
                 </div>
-                <div className="text-right">
-                    <p className="text-[10px] text-slate-500 uppercase">Puissance de feu</p>
-                    <p className="text-xl font-black text-white">{power}</p>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center">
+                        <p className="text-[10px] text-slate-500 uppercase">Puissance de feu</p>
+                        <p className="text-xl font-black text-white">{power.toLocaleString()}</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-[10px] text-yellow-500 uppercase">Capacité Cargo</p>
+                        <p className="text-xl font-black text-yellow-400">{cargo.toLocaleString()}</p>
+                    </div>
                 </div>
             </div>
 

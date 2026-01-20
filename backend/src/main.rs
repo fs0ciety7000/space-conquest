@@ -77,6 +77,7 @@ struct AttackPayload {
     target_planet_id: Uuid,
     hunters: i32,
     cruisers: i32,
+    transporters: i32,
 }
 
 #[derive(Deserialize)]
@@ -90,6 +91,7 @@ struct ColonizePayload {
 struct ExpeditionPayload {
     hunters: i32,
     cruisers: i32,
+    recyclers: i32,
 }
 
 #[derive(Deserialize)]
@@ -349,21 +351,22 @@ async fn resolve_attack_mission(
         def_energy_ratio
     );
 
-    let att_hunters = mission.metal as i32; 
+    let att_hunters = mission.metal as i32;
     let att_cruisers = mission.crystal as i32;
+    let att_transporters = mission.deuterium as i32;
 
-    let att_techs = game_logic::CombatTechs { 
-        laser: att_planet.laser_battery_level, energy: att_planet.energy_tech_level, armour: att_planet.armour_tech_level 
+    let att_techs = game_logic::CombatTechs {
+        laser: att_planet.laser_battery_level, energy: att_planet.energy_tech_level, armour: att_planet.armour_tech_level
     };
-    let def_techs = game_logic::CombatTechs { 
-        laser: def_planet.laser_battery_level, energy: def_planet.energy_tech_level, armour: def_planet.armour_tech_level 
+    let def_techs = game_logic::CombatTechs {
+        laser: def_planet.laser_battery_level, energy: def_planet.energy_tech_level, armour: def_planet.armour_tech_level
     };
 
     let result = game_logic::resolve_pvp(
-        att_hunters, att_cruisers, att_techs,
-        def_planet.light_hunter_count, def_planet.cruiser_count, 0, 
-        def_planet.missile_launcher_count, def_planet.plasma_turret_count, 
-        def_techs, 
+        att_hunters, att_cruisers, att_transporters, att_planet.hangar_level, att_techs,
+        def_planet.light_hunter_count, def_planet.cruiser_count, 0,
+        def_planet.missile_launcher_count, def_planet.plasma_turret_count,
+        def_techs,
         game_logic::Cost { metal: def_planet.metal_amount, crystal: def_planet.crystal_amount, deuterium: def_planet.deuterium_amount }
     );
 
@@ -462,9 +465,11 @@ async fn resolve_attack_mission(
     let total_sent = (att_hunters + att_cruisers).max(1);
     let lost_h = (att_hunters as f64 * (result.attacker_losses as f64 / total_sent as f64)) as i32;
     let lost_c = result.attacker_losses - lost_h;
-    
+
     att_active.light_hunter_count = Set(att_planet.light_hunter_count + (att_hunters - lost_h));
     att_active.cruiser_count = Set(att_planet.cruiser_count + (att_cruisers - lost_c));
+    // Les transporteurs ne participent pas au combat, ils reviennent tous
+    att_active.transporter_count = Set(att_planet.transporter_count + att_transporters);
 
     // Résultat du point de vue de l'attaquant (cohérent avec combat_log.result)
     let attacker_result = if result.winner == "attacker" { "victory" } else { "defeat" };
@@ -1136,7 +1141,9 @@ async fn attack_handler(
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible introuvable"}))).into_response(),
     };
 
-    if payload.hunters > att_planet.light_hunter_count || payload.cruisers > att_planet.cruiser_count {
+    if payload.hunters > att_planet.light_hunter_count
+        || payload.cruisers > att_planet.cruiser_count
+        || payload.transporters > att_planet.transporter_count {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Flotte insuffisante"}))).into_response();
     }
 
@@ -1150,6 +1157,7 @@ async fn attack_handler(
     let mut att_active: planet::ActiveModel = att_planet.into();
     att_active.light_hunter_count = Set(att_active.light_hunter_count.unwrap() - payload.hunters);
     att_active.cruiser_count = Set(att_active.cruiser_count.unwrap() - payload.cruisers);
+    att_active.transporter_count = Set(att_active.transporter_count.unwrap() - payload.transporters);
     att_active.update(&state.db).await.unwrap();
 
     let new_mission = fleet_mission::ActiveModel {
@@ -1160,7 +1168,8 @@ async fn attack_handler(
         arrival_time: Set(arrival),
         metal: Set(payload.hunters as f64),
         crystal: Set(payload.cruisers as f64),
-        ships_count: Set(payload.hunters + payload.cruisers),
+        deuterium: Set(payload.transporters as f64), // Store transporters in deuterium field
+        ships_count: Set(payload.hunters + payload.cruisers + payload.transporters),
         ..Default::default()
     };
     new_mission.insert(&state.db).await.unwrap();
@@ -1187,7 +1196,7 @@ async fn attack_handler(
                     &attacker_user.username,
                     &source_coords,
                     &arrival.to_string(),
-                    payload.hunters + payload.cruisers,
+                    payload.hunters + payload.cruisers + payload.transporters,
                 );
             }
         }
@@ -1221,6 +1230,7 @@ async fn expedition_handler(
     // Validation du nombre de vaisseaux
     let hunters = payload.hunters;
     let cruisers = payload.cruisers;
+    let recyclers = payload.recyclers;
     if hunters + cruisers <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
     }
@@ -1229,6 +1239,9 @@ async fn expedition_handler(
     }
     if cruisers > p.cruiser_count {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de croiseurs"}))).into_response();
+    }
+    if recyclers > p.recycler_count {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de recycleurs"}))).into_response();
     }
 
     let mut active: planet::ActiveModel = p.clone().into();
@@ -1254,17 +1267,20 @@ async fn expedition_handler(
 
     let total_ships = hunters + cruisers;
 
+    // Recycleurs augmentent la capacité de collecte de ressources (bonus x2 par recycleur)
+    let recycler_bonus = 1.0 + (recyclers as f64 * 2.0);
+
     let (loot_metal, loot_crystal, loot_deuterium) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
         let combat_res = game_logic::simulate_combat(total_ships, p.laser_battery_level);
 
         if combat_res.victory {
             winner = "victory";
-            // Gains proportionnels au nombre et type de vaisseaux
-            let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0);
-            let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0);
+            // Gains proportionnels au nombre et type de vaisseaux + bonus recycleur
+            let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * recycler_bonus * (game_logic::SPEED_FACTOR / 100.0);
+            let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * recycler_bonus * (game_logic::SPEED_FACTOR / 100.0);
             let deuterium = if found_deuterium {
-                (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * (game_logic::SPEED_FACTOR / 100.0)
+                (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * recycler_bonus * (game_logic::SPEED_FACTOR / 100.0)
             } else {
                 0.0
             };
@@ -1363,11 +1379,11 @@ async fn expedition_handler(
         }
     } else {
         winner = "calm";
-        // Gains proportionnels au nombre et type de vaisseaux (bonus pour secteur calme: x1.2)
-        let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
-        let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
+        // Gains proportionnels au nombre et type de vaisseaux (bonus pour secteur calme: x1.2) + bonus recycleur
+        let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * recycler_bonus * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
+        let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * recycler_bonus * 1.2 * (game_logic::SPEED_FACTOR / 100.0);
         let deuterium = if found_deuterium {
-            (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * 1.2 * (game_logic::SPEED_FACTOR / 100.0)
+            (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * recycler_bonus * 1.2 * (game_logic::SPEED_FACTOR / 100.0)
         } else {
             0.0
         };
@@ -1444,6 +1460,8 @@ async fn expedition_handler(
     
     active.light_hunter_count = Set(p.light_hunter_count - lost_hunters);
     active.cruiser_count = Set(p.cruiser_count - lost_cruisers);
+    // Les recycleurs ne participent pas au combat, ils ne sont pas perdus
+    // Mais ils sont temporairement indisponibles pendant l'expédition
 
     let duration = std::cmp::max(1, (600.0 / game_logic::SPEED_FACTOR) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
