@@ -41,6 +41,7 @@ mod m20260119_400001_seed_officers;
 mod m20260120_000001_add_resource_storage;
 mod m20260120_000002_create_sabotage_system;
 mod m20260120_000003_create_casus_belli;
+mod m20260120_000004_populate_server_config;
 
 pub struct Migrator;
 
@@ -89,6 +90,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260120_000001_add_resource_storage::Migration),
             Box::new(m20260120_000002_create_sabotage_system::Migration),
             Box::new(m20260120_000003_create_casus_belli::Migration),
+            Box::new(m20260120_000004_populate_server_config::Migration),
         ]
     }
 }
