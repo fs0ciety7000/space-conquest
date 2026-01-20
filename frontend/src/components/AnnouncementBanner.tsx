@@ -51,22 +51,33 @@ export default function AnnouncementBanner() {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'warning':
-        return <AlertCircle size={16} className="text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.8)]" />;
+        return <AlertCircle size={20} className="text-orange-400 drop-shadow-[0_0_12px_rgba(251,146,60,1)]" />;
       case 'danger':
-        return <Zap size={16} className="text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />;
+        return <Zap size={20} className="text-red-400 drop-shadow-[0_0_12px_rgba(239,68,68,1)] animate-pulse" />;
       default:
-        return <Info size={16} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]" />;
+        return <Info size={20} className="text-cyan-400 drop-shadow-[0_0_12px_rgba(6,182,212,1)]" />;
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'warning':
-        return 'border-orange-500/50 bg-orange-950/30 shadow-[0_0_20px_rgba(251,146,60,0.15)]';
+        return 'border-orange-500 bg-gradient-to-r from-orange-950/90 via-orange-900/70 to-orange-950/90 shadow-[0_0_40px_rgba(251,146,60,0.4)]';
       case 'danger':
-        return 'border-red-500/50 bg-red-950/30 shadow-[0_0_20px_rgba(239,68,68,0.15)]';
+        return 'border-red-500 bg-gradient-to-r from-red-950/90 via-red-900/70 to-red-950/90 shadow-[0_0_40px_rgba(239,68,68,0.4)]';
       default:
-        return 'border-cyan-500/50 bg-cyan-950/30 shadow-[0_0_20px_rgba(6,182,212,0.15)]';
+        return 'border-cyan-500 bg-gradient-to-r from-cyan-950/90 via-cyan-900/70 to-cyan-950/90 shadow-[0_0_40px_rgba(6,182,212,0.4)]';
+    }
+  };
+
+  const getGlowColor = (type: string) => {
+    switch (type) {
+      case 'warning':
+        return 'via-orange-400';
+      case 'danger':
+        return 'via-red-400';
+      default:
+        return 'via-cyan-400';
     }
   };
 
@@ -86,11 +97,11 @@ export default function AnnouncementBanner() {
           >
             {/* Animated background effects */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse"></div>
-              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+              <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent ${getGlowColor(announcement.announcement_type)} to-transparent animate-pulse`}></div>
+              <div className={`absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent ${getGlowColor(announcement.announcement_type)} to-transparent animate-pulse`} style={{ animationDelay: '0.5s' }}></div>
             </div>
 
-            <div className="relative z-10 flex items-center gap-4 px-4 py-3">
+            <div className="relative z-10 flex items-center gap-4 px-4 py-4">
               {/* Icon with pulse effect */}
               <div className="flex-shrink-0 relative">
                 <div className="absolute inset-0 animate-ping opacity-75">
@@ -102,9 +113,9 @@ export default function AnnouncementBanner() {
               </div>
 
               {/* Ticker indicator */}
-              <div className="flex-shrink-0 flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-lg border border-white/10">
-                <Radio size={12} className="text-cyan-400 animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400">
+              <div className="flex-shrink-0 flex items-center gap-2 bg-black/60 px-4 py-2 rounded-lg border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]">
+                <Radio size={14} className="text-cyan-400 animate-pulse" />
+                <span className="text-xs font-black uppercase tracking-[0.3em] text-cyan-400">
                   FLASH INFO
                 </span>
               </div>
@@ -128,14 +139,14 @@ export default function AnnouncementBanner() {
                   {/* Repeat content multiple times for seamless loop */}
                   {[...Array(5)].map((_, idx) => (
                     <div key={idx} className="flex items-center gap-3">
-                      <span className="text-sm font-black uppercase text-white tracking-wider drop-shadow-md">
+                      <span className="text-base font-black uppercase text-white tracking-wider drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">
                         {announcement.title}
                       </span>
-                      <span className="text-white/20 font-black">///</span>
-                      <span className="text-sm text-slate-300 font-semibold">
+                      <span className="text-white/30 font-black text-lg">///</span>
+                      <span className="text-base text-slate-200 font-semibold">
                         {announcement.content}
                       </span>
-                      <span className="text-cyan-400/40 font-black text-lg">◆</span>
+                      <span className="text-cyan-400/50 font-black text-xl">◆</span>
                     </div>
                   ))}
                 </motion.div>
@@ -144,14 +155,14 @@ export default function AnnouncementBanner() {
               {/* Close button */}
               <button
                 onClick={handleHide}
-                className="flex-shrink-0 p-2 rounded-lg bg-black/40 border border-white/10 hover:border-red-500/50 hover:bg-red-500/10 transition-all duration-300 group hover:shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+                className="flex-shrink-0 p-2.5 rounded-lg bg-black/60 border border-white/20 hover:border-red-500 hover:bg-red-500/20 transition-all duration-300 group hover:shadow-[0_0_20px_rgba(239,68,68,0.5)]"
               >
-                <X size={16} className="text-slate-400 group-hover:text-red-400 transition-colors" />
+                <X size={18} className="text-slate-300 group-hover:text-red-400 transition-colors" />
               </button>
             </div>
 
             {/* Bottom glow effect */}
-            <div className="absolute bottom-0 left-0 right-0 h-1 overflow-hidden">
+            <div className="absolute bottom-0 left-0 right-0 h-[3px] overflow-hidden">
               <motion.div
                 animate={{
                   x: [-100, 400]
@@ -164,7 +175,7 @@ export default function AnnouncementBanner() {
                     ease: "linear"
                   }
                 }}
-                className="h-full w-1/4 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-50"
+                className={`h-full w-1/4 bg-gradient-to-r from-transparent ${getGlowColor(announcement.announcement_type)} to-transparent opacity-75`}
               />
             </div>
           </div>

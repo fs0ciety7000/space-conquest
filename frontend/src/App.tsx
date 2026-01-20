@@ -683,11 +683,6 @@ export default function App() {
           />
       </div>
 
-      {/* Announcement Banner */}
-      <div className="absolute top-[60px] md:top-[72px] left-0 w-full z-40">
-        <AnnouncementBanner />
-      </div>
-
       <div className="flex flex-1 w-full h-full overflow-hidden relative z-30 pt-[60px] md:pt-[72px]">
         {/* Sidebar Desktop */}
         <aside className="w-64 bg-slate-950/80 backdrop-blur-xl border-r border-indigo-500/10 flex-col h-full overflow-y-auto hidden md:flex scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent relative">
@@ -770,13 +765,17 @@ export default function App() {
           </>
         )}
 
-        <main className="flex-1 overflow-y-auto p-3 md:p-4 lg:p-8 scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent">
-            {/* BuildQueue en haut si actif */}
-            {buildQueueItems.length > 0 && (
-              <div className="max-w-7xl mx-auto mb-6">
-                <BuildQueue items={buildQueueItems} />
-              </div>
-            )}
+        <main className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent">
+            {/* Announcement Banner */}
+            <AnnouncementBanner />
+
+            <div className="p-3 md:p-4 lg:p-8">
+              {/* BuildQueue en haut si actif */}
+              {buildQueueItems.length > 0 && (
+                <div className="max-w-7xl mx-auto mb-6">
+                  <BuildQueue items={buildQueueItems} />
+                </div>
+              )}
 
             <div className="max-w-7xl mx-auto pb-4 md:pb-0 min-h-full">
                 <AnimatePresence mode="wait">
@@ -825,6 +824,7 @@ export default function App() {
                   </motion.div>
                 </AnimatePresence>
             </div>
+          </div>
         </main>
 
         
