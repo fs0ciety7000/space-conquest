@@ -261,7 +261,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanets
                         <h3 className="text-lg font-black text-white uppercase tracking-wider">{planet.name}</h3>
                         {/* Badge planète actuelle - intégré au titre */}
                         {isCurrent && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/50 rounded-full text-[8px] font-black uppercase text-indigo-300 animate-glow-pulse">
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/50 rounded-full text-[8px] font-black uppercase text-indigo-300">
                             <Crown size={8} /> Actuelle
                           </span>
                         )}

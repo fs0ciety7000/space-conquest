@@ -71,7 +71,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                 {/* Header et Filtres */}
                 <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 p-3 rounded-lg border border-yellow-500/30 animate-glow-pulse">
+                        <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 p-3 rounded-lg border border-yellow-500/30">
                             <Trophy className="text-yellow-500" size={28} />
                         </div>
                         <div>
@@ -83,19 +83,19 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                     <div className="flex bg-slate-950/50 p-1 rounded-lg border border-white/10 card-depth">
                         <button
                             onClick={() => setCategory('general')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'general' ? 'bg-indigo-600 text-white shadow-lg animate-glow-pulse' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'general' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                         >
                             <Globe size={14} /> Général
                         </button>
                         <button
                             onClick={() => setCategory('economy')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'economy' ? 'bg-emerald-600 text-white shadow-lg animate-glow-pulse' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'economy' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                         >
                             <TrendingUp size={14} /> Économie
                         </button>
                         <button
                             onClick={() => setCategory('military')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'military' ? 'bg-red-600 text-white shadow-lg animate-glow-pulse' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'military' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                         >
                             <ShieldAlert size={14} /> Militaire
                         </button>

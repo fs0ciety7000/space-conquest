@@ -144,10 +144,10 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                 </div>
 
                 <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800 card-depth hover:shadow-xl transition-all duration-300">
-                    <button onClick={() => setViewMode('list')} className={`px-4 py-2 rounded-md text-xs font-bold uppercase flex items-center gap-2 transition-all hover:scale-105 ${viewMode === 'list' ? 'bg-indigo-600 text-white shadow-lg animate-glow-pulse' : 'text-slate-400 hover:bg-white/5'}`}>
+                    <button onClick={() => setViewMode('list')} className={`px-4 py-2 rounded-md text-xs font-bold uppercase flex items-center gap-2 transition-all hover:scale-105 ${viewMode === 'list' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-white/5'}`}>
                         <List size={16} /> Liste
                     </button>
-                    <button onClick={() => setViewMode('map')} className={`px-4 py-2 rounded-md text-xs font-bold uppercase flex items-center gap-2 transition-all hover:scale-105 ${viewMode === 'map' ? 'bg-indigo-600 text-white shadow-lg animate-glow-pulse' : 'text-slate-400 hover:bg-white/5'}`}>
+                    <button onClick={() => setViewMode('map')} className={`px-4 py-2 rounded-md text-xs font-bold uppercase flex items-center gap-2 transition-all hover:scale-105 ${viewMode === 'map' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-white/5'}`}>
                         <LayoutGrid size={16} /> Carte
                     </button>
                 </div>
@@ -272,7 +272,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                                 <div className="col-span-2 space-y-2">
                                                     <div className={`py-4 border rounded-lg flex flex-col items-center justify-center gap-2 transition-all duration-300 glass-card hover:-translate-y-1 hover:shadow-xl animate-fade-in ${
                                                         selectedSlot.is_me
-                                                            ? 'bg-indigo-600/20 border-indigo-500/50 shadow-[inset_0_0_20px_rgba(79,70,229,0.2)] animate-glow-pulse' // Style Planète Mère
+                                                            ? 'bg-indigo-600/20 border-indigo-500/50 shadow-[inset_0_0_20px_rgba(79,70,229,0.2)]' // Style Planète Mère
                                                             : 'bg-blue-900/20 border-blue-500/30' // Style Colonie
                                                     }`}>
                                                         {selectedSlot.is_me ? (
@@ -307,7 +307,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                             )
                                         ) : (
                                             // --- CAS : ESPACE VIDE ---
-                                            <Button onClick={() => handleColonize(selectedSlot.position)} className="col-span-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-6 shadow-lg shadow-emerald-900/20 card-depth hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 hover:scale-105 animate-glow-pulse">
+                                            <Button onClick={() => handleColonize(selectedSlot.position)} className="col-span-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-6 shadow-lg shadow-emerald-900/20 card-depth hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 hover:scale-105">
                                                 <Rocket className="mr-2" size={20} /> LANCER COLONISATION
                                             </Button>
                                         )}

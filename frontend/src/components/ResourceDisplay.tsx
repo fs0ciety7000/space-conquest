@@ -357,7 +357,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                   )}
 
                   {activeItem ? (
-                     <span className="flex items-center gap-2 relative z-10 text-cyan-400 animate-glow-pulse">
+                     <span className="flex items-center gap-2 relative z-10 text-cyan-400">
                        <Timer size={14} className="animate-spin-slow" /> En cours {timeLeft}s
                      </span>
                   ) : isQueueFull ? (
@@ -413,7 +413,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                   key={slot.slot_number}
                   className={`relative overflow-hidden transition-all duration-500 hover:-translate-y-1 hover-scale card-depth group/slot animate-fade-in ${
                     slot.is_active
-                      ? `border ${slotBorder} ${slotBg} shadow-lg animate-glow-pulse`
+                      ? `border ${slotBorder} ${slotBg} shadow-lg`
                       : 'border border-slate-700/50 bg-slate-900/30 opacity-60 hover:opacity-100'
                   }`}
                 >

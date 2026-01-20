@@ -218,7 +218,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             <Button variant="ghost" size="icon" onClick={fetchConversations} className="h-6 w-6 lg:h-7 lg:w-7 hover:scale-110 transition-all duration-300 card-depth hover:shadow-lg">
                                 <RotateCw size={12} className={`lg:w-3.5 lg:h-3.5 ${loading ? "animate-spin" : ""}`}/>
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(true)} className="h-6 w-6 lg:h-7 lg:w-7 text-indigo-400 hover:scale-110 transition-all duration-300 card-depth hover:shadow-lg animate-glow-pulse">
+                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(true)} className="h-6 w-6 lg:h-7 lg:w-7 text-indigo-400 hover:scale-110 transition-all duration-300 card-depth hover:shadow-lg">
                                 <Plus size={14} className="lg:w-4 lg:h-4"/>
                             </Button>
                         </div>
@@ -230,7 +230,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             onClick={() => setShowArchived(false)}
                             className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
                                 !showArchived
-                                    ? 'bg-indigo-600 text-white animate-glow-pulse'
+                                    ? 'bg-indigo-600 text-white'
                                     : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
                             }`}
                         >
@@ -246,7 +246,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             onClick={() => setShowArchived(true)}
                             className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
                                 showArchived
-                                    ? 'bg-indigo-600 text-white animate-glow-pulse'
+                                    ? 'bg-indigo-600 text-white'
                                     : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
                             }`}
                         >
@@ -339,7 +339,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             <Button variant="ghost" size="icon" onClick={() => setIsComposing(false)} className="hover:scale-110 transition-all duration-300 card-depth">
                                 <ArrowLeft size={18}/>
                             </Button>
-                            <h3 className="font-black uppercase text-sm tracking-widest text-indigo-400 animate-glow-pulse">
+                            <h3 className="font-black uppercase text-sm tracking-widest text-indigo-400">
                                 Nouveau Message
                             </h3>
                         </div>

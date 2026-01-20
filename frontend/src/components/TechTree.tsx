@@ -140,7 +140,7 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
                             <span className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">Niveau</span>
                         </div>
                         <div className="h-1 w-full bg-slate-900 rounded-full overflow-hidden progress-bar-animated">
-                            <div className={`h-full ${isResearchingThis ? 'w-full animate-progress-indeterminate bg-yellow-500 animate-glow-pulse' : 'w-[40%] ' + style.color.replace('text-', 'bg-') + ' animate-gradient'} opacity-80`}></div>
+                            <div className={`h-full ${isResearchingThis ? 'w-full animate-progress-indeterminate bg-yellow-500' : 'w-[40%] ' + style.color.replace('text-', 'bg-') + ' animate-gradient'} opacity-80`}></div>
                         </div>
                     </div>
 

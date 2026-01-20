@@ -213,7 +213,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
       {(incomingMissions.length > 0 || outgoingMissions.length > 0) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* RADAR DE DÉTECTION (Incoming) */}
-              <Card className={`bg-slate-950 border ${incomingMissions.some((m: any) => m.mission_type === 'attack') ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)] animate-glow-pulse' : 'border-blue-500/30'} overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
+              <Card className={`bg-slate-950 border ${incomingMissions.some((m: any) => m.mission_type === 'attack') ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-blue-500/30'} overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
                   <div className="absolute top-0 right-0 p-2 opacity-10"><Radar size={80} /></div>
                   <CardHeader className="pb-2 border-b border-white/5">
                       <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-slate-400">
@@ -432,7 +432,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </Card>
 
         {/* ENERGIE - DESIGN ÉLECTRIQUE */}
-        <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${energyRatio >= 100 ? 'border-yellow-500/50 animate-glow-pulse' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50 animate-glow-pulse'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
+        <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${energyRatio >= 100 ? 'border-yellow-500/50' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
             {/* Effets de fond électriques */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 {/* Lueur principale */}

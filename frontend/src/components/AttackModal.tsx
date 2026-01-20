@@ -108,7 +108,7 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
                 <Button
                     onClick={handleSubmit}
                     disabled={power === 0}
-                    className="bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest shadow-[0_0_20px_rgba(220,38,38,0.5)] disabled:opacity-50 disabled:cursor-not-allowed card-depth hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 hover:scale-105 animate-glow-pulse"
+                    className="bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest shadow-[0_0_20px_rgba(220,38,38,0.5)] disabled:opacity-50 disabled:cursor-not-allowed card-depth hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 hover:scale-105"
                 >
                     FEU À VOLONTÉ
                 </Button>

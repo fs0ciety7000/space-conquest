@@ -292,7 +292,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                                setSearchQuery("");
                              }}
                              className={`flex justify-between items-center py-2 px-4 cursor-pointer focus:bg-white/10 focus:text-white transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg animate-fade-in ${
-                               p.is_current ? 'bg-indigo-600/20 text-indigo-300 border-l-2 border-indigo-400 animate-glow-pulse' : 'text-slate-300 hover:bg-white/5'
+                               p.is_current ? 'bg-indigo-600/20 text-indigo-300 border-l-2 border-indigo-400' : 'text-slate-300 hover:bg-white/5'
                              }`}
                            >
                              <div className="flex items-center gap-2 flex-1 min-w-0">
