@@ -87,6 +87,7 @@ pub struct MissionsOverview {
     pub streak: StreakInfo,
     pub total_xp: i32,
     pub missions_completed_today: i32,
+    pub speed_factor: f64,
 }
 
 // ============================================================================
@@ -168,11 +169,19 @@ pub async fn get_daily_missions_handler(
         .map(|m| m.reward_xp)
         .sum();
 
+    // Récupérer le speed_factor depuis la config
+    let speed_factor = if let Ok(config) = state.config.read() {
+        (config.speed_factor / 100.0).max(1.0)
+    } else {
+        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
+    };
+
     Json(MissionsOverview {
         daily_missions: missions,
         streak: streak_info,
         total_xp,
         missions_completed_today: completed_today,
+        speed_factor,
     }).into_response()
 }
 

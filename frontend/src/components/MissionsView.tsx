@@ -73,6 +73,7 @@ interface MissionsOverview {
   streak: StreakInfo;
   total_xp: number;
   missions_completed_today: number;
+  speed_factor: number;
 }
 
 type Tab = 'missions' | 'achievements';
@@ -266,10 +267,10 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
                 <div className="text-xs text-slate-500 uppercase mb-2">Récompense quotidienne</div>
                 <div className="space-y-1 text-xs mb-3">
                   <div className="text-slate-300">
-                    +{overview.streak.next_reward.metal.toLocaleString()} <span className="text-slate-500">métal</span>
+                    +{Math.floor(overview.streak.next_reward.metal * overview.speed_factor).toLocaleString()} <span className="text-slate-500">métal</span>
                   </div>
                   <div className="text-slate-300">
-                    +{overview.streak.next_reward.crystal.toLocaleString()} <span className="text-slate-500">cristal</span>
+                    +{Math.floor(overview.streak.next_reward.crystal * overview.speed_factor).toLocaleString()} <span className="text-slate-500">cristal</span>
                   </div>
                 </div>
                 <Button
@@ -371,13 +372,13 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
 
                         <div className="flex gap-4 mt-3 text-[10px] text-slate-500">
                           {mission.reward_metal > 0 && (
-                            <span>+{mission.reward_metal.toLocaleString()} métal</span>
+                            <span>+{Math.floor(mission.reward_metal * (overview?.speed_factor || 5.0) * (overview?.streak.streak_bonus_multiplier || 1)).toLocaleString()} métal</span>
                           )}
                           {mission.reward_crystal > 0 && (
-                            <span>+{mission.reward_crystal.toLocaleString()} cristal</span>
+                            <span>+{Math.floor(mission.reward_crystal * (overview?.speed_factor || 5.0) * (overview?.streak.streak_bonus_multiplier || 1)).toLocaleString()} cristal</span>
                           )}
                           {mission.reward_deuterium > 0 && (
-                            <span>+{mission.reward_deuterium.toLocaleString()} deutérium</span>
+                            <span>+{Math.floor(mission.reward_deuterium * (overview?.speed_factor || 5.0) * (overview?.streak.streak_bonus_multiplier || 1)).toLocaleString()} deutérium</span>
                           )}
                           {mission.reward_xp > 0 && (
                             <span className="text-amber-400">+{mission.reward_xp} XP</span>

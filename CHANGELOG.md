@@ -1,5 +1,170 @@
 # Changelog - Space Conquest
 
+## [2.0.5] - 2026-01-20 - Corrections gameplay et équilibrage
+
+### 🔧 Corrections critiques
+
+#### 🛠️ Système de capacité cargo pour les attaques
+**Problème**: Les joueurs pouvaient piller plus de ressources que leurs vaisseaux ne pouvaient transporter
+
+**Solution implémentée**:
+- Ajout d'un système de capacité cargo pour tous les vaisseaux:
+  - **Chasseurs Légers**: 50 unités de cargo
+  - **Croiseurs**: 800 unités de cargo
+  - **Transporteurs**: 10,000 unités de base (+5% par niveau hangar)
+- Le butin est maintenant limité par la capacité totale des vaisseaux **survivants**
+- Message d'alerte si la capacité cargo est insuffisante pour tout récupérer
+- Les transporteurs ne participent pas au combat et survivent toujours
+
+**Impact**: Empêche le pillage excessif, encourage l'envoi de transporteurs en attaque
+
+**Fichiers**:
+- `backend/src/game_logic.rs` (fonctions `get_ship_cargo_capacity()`, `resolve_pvp()`)
+- `backend/src/main.rs` (payload `AttackPayload`, handler `resolve_attack_mission`)
+
+---
+
+#### 🚀 Support des transporteurs et recycleurs
+
+**Feature**: Possibilité d'envoyer des transporteurs en attaque et des recycleurs en expédition
+
+**Transporteurs en attaque**:
+- Augmentent massivement la capacité de pillage (10k+ par transporteur)
+- Ne participent pas au combat (toujours survivent)
+- Interface mise à jour avec sélection et affichage cargo
+
+**Recycleurs en expédition**:
+- **Bonus x2** aux ressources collectées (par recycleur)
+- Ne participent pas au combat
+- Parfait pour maximiser les gains d'exploration
+
+**Fichiers**:
+- `backend/src/main.rs` (payloads, handlers attack & expedition)
+- `frontend/src/components/AttackModal.tsx` (UI transporteurs + cargo)
+- `frontend/src/components/ExpeditionZone.tsx` (UI recycleurs)
+- `frontend/src/App.tsx` (handlers mis à jour)
+
+---
+
+#### ⏱️ Refonte calcul temps de vol
+
+**Problème**: Voyage galaxie 1→2 prenait seulement 15 secondes (irréaliste)
+
+**Solution**: Nouvelle formule tiered par distance
+- **Même système** (< 1000): ~30s à 2 minutes
+- **Même galaxie** (1000-10000): ~5-15 minutes
+- **Galaxies différentes** (> 10000): ~30 minutes à 1h+
+
+**Exemple concret** (avec SPEED_FACTOR=500):
+- Galaxie 1→2: **15s → ~35 minutes**
+- Système différent: ~8-12 minutes
+- Position adjacente: ~45-90 secondes
+
+**Formule**:
+```rust
+let base_time = if dist < 1000.0 {
+    dist / 10.0 + 30.0
+} else if dist < 10000.0 {
+    dist / 5.0 + 200.0
+} else {
+    dist / 2.0 + 500.0
+};
+let seconds = (base_time * 100.0) / speed_factor;
+```
+
+**Fichier**: `backend/src/game_logic.rs` (fonction `calculate_flight_time`)
+
+---
+
+#### ⚡ Énergie minimale nouvelles planètes
+
+**Problème**: Les nouvelles planètes (colonie + première planète) n'avaient pas assez d'énergie pour faire fonctionner les mines de base
+
+**Solution**:
+- **Solar Plant niveau 3** par défaut (~240 énergie produite)
+- Garantit un minimum de 150 énergie disponible
+- Consommation 3 mines niveau 1: ~44 énergie
+- Ratio énergétique optimal dès le départ (100%)
+
+**Fichiers**:
+- `backend/src/main.rs` (création colonie)
+- `backend/src/auth.rs` (création première planète)
+
+---
+
+#### 🎯 Expéditions - compteurs par défaut
+
+**Problème**: Les compteurs de vaisseaux commençaient à 1, causant des lancements accidentels
+
+**Solution**:
+- Tous les compteurs démarrent à **0** par défaut
+- Chasseurs, croiseurs et recycleurs à 0
+- L'utilisateur doit explicitement sélectionner ses vaisseaux
+- Évite les lancements d'expédition involontaires
+
+**Fichier**: `frontend/src/components/ExpeditionZone.tsx`
+
+---
+
+### 📝 Notes techniques
+
+**Capacité cargo combat**:
+```rust
+// Capacité totale = vaisseaux survivants uniquement
+let total_cargo = (surviving_hunters * 50.0)
+                + (surviving_cruisers * 800.0)
+                + (transporters * 10000.0);
+
+// Butin limité par cargo
+if potential_loot > total_cargo {
+    loot = potential_loot * (total_cargo / potential_loot);
+}
+```
+
+**Bonus recycleurs expédition**:
+```rust
+let recycler_bonus = 1.0 + (recyclers as f64 * 2.0);
+let metal = base_metal * recycler_bonus * speed_factor;
+```
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: Aucune (modifications logique gameplay uniquement)
+
+**Redémarrage**: Backend + Frontend recommandé
+
+**Tests recommandés**:
+1. ✅ Attaque avec peu de vaisseaux → vérifier cargo insuffisant
+2. ✅ Attaque avec transporteurs → cargo augmenté, butin maximum
+3. ✅ Expédition avec recycleurs → gains x2+
+4. ✅ Transport galaxies → vérifier temps réaliste (~30min+)
+5. ✅ Nouvelle colonie → vérifier 150+ énergie disponible
+6. ✅ Expéditions → compteurs démarrent à 0
+
+---
+
+### 📦 Fichiers modifiés (7 fichiers)
+
+#### Backend (3 fichiers)
+- ✏️ `backend/src/game_logic.rs` - Cargo capacity, flight time, ship capacity functions
+- ✏️ `backend/src/main.rs` - Attack/expedition handlers, transporters/recyclers support, colonization energy
+- ✏️ `backend/src/auth.rs` - Solar plant level 3 for first planet
+
+#### Frontend (4 fichiers)
+- ✏️ `frontend/src/components/AttackModal.tsx` - Transporters selection + cargo display
+- ✏️ `frontend/src/components/ExpeditionZone.tsx` - Recyclers selection + defaults to 0
+- ✏️ `frontend/src/App.tsx` - Updated handlers for new payloads
+- ✏️ `frontend/src/lib/gameRules.ts` - Transporter capacity function (already existed)
+
+---
+
+**Commits**: `d6c52ba`, `978e447`, `a0a444a`, `21fdcee`
+**Branche**: `claude/fix-websocket-error-7nGya`
+
+---
+
 ## [2.0.4] - 2026-01-19 - Page Mes Planètes et corrections UI
 
 ### ✨ Nouvelles Fonctionnalités
