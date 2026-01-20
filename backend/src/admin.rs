@@ -343,22 +343,49 @@ pub async fn update_server_config_handler(
             .into_response();
     }
 
+    println!("🔧 [ADMIN CONFIG] Received {} config updates", updates.configs.len());
+
     let now = Utc::now().naive_utc();
+    let mut updated_count = 0;
+    let mut not_found_keys = Vec::new();
 
     // Mettre à jour toutes les configurations fournies
     for (config_key, config_value) in updates.configs.iter() {
-        if let Ok(config) = ServerConfig::find()
+        println!("  📝 Updating '{}' = '{}'", config_key, config_value);
+
+        match ServerConfig::find()
             .filter(server_config::Column::ConfigKey.eq(config_key))
             .one(&state.db)
             .await
         {
-            if let Some(c) = config {
+            Ok(Some(c)) => {
                 let mut active: server_config::ActiveModel = c.into();
                 active.config_value = Set(config_value.clone());
                 active.updated_at = Set(now);
-                let _ = active.update(&state.db).await;
+
+                match active.update(&state.db).await {
+                    Ok(_) => {
+                        println!("    ✅ Successfully updated '{}'", config_key);
+                        updated_count += 1;
+                    }
+                    Err(e) => {
+                        println!("    ❌ Failed to update '{}': {:?}", config_key, e);
+                    }
+                }
+            }
+            Ok(None) => {
+                println!("    ⚠️  Config key '{}' not found in database", config_key);
+                not_found_keys.push(config_key.clone());
+            }
+            Err(e) => {
+                println!("    ❌ Database error for '{}': {:?}", config_key, e);
             }
         }
+    }
+
+    println!("✅ Updated {}/{} configs successfully", updated_count, updates.configs.len());
+    if !not_found_keys.is_empty() {
+        println!("⚠️  Keys not found in DB: {:?}", not_found_keys);
     }
 
     // Recharger le cache de configuration depuis la DB
@@ -390,12 +417,17 @@ pub async fn update_server_config_handler(
         cache.speed_factor = new_speed_factor;
         cache.construction_speed = new_construction_speed;
         cache.mining_speed = new_mining_speed;
-        cache.configs = all_configs;
+        cache.configs = all_configs.clone();
+        println!("🔄 Cache reloaded with {} configs", all_configs.len());
+    } else {
+        println!("❌ Failed to acquire write lock on config cache");
     }
 
     Json(json!({
         "success": true,
-        "message": "Configuration mise à jour et rechargée"
+        "message": format!("✅ {} configurations mises à jour", updated_count),
+        "updated_count": updated_count,
+        "not_found": not_found_keys
     })).into_response()
 }
 
