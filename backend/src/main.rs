@@ -45,8 +45,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology
 };
 
 #[derive(Serialize, Clone)]
@@ -996,32 +996,69 @@ async fn get_planet_handler(
         // Déterminer si c'est un bâtiment/tech ou un vaisseau/défense
         let is_ship_or_defense = matches!(
             item.building_type.as_str(),
-            "light_hunter" | "cruiser" | "missile_launcher" | "plasma_turret" | 
+            "light_hunter" | "cruiser" | "missile_launcher" | "plasma_turret" |
             "spy_probe" | "transporter" | "colony_ship" | "recycler"
         );
 
-        match item.building_type.as_str() {
-            "metal" => active.metal_mine_level = Set(item.level),
-            "crystal" => active.crystal_mine_level = Set(item.level),
-            "deuterium" => active.deuterium_mine_level = Set(item.level),
-            "solar_plant" => active.solar_plant_level = Set(item.level),
-            "shipyard" => active.shipyard_level = Set(item.level),
-            "research" => active.research_lab_level = Set(item.level),
-            "hangar" => active.hangar_level = Set(item.level),
-            "resource_storage" => active.resource_storage_level = Set(item.level),
-            "energy_tech" => active.energy_tech_level = Set(item.level),
-            "laser" => active.laser_battery_level = Set(item.level),
-            "espionage" => active.espionage_tech_level = Set(item.level),
-            "armour" => active.armour_tech_level = Set(item.level),
-            "light_hunter" => active.light_hunter_count = Set(active.light_hunter_count.unwrap() + item.level),
-            "cruiser" => active.cruiser_count = Set(active.cruiser_count.unwrap() + item.level),
-            "missile_launcher" => active.missile_launcher_count = Set(active.missile_launcher_count.unwrap() + item.level),
-            "plasma_turret" => active.plasma_turret_count = Set(active.plasma_turret_count.unwrap() + item.level),
-            "spy_probe" => active.spy_probe_count = Set(active.spy_probe_count.unwrap() + item.level),
-            "transporter" => active.transporter_count = Set(active.transporter_count.unwrap() + item.level),
-            "colony_ship" => active.colony_ship_count = Set(active.colony_ship_count.unwrap() + item.level),
-            "recycler" => active.recycler_count = Set(active.recycler_count.unwrap() + item.level),
-            _ => {}
+        // Check if this is a technology from the new tech tree system
+        let tech = Technology::find()
+            .filter(technology::Column::TechKey.eq(&item.building_type))
+            .one(&state.db)
+            .await
+            .ok()
+            .flatten();
+
+        if let Some(tech_data) = tech {
+            // NEW TECH TREE SYSTEM - Update planet_technologies table
+            let existing = PlanetTechnology::find()
+                .filter(planet_technology::Column::PlanetId.eq(p.id))
+                .filter(planet_technology::Column::TechId.eq(tech_data.id))
+                .one(&state.db)
+                .await
+                .ok()
+                .flatten();
+
+            if let Some(existing_tech) = existing {
+                // Update existing tech level
+                let mut tech_active: planet_technology::ActiveModel = existing_tech.into();
+                tech_active.current_level = Set(item.level);
+                let _ = tech_active.update(&state.db).await;
+            } else {
+                // Insert new tech level
+                let new_tech = planet_technology::ActiveModel {
+                    planet_id: Set(p.id),
+                    tech_id: Set(tech_data.id),
+                    current_level: Set(item.level),
+                    researching_to_level: Set(None),
+                    research_end_time: Set(None),
+                };
+                let _ = new_tech.insert(&state.db).await;
+            }
+        } else {
+            // OLD SYSTEM - Update planet columns directly
+            match item.building_type.as_str() {
+                "metal" => active.metal_mine_level = Set(item.level),
+                "crystal" => active.crystal_mine_level = Set(item.level),
+                "deuterium" => active.deuterium_mine_level = Set(item.level),
+                "solar_plant" => active.solar_plant_level = Set(item.level),
+                "shipyard" => active.shipyard_level = Set(item.level),
+                "research" => active.research_lab_level = Set(item.level),
+                "hangar" => active.hangar_level = Set(item.level),
+                "resource_storage" => active.resource_storage_level = Set(item.level),
+                "energy_tech" => active.energy_tech_level = Set(item.level),
+                "laser" => active.laser_battery_level = Set(item.level),
+                "espionage" => active.espionage_tech_level = Set(item.level),
+                "armour" => active.armour_tech_level = Set(item.level),
+                "light_hunter" => active.light_hunter_count = Set(active.light_hunter_count.unwrap() + item.level),
+                "cruiser" => active.cruiser_count = Set(active.cruiser_count.unwrap() + item.level),
+                "missile_launcher" => active.missile_launcher_count = Set(active.missile_launcher_count.unwrap() + item.level),
+                "plasma_turret" => active.plasma_turret_count = Set(active.plasma_turret_count.unwrap() + item.level),
+                "spy_probe" => active.spy_probe_count = Set(active.spy_probe_count.unwrap() + item.level),
+                "transporter" => active.transporter_count = Set(active.transporter_count.unwrap() + item.level),
+                "colony_ship" => active.colony_ship_count = Set(active.colony_ship_count.unwrap() + item.level),
+                "recycler" => active.recycler_count = Set(active.recycler_count.unwrap() + item.level),
+                _ => {}
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1260,39 +1297,83 @@ async fn upgrade_mine_handler(
         .await
         .unwrap_or(0);
 
-    let base_level = match type_mine.as_str() {
-        "metal" => p.metal_mine_level,
-        "crystal" => p.crystal_mine_level,
-        "deuterium" => p.deuterium_mine_level,
-        "energy_tech" => p.energy_tech_level,
-        "research" => p.research_lab_level,
-        "solar_plant" => p.solar_plant_level,
-        "shipyard" => p.shipyard_level,
-        "laser" => p.laser_battery_level,
-        "espionage" => p.espionage_tech_level,
-        "armour" => p.armour_tech_level,
-        "hangar" => p.hangar_level,
-        "resource_storage" => p.resource_storage_level,
-        _ => return Err(StatusCode::BAD_REQUEST),
+    // Check if this is a technology from the new tech tree system
+    let tech = Technology::find()
+        .filter(technology::Column::TechKey.eq(&type_mine))
+        .one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let (base_level, cost, facility_level, is_research) = if let Some(tech_data) = tech {
+        // NEW TECH TREE SYSTEM
+        let current_level = tech_tree::get_planet_tech_level(&state.db, p.id, &type_mine)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        let target_level = current_level + (in_queue_count as i32) + 1;
+
+        // Check if requirements are met
+        let can_research = tech_tree::can_research_tech(&state.db, p.id, &type_mine)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        if current_level == 0 && !can_research {
+            return Err(StatusCode::BAD_REQUEST); // Requirements not met
+        }
+
+        // Calculate cost for the target level
+        let metal = tech_tree::calculate_tech_cost(tech_data.base_cost_metal, tech_data.cost_multiplier, current_level);
+        let crystal = tech_tree::calculate_tech_cost(tech_data.base_cost_crystal, tech_data.cost_multiplier, current_level);
+        let deuterium = tech_tree::calculate_tech_cost(tech_data.base_cost_deuterium, tech_data.cost_multiplier, current_level);
+
+        let cost = game_logic::Cost {
+            metal: metal as f64,
+            crystal: crystal as f64,
+            deuterium: deuterium as f64,
+        };
+
+        (current_level, cost, p.research_lab_level, true)
+    } else {
+        // OLD SYSTEM (backward compatibility)
+        let base_level = match type_mine.as_str() {
+            "metal" => p.metal_mine_level,
+            "crystal" => p.crystal_mine_level,
+            "deuterium" => p.deuterium_mine_level,
+            "energy_tech" => p.energy_tech_level,
+            "research" => p.research_lab_level,
+            "solar_plant" => p.solar_plant_level,
+            "shipyard" => p.shipyard_level,
+            "laser" => p.laser_battery_level,
+            "espionage" => p.espionage_tech_level,
+            "armour" => p.armour_tech_level,
+            "hangar" => p.hangar_level,
+            "resource_storage" => p.resource_storage_level,
+            _ => return Err(StatusCode::BAD_REQUEST),
+        };
+
+        let target_level = base_level + (in_queue_count as i32) + 1;
+        let cost = game_logic::get_upgrade_cost(&type_mine, target_level, &config);
+
+        let facility_level = match type_mine.as_str() {
+            "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level,
+            _ => p.shipyard_level,
+        };
+
+        let is_research = matches!(type_mine.as_str(), "research" | "energy_tech" | "laser" | "espionage" | "armour");
+
+        (base_level, cost, facility_level, is_research)
     };
 
     let target_level = base_level + (in_queue_count as i32) + 1;
-    let cost = game_logic::get_upgrade_cost(&type_mine, target_level, &config);
 
     if p.metal_amount < cost.metal || p.crystal_amount < cost.crystal || p.deuterium_amount < cost.deuterium {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let facility_level = match type_mine.as_str() {
-        "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level,
-        _ => p.shipyard_level,
-    };
-
     let mut build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level, &config);
 
     // Appliquer le bonus de recherche si disponible (vol de technologie via sabotage)
     // Le bonus s'applique seulement aux technologies, pas aux bâtiments
-    let is_research = matches!(type_mine.as_str(), "research" | "energy_tech" | "laser" | "espionage" | "armour");
     if is_research {
         let research_bonus = sabotage::apply_research_bonus(&state.db, p.owner_id)
             .await
