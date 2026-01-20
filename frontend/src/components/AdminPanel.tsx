@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse } from 'lucide-react';
+import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -612,11 +612,15 @@ export default function AdminPanel() {
                                 </div>
                               )}
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
 
-                      {/* SECTION 6: STATISTIQUES DE COMBAT */}
+              {/* SECTION 6: STATISTIQUES DE COMBAT */}
                       <Card className="bg-slate-900/40 border-red-500/30">
                         <CardHeader className="pb-3">
                           <CardTitle className="text-xs font-black uppercase tracking-wider text-red-400 flex items-center gap-2">
@@ -1207,30 +1211,6 @@ export default function AdminPanel() {
                           </div>
                         </CardContent>
                       </Card>
-
-                      {/* BOUTONS D'ACTION */}
-                      <div className="flex gap-3 pt-2">
-                        <Button
-                          onClick={updateConfig}
-                          disabled={loadingConfig}
-                          className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold uppercase tracking-wider shadow-lg"
-                        >
-                          <Save size={16} className="mr-2" />
-                          Enregistrer toutes les modifications
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => setEditedConfig(config)}
-                          className="border-white/20 bg-white/5 hover:bg-white/10 font-bold"
-                        >
-                          <X size={16} className="mr-2" />
-                          Annuler
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
 
               {/* Action Buttons */}
               <div className="flex gap-3 sticky bottom-4 z-10">
