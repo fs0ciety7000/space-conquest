@@ -321,3 +321,112 @@ pub async fn resolve_expedition_combat(
         remaining_ships,
     })
 }
+
+/// Resolve PvP combat using database ship stats
+/// Returns combat report with winner, remaining ships, loot, and debris
+pub async fn resolve_pvp_combat(
+    db: &DatabaseConnection,
+    attacker_ships: HashMap<String, i32>,
+    defender_ships: HashMap<String, i32>,
+    defender_resources: (f64, f64, f64), // (metal, crystal, deuterium)
+) -> Result<PvpCombatReport, sea_orm::DbErr> {
+    let mut logs = Vec::new();
+
+    // Load ship stats and rapid fire rules from database
+    let stats_cache = load_ship_stats_cache(db).await?;
+    let rapid_fire_cache = load_rapid_fire_cache(db).await?;
+
+    // 1. Initialize attacker fleet
+    let mut attacker_fleet = Fleet::new();
+    for (ship_key, count) in &attacker_ships {
+        attacker_fleet.set_ship_count(ship_key, *count);
+    }
+
+    // 2. Initialize defender fleet
+    let mut defender_fleet = Fleet::new();
+    for (ship_key, count) in &defender_ships {
+        defender_fleet.set_ship_count(ship_key, *count);
+    }
+
+    logs.push("⚔️ ENGAGEMENT DE COMBAT PvP".to_string());
+
+    // 3. Combat simulation (max 6 rounds)
+    let max_rounds = 6;
+    let mut winner = "draw";
+
+    for round in 1..=max_rounds {
+        if attacker_fleet.is_destroyed() || defender_fleet.is_destroyed() {
+            break;
+        }
+
+        logs.push(format!("--- ROUND {} ---", round));
+
+        // Attacker shoots first
+        let attacker_damage = attacker_fleet.calculate_damage_to_fleet(&defender_fleet, &stats_cache, &rapid_fire_cache);
+        defender_fleet.take_damage(attacker_damage, &stats_cache);
+
+        if attacker_damage > 0.0 {
+            logs.push(format!("Attaquant inflige {:.0} dégâts", attacker_damage));
+        }
+
+        if defender_fleet.is_destroyed() {
+            winner = "attacker";
+            logs.push("Défenseur détruit !".to_string());
+            break;
+        }
+
+        // Defender shoots back
+        let defender_damage = defender_fleet.calculate_damage_to_fleet(&attacker_fleet, &stats_cache, &rapid_fire_cache);
+        attacker_fleet.take_damage(defender_damage, &stats_cache);
+
+        if defender_damage > 0.0 {
+            logs.push(format!("Défenseur inflige {:.0} dégâts", defender_damage));
+        }
+
+        if attacker_fleet.is_destroyed() {
+            winner = "defender";
+            logs.push("Attaquant détruit !".to_string());
+            break;
+        }
+    }
+
+    // Calculate loot (50% of resources if attacker wins)
+    let (loot_metal, loot_crystal, loot_deuterium) = if winner == "attacker" {
+        (
+            defender_resources.0 * 0.5,
+            defender_resources.1 * 0.5,
+            defender_resources.2 * 0.5,
+        )
+    } else {
+        (0.0, 0.0, 0.0)
+    };
+
+    // Calculate debris (30% of destroyed ships value)
+    let debris_metal = 0.0; // Simplified for now
+    let debris_crystal = 0.0;
+
+    logs.push(format!("RÉSULTAT: {}", match winner {
+        "attacker" => "VICTOIRE ATTAQUANT",
+        "defender" => "VICTOIRE DÉFENSEUR",
+        _ => "MATCH NUL"
+    }));
+
+    Ok(PvpCombatReport {
+        log: logs,
+        winner: winner.to_string(),
+        attacker_remaining: attacker_fleet.get_all_ships().clone(),
+        defender_remaining: defender_fleet.get_all_ships().clone(),
+        loot: (loot_metal, loot_crystal, loot_deuterium),
+        debris: (debris_metal, debris_crystal),
+    })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PvpCombatReport {
+    pub log: Vec<String>,
+    pub winner: String,
+    pub attacker_remaining: HashMap<String, i32>,
+    pub defender_remaining: HashMap<String, i32>,
+    pub loot: (f64, f64, f64), // (metal, crystal, deuterium)
+    pub debris: (f64, f64),    // (metal, crystal)
+}

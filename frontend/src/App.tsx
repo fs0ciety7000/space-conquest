@@ -798,7 +798,7 @@ export default function App() {
 
                     {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
                     {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
-                    {activeTab === 'expedition' && <ExpeditionZoneV2 planet={planet} onAction={fetchPlanetData} />}
+                    {activeTab === 'expedition' && <ExpeditionZoneV2 planet={planet} onAction={fetchPlanet} />}
                     
                     {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
                     {activeTab === 'changelog' && <Changelog />}

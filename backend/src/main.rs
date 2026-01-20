@@ -4240,6 +4240,35 @@ async fn run_dynamic_expedition_combat(
     Ok((combat_report, metal, crystal, deuterium))
 }
 
+/// Load planet ships as HashMap for combat
+async fn load_planet_ships_for_combat(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> Result<HashMap<String, i32>, String> {
+    let planet_ships = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await
+        .map_err(|e| format!("DB error: {:?}", e))?;
+
+    // Get ship keys
+    let mut fleet = HashMap::new();
+    for ps in planet_ships {
+        if ps.count > 0 {
+            // Get ship type to get ship_key
+            let ship_type = ShipType::find_by_id(ps.ship_type_id)
+                .one(db)
+                .await
+                .map_err(|e| format!("DB error: {:?}", e))?
+                .ok_or_else(|| format!("Ship type {} not found", ps.ship_type_id))?;
+
+            fleet.insert(ship_type.ship_key, ps.count);
+        }
+    }
+
+    Ok(fleet)
+}
+
 /// Update planet ships after combat (deduct losses)
 async fn update_planet_ships_after_combat(
     db: &DatabaseConnection,
