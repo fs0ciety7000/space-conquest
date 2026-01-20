@@ -3,7 +3,7 @@ use axum::{
     http::{StatusCode, HeaderMap},
     response::{IntoResponse, Json},
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, DbErr, PaginatorTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, DbErr, PaginatorTrait};
 use chrono::{Utc, Duration};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
@@ -555,7 +555,7 @@ pub async fn get_sabotages_suffered_handler(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
     };
 
-    let planet_ids: Vec<String> = my_planets.iter().map(|p| p.id.clone()).collect();
+    let planet_ids: Vec<Uuid> = my_planets.iter().map(|p| p.id).collect();
 
     // Récupérer tous les sabotages actifs et expirés sur mes planètes (historique complet)
     let sabotages = match SabotageEffect::find()
@@ -574,9 +574,12 @@ pub async fn get_sabotages_suffered_handler(
 
     for sabotage in sabotages {
         let planet = my_planets.iter().find(|p| p.id == sabotage.target_planet_id);
-        let attacker = match User::find_by_id(sabotage.attacker_user_id).one(&state.db).await {
-            Ok(Some(u)) => u,
-            _ => continue, // Utilisateur supprimé, skip
+        let attacker = match sabotage.attacker_user_id {
+            Some(attacker_id) => match User::find_by_id(attacker_id).one(&state.db).await {
+                Ok(Some(u)) => u,
+                _ => continue, // Utilisateur supprimé, skip
+            },
+            None => continue, // Pas d'attaquant, skip
         };
 
         let now = Utc::now().naive_utc();
