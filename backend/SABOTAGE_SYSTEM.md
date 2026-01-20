@@ -244,22 +244,40 @@ curl http://localhost:8080/planets/{planet_id}
 - [x] Calcul détection
 - [x] Notifications
 
-### Phase 2 (TODO Backend)
-- [ ] Intégration dans `update_planet_resources()` (game_logic.rs)
-- [ ] Intégration dans handler recherche
-- [ ] Tâche périodique cleanup
-- [ ] Table `casus_belli`
+### Phase 2 (✅ Implémenté - Backend)
+- [x] Intégration dans `update_planet_resources()` (main.rs:748-755)
+  - Multiplicateur de production (0.5 si sabotage actif)
+  - Appliqué seulement à la nouvelle production
+- [x] Intégration dans handler recherche (main.rs:1090-1098)
+  - Bonus -20% temps recherche si "steal_tech" disponible
+  - Consommation automatique du bonus
+- [x] Tâche périodique cleanup (main.rs:301-328)
+  - Nettoyage sabotages + casus belli expirés chaque heure
+- [x] Table `casus_belli` (migration m20260120_000003)
+  - Droit d'attaque 48h après détection sabotage
+  - Suivi d'utilisation (was_used)
+  - Cleanup automatique
+- [x] Authentification JWT sur tous les endpoints
+- [x] Système Casus Belli complet
+  - grant_casus_belli(): Accordé si saboteur détecté
+  - has_casus_belli(): Vérifier droit d'attaque
+  - consume_casus_belli(): Marquer comme utilisé
+  - get_active_casus_belli(): Liste pour UI
 
-### Phase 3 (TODO Frontend)
-- [ ] Connecter UI SpyModal aux endpoints
+### Phase 3 (✅ Partiel - Frontend)
+- [x] Connecter UI SpyModal aux endpoints (App.tsx:411-460)
+  - Appel POST /sabotage avec JWT auth
+  - Toast notifications (succès/détection/erreur)
+  - Fermeture auto + refresh planète
 - [ ] Dashboard sabotages actifs
 - [ ] Notifications WebSocket en temps réel
 - [ ] Historique sabotages
 
-### Phase 4 (Amélioration)
+### Phase 4 (Amélioration Future)
 - [ ] Nouvelles actions (ex: "slow_research", "steal_resources")
 - [ ] Contre-sabotage (défenses actives)
 - [ ] Système réputation (criminels vs justiciers)
+- [ ] API endpoint pour consommer casus belli lors d'attaque
 
 ## Support
 
@@ -269,6 +287,6 @@ curl http://localhost:8080/planets/{planet_id}
 
 ---
 
-**Version**: 1.0.0
+**Version**: 2.0.0
 **Date**: 2026-01-20
 **Auteur**: Space Conquest Dev Team
