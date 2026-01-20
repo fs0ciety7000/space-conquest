@@ -2,7 +2,7 @@
 // Tech Tree System - Dynamic relational database queries
 
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySelect};
-use crate::entities::{prelude::*, technology, planet_technology, ship_type, planet_ship, technology_requirement, ship_requirement};
+use crate::entities::{prelude::*, technology, planet_technology, ship_type, planet_ship, technology_requirement, ship_requirement, building_type, building_requirement, planet_building, defense_type, defense_requirement, planet_defense};
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
@@ -58,6 +58,62 @@ pub struct ShipRequirementInfo {
     pub requirement_type: String, // "tech" or "building"
     pub tech_key: Option<String>,
     pub tech_name: Option<String>,
+    pub building_name: Option<String>,
+    pub required_level: i32,
+    pub current_level: i32,
+    pub met: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildingTypeInfo {
+    pub id: i32,
+    pub building_key: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub base_cost_metal: i32,
+    pub base_cost_crystal: i32,
+    pub base_cost_deuterium: i32,
+    pub base_time_seconds: i32,
+    pub cost_multiplier: f32,
+    pub current_level: i32,
+    pub requirements: Vec<BuildingRequirementInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildingRequirementInfo {
+    pub requirement_type: String, // "tech" or "building"
+    pub tech_key: Option<String>,
+    pub tech_name: Option<String>,
+    pub building_key: Option<String>,
+    pub building_name: Option<String>,
+    pub required_level: i32,
+    pub current_level: i32,
+    pub met: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DefenseTypeInfo {
+    pub id: i32,
+    pub defense_key: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub base_cost_metal: i32,
+    pub base_cost_crystal: i32,
+    pub base_cost_deuterium: i32,
+    pub base_time_seconds: i32,
+    pub attack: i32,
+    pub shield: i32,
+    pub hull: i32,
+    pub current_count: i32,
+    pub requirements: Vec<DefenseRequirementInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DefenseRequirementInfo {
+    pub requirement_type: String, // "tech" or "building"
+    pub tech_key: Option<String>,
+    pub tech_name: Option<String>,
+    pub building_key: Option<String>,
     pub building_name: Option<String>,
     pub required_level: i32,
     pub current_level: i32,
@@ -397,6 +453,310 @@ pub async fn get_ship_stats(
         .await
 }
 
+// ========== BUILDING QUERIES ==========
+
+/// Get building level for a planet
+pub async fn get_planet_building_level(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    building_key: &str,
+) -> Result<i32, sea_orm::DbErr> {
+    // Get building type id
+    let building = BuildingType::find()
+        .filter(building_type::Column::BuildingKey.eq(building_key))
+        .one(db)
+        .await?;
+
+    let building_type_id = match building {
+        Some(b) => b.id,
+        None => return Ok(0),
+    };
+
+    // Get planet building level
+    let planet_building = PlanetBuilding::find()
+        .filter(planet_building::Column::PlanetId.eq(planet_id))
+        .filter(planet_building::Column::BuildingTypeId.eq(building_type_id))
+        .one(db)
+        .await?;
+
+    Ok(planet_building.map(|pb| pb.current_level).unwrap_or(0))
+}
+
+/// Get all building levels for a planet as a HashMap
+pub async fn get_all_planet_building_levels(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> Result<HashMap<String, i32>, sea_orm::DbErr> {
+    let planet_buildings = PlanetBuilding::find()
+        .filter(planet_building::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await?;
+
+    let mut result = HashMap::new();
+
+    for pb in planet_buildings {
+        if let Some(building) = BuildingType::find_by_id(pb.building_type_id).one(db).await? {
+            result.insert(building.building_key, pb.current_level);
+        }
+    }
+
+    Ok(result)
+}
+
+/// Get all building types with their requirements for a planet
+pub async fn get_building_types_for_planet(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> Result<Vec<BuildingTypeInfo>, sea_orm::DbErr> {
+    let all_buildings = BuildingType::find().all(db).await?;
+    let planet_building_levels = get_all_planet_building_levels(db, planet_id).await?;
+
+    let mut result = Vec::new();
+
+    for building in all_buildings {
+        let current_level = *planet_building_levels.get(&building.building_key).unwrap_or(&0);
+        let requirements = get_building_requirements(db, building.id, planet_id).await?;
+
+        result.push(BuildingTypeInfo {
+            id: building.id,
+            building_key: building.building_key,
+            name: building.name,
+            description: building.description,
+            base_cost_metal: building.base_cost_metal,
+            base_cost_crystal: building.base_cost_crystal,
+            base_cost_deuterium: building.base_cost_deuterium,
+            base_time_seconds: building.base_time_seconds,
+            cost_multiplier: building.cost_multiplier,
+            current_level,
+            requirements,
+        });
+    }
+
+    Ok(result)
+}
+
+/// Get requirements for a specific building
+async fn get_building_requirements(
+    db: &DatabaseConnection,
+    building_type_id: i32,
+    planet_id: Uuid,
+) -> Result<Vec<BuildingRequirementInfo>, sea_orm::DbErr> {
+    let requirements = BuildingRequirement::find()
+        .filter(building_requirement::Column::BuildingTypeId.eq(building_type_id))
+        .all(db)
+        .await?;
+
+    let mut result = Vec::new();
+
+    for req in requirements {
+        if let Some(tech_id) = req.required_tech_id {
+            if let Some(required_tech) = Technology::find_by_id(tech_id).one(db).await? {
+                let current_level = get_planet_tech_level(db, planet_id, &required_tech.tech_key).await?;
+
+                result.push(BuildingRequirementInfo {
+                    requirement_type: "tech".to_string(),
+                    tech_key: Some(required_tech.tech_key.clone()),
+                    tech_name: Some(required_tech.display_name),
+                    building_key: None,
+                    building_name: None,
+                    required_level: req.required_level,
+                    current_level,
+                    met: current_level >= req.required_level,
+                });
+            }
+        } else if let Some(building_id) = req.required_building_id {
+            if let Some(required_building) = BuildingType::find_by_id(building_id).one(db).await? {
+                let current_level = get_planet_building_level(db, planet_id, &required_building.building_key).await?;
+
+                result.push(BuildingRequirementInfo {
+                    requirement_type: "building".to_string(),
+                    tech_key: None,
+                    tech_name: None,
+                    building_key: Some(required_building.building_key.clone()),
+                    building_name: Some(required_building.name),
+                    required_level: req.required_level,
+                    current_level,
+                    met: current_level >= req.required_level,
+                });
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Check if a building can be built or upgraded (all requirements met)
+pub async fn can_build_building(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    building_key: &str,
+) -> Result<bool, sea_orm::DbErr> {
+    let building = BuildingType::find()
+        .filter(building_type::Column::BuildingKey.eq(building_key))
+        .one(db)
+        .await?;
+
+    let building_type_id = match building {
+        Some(b) => b.id,
+        None => return Ok(false),
+    };
+
+    let requirements = get_building_requirements(db, building_type_id, planet_id).await?;
+    Ok(requirements.iter().all(|req| req.met))
+}
+
+// ========== DEFENSE QUERIES ==========
+
+/// Get defense count for a planet
+pub async fn get_planet_defense_count(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    defense_key: &str,
+) -> Result<i32, sea_orm::DbErr> {
+    let defense_type = DefenseType::find()
+        .filter(defense_type::Column::DefenseKey.eq(defense_key))
+        .one(db)
+        .await?;
+
+    let defense_type_id = match defense_type {
+        Some(dt) => dt.id,
+        None => return Ok(0),
+    };
+
+    let planet_defense = PlanetDefense::find()
+        .filter(planet_defense::Column::PlanetId.eq(planet_id))
+        .filter(planet_defense::Column::DefenseTypeId.eq(defense_type_id))
+        .one(db)
+        .await?;
+
+    Ok(planet_defense.map(|pd| pd.defense_count).unwrap_or(0))
+}
+
+/// Get all defense counts for a planet as a HashMap
+pub async fn get_all_planet_defense_counts(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> Result<HashMap<String, i32>, sea_orm::DbErr> {
+    let planet_defenses = PlanetDefense::find()
+        .filter(planet_defense::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await?;
+
+    let mut result = HashMap::new();
+
+    for pd in planet_defenses {
+        if let Some(defense_type) = DefenseType::find_by_id(pd.defense_type_id).one(db).await? {
+            result.insert(defense_type.defense_key, pd.defense_count);
+        }
+    }
+
+    Ok(result)
+}
+
+/// Get all defense types with their requirements for a planet
+pub async fn get_defense_types_for_planet(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> Result<Vec<DefenseTypeInfo>, sea_orm::DbErr> {
+    let all_defenses = DefenseType::find().all(db).await?;
+    let planet_defense_counts = get_all_planet_defense_counts(db, planet_id).await?;
+
+    let mut result = Vec::new();
+
+    for defense in all_defenses {
+        let current_count = *planet_defense_counts.get(&defense.defense_key).unwrap_or(&0);
+        let requirements = get_defense_requirements(db, defense.id, planet_id).await?;
+
+        result.push(DefenseTypeInfo {
+            id: defense.id,
+            defense_key: defense.defense_key,
+            name: defense.name,
+            description: defense.description,
+            base_cost_metal: defense.base_cost_metal,
+            base_cost_crystal: defense.base_cost_crystal,
+            base_cost_deuterium: defense.base_cost_deuterium,
+            base_time_seconds: defense.base_time_seconds,
+            attack: defense.attack,
+            shield: defense.shield,
+            hull: defense.hull,
+            current_count,
+            requirements,
+        });
+    }
+
+    Ok(result)
+}
+
+/// Get requirements for a specific defense
+async fn get_defense_requirements(
+    db: &DatabaseConnection,
+    defense_type_id: i32,
+    planet_id: Uuid,
+) -> Result<Vec<DefenseRequirementInfo>, sea_orm::DbErr> {
+    let requirements = DefenseRequirement::find()
+        .filter(defense_requirement::Column::DefenseTypeId.eq(defense_type_id))
+        .all(db)
+        .await?;
+
+    let mut result = Vec::new();
+
+    for req in requirements {
+        if let Some(tech_id) = req.required_tech_id {
+            if let Some(required_tech) = Technology::find_by_id(tech_id).one(db).await? {
+                let current_level = get_planet_tech_level(db, planet_id, &required_tech.tech_key).await?;
+
+                result.push(DefenseRequirementInfo {
+                    requirement_type: "tech".to_string(),
+                    tech_key: Some(required_tech.tech_key.clone()),
+                    tech_name: Some(required_tech.display_name),
+                    building_key: None,
+                    building_name: None,
+                    required_level: req.required_level,
+                    current_level,
+                    met: current_level >= req.required_level,
+                });
+            }
+        } else if let Some(building_id) = req.required_building_id {
+            if let Some(required_building) = BuildingType::find_by_id(building_id).one(db).await? {
+                let current_level = get_planet_building_level(db, planet_id, &required_building.building_key).await?;
+
+                result.push(DefenseRequirementInfo {
+                    requirement_type: "building".to_string(),
+                    tech_key: None,
+                    tech_name: None,
+                    building_key: Some(required_building.building_key.clone()),
+                    building_name: Some(required_building.name),
+                    required_level: req.required_level,
+                    current_level,
+                    met: current_level >= req.required_level,
+                });
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Check if a defense can be built (all requirements met)
+pub async fn can_build_defense(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    defense_key: &str,
+) -> Result<bool, sea_orm::DbErr> {
+    let defense_type = DefenseType::find()
+        .filter(defense_type::Column::DefenseKey.eq(defense_key))
+        .one(db)
+        .await?;
+
+    let defense_type_id = match defense_type {
+        Some(dt) => dt.id,
+        None => return Ok(false),
+    };
+
+    let requirements = get_defense_requirements(db, defense_type_id, planet_id).await?;
+    Ok(requirements.iter().all(|req| req.met))
+}
+
 // ========== UTILITY FUNCTIONS ==========
 
 /// Calculate cost for a tech at a specific level (exponential growth)
@@ -407,4 +767,14 @@ pub fn calculate_tech_cost(base_cost: i32, multiplier: f64, current_level: i32) 
 /// Calculate time for a tech at a specific level
 pub fn calculate_tech_time(base_time: i32, multiplier: f64, current_level: i32) -> i32 {
     (base_time as f64 * multiplier.powi(current_level)).ceil() as i32
+}
+
+/// Calculate cost for a building at a specific level (exponential growth)
+pub fn calculate_building_cost(base_cost: i32, multiplier: f32, current_level: i32) -> i32 {
+    (base_cost as f32 * multiplier.powi(current_level)).ceil() as i32
+}
+
+/// Calculate time for a building at a specific level
+pub fn calculate_building_time(base_time: i32, multiplier: f32, current_level: i32) -> i32 {
+    (base_time as f32 * multiplier.powi(current_level)).ceil() as i32
 }

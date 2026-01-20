@@ -219,6 +219,8 @@ async fn main() {
         // Tech Tree (Expansion 2.0)
         .route("/planets/:id/tech-tree", get(get_tech_tree_handler))
         .route("/planets/:id/ship-types", get(get_ship_types_handler))
+        .route("/planets/:id/building-types", get(get_building_types_handler))
+        .route("/planets/:id/defense-types", get(get_defense_types_handler))
         .route("/planets/:id/research/:tech_key", post(start_research_handler))
         .route("/planets/:id/build-ships/:ship_key/:quantity", post(build_ships_handler))
         .route("/tech/:tech_key", get(get_tech_details_handler))
@@ -3996,6 +3998,28 @@ async fn get_ship_details_handler(
         Ok(Some(ship)) => Json(json!({ "ship": ship })).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Ship type not found"}))).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    }
+}
+
+/// GET /planets/:id/building-types - Get all building types with requirements for a planet
+async fn get_building_types_handler(
+    State(state): State<AppState>,
+    Path(planet_id): Path<Uuid>,
+) -> impl IntoResponse {
+    match tech_tree::get_building_types_for_planet(&state.db, planet_id).await {
+        Ok(building_types) => Json(json!({ "building_types": building_types })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch building types"}))).into_response(),
+    }
+}
+
+/// GET /planets/:id/defense-types - Get all defense types with requirements for a planet
+async fn get_defense_types_handler(
+    State(state): State<AppState>,
+    Path(planet_id): Path<Uuid>,
+) -> impl IntoResponse {
+    match tech_tree::get_defense_types_for_planet(&state.db, planet_id).await {
+        Ok(defense_types) => Json(json!({ "defense_types": defense_types })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch defense types"}))).into_response(),
     }
 }
 
