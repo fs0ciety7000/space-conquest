@@ -61,10 +61,41 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   const [now, setNow] = useState(new Date().getTime());
   const [extraSlots, setExtraSlots] = useState<ResourceSlot[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; slotNumber: number; cost: any } | null>(null);
+  const [config, setConfig] = useState<any>({
+    production_metal_base: 30,
+    production_crystal_base: 20,
+    production_deuterium_base: 10,
+    production_metal_growth: 1.1,
+    production_crystal_growth: 1.1,
+    production_deuterium_growth: 1.05,
+    energy_tech_bonus: 0.01,
+    energy_solar_base: 20,
+    energy_solar_growth: 1.1,
+    energy_mine_consumption_base: 10,
+    energy_mine_consumption_growth: 1.1,
+    energy_deuterium_extra_consumption: 20
+  });
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Récupérer la configuration serveur
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch(apiUrl('/config'));
+        if (res.ok) {
+          const data = await res.json();
+          setConfig(data);
+        }
+      } catch (e) {
+        console.error("Erreur chargement config", e);
+      }
+    };
+
+    fetchConfig();
   }, []);
 
   // Fonction pour recharger les slots
@@ -170,22 +201,22 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
   // --- FORMULES AVEC PRISE EN COMPTE DES SLOTS ---
   const calculateEnergyProd = (level: number) => {
-    const baseProd = 20 * level * Math.pow(1.1, level);
+    const baseProd = (config.energy_solar_base || 20) * level * Math.pow(config.energy_solar_growth || 1.1, level);
     const techLevel = planet.energy_tech_level || 0;
-    return Math.floor(baseProd * (1 + (techLevel * 0.05)));
+    return Math.floor(baseProd * (1 + (techLevel * (config.energy_tech_bonus || 0.10))));
   };
 
-  const calculateProd = (type: string, level: number, base: number) => {
+  const calculateProd = (type: string, level: number, base: number, growthFactor: number) => {
       if (type === 'solar_plant') {
           return calculateEnergyProd(level);
       }
 
       // Calcul de base
-      let prod = base * level * Math.pow(1.1, level);
+      let prod = base * level * Math.pow(growthFactor, level);
 
-      // Bonus technologie énergie (+1% par niveau)
+      // Bonus technologie énergie (configurable)
       const techLevel = planet.energy_tech_level || 0;
-      const techBonus = 1.0 + (techLevel * 0.01);
+      const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
       prod *= techBonus;
 
       // Utiliser le ratio énergétique du backend (cohérent avec EmpireBar et ProductionStats)
@@ -208,8 +239,10 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
   const calculateEnergyCons = (type: string, level: number) => {
       if (type === 'solar_plant') return 0;
-      const baseFactor = type === 'deuterium' ? 20 : 10;
-      return Math.floor(baseFactor * level * Math.pow(1.1, level));
+      const baseFactor = type === 'deuterium'
+        ? (config.energy_deuterium_extra_consumption || 20)
+        : (config.energy_mine_consumption_base || 10);
+      return Math.floor(baseFactor * level * Math.pow(config.energy_mine_consumption_growth || 1.1, level));
   }
 
   // Calcul du ROI (Return On Investment) - Temps pour rentabiliser l'upgrade
@@ -246,10 +279,10 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   };
 
   const buildings = [
-    { id: 'metal', name: 'Mine de Métal', lv: planet.metal_mine_level ?? 0, base: 30 },
-    { id: 'crystal', name: 'Mine de Cristal', lv: planet.crystal_mine_level ?? 0, base: 20 },
-    { id: 'deuterium', name: 'Synthé de Deutérium', lv: planet.deuterium_mine_level ?? 0, base: 10 },
-    { id: 'solar_plant', name: 'Centrale Solaire', lv: planet.solar_plant_level ?? 0, base: 0 }, 
+    { id: 'metal', name: 'Mine de Métal', lv: planet.metal_mine_level ?? 0, base: config.production_metal_base || 30, growth: config.production_metal_growth || 1.1 },
+    { id: 'crystal', name: 'Mine de Cristal', lv: planet.crystal_mine_level ?? 0, base: config.production_crystal_base || 20, growth: config.production_crystal_growth || 1.1 },
+    { id: 'deuterium', name: 'Synthé de Deutérium', lv: planet.deuterium_mine_level ?? 0, base: config.production_deuterium_base || 10, growth: config.production_deuterium_growth || 1.05 },
+    { id: 'solar_plant', name: 'Centrale Solaire', lv: planet.solar_plant_level ?? 0, base: 0, growth: 1.1 },
   ];
 
   const metalNow = planet.metal_amount ?? 0;
@@ -267,9 +300,9 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
         const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
 
         // Calculs (Design Riche)
-        const currentProd = calculateProd(build.id, build.lv, build.base);
+        const currentProd = calculateProd(build.id, build.lv, build.base, build.growth);
         const currentEnergy = calculateEnergyCons(build.id, build.lv);
-        const nextProd = calculateProd(build.id, build.lv + 1, build.base);
+        const nextProd = calculateProd(build.id, build.lv + 1, build.base, build.growth);
         const nextEnergy = calculateEnergyCons(build.id, build.lv + 1);
         const diffProd = nextProd - currentProd;
         const diffEnergy = nextEnergy - currentEnergy;

@@ -76,7 +76,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   });
 
   // Hook pour ressources en temps réel
-  const realtimeResources = useRealtimeResources(planet, speedFactor);
+  const realtimeResources = useRealtimeResources(planet, speedFactor, config);
 
   // Récupérer la configuration serveur
   useEffect(() => {

@@ -652,7 +652,13 @@ async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResp
         "production_crystal_growth": config.get_config("production_crystal_growth", 1.1),
         "production_deuterium_growth": config.get_config("production_deuterium_growth", 1.05),
         "energy_tech_bonus": config.get_config("energy_tech_bonus", 0.01),
-        "mining_speed_multiplier": config.mining_speed
+        "energy_solar_base": config.get_config("energy_solar_base", 20.0),
+        "energy_solar_growth": config.get_config("energy_solar_growth", 1.1),
+        "energy_mine_consumption_base": config.get_config("energy_mine_consumption_base", 10.0),
+        "energy_mine_consumption_growth": config.get_config("energy_mine_consumption_growth", 1.1),
+        "energy_deuterium_extra_consumption": config.get_config("energy_deuterium_extra_consumption", 20.0),
+        "mining_speed_multiplier": config.mining_speed,
+        "construction_speed_multiplier": config.construction_speed
     }))
 }
 
