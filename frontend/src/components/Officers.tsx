@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { apiUrl } from '@/config/api';
 import { toast } from 'sonner';
-import { Users, Star, Zap, TrendingUp, Filter, Sparkles, Crown, Award, Trophy } from 'lucide-react';
+import {
+  Users, Star, Zap, TrendingUp, Filter, Sparkles, Crown, Award, Trophy,
+  ChevronRight, AlertCircle, CheckCircle2, Loader2, Box, Gem, Droplets
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 // ============================================================================
 // TYPES
@@ -37,68 +42,71 @@ interface UserOfficer {
 // CONSTANTS
 // ============================================================================
 
-const RARITY_COLORS = {
-  common: 'from-gray-600/80 via-gray-700/80 to-gray-800/80 border-gray-500/60',
-  uncommon: 'from-green-600/80 via-green-700/80 to-green-800/80 border-green-500/60',
-  rare: 'from-blue-600/80 via-blue-700/80 to-blue-800/80 border-blue-500/60',
-  epic: 'from-purple-600/80 via-purple-700/80 to-purple-800/80 border-purple-500/60',
-  legendary: 'from-yellow-500/90 via-orange-600/90 to-red-600/90 border-yellow-400/80',
+const RARITY_CONFIG = {
+  common: {
+    label: 'Commun',
+    color: 'text-gray-400',
+    border: 'border-gray-500/40',
+    bg: 'bg-gray-500/5',
+    glow: 'shadow-[0_0_10px_rgba(156,163,175,0.15)]',
+    icon: Star,
+  },
+  uncommon: {
+    label: 'Peu commun',
+    color: 'text-green-400',
+    border: 'border-green-500/40',
+    bg: 'bg-green-500/5',
+    glow: 'shadow-[0_0_15px_rgba(34,197,94,0.2)]',
+    icon: Award,
+  },
+  rare: {
+    label: 'Rare',
+    color: 'text-blue-400',
+    border: 'border-blue-500/40',
+    bg: 'bg-blue-500/5',
+    glow: 'shadow-[0_0_20px_rgba(59,130,246,0.25)]',
+    icon: Sparkles,
+  },
+  epic: {
+    label: 'Épique',
+    color: 'text-purple-400',
+    border: 'border-purple-500/40',
+    bg: 'bg-purple-500/5',
+    glow: 'shadow-[0_0_25px_rgba(168,85,247,0.3)]',
+    icon: Trophy,
+  },
+  legendary: {
+    label: 'Légendaire',
+    color: 'text-yellow-400',
+    border: 'border-yellow-500/50',
+    bg: 'bg-yellow-500/10',
+    glow: 'shadow-[0_0_30px_rgba(251,191,36,0.4)] animate-pulse',
+    icon: Crown,
+  },
 };
 
-const RARITY_GLOW = {
-  common: 'shadow-[0_0_15px_rgba(156,163,175,0.3)]',
-  uncommon: 'shadow-[0_0_20px_rgba(34,197,94,0.4)]',
-  rare: 'shadow-[0_0_25px_rgba(59,130,246,0.5)]',
-  epic: 'shadow-[0_0_30px_rgba(168,85,247,0.6)]',
-  legendary: 'shadow-[0_0_40px_rgba(251,191,36,0.8)] animate-pulse',
-};
-
-const RARITY_BG_GLOW = {
-  common: 'bg-gray-500/10',
-  uncommon: 'bg-green-500/10',
-  rare: 'bg-blue-500/15',
-  epic: 'bg-purple-500/20',
-  legendary: 'bg-yellow-500/25',
-};
-
-const RARITY_LABELS = {
-  common: 'Commun',
-  uncommon: 'Peu commun',
-  rare: 'Rare',
-  epic: 'Épique',
-  legendary: 'Légendaire',
-};
-
-const RARITY_ICONS = {
-  common: Star,
-  uncommon: Award,
-  rare: Sparkles,
-  epic: Trophy,
-  legendary: Crown,
-};
-
-const SPECIALIZATION_COLORS = {
-  economy: 'text-emerald-400',
-  military: 'text-red-400',
-  research: 'text-purple-400',
-};
-
-const SPECIALIZATION_BG = {
-  economy: 'bg-emerald-500/20 border-emerald-500/40',
-  military: 'bg-red-500/20 border-red-500/40',
-  research: 'bg-purple-500/20 border-purple-500/40',
-};
-
-const SPECIALIZATION_ICONS = {
-  economy: '💰',
-  military: '⚔️',
-  research: '🔬',
-};
-
-const SPECIALIZATION_LABELS = {
-  economy: 'Économie',
-  military: 'Militaire',
-  research: 'Recherche',
+const SPEC_CONFIG = {
+  economy: {
+    label: 'Économie',
+    color: 'text-emerald-400',
+    border: 'border-emerald-500/30',
+    bg: 'bg-emerald-500/10',
+    icon: '💰',
+  },
+  military: {
+    label: 'Militaire',
+    color: 'text-red-400',
+    border: 'border-red-500/30',
+    bg: 'bg-red-500/10',
+    icon: '⚔️',
+  },
+  research: {
+    label: 'Recherche',
+    color: 'text-purple-400',
+    border: 'border-purple-500/30',
+    bg: 'bg-purple-500/10',
+    icon: '🔬',
+  },
 };
 
 // ============================================================================
@@ -116,159 +124,160 @@ function OfficerCard({
   isRecruited?: boolean;
   userOfficer?: UserOfficer;
 }) {
-  const rarityColor = RARITY_COLORS[officer.rarity];
-  const rarityGlow = RARITY_GLOW[officer.rarity];
-  const rarityBgGlow = RARITY_BG_GLOW[officer.rarity];
-  const specColor = SPECIALIZATION_COLORS[officer.specialization];
-  const specIcon = SPECIALIZATION_ICONS[officer.specialization];
-  const specBg = SPECIALIZATION_BG[officer.specialization];
-  const RarityIcon = RARITY_ICONS[officer.rarity];
+  const rarity = RARITY_CONFIG[officer.rarity];
+  const spec = SPEC_CONFIG[officer.specialization];
+  const RarityIcon = rarity.icon;
 
   return (
-    <div
-      className={`relative bg-gradient-to-br ${rarityColor} backdrop-blur-md border-2 rounded-xl p-5 ${rarityGlow} hover:scale-105 hover:-translate-y-2 transition-all duration-500 group overflow-hidden card-depth animate-fade-in`}
-    >
-      {/* Effets de fond animés */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-30 ${rarityBgGlow} animate-pulse group-hover:opacity-40 transition-opacity`}></div>
-        <div className={`absolute -left-10 -bottom-10 w-24 h-24 rounded-full blur-2xl opacity-20 ${rarityBgGlow} animate-pulse`} style={{ animationDelay: '0.5s' }}></div>
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-1/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent animate-pulse"></div>
-        </div>
+    <Card className={`bg-slate-950 border overflow-hidden relative group hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up ${rarity.border} ${rarity.glow}`}>
+
+      {/* Background subtle effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+        <div className={`absolute top-0 right-0 w-32 h-32 ${rarity.bg} blur-3xl`}></div>
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
       </div>
 
-      {/* Badge de rareté */}
-      <div className="absolute top-3 right-3 px-3 py-1.5 bg-black/70 backdrop-blur-md rounded-lg text-[10px] font-black uppercase tracking-wider border border-white/20 flex items-center gap-1.5 shadow-lg z-10">
-        <RarityIcon size={12} className="animate-pulse" />
-        {RARITY_LABELS[officer.rarity]}
-      </div>
+      <CardHeader className="pb-2 border-b border-white/5 relative z-10">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-slate-500">
+            <RarityIcon size={12} className={`${rarity.color}`} />
+            {rarity.label}
+          </CardTitle>
 
-      {/* Badge actif */}
-      {isRecruited && userOfficer?.is_active && (
-        <div className="absolute top-3 left-3 px-3 py-1.5 bg-emerald-600/90 backdrop-blur-md rounded-lg text-[10px] font-black uppercase tracking-wider border border-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.5)] z-10 animate-pulse">
-          <span className="flex items-center gap-1">
-            <Zap size={12} className="drop-shadow-[0_0_4px_rgba(16,185,129,0.8)]" />
-            Actif
-          </span>
+          {isRecruited && userOfficer?.is_active && (
+            <div className="px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-1">
+              <Zap size={10} className="text-emerald-400" />
+              <span className="text-[9px] font-black uppercase text-emerald-400 tracking-wider">Actif</span>
+            </div>
+          )}
         </div>
-      )}
+      </CardHeader>
 
-      {/* Image de l'officier */}
-      <div className="flex justify-center mb-5 relative z-10">
-        <div className="relative group-hover:scale-110 transition-transform duration-500">
-          <div className={`absolute inset-0 ${rarityBgGlow} blur-xl animate-pulse`}></div>
-          <img
-            src={`/officers/${officer.image_type}.svg`}
-            alt={officer.name}
-            className="w-36 h-36 drop-shadow-[0_0_15px_rgba(0,0,0,0.8)] relative z-10"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = '/officers/engineer.svg';
-            }}
-          />
-        </div>
-      </div>
+      <CardContent className="p-5 space-y-4 relative z-10">
 
-      {/* Nom et spécialisation */}
-      <div className="text-center mb-4 relative z-10">
-        <h3 className="text-xl font-black uppercase mb-2 tracking-wide drop-shadow-[0_0_10px_rgba(0,0,0,0.8)] text-white">{officer.name}</h3>
-        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold border ${specBg} shadow-inner`}>
-          <span className="text-lg">{specIcon}</span>
-          <span className={specColor}>{SPECIALIZATION_LABELS[officer.specialization]}</span>
-        </div>
-      </div>
-
-      {/* Description */}
-      <p className="text-sm text-gray-200 mb-4 text-center italic leading-relaxed relative z-10 drop-shadow-md">
-        {officer.description}
-      </p>
-
-      {/* Bonus */}
-      <div className="bg-black/50 backdrop-blur-md rounded-xl p-3 mb-4 border border-white/20 shadow-inner relative z-10">
-        <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
-          <TrendingUp size={10} className="text-yellow-400" />
-          Bonus de Performance
-        </div>
-        <div className="text-lg font-black text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]">
-          {userOfficer
-            ? `+${userOfficer.current_bonus.toFixed(1)}%`
-            : `+${officer.base_bonus_value.toFixed(1)}%`}
-        </div>
-        <div className="text-[10px] text-gray-400 mt-1">
-          +{officer.bonus_per_level.toFixed(1)}% par niveau
-        </div>
-      </div>
-
-      {/* Niveau (pour officiers recrutés) */}
-      {isRecruited && userOfficer && (
-        <div className="mb-4 relative z-10">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-gray-300 font-bold uppercase text-[10px] tracking-wider">Niveau</span>
-            <span className="font-black text-white">
-              {userOfficer.level} / {officer.max_level}
-            </span>
-          </div>
-          <div className="relative w-full bg-gray-800/80 rounded-full h-3 border border-white/20 overflow-hidden shadow-inner">
-            <div
-              className="bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 h-3 rounded-full transition-all duration-700 relative animate-gradient"
-              style={{
-                width: `${(userOfficer.level / officer.max_level) * 100}%`,
+        {/* Officer Image */}
+        <div className="flex justify-center mb-4">
+          <div className="relative group-hover:scale-105 transition-transform duration-500">
+            <div className={`absolute inset-0 ${rarity.bg} blur-xl opacity-50`}></div>
+            <img
+              src={`/officers/${officer.image_type}.svg`}
+              alt={officer.name}
+              className="w-28 h-28 drop-shadow-2xl relative z-10"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/officers/engineer.svg';
               }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)] animate-pulse"></div>
-            </div>
+            />
           </div>
         </div>
-      )}
 
-      {/* Coût de recrutement */}
-      {!isRecruited && (
-        <>
-          <div className="space-y-2 mb-4 bg-black/40 rounded-xl p-3 border border-white/20 backdrop-blur-sm relative z-10">
-            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-2 flex items-center gap-1">
-              <Sparkles size={10} className="text-yellow-400" />
-              Coût de Recrutement
-            </div>
-            {officer.recruitment_cost_metal > 0 && (
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-gray-300 font-semibold">Métal:</span>
-                <span className="font-mono font-black text-orange-400 drop-shadow-[0_0_6px_rgba(251,146,60,0.5)]">
-                  {officer.recruitment_cost_metal.toLocaleString()}
-                </span>
-              </div>
-            )}
-            {officer.recruitment_cost_crystal > 0 && (
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-gray-300 font-semibold">Cristal:</span>
-                <span className="font-mono font-black text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]">
-                  {officer.recruitment_cost_crystal.toLocaleString()}
-                </span>
-              </div>
-            )}
-            {officer.recruitment_cost_deuterium > 0 && (
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-gray-300 font-semibold">Deutérium:</span>
-                <span className="font-mono font-black text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.5)]">
-                  {officer.recruitment_cost_deuterium.toLocaleString()}
-                </span>
-              </div>
-            )}
+        {/* Name & Specialization */}
+        <div className="text-center space-y-2">
+          <h3 className="text-lg font-black uppercase text-white tracking-wide">{officer.name}</h3>
+          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${spec.border} ${spec.bg}`}>
+            <span className="text-sm">{spec.icon}</span>
+            <span className={`text-xs font-bold ${spec.color} uppercase tracking-wider`}>{spec.label}</span>
           </div>
+        </div>
 
-          {/* Bouton de recrutement */}
-          <button
-            onClick={() => onRecruit && onRecruit(officer)}
-            className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-black py-3 px-4 rounded-lg transition-all duration-300 uppercase tracking-wider text-sm shadow-lg hover:shadow-[0_0_25px_rgba(99,102,241,0.6)] hover:scale-105 border-2 border-blue-400/50 relative z-10 group/btn overflow-hidden"
-          >
-            <span className="relative z-10 flex items-center justify-center gap-2">
-              <Users size={16} />
-              Recruter
+        {/* Description */}
+        <p className="text-xs text-slate-400 text-center italic leading-relaxed">
+          {officer.description}
+        </p>
+
+        {/* Bonus Stats */}
+        <div className="bg-black/40 border border-white/10 rounded-xl p-3 space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+              <TrendingUp size={10} className="text-yellow-400" />
+              Bonus Performance
             </span>
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000"></div>
-          </button>
-        </>
-      )}
-    </div>
+            <span className={`text-lg font-black ${rarity.color} drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]`}>
+              {userOfficer ? `+${userOfficer.current_bonus.toFixed(1)}%` : `+${officer.base_bonus_value.toFixed(1)}%`}
+            </span>
+          </div>
+          <div className="text-[9px] text-slate-500 text-right">
+            +{officer.bonus_per_level.toFixed(1)}% par niveau
+          </div>
+        </div>
+
+        {/* Level Progress (recruited officers) */}
+        {isRecruited && userOfficer && (
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Niveau</span>
+              <span className="text-sm font-black text-white font-mono">
+                {userOfficer.level} / {officer.max_level}
+              </span>
+            </div>
+            <div className="relative w-full bg-slate-900 rounded-full h-2 border border-white/10 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-cyan-600 to-blue-600 h-2 rounded-full transition-all duration-700 relative"
+                style={{ width: `${(userOfficer.level / officer.max_level) * 100}%` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recruitment Cost */}
+        {!isRecruited && (
+          <div className="space-y-3">
+            <div className="bg-black/30 border border-white/5 rounded-xl p-3 space-y-2">
+              <div className="text-[9px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1 mb-2">
+                <Sparkles size={10} className="text-yellow-400" />
+                Coût de Recrutement
+              </div>
+              {officer.recruitment_cost_metal > 0 && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400 flex items-center gap-1 font-semibold">
+                    <Box size={10} className="text-orange-400" />
+                    Métal
+                  </span>
+                  <span className="font-mono font-bold text-orange-400">
+                    {officer.recruitment_cost_metal.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {officer.recruitment_cost_crystal > 0 && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400 flex items-center gap-1 font-semibold">
+                    <Gem size={10} className="text-cyan-400" />
+                    Cristal
+                  </span>
+                  <span className="font-mono font-bold text-cyan-400">
+                    {officer.recruitment_cost_crystal.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {officer.recruitment_cost_deuterium > 0 && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400 flex items-center gap-1 font-semibold">
+                    <Droplets size={10} className="text-emerald-400" />
+                    Deutérium
+                  </span>
+                  <span className="font-mono font-bold text-emerald-400">
+                    {officer.recruitment_cost_deuterium.toLocaleString()}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <Button
+              onClick={() => onRecruit && onRecruit(officer)}
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black uppercase tracking-wider text-sm border border-indigo-400/50 shadow-lg hover:shadow-indigo-500/40 transition-all group/btn relative overflow-hidden h-10"
+            >
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                <Users size={16} />
+                Recruter
+              </span>
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000"></div>
+            </Button>
+          </div>
+        )}
+
+      </CardContent>
+    </Card>
   );
 }
 
@@ -283,7 +292,6 @@ export default function Officers() {
   const userId = localStorage.getItem('user_id');
   const token = localStorage.getItem('token');
 
-  // Charger les templates et les officiers de l'utilisateur
   useEffect(() => {
     loadData();
   }, []);
@@ -291,14 +299,12 @@ export default function Officers() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Charger les templates
       const templatesRes = await fetch(apiUrl('/officers/templates'));
       if (templatesRes.ok) {
         const templatesData = await templatesRes.json();
         setTemplates(templatesData);
       }
 
-      // Charger les officiers recrutés
       if (userId) {
         const officersRes = await fetch(apiUrl(`/users/${userId}/officers`), {
           headers: { Authorization: `Bearer ${token}` },
@@ -334,7 +340,7 @@ export default function Officers() {
 
       if (res.ok) {
         toast.success(`${officer.name} a été recruté !`);
-        loadData(); // Recharger les données
+        loadData();
       } else {
         const error = await res.text();
         toast.error(`Échec du recrutement: ${error}`);
@@ -345,16 +351,13 @@ export default function Officers() {
     }
   };
 
-  // Filtrer les templates
   const filteredTemplates = templates.filter((t) => {
     if (filter !== 'all' && t.specialization !== filter) return false;
     if (rarityFilter !== 'all' && t.rarity !== rarityFilter) return false;
-    // Masquer les officiers déjà recrutés
     if (userOfficers.some((uo) => uo.template.id === t.id)) return false;
     return true;
   });
 
-  // Filtrer les officiers recrutés
   const filteredUserOfficers = userOfficers.filter((uo) => {
     if (filter !== 'all' && uo.template.specialization !== filter) return false;
     if (rarityFilter !== 'all' && uo.template.rarity !== rarityFilter) return false;
@@ -363,103 +366,89 @@ export default function Officers() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <div className="relative inline-block">
-            <Users size={64} className="text-cyan-400 animate-pulse drop-shadow-[0_0_20px_rgba(6,182,212,0.6)]" />
-            <Users size={64} className="absolute inset-0 text-cyan-400 animate-ping opacity-30" />
-          </div>
-          <p className="text-xl font-black uppercase tracking-[0.2em] text-slate-400 mt-6">Chargement du Personnel...</p>
+          <Loader2 size={64} className="text-cyan-400 animate-spin mx-auto mb-4" />
+          <p className="text-sm font-black uppercase tracking-[0.2em] text-slate-500">Chargement du Personnel...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
-      {/* Effets de fond globaux */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full blur-3xl opacity-10 bg-cyan-500 animate-pulse"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full blur-3xl opacity-10 bg-purple-500 animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent animate-pulse"></div>
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+
+      {/* Header */}
+      <Card className="bg-slate-950 border border-cyan-500/30 overflow-hidden relative shadow-[0_0_20px_rgba(6,182,212,0.1)] hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -right-20 -top-20 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl"></div>
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent"></div>
+        </div>
+
+        <CardHeader className="relative z-10 border-b border-white/5">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <Users size={48} className="text-cyan-400" />
+              <div className="absolute inset-0 blur-xl bg-cyan-400/30"></div>
+            </div>
+            <div>
+              <CardTitle className="text-3xl font-black uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
+                Officiers d'Élite
+              </CardTitle>
+              <p className="text-slate-400 text-sm font-semibold mt-1">
+                Recrutez des héros légendaires pour dominer la galaxie
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* View Tabs */}
+      <div className="flex gap-4">
+        <Button
+          onClick={() => setView('available')}
+          className={`relative px-6 py-3 font-black uppercase tracking-wider transition-all overflow-hidden ${
+            view === 'available'
+              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30 scale-105 border border-indigo-400/50'
+              : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-white/10 hover:border-white/20'
+          }`}
+        >
+          <span className="relative z-10 flex items-center gap-2">
+            <Star size={16} />
+            Disponibles ({filteredTemplates.length})
+          </span>
+        </Button>
+        <Button
+          onClick={() => setView('recruited')}
+          className={`relative px-6 py-3 font-black uppercase tracking-wider transition-all overflow-hidden ${
+            view === 'recruited'
+              ? 'bg-gradient-to-r from-emerald-600 to-cyan-600 text-white shadow-lg shadow-emerald-500/30 scale-105 border border-emerald-400/50'
+              : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-white/10 hover:border-white/20'
+          }`}
+        >
+          <span className="relative z-10 flex items-center gap-2">
+            <CheckCircle2 size={16} />
+            Mes Officiers ({userOfficers.length})
+          </span>
+        </Button>
       </div>
 
-      <div className="container mx-auto px-6 py-10 relative z-10">
-        {/* En-tête immersif */}
-        <div className="mb-10 relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-cyan-500/10 blur-3xl"></div>
-          <div className="relative bg-gradient-to-br from-slate-900/80 via-slate-800/80 to-slate-900/80 backdrop-blur-xl border-2 border-cyan-500/30 rounded-2xl p-8 shadow-[0_0_50px_rgba(6,182,212,0.2)] overflow-hidden">
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div className="absolute -right-20 -top-20 w-64 h-64 rounded-full blur-3xl opacity-20 bg-cyan-400 animate-pulse"></div>
-              <div className="absolute -left-20 -bottom-20 w-48 h-48 rounded-full blur-2xl opacity-15 bg-purple-400 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-            </div>
-            <div className="flex items-center gap-4 relative z-10">
-              <div className="relative">
-                <Users size={48} className="text-cyan-400 drop-shadow-[0_0_20px_rgba(6,182,212,0.8)] animate-pulse" />
-                <Users size={48} className="absolute inset-0 text-cyan-400 animate-ping opacity-30" />
-              </div>
-              <div>
-                <h1 className="text-5xl font-black uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-cyan-400 drop-shadow-[0_0_30px_rgba(6,182,212,0.5)] mb-2 animate-gradient">
-                  Officiers d'Élite
-                </h1>
-                <p className="text-gray-400 text-lg font-semibold">
-                  Recrutez des héros légendaires pour dominer la galaxie
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Onglets stylisés */}
-        <div className="flex gap-4 mb-8">
-          <button
-            onClick={() => setView('available')}
-            className={`relative px-8 py-4 rounded-xl font-black uppercase tracking-wider transition-all duration-300 overflow-hidden group ${
-              view === 'available'
-                ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-[0_0_30px_rgba(99,102,241,0.6)] scale-105 border-2 border-blue-400/50'
-                : 'bg-slate-800/50 text-gray-400 hover:bg-slate-700/50 border-2 border-slate-700/50 hover:border-slate-600/50'
-            }`}
-          >
-            <span className="relative z-10 flex items-center gap-2">
-              <Star size={18} />
-              Disponibles ({filteredTemplates.length})
-            </span>
-            {view === 'available' && (
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-            )}
-          </button>
-          <button
-            onClick={() => setView('recruited')}
-            className={`relative px-8 py-4 rounded-xl font-black uppercase tracking-wider transition-all duration-300 overflow-hidden group ${
-              view === 'recruited'
-                ? 'bg-gradient-to-r from-emerald-600 via-cyan-600 to-emerald-600 text-white shadow-[0_0_30px_rgba(16,185,129,0.6)] scale-105 border-2 border-emerald-400/50'
-                : 'bg-slate-800/50 text-gray-400 hover:bg-slate-700/50 border-2 border-slate-700/50 hover:border-slate-600/50'
-            }`}
-          >
-            <span className="relative z-10 flex items-center gap-2">
-              <Users size={18} />
-              Mes Officiers ({userOfficers.length})
-            </span>
-            {view === 'recruited' && (
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-            )}
-          </button>
-        </div>
-
-        {/* Filtres modernisés */}
-        <div className="bg-gradient-to-br from-slate-900/80 via-slate-800/80 to-slate-900/80 backdrop-blur-xl border-2 border-slate-700/50 rounded-xl p-6 mb-8 shadow-lg">
-          <div className="flex items-center gap-2 mb-4">
-            <Filter size={18} className="text-cyan-400" />
-            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Filtres de Recherche</h3>
-          </div>
+      {/* Filters */}
+      <Card className="bg-slate-950 border border-white/10 overflow-hidden card-depth hover:-translate-y-1 hover:shadow-2xl transition-all duration-500">
+        <CardHeader className="pb-2 border-b border-white/5">
+          <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-slate-500">
+            <Filter size={14} className="text-cyan-400" />
+            Filtres de Recherche
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
           <div className="flex flex-wrap gap-4">
-            {/* Filtre spécialisation */}
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs text-gray-500 mb-2 font-bold uppercase tracking-wider">Spécialisation</label>
+              <label className="block text-[9px] text-slate-500 mb-2 font-bold uppercase tracking-wider">Spécialisation</label>
               <select
                 value={filter}
                 onChange={(e) => setFilter(e.target.value as typeof filter)}
-                className="w-full bg-slate-900/80 border-2 border-slate-700/50 rounded-lg px-4 py-3 font-semibold text-white hover:border-cyan-500/50 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all outline-none"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-semibold text-white hover:border-cyan-500/50 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all outline-none"
               >
                 <option value="all">🌟 Toutes</option>
                 <option value="economy">💰 Économie</option>
@@ -468,13 +457,12 @@ export default function Officers() {
               </select>
             </div>
 
-            {/* Filtre rareté */}
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs text-gray-500 mb-2 font-bold uppercase tracking-wider">Rareté</label>
+              <label className="block text-[9px] text-slate-500 mb-2 font-bold uppercase tracking-wider">Rareté</label>
               <select
                 value={rarityFilter}
                 onChange={(e) => setRarityFilter(e.target.value as typeof rarityFilter)}
-                className="w-full bg-slate-900/80 border-2 border-slate-700/50 rounded-lg px-4 py-3 font-semibold text-white hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all outline-none"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2.5 text-sm font-semibold text-white hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all outline-none"
               >
                 <option value="all">✨ Toutes</option>
                 <option value="common">⭐ Commun</option>
@@ -485,55 +473,56 @@ export default function Officers() {
               </select>
             </div>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Grille d'officiers */}
-        {view === 'available' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredTemplates.length === 0 ? (
-              <div className="col-span-full text-center py-20">
-                <div className="relative inline-block mb-4">
-                  <Users size={64} className="text-slate-700 opacity-30" />
-                </div>
-                <p className="text-gray-500 text-lg font-bold uppercase tracking-wider">Aucun officier disponible avec ces filtres</p>
-              </div>
-            ) : (
-              filteredTemplates.map((officer) => (
-                <OfficerCard
-                  key={officer.id}
-                  officer={officer}
-                  onRecruit={handleRecruit}
-                />
-              ))
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredUserOfficers.length === 0 ? (
-              <div className="col-span-full text-center py-20">
-                <div className="relative inline-block mb-4">
-                  <Users size={64} className="text-slate-700 opacity-30 animate-pulse" />
-                  <Users size={64} className="absolute inset-0 text-slate-700 opacity-10 animate-ping" />
-                </div>
-                <p className="text-gray-500 text-lg font-bold uppercase tracking-wider">
-                  {userOfficers.length === 0
-                    ? "Vous n'avez pas encore recruté d'officiers"
-                    : 'Aucun officier avec ces filtres'}
-                </p>
-              </div>
-            ) : (
-              filteredUserOfficers.map((userOfficer) => (
-                <OfficerCard
-                  key={userOfficer.id}
-                  officer={userOfficer.template}
-                  isRecruited={true}
-                  userOfficer={userOfficer}
-                />
-              ))
-            )}
-          </div>
-        )}
-      </div>
+      {/* Officers Grid */}
+      {view === 'available' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredTemplates.length === 0 ? (
+            <div className="col-span-full">
+              <Card className="bg-slate-950 border border-white/10">
+                <CardContent className="py-20 text-center">
+                  <AlertCircle size={64} className="text-slate-700 opacity-30 mx-auto mb-4" />
+                  <p className="text-slate-500 text-sm font-bold uppercase tracking-wider">
+                    Aucun officier disponible avec ces filtres
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            filteredTemplates.map((officer) => (
+              <OfficerCard key={officer.id} officer={officer} onRecruit={handleRecruit} />
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredUserOfficers.length === 0 ? (
+            <div className="col-span-full">
+              <Card className="bg-slate-950 border border-white/10">
+                <CardContent className="py-20 text-center">
+                  <Users size={64} className="text-slate-700 opacity-30 mx-auto mb-4 animate-pulse" />
+                  <p className="text-slate-500 text-sm font-bold uppercase tracking-wider">
+                    {userOfficers.length === 0
+                      ? "Vous n'avez pas encore recruté d'officiers"
+                      : 'Aucun officier avec ces filtres'}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            filteredUserOfficers.map((userOfficer) => (
+              <OfficerCard
+                key={userOfficer.id}
+                officer={userOfficer.template}
+                isRecruited={true}
+                userOfficer={userOfficer}
+              />
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
