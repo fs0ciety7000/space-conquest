@@ -47,7 +47,7 @@ impl MigrationTrait for Migration {
             db.execute_unprepared(&format!(
                 "INSERT INTO technologies (tech_key, name, category, base_cost_metal, base_cost_crystal, base_cost_deuterium, base_time_seconds, cost_multiplier, research_lab_required, description) \
                  VALUES ('{}', '{}', '{}', {}, {}, {}, {}, {}, {}, '{}') ON CONFLICT (tech_key) DO NOTHING",
-                key, name, category, metal, crystal, deut, time, mult, lab_req, desc
+                key, name.replace("'", "''"), category, metal, crystal, deut, time, mult, lab_req, desc.replace("'", "''")
             )).await?;
         }
 
@@ -125,7 +125,7 @@ impl MigrationTrait for Migration {
             db.execute_unprepared(&format!(
                 "INSERT INTO ship_types (ship_key, name, category, base_cost_metal, base_cost_crystal, base_cost_deuterium, build_time_seconds, attack, shield, hull, cargo_capacity, speed, fuel_consumption, shipyard_required, description) \
                  VALUES ('{}', '{}', '{}', {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, 'Vaisseau de combat spatial') ON CONFLICT (ship_key) DO NOTHING",
-                key, name, category, metal, crystal, deut, time, attack, shield, hull, cargo, speed, fuel, shipyard
+                key, name.replace("'", "''"), category, metal, crystal, deut, time, attack, shield, hull, cargo, speed, fuel, shipyard
             )).await?;
         }
 
@@ -210,7 +210,7 @@ impl MigrationTrait for Migration {
             db.execute_unprepared(&format!(
                 "INSERT INTO building_types (building_key, name, category, base_cost_metal, base_cost_crystal, base_cost_deuterium, cost_multiplier, description) \
                  VALUES ('{}', '{}', '{}', {}, {}, {}, {}, '{}') ON CONFLICT (building_key) DO NOTHING",
-                key, name, category, metal, crystal, deut, mult, desc
+                key, name.replace("'", "''"), category, metal, crystal, deut, mult, desc.replace("'", "''")
             )).await?;
         }
 
@@ -278,7 +278,7 @@ impl MigrationTrait for Migration {
             db.execute_unprepared(&format!(
                 "INSERT INTO defense_types (defense_key, name, category, base_cost_metal, base_cost_crystal, base_cost_deuterium, build_time_seconds, attack, shield, hull, description) \
                  VALUES ('{}', '{}', '{}', {}, {}, {}, {}, {}, {}, {}, '{}') ON CONFLICT (defense_key) DO NOTHING",
-                key, name, category, metal, crystal, deut, time, attack, shield, hull, desc
+                key, name.replace("'", "''"), category, metal, crystal, deut, time, attack, shield, hull, desc.replace("'", "''")
             )).await?;
         }
 
