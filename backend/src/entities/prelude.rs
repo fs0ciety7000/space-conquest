@@ -33,3 +33,4 @@ pub use super :: user_officer :: Entity as UserOfficer ;
 
 // Sabotage system
 pub use super :: sabotage_effect :: Entity as SabotageEffect ;
+pub use super :: casus_belli :: Entity as CasusBelli ;

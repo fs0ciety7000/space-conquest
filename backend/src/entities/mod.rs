@@ -35,3 +35,4 @@ pub mod user_officer;
 
 // Sabotage system
 pub mod sabotage_effect;
+pub mod casus_belli;
