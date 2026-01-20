@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use rand::Rng;
 use std::collections::HashMap;
+use sea_orm::DatabaseConnection;
 
 // --- STRUCTURES DE DONNÉES ---
 
@@ -9,19 +10,74 @@ pub struct CombatReport {
     pub log: Vec<String>,       // Le journal du combat (ex: "Tour 1: 500 dégâts infligés")
     pub winner: String,         // "player", "pirates", or "draw"
     pub loot_metal: f64,        // Gain en cas de victoire
-    pub remaining_hunters: i32, // Vaisseaux restants après le combat
-    pub remaining_cruisers: i32,
-    pub remaining_recyclers: i32,
-    // Add remaining counts for new ships
-    pub remaining_heavy_hunters: i32,
-    pub remaining_battleships: i32,
-    pub remaining_bombers: i32,
-    pub remaining_destroyers: i32,
+    pub remaining_ships: HashMap<String, i32>, // All remaining ships by ship_key
+}
+
+/// Ship stats loaded from database
+#[derive(Debug, Clone)]
+pub struct ShipStats {
+    pub attack: i32,
+    pub shield: i32,
+    pub hull: i32,
+    pub display_name: String,
+}
+
+/// Cache of ship stats for combat calculations
+pub type ShipStatsCache = HashMap<String, ShipStats>;
+
+/// Rapid fire rules: (attacker_ship_key, target_ship_key) -> multiplier
+/// Example: ("destroyer", "light_hunter") -> 5 means destroyers fire 5x against light hunters
+pub type RapidFireCache = HashMap<(String, String), i32>;
+
+/// Load ship stats from database into a cache
+pub async fn load_ship_stats_cache(db: &DatabaseConnection) -> Result<ShipStatsCache, sea_orm::DbErr> {
+    use sea_orm::EntityTrait;
+    use crate::entities::prelude::ShipType;
+
+    let all_ships = ShipType::find().all(db).await?;
+
+    let mut cache = HashMap::new();
+    for ship in all_ships {
+        cache.insert(
+            ship.ship_key.clone(),
+            ShipStats {
+                attack: ship.attack,
+                shield: ship.shield,
+                hull: ship.hull,
+                display_name: ship.display_name,
+            },
+        );
+    }
+
+    Ok(cache)
+}
+
+/// Load rapid fire rules from database
+pub async fn load_rapid_fire_cache(db: &DatabaseConnection) -> Result<RapidFireCache, sea_orm::DbErr> {
+    use sea_orm::EntityTrait;
+    use crate::entities::prelude::{RapidFireRule, ShipType};
+
+    let all_rules = RapidFireRule::find().all(db).await?;
+
+    let mut cache = HashMap::new();
+    for rule in all_rules {
+        // Get ship keys from ship_type_id
+        if let (Some(attacker), Some(target)) = (
+            ShipType::find_by_id(rule.attacker_ship_id).one(db).await?,
+            ShipType::find_by_id(rule.target_id).one(db).await?,
+        ) {
+            cache.insert(
+                (attacker.ship_key, target.ship_key),
+                rule.rapid_fire_value,
+            );
+        }
+    }
+
+    Ok(cache)
 }
 
 #[derive(Debug, Clone)]
 struct Fleet {
-    // Use a generic HashMap for ship types - makes it easier to extend
     ships: HashMap<String, i32>,
 }
 
@@ -42,47 +98,78 @@ impl Fleet {
         *self.ships.get(ship_type).unwrap_or(&0)
     }
 
-    // Calcul de la puissance de feu totale
-    fn get_total_attack(&self) -> f64 {
+    fn get_all_ships(&self) -> &HashMap<String, i32> {
+        &self.ships
+    }
+
+    // Calcul de la puissance de feu totale (dynamique avec stats DB)
+    fn get_total_attack(&self, stats_cache: &ShipStatsCache) -> f64 {
         let mut total = 0.0;
-        for (ship_type, count) in &self.ships {
-            let attack = match ship_type.as_str() {
-                "light_hunter" => 50.0,
-                "heavy_hunter" => 150.0,
-                "cruiser" => 400.0,
-                "battleship" => 1000.0,
-                "bomber" => 1000.0,
-                "destroyer" => 2000.0,
-                "recycler" => 1.0,
-                _ => 1.0,
-            };
-            total += *count as f64 * attack;
+        for (ship_key, count) in &self.ships {
+            if let Some(stats) = stats_cache.get(ship_key) {
+                total += *count as f64 * stats.attack as f64;
+            }
         }
         total
     }
 
-    // Calcul des points de vie totaux (Structure + Bouclier)
-    fn get_total_defense(&self) -> f64 {
+    // Calculate damage dealt to target fleet with rapid fire rules
+    fn calculate_damage_to_fleet(
+        &self,
+        target: &Fleet,
+        stats_cache: &ShipStatsCache,
+        rapid_fire_cache: &RapidFireCache,
+    ) -> f64 {
+        let mut total_damage = 0.0;
+
+        // For each attacking ship type
+        for (attacker_key, attacker_count) in &self.ships {
+            if let Some(attacker_stats) = stats_cache.get(attacker_key) {
+                let base_attack = attacker_stats.attack as f64 * (*attacker_count as f64);
+
+                // Calculate effective damage considering rapid fire against each target type
+                let mut effective_damage = 0.0;
+                let target_ship_count = target.ships.len() as f64;
+
+                if target_ship_count > 0.0 {
+                    for (target_key, target_count) in &target.ships {
+                        // Check for rapid fire rule
+                        let rapid_fire_mult = rapid_fire_cache
+                            .get(&(attacker_key.clone(), target_key.clone()))
+                            .copied()
+                            .unwrap_or(1);
+
+                        // Weight by target proportion in enemy fleet
+                        let target_proportion = (*target_count as f64) / target.ships.values().sum::<i32>() as f64;
+                        effective_damage += base_attack * (rapid_fire_mult as f64) * target_proportion;
+                    }
+                } else {
+                    effective_damage = base_attack;
+                }
+
+                total_damage += effective_damage;
+            }
+        }
+
+        total_damage
+    }
+
+    // Calcul des points de vie totaux (Shield + Hull)
+    fn get_total_defense(&self, stats_cache: &ShipStatsCache) -> f64 {
         let mut total = 0.0;
-        for (ship_type, count) in &self.ships {
-            let defense = match ship_type.as_str() {
-                "light_hunter" => 400.0,
-                "heavy_hunter" => 1000.0,
-                "cruiser" => 2700.0,
-                "battleship" => 6000.0,
-                "bomber" => 7500.0,
-                "destroyer" => 11000.0,
-                "recycler" => 1600.0,
-                _ => 10.0,
-            };
-            total += *count as f64 * defense;
+        for (ship_key, count) in &self.ships {
+            if let Some(stats) = stats_cache.get(ship_key) {
+                // Defense = shield + hull
+                let defense = stats.shield + stats.hull;
+                total += *count as f64 * defense as f64;
+            }
         }
         total
     }
 
     // Appliquer les dégâts : On réduit le nombre de vaisseaux au prorata des dégâts reçus
-    fn take_damage(&mut self, damage: f64) {
-        let total_def = self.get_total_defense();
+    fn take_damage(&mut self, damage: f64, stats_cache: &ShipStatsCache) {
+        let total_def = self.get_total_defense(stats_cache);
         if total_def <= 0.0 { return; }
 
         // Si la flotte prend 1000 dégâts sur 10000 PV, elle perd 10% de ses vaisseaux
@@ -105,103 +192,93 @@ impl Fleet {
     }
 }
 
-// --- MOTEUR DE COMBAT PRINCIPAL ---
+// --- MOTEUR DE COMBAT PRINCIPAL (DATABASE VERSION) ---
 
-pub fn resolve_expedition_combat(
-    p_hunters: i32,
-    p_cruisers: i32,
-    p_recyclers: i32,
-    p_heavy_hunters: i32,
-    p_battleships: i32,
-    p_bombers: i32,
-    p_destroyers: i32,
-) -> CombatReport {
+/// Resolve expedition combat using database ship stats
+pub async fn resolve_expedition_combat(
+    db: &DatabaseConnection,
+    player_ships: HashMap<String, i32>,
+) -> Result<CombatReport, sea_orm::DbErr> {
     let mut rng = rand::thread_rng();
     let mut logs = Vec::new();
 
-    // 1. Initialisation de la flotte du Joueur
+    // Load ship stats and rapid fire rules from database
+    let stats_cache = load_ship_stats_cache(db).await?;
+    let rapid_fire_cache = load_rapid_fire_cache(db).await?;
+
+    // 1. Initialize player fleet
     let mut player_fleet = Fleet::new();
-    player_fleet.set_ship_count("light_hunter", p_hunters);
-    player_fleet.set_ship_count("cruiser", p_cruisers);
-    player_fleet.set_ship_count("recycler", p_recyclers);
-    player_fleet.set_ship_count("heavy_hunter", p_heavy_hunters);
-    player_fleet.set_ship_count("battleship", p_battleships);
-    player_fleet.set_ship_count("bomber", p_bombers);
-    player_fleet.set_ship_count("destroyer", p_destroyers);
+    for (ship_key, count) in &player_ships {
+        player_fleet.set_ship_count(ship_key, *count);
+    }
 
-    // 2. Génération de la flotte Pirate (Scaling)
-    // Les pirates ont entre 50% et 110% de la force du joueur pour que ce soit risqué
+    // 2. Generate pirate fleet (scaling factor 50% to 110% of player strength)
     let scaling_factor = rng.gen_range(0.5..1.1);
-
     let mut pirate_fleet = Fleet::new();
 
-    // Pirates use a mix of ship types based on player fleet composition
-    if p_hunters > 0 {
-        pirate_fleet.set_ship_count("light_hunter", (p_hunters as f64 * scaling_factor).ceil() as i32);
-    }
-    if p_cruisers > 0 {
-        pirate_fleet.set_ship_count("cruiser", (p_cruisers as f64 * scaling_factor).ceil() as i32);
-    }
-    if p_heavy_hunters > 0 {
-        pirate_fleet.set_ship_count("heavy_hunter", (p_heavy_hunters as f64 * scaling_factor * 0.7).ceil() as i32);
-    }
-    if p_battleships > 0 {
-        pirate_fleet.set_ship_count("battleship", (p_battleships as f64 * scaling_factor * 0.6).ceil() as i32);
-    }
-    if p_bombers > 0 {
-        pirate_fleet.set_ship_count("bomber", (p_bombers as f64 * scaling_factor * 0.5).ceil() as i32);
-    }
-    if p_destroyers > 0 {
-        pirate_fleet.set_ship_count("destroyer", (p_destroyers as f64 * scaling_factor * 0.5).ceil() as i32);
+    // Pirates mirror player fleet composition with scaling
+    for (ship_key, count) in &player_ships {
+        if *count > 0 {
+            // Apply different scaling for different ship types
+            let type_scaling = match ship_key.as_str() {
+                "heavy_hunter" => 0.7,
+                "battleship" => 0.6,
+                "bomber" => 0.5,
+                "destroyer" => 0.5,
+                _ => 1.0,
+            };
+            let pirate_count = (*count as f64 * scaling_factor * type_scaling).ceil() as i32;
+            if pirate_count > 0 {
+                pirate_fleet.set_ship_count(ship_key, pirate_count);
+            }
+        }
     }
 
-    // Ajout d'un petit bonus pirate aléatoire pour ne pas avoir 0 vaisseaux si le joueur envoie 1 seul chasseur
+    // Ensure pirates always have at least some ships
     if pirate_fleet.is_destroyed() {
         pirate_fleet.set_ship_count("light_hunter", rng.gen_range(1..3));
     }
 
-    logs.push(format!("ALERTE : Flotte Pirate interceptée ! (Force estimée: {:.0}%)", scaling_factor * 100.0));
+    logs.push(format!(
+        "ALERTE : Flotte Pirate interceptée ! (Force estimée: {:.0}%)",
+        scaling_factor * 100.0
+    ));
 
     // Log pirate fleet composition
     let mut hostile_desc = String::from("HOSTILES : ");
     let mut ship_descriptions = Vec::new();
 
-    for (ship_type, count) in &pirate_fleet.ships {
+    for (ship_key, count) in pirate_fleet.get_all_ships() {
         if *count > 0 {
-            let name = match ship_type.as_str() {
-                "light_hunter" => "Chasseurs",
-                "heavy_hunter" => "Chasseurs Lourds",
-                "cruiser" => "Croiseurs",
-                "battleship" => "Vaisseaux de Bataille",
-                "bomber" => "Bombardiers",
-                "destroyer" => "Destructeurs",
-                _ => "Vaisseaux",
-            };
+            let name = stats_cache
+                .get(ship_key)
+                .map(|s| s.display_name.as_str())
+                .unwrap_or("Vaisseaux");
             ship_descriptions.push(format!("{} {}", count, name));
         }
     }
     hostile_desc.push_str(&ship_descriptions.join(", "));
     logs.push(hostile_desc);
 
-    // 3. Boucle de Combat (Max 6 Tours)
+    // 3. Combat loop (Max 6 rounds)
     let mut round = 1;
     let mut winner = "draw".to_string();
 
     while round <= 6 {
-        // Puissance de feu pour ce tour
-        let player_dmg = player_fleet.get_total_attack();
-        let pirate_dmg = pirate_fleet.get_total_attack();
+        // Calculate firepower for this round (with rapid fire rules)
+        let player_dmg = player_fleet.calculate_damage_to_fleet(&pirate_fleet, &stats_cache, &rapid_fire_cache);
+        let pirate_dmg = pirate_fleet.calculate_damage_to_fleet(&player_fleet, &stats_cache, &rapid_fire_cache);
 
-        // Application des dégâts simultanés
-        pirate_fleet.take_damage(player_dmg);
-        player_fleet.take_damage(pirate_dmg);
+        // Apply simultaneous damage
+        pirate_fleet.take_damage(player_dmg, &stats_cache);
+        player_fleet.take_damage(pirate_dmg, &stats_cache);
 
         logs.push(format!(
             "TOUR {}: Nous infligeons {:.0} dmg. Pirates ripostent avec {:.0} dmg.",
             round, player_dmg, pirate_dmg
         ));
 
-        // Vérification des conditions de victoire
+        // Check victory conditions
         if player_fleet.is_destroyed() && pirate_fleet.is_destroyed() {
             winner = "draw".to_string();
             logs.push("DESTRUCTION MUTUELLE : Aucune flotte n'a survécu.".to_string());
@@ -223,24 +300,24 @@ pub fn resolve_expedition_combat(
         logs.push("FUITE : Le combat s'éternise, les flottes se désengagent.".to_string());
     }
 
-    // 4. Calcul du butin (Seulement si victoire)
+    // 4. Calculate loot (only on victory)
     let mut loot = 0.0;
     if winner == "player" {
-        // Butin basé sur la force des pirates vaincus
-        loot = (pirate_fleet.get_total_attack() * 10.0) + 5000.0;
+        // Loot based on defeated pirate strength
+        loot = (pirate_fleet.get_total_attack(&stats_cache) * 10.0) + 5000.0;
         logs.push(format!("EPAVE FOUILLÉE : +{:.0} Métal récupéré.", loot));
     }
 
-    CombatReport {
+    // Build remaining ships map
+    let mut remaining_ships = HashMap::new();
+    for (ship_key, count) in player_fleet.get_all_ships() {
+        remaining_ships.insert(ship_key.clone(), *count);
+    }
+
+    Ok(CombatReport {
         log: logs,
         winner,
         loot_metal: loot,
-        remaining_hunters: player_fleet.get_ship_count("light_hunter"),
-        remaining_cruisers: player_fleet.get_ship_count("cruiser"),
-        remaining_recyclers: player_fleet.get_ship_count("recycler"),
-        remaining_heavy_hunters: player_fleet.get_ship_count("heavy_hunter"),
-        remaining_battleships: player_fleet.get_ship_count("battleship"),
-        remaining_bombers: player_fleet.get_ship_count("bomber"),
-        remaining_destroyers: player_fleet.get_ship_count("destroyer"),
-    }
+        remaining_ships,
+    })
 }

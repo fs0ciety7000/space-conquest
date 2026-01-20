@@ -36,3 +36,12 @@ pub mod user_officer;
 // Sabotage system
 pub mod sabotage_effect;
 pub mod casus_belli;
+
+// Tech Tree system (Expansion 2.0)
+pub mod technology;
+pub mod technology_requirement;
+pub mod planet_technology;
+pub mod ship_type;
+pub mod ship_requirement;
+pub mod planet_ship;
+pub mod rapid_fire_rule;

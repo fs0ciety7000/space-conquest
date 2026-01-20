@@ -16,6 +16,7 @@ pub mod market;
 pub mod missions;
 pub mod officers;
 pub mod sabotage;
+pub mod tech_tree;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::ServerConfig, server_config};

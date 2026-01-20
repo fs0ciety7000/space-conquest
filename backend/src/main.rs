@@ -3,7 +3,7 @@
 use axum::{
     extract::{Path, State, Query},
     http::StatusCode,
-    response::{IntoResponse, Json},
+    response::{IntoResponse, Json, Response},
     routing::{get, post, delete, patch},
     Router,
 };
@@ -38,7 +38,7 @@ use sea_orm_migration::MigratorTrait;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin,
-    messaging, market, websocket, alliance, missions, officers, sabotage, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, AppState
 };
 use config::Config;
 use websocket::WsState;
@@ -97,6 +97,12 @@ struct ExpeditionPayload {
     hunters: i32,
     cruisers: i32,
     recyclers: i32,
+}
+
+#[derive(Deserialize)]
+struct ExpeditionPayloadV2 {
+    // Generic fleet composition using ship_key -> count mapping
+    fleet: HashMap<String, i32>,
 }
 
 #[derive(Deserialize)]
@@ -200,6 +206,8 @@ async fn main() {
         .route("/planets/:id/build-fleet/:type/:qty", post(build_fleet_handler))
         .route("/planets/:id/expedition", post(expedition_handler))
         .route("/planets/:id/expedition/scout", post(scout_expedition_handler))
+        // TODO: Fix expedition_v2_handler - temporarily disabled
+        // .route("/planets/:id/expedition-v2", post(expedition_v2_handler))
         .route("/planets/:id/clear-report", post(clear_report_handler))
         .route("/planets/:id/reports", get(get_reports_handler))
         .route("/combat-reports/:id/detail", get(get_combat_report_detail_handler))
@@ -209,6 +217,13 @@ async fn main() {
         .route("/planets/:id/resource-slots/:slot_number", patch(update_resource_slot_handler))
         .route("/planets/:id/resource-slots/:slot_number/toggle", post(toggle_resource_slot_handler))
         .route("/my-planets", get(get_my_planets_handler))
+        // Tech Tree (Expansion 2.0)
+        .route("/planets/:id/tech-tree", get(get_tech_tree_handler))
+        .route("/planets/:id/ship-types", get(get_ship_types_handler))
+        .route("/planets/:id/research/:tech_key", post(start_research_handler))
+        .route("/planets/:id/build-ships/:ship_key/:quantity", post(build_ships_handler))
+        .route("/tech/:tech_key", get(get_tech_details_handler))
+        .route("/ship/:ship_key", get(get_ship_details_handler))
         // Actions
         .route("/attack", post(attack_handler))
         .route("/spy", post(spy_handler))
@@ -1164,6 +1179,16 @@ async fn get_planet_handler(
             "energy": format!("+{}%", energy_slots * 50),
             "deuterium": format!("+{}%", deuterium_slots * 50)
         }));
+
+        // ========== EXPANSION 2.0: Add relational tech tree and ship data ==========
+        // Include tech levels and ship counts from relational tables
+        if let Ok(tech_levels) = tech_tree::get_all_planet_tech_levels(&state.db, updated_model.id).await {
+            obj.insert("technologies".into(), json!(tech_levels));
+        }
+
+        if let Ok(ship_counts) = tech_tree::get_all_planet_ship_counts(&state.db, updated_model.id).await {
+            obj.insert("ships".into(), json!(ship_counts));
+        }
     }
 
     Ok(Json(json_response))
@@ -3891,4 +3916,517 @@ async fn toggle_resource_slot_handler(
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la mise à jour"}))).into_response(),
     }
+}
+
+// ========== TECH TREE ENDPOINTS (Expansion 2.0) ==========
+
+/// GET /planets/:id/tech-tree - Get all technologies with requirements for a planet
+async fn get_tech_tree_handler(
+    State(state): State<AppState>,
+    Path(planet_id): Path<Uuid>,
+) -> impl IntoResponse {
+    match tech_tree::get_tech_tree_for_planet(&state.db, planet_id).await {
+        Ok(tech_tree_data) => Json(json!({ "technologies": tech_tree_data })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch tech tree"}))).into_response(),
+    }
+}
+
+/// GET /planets/:id/ship-types - Get all ship types with requirements for a planet
+async fn get_ship_types_handler(
+    State(state): State<AppState>,
+    Path(planet_id): Path<Uuid>,
+) -> impl IntoResponse {
+    match tech_tree::get_ship_types_for_planet(&state.db, planet_id).await {
+        Ok(ship_types) => Json(json!({ "ship_types": ship_types })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch ship types"}))).into_response(),
+    }
+}
+
+/// GET /tech/:tech_key - Get details for a specific technology
+async fn get_tech_details_handler(
+    State(state): State<AppState>,
+    Path(tech_key): Path<String>,
+) -> impl IntoResponse {
+    use entities::prelude::Technology;
+    use entities::technology;
+
+    match Technology::find()
+        .filter(technology::Column::TechKey.eq(&tech_key))
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(tech)) => Json(json!({ "technology": tech })).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Technology not found"}))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    }
+}
+
+/// GET /ship/:ship_key - Get details for a specific ship type
+async fn get_ship_details_handler(
+    State(state): State<AppState>,
+    Path(ship_key): Path<String>,
+) -> impl IntoResponse {
+    match tech_tree::get_ship_stats(&state.db, &ship_key).await {
+        Ok(Some(ship)) => Json(json!({ "ship": ship })).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Ship type not found"}))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    }
+}
+
+/// POST /planets/:id/research/:tech_key - Start researching a technology
+async fn start_research_handler(
+    Path((planet_id, tech_key)): Path<(Uuid, String)>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    use entities::{prelude::*, technology, planet_technology};
+    use sea_orm::ActiveModelTrait;
+
+    // Get planet
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Get technology
+    let tech = match Technology::find()
+        .filter(technology::Column::TechKey.eq(&tech_key))
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(t)) => t,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Technology not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Check if player can research this tech (requirements met)
+    let can_research = match tech_tree::can_research_tech(&state.db, planet_id, &tech_key).await {
+        Ok(can) => can,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
+    };
+
+    if !can_research {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Tech requirements not met"}))).into_response();
+    }
+
+    // Get current tech level
+    let current_level = match tech_tree::get_planet_tech_level(&state.db, planet_id, &tech_key).await {
+        Ok(level) => level,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Check if already researching
+    let existing_research = PlanetTechnology::find()
+        .filter(planet_technology::Column::PlanetId.eq(planet_id))
+        .filter(planet_technology::Column::TechId.eq(tech.id))
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    if let Some(pt) = &existing_research {
+        if pt.researching_to_level.is_some() {
+            return (StatusCode::CONFLICT, Json(json!({"error": "Already researching this technology"}))).into_response();
+        }
+    }
+
+    // Calculate cost for next level
+    let next_level = current_level + 1;
+    let cost_metal = tech_tree::calculate_tech_cost(tech.base_cost_metal, tech.cost_multiplier, current_level);
+    let cost_crystal = tech_tree::calculate_tech_cost(tech.base_cost_crystal, tech.cost_multiplier, current_level);
+    let cost_deuterium = tech_tree::calculate_tech_cost(tech.base_cost_deuterium, tech.cost_multiplier, current_level);
+    let research_time_seconds = tech_tree::calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level);
+
+    // Check if planet has enough resources
+    if planet.metal_amount < cost_metal as f64
+        || planet.crystal_amount < cost_crystal as f64
+        || planet.deuterium_amount < cost_deuterium as f64
+    {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Insufficient resources"}))).into_response();
+    }
+
+    // Deduct resources
+    let mut active_planet: planet::ActiveModel = planet.clone().into();
+    active_planet.metal_amount = Set(planet.metal_amount - cost_metal as f64);
+    active_planet.crystal_amount = Set(planet.crystal_amount - cost_crystal as f64);
+    active_planet.deuterium_amount = Set(planet.deuterium_amount - cost_deuterium as f64);
+
+    if let Err(_) = active_planet.update(&state.db).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
+    }
+
+    // Start research
+    let end_time = Utc::now().naive_utc() + Duration::seconds(research_time_seconds as i64);
+
+    if let Some(pt) = existing_research {
+        // Update existing record
+        let mut active_pt: planet_technology::ActiveModel = pt.into();
+        active_pt.researching_to_level = Set(Some(next_level));
+        active_pt.research_end_time = Set(Some(end_time));
+
+        if let Err(_) = active_pt.update(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start research"}))).into_response();
+        }
+    } else {
+        // Create new record
+        let new_pt = planet_technology::ActiveModel {
+            planet_id: Set(planet_id),
+            tech_id: Set(tech.id),
+            current_level: Set(0),
+            researching_to_level: Set(Some(next_level)),
+            research_end_time: Set(Some(end_time)),
+        };
+
+        if let Err(_) = new_pt.insert(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start research"}))).into_response();
+        }
+    }
+
+    Json(json!({
+        "success": true,
+        "tech_key": tech_key,
+        "level": next_level,
+        "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
+        "duration_seconds": research_time_seconds
+    })).into_response()
+}
+
+/// POST /planets/:id/build-ships/:ship_key/:quantity - Build ships using relational system
+#[axum::debug_handler]
+async fn build_ships_handler(
+    Path((planet_id, ship_key, quantity)): Path<(Uuid, String, i32)>,
+    State(state): State<AppState>,
+) -> Response {
+    use entities::{prelude::*, ship_type, planet_ship};
+    use sea_orm::ActiveModelTrait;
+
+    if quantity <= 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid quantity"}))).into_response();
+    }
+
+    // Get planet
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Get ship type
+    let ship = match ShipType::find()
+        .filter(ship_type::Column::ShipKey.eq(&ship_key))
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(s)) => s,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Ship type not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Check if player can build this ship (tech requirements met)
+    let can_build = match tech_tree::can_build_ship(&state.db, planet_id, &ship_key).await {
+        Ok(can) => can,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
+    };
+
+    if !can_build {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Ship requirements not met"}))).into_response();
+    }
+
+    // Calculate total cost
+    let total_cost_metal = ship.cost_metal * quantity;
+    let total_cost_crystal = ship.cost_crystal * quantity;
+    let total_cost_deuterium = ship.cost_deuterium * quantity;
+
+    // Check if planet has enough resources
+    if planet.metal_amount < total_cost_metal as f64
+        || planet.crystal_amount < total_cost_crystal as f64
+        || planet.deuterium_amount < total_cost_deuterium as f64
+    {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Insufficient resources"}))).into_response();
+    }
+
+    // Check if already building ships
+    let existing_build = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    if let Some(ps) = &existing_build {
+        if ps.building_count.is_some() && ps.building_count.unwrap() > 0 {
+            return (StatusCode::CONFLICT, Json(json!({"error": "Already building this ship type"}))).into_response();
+        }
+    }
+
+    // Deduct resources
+    let mut active_planet: planet::ActiveModel = planet.clone().into();
+    active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
+    active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
+    active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
+
+    if let Err(_) = active_planet.update(&state.db).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
+    }
+
+    // Calculate build time (total time for all ships)
+    let config = state.config.read().unwrap().clone();
+    let build_time_per_ship = ship.build_time_seconds as f64 * config.construction_speed;
+    let total_build_time = (build_time_per_ship * quantity as f64) as i64;
+    let end_time = Utc::now().naive_utc() + Duration::seconds(total_build_time);
+
+    // Start building
+    if let Some(ps) = existing_build {
+        // Update existing record
+        let mut active_ps: planet_ship::ActiveModel = ps.into();
+        active_ps.building_count = Set(Some(quantity));
+        active_ps.build_end_time = Set(Some(end_time));
+
+        if let Err(_) = active_ps.update(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
+        }
+    } else {
+        // Create new record
+        let new_ps = planet_ship::ActiveModel {
+            planet_id: Set(planet_id),
+            ship_type_id: Set(ship.id),
+            count: Set(0),
+            building_count: Set(Some(quantity)),
+            build_end_time: Set(Some(end_time)),
+        };
+
+        if let Err(_) = new_ps.insert(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
+        }
+    }
+
+    Json(json!({
+        "success": true,
+        "ship_key": ship_key,
+        "quantity": quantity,
+        "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
+        "duration_seconds": total_build_time
+    })).into_response()
+}
+
+// ========== HELPER FUNCTIONS FOR DYNAMIC COMBAT SYSTEM ==========
+
+/// Helper function to run expedition with dynamic combat system
+/// This is used for new dynamic expedition endpoints that leverage the relational ship system
+async fn run_dynamic_expedition_combat(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    fleet: HashMap<String, i32>,
+) -> Result<(combat::CombatReport, f64, f64, f64), String> {
+    // Run combat with database-driven stats
+    let combat_report = combat::resolve_expedition_combat(db, fleet)
+        .await
+        .map_err(|e| format!("Combat error: {:?}", e))?;
+
+    // Calculate loot based on winner
+    let (metal, crystal, deuterium) = if combat_report.winner == "player" {
+        // Base loot from combat (already in combat_report.loot_metal)
+        // Add some crystal and deuterium based on metal
+        let metal = combat_report.loot_metal;
+        let crystal = metal * 0.4; // 40% of metal as crystal
+        let deuterium = metal * 0.2; // 20% of metal as deuterium
+        (metal, crystal, deuterium)
+    } else {
+        (0.0, 0.0, 0.0)
+    };
+
+    Ok((combat_report, metal, crystal, deuterium))
+}
+
+/// Update planet ships after combat (deduct losses)
+async fn update_planet_ships_after_combat(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    sent_fleet: &HashMap<String, i32>,
+    remaining_fleet: &HashMap<String, i32>,
+) -> Result<(), String> {
+    use entities::{prelude::*, ship_type, planet_ship};
+    use sea_orm::ActiveModelTrait;
+
+    for (ship_key, &sent_count) in sent_fleet {
+        let remaining_count = remaining_fleet.get(ship_key).copied().unwrap_or(0);
+        let lost = sent_count - remaining_count;
+
+        if lost > 0 {
+            // Get ship type ID
+            let ship = ShipType::find()
+                .filter(ship_type::Column::ShipKey.eq(ship_key))
+                .one(db)
+                .await
+                .map_err(|e| format!("DB error: {:?}", e))?
+                .ok_or_else(|| format!("Ship type {} not found", ship_key))?;
+
+            // Update planet_ship count
+            if let Some(planet_ship_record) = PlanetShip::find()
+                .filter(planet_ship::Column::PlanetId.eq(planet_id))
+                .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+                .one(db)
+                .await
+                .map_err(|e| format!("DB error: {:?}", e))?
+            {
+                let mut active: planet_ship::ActiveModel = planet_ship_record.into();
+                let new_count = active.count.as_ref().saturating_sub(lost).max(0);
+                active.count = Set(new_count);
+                active.update(db).await.map_err(|e| format!("Update error: {:?}", e))?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// POST /planets/:id/expedition-v2 - New expedition handler using dynamic combat system
+async fn expedition_v2_handler(
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<ExpeditionPayloadV2>,
+) -> impl IntoResponse {
+    use entities::prelude::*;
+    use entities::{planet_ship, ship_type};
+
+    // Get planet
+    let planet = match Planet::find_by_id(id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+    };
+
+    // Check if expedition already active
+    if let Some(date) = planet.expedition_end {
+        if date > Utc::now().naive_utc() {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Expedition already active"}))).into_response();
+        }
+    }
+
+    // Validate fleet
+    if payload.fleet.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "No ships selected"}))).into_response();
+    }
+
+    // Verify planet has these ships
+    for (ship_key, &count) in &payload.fleet {
+        if count <= 0 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
+        }
+
+        // Get ship type
+        let ship = match ShipType::find()
+            .filter(ship_type::Column::ShipKey.eq(ship_key))
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(s)) => s,
+            Ok(None) => return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Unknown ship type: {}", ship_key)}))).into_response(),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+        };
+
+        // Check if planet has enough of this ship
+        let planet_ship_count = match PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(id))
+            .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(ps)) => ps.count,
+            Ok(None) => 0,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+        };
+
+        if count > planet_ship_count {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Not enough {}", ship.display_name)}))).into_response();
+        }
+    }
+
+    // Get config
+    let config = state.config.read().unwrap().clone();
+    let combat_chance = config.get_config("expedition_combat_chance", 0.3);
+    let base_duration = config.get_config("expedition_base_duration", 600.0);
+    let speed_factor = config.speed_factor;
+
+    // Determine if combat occurs
+    let combat_triggered = rand::thread_rng().gen_bool(combat_chance);
+
+    let mut logs = Vec::new();
+    let (final_metal, final_crystal, final_deuterium, winner) = if combat_triggered {
+        logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
+
+        // Run dynamic combat
+        match run_dynamic_expedition_combat(&state.db, id, payload.fleet.clone()).await {
+            Ok((combat_report, metal, crystal, deuterium)) => {
+                // Add combat logs
+                logs.extend(combat_report.log);
+
+                // Update ships based on combat results
+                if let Err(e) = update_planet_ships_after_combat(
+                    &state.db,
+                    id,
+                    &payload.fleet,
+                    &combat_report.remaining_ships,
+                ).await {
+                    eprintln!("Error updating ships after combat: {}", e);
+                }
+
+                let winner = if combat_report.winner == "player" {
+                    logs.push(format!("BUTIN : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium", metal, crystal, deuterium));
+                    "victory"
+                } else if combat_report.winner == "pirates" {
+                    "defeat"
+                } else {
+                    "draw"
+                };
+
+                (metal, crystal, deuterium, winner)
+            }
+            Err(e) => {
+                eprintln!("Combat error: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Combat simulation failed"}))).into_response();
+            }
+        }
+    } else {
+        // Calm sector - peaceful resource gathering
+        logs.push("SCAN : Secteur calme.".to_string());
+        let calm_bonus = config.get_config("expedition_calm_sector_bonus", 1.2);
+
+        // Base loot calculation (simplified for now)
+        let total_ship_value: i32 = payload.fleet.values().sum();
+        let metal = (total_ship_value as f64 * 100.0 * calm_bonus * (speed_factor / 100.0)).floor();
+        let crystal = (metal * 0.4).floor();
+        let deuterium = (metal * 0.2).floor();
+
+        logs.push(format!("DÉCOUVERTE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium", metal, crystal, deuterium));
+
+        (metal, crystal, deuterium, "calm")
+    };
+
+    // Update planet resources
+    let mut active: planet::ActiveModel = planet.clone().into();
+    active.metal_amount = Set(planet.metal_amount + final_metal);
+    active.crystal_amount = Set(planet.crystal_amount + final_crystal);
+    active.deuterium_amount = Set(planet.deuterium_amount + final_deuterium);
+
+    // Set expedition end time
+    let duration = std::cmp::max(1, (base_duration / speed_factor) as i64);
+    active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
+
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update planet"}))).into_response();
+    }
+
+    // Build response
+    Json(json!({
+        "success": true,
+        "result": winner,
+        "logs": logs,
+        "loot": {
+            "metal": final_metal,
+            "crystal": final_crystal,
+            "deuterium": final_deuterium
+        },
+        "duration_seconds": duration
+    })).into_response()
 }
