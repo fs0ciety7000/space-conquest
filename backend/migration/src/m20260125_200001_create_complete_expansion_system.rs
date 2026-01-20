@@ -30,6 +30,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Alias::new("base_cost_metal")).integer().not_null())
                     .col(ColumnDef::new(Alias::new("base_cost_crystal")).integer().not_null())
                     .col(ColumnDef::new(Alias::new("base_cost_deuterium")).integer().not_null())
+                    .col(ColumnDef::new(Alias::new("base_time_seconds")).integer().not_null().default(0))
                     .col(ColumnDef::new(Alias::new("cost_multiplier")).double().not_null())
                     .col(ColumnDef::new(Alias::new("description")).string().null())
                     .col(
