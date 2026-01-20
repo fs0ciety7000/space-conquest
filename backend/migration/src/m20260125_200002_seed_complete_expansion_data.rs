@@ -8,6 +8,29 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
 
+        // ==================== CLEAR EXISTING DATA ====================
+        // Delete existing data from previous migrations to avoid conflicts
+        // Order matters due to foreign key constraints
+        db.execute_unprepared("DELETE FROM defense_requirements WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM building_requirements WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM ship_requirements WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM technology_requirements WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM rapid_fire_rules WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM planet_ships WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM planet_technologies WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM planet_buildings WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM planet_defenses WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM defense_types WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM building_types WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM ship_types WHERE 1=1").await.ok();
+        db.execute_unprepared("DELETE FROM technologies WHERE 1=1").await.ok();
+
+        // Reset sequences to start from 1
+        db.execute_unprepared("ALTER SEQUENCE IF EXISTS technologies_id_seq RESTART WITH 1").await.ok();
+        db.execute_unprepared("ALTER SEQUENCE IF EXISTS ship_types_id_seq RESTART WITH 1").await.ok();
+        db.execute_unprepared("ALTER SEQUENCE IF EXISTS building_types_id_seq RESTART WITH 1").await.ok();
+        db.execute_unprepared("ALTER SEQUENCE IF EXISTS defense_types_id_seq RESTART WITH 1").await.ok();
+
         // ==================== TECHNOLOGIES ====================
         // Base de données complète des technologies du jeu
 
@@ -94,7 +117,7 @@ impl MigrationTrait for Migration {
 
         for (tech_key, req_key, level) in tech_reqs {
             db.execute_unprepared(&format!(
-                "INSERT INTO tech_requirements (tech_id, required_tech_id, required_level) \
+                "INSERT INTO technology_requirements (tech_id, required_tech_id, required_level) \
                  SELECT t1.id, t2.id, {} FROM technologies t1, technologies t2 \
                  WHERE t1.tech_key = '{}' AND t2.tech_key = '{}' \
                  ON CONFLICT DO NOTHING",
@@ -353,7 +376,7 @@ impl MigrationTrait for Migration {
         db.execute_unprepared("DELETE FROM defense_requirements").await?;
         db.execute_unprepared("DELETE FROM building_requirements").await?;
         db.execute_unprepared("DELETE FROM ship_requirements").await?;
-        db.execute_unprepared("DELETE FROM tech_requirements").await?;
+        db.execute_unprepared("DELETE FROM technology_requirements").await?;
         db.execute_unprepared("DELETE FROM defense_types").await?;
         db.execute_unprepared("DELETE FROM building_types").await?;
         db.execute_unprepared("DELETE FROM ship_types WHERE ship_key IN ('heavy_hunter', 'battleship', 'destroyer', 'bomber', 'deathstar')").await?;
