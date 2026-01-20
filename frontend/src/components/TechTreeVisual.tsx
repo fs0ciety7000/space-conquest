@@ -365,6 +365,10 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
       tech.requirements.forEach(req => {
         const config = getTechConfig(req.required_tech_key);
 
+        // Color coding: satisfied = tech color, unsatisfied = red
+        const edgeColor = req.met ? config.hexColor : '#ef4444'; // red-500
+        const edgeOpacity = req.met ? 0.9 : 0.6;
+
         edges.push({
           id: `${req.required_tech_key}-${tech.tech_key}`,
           source: req.required_tech_key,
@@ -372,25 +376,27 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
           type: ConnectionLineType.SmoothStep,
           animated: req.met,
           style: {
-            stroke: req.met ? config.hexColor : '#475569',
-            strokeWidth: req.met ? 3 : 1.5,
-            opacity: req.met ? 0.8 : 0.3,
+            stroke: edgeColor,
+            strokeWidth: req.met ? 3 : 2,
+            opacity: edgeOpacity,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: req.met ? config.hexColor : '#475569',
+            color: edgeColor,
             width: 20,
             height: 20,
           },
           label: req.met ? '✓' : `Niv. ${req.required_level}`,
           labelStyle: {
-            fill: req.met ? config.hexColor : '#94a3b8',
+            fill: edgeColor,
             fontSize: 10,
-            fontWeight: 600,
+            fontWeight: 700,
           },
           labelBgStyle: {
             fill: '#0f172a',
-            fillOpacity: 0.8,
+            fillOpacity: 0.9,
+            stroke: edgeColor,
+            strokeWidth: 1,
           },
         });
       });
@@ -417,7 +423,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   }
 
   return (
-    <div className="h-[700px] bg-slate-950 rounded-lg border border-white/10 overflow-hidden card-depth">
+    <div className="h-[700px] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 rounded-lg border border-purple-500/20 overflow-hidden card-depth shadow-2xl">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -428,22 +434,16 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
         minZoom={0.3}
         maxZoom={1.2}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-        className="bg-slate-950"
+        className="bg-transparent"
         proOptions={{ hideAttribution: true }}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          color="#334155"
-          className="bg-slate-950"
-        />
+        {/* Removed Background grid for cleaner skill tree look */}
         <Controls
-          className="bg-slate-900 border-white/10"
+          className="bg-slate-900/80 border-purple-500/30 backdrop-blur-sm"
           showInteractive={false}
         />
         <MiniMap
-          className="bg-slate-900 border border-white/10 rounded-lg"
+          className="bg-slate-900/80 border border-purple-500/30 rounded-lg backdrop-blur-sm"
           nodeColor={(node) => {
             const config = getTechConfig(node.id);
             return node.data.allRequirementsMet ? config.hexColor : '#475569';
