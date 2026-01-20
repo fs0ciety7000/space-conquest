@@ -32,3 +32,6 @@ pub mod login_streak;
 // Officers system
 pub mod officer_template;
 pub mod user_officer;
+
+// Sabotage system
+pub mod sabotage_effect;

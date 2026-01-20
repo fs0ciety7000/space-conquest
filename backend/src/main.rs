@@ -277,6 +277,9 @@ async fn main() {
         .route("/officers/templates", get(officers::list_officer_templates_handler))
         .route("/users/:id/officers", get(officers::get_user_officers_handler))
         .route("/users/:id/officers/recruit", post(officers::recruit_officer_handler))
+        // Sabotage
+        .route("/sabotage", post(sabotage::attempt_sabotage))
+        .route("/planets/:id/sabotages", get(sabotage::get_active_sabotages))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

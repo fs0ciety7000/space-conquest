@@ -1,5 +1,216 @@
 # Changelog - Space Conquest
 
+## [2.0.0] - 2026-01-20 - Système de Sabotage & Espionnage Avancé
+
+### 🕵️ Nouvelles Fonctionnalités
+
+#### **Système de Sabotage Complet**
+
+**Description**: Actions clandestines après espionnage réussi
+
+**Actions disponibles**:
+
+1. **Saboter Infrastructure** (`disable_mine`)
+   - Effet: -50% production ressources pendant 1h
+   - Durée: 3600 secondes
+   - Risque: Modéré
+   - Notification: Message vague si non détecté
+
+2. **Espionnage Industriel** (`steal_tech`)
+   - Effet: -20% temps prochaine recherche
+   - Durée: 7 jours (ou jusqu'à utilisation)
+   - Risque: Élevé
+   - Notification: Silencieux si non détecté
+
+**Mécaniques de Détection**:
+- Probabilité base: 30%
+- Réduction: -5% par niveau différence tech espionnage
+- Minimum: 5% (jamais 0%)
+- Formule: `detection = max(5%, 30% - (tech_diff × 5%))`
+
+**Conséquences Détection**:
+- ❌ Sabotage échoue
+- 🚨 Notification immédiate à la victime
+- ⚔️ **Casus Belli** accordé (droit d'attaque sans pénalité)
+
+**Prérequis**:
+- Espionnage réussi sur cible (`detection_level !== 'none'`)
+- Avantage tech minimal (`attacker_spy_level - defender_spy_level >= 1`)
+
+---
+
+### 📦 Nouvelles Entités & Tables
+
+#### **sabotage_effect**
+
+Table pour stocker les effets de sabotage actifs
+
+**Colonnes**:
+```sql
+id UUID PRIMARY KEY
+target_planet_id UUID (FK planet.id, CASCADE DELETE)
+attacker_user_id UUID (NULL si non détecté)
+effect_type VARCHAR(50) ('disable_mine' | 'steal_tech')
+created_at TIMESTAMP
+expires_at TIMESTAMP
+was_detected BOOLEAN
+metadata JSONB (infos supplémentaires)
+```
+
+**Index**:
+- `idx_sabotage_target` sur `target_planet_id`
+- `idx_sabotage_expires` sur `expires_at`
+- `idx_sabotage_type` sur `effect_type`
+
+**Migration**:
+```bash
+psql -U postgres -d space_conquest < backend/migrations/create_sabotage_effect_table.sql
+```
+
+---
+
+### 🔌 Nouveaux Endpoints API
+
+#### `POST /sabotage`
+
+Tenter une action de sabotage
+
+**Payload**:
+```json
+{
+  "target_planet_id": "uuid",
+  "action_type": "disable_mine" | "steal_tech"
+}
+```
+
+**Réponses**:
+- `200 OK`: Sabotage réussi (detected: false) ou détecté (detected: true)
+- `400 Bad Request`: Tech insuffisant, action invalide
+- `401 Unauthorized`: Non authentifié
+- `404 Not Found`: Planète non trouvée
+
+#### `GET /planets/:id/sabotages`
+
+Récupère les sabotages actifs sur une planète (propriétaire uniquement)
+
+**Réponse**:
+```json
+{
+  "sabotages": [
+    {
+      "id": "uuid",
+      "effect_type": "disable_mine",
+      "created_at": "...",
+      "expires_at": "...",
+      "was_detected": false
+    }
+  ]
+}
+```
+
+---
+
+### 🛠️ Nouveaux Modules
+
+#### **sabotage.rs**
+
+Module complet avec fonctions utilitaires:
+
+**Fonctions principales**:
+- `attempt_sabotage()` - Handler endpoint POST
+- `get_active_sabotages()` - Handler endpoint GET
+- `cleanup_expired_sabotages()` - Nettoyage périodique
+- `has_active_sabotage()` - Vérification rapide
+- `get_production_multiplier()` - Retourne 0.5 si sabotage actif, 1.0 sinon
+- `apply_research_bonus()` - Retourne 0.8 si bonus actif, 1.0 sinon (et consomme)
+
+**Sécurité**:
+- ✅ Vérification JWT authentification
+- ✅ Validation UUID
+- ✅ Empêche auto-sabotage
+- ✅ Vérification niveau tech
+- ✅ Relations CASCADE DELETE
+
+**Fichiers**:
+- `backend/src/sabotage.rs` (module principal)
+- `backend/src/entities/sabotage_effect.rs` (entité SeaORM)
+- `backend/SABOTAGE_SYSTEM.md` (documentation complète)
+- `backend/migrations/create_sabotage_effect_table.sql` (migration SQL)
+
+---
+
+### 📝 TODO - Intégrations
+
+**Phase 2** (Backend):
+- [ ] Intégrer `get_production_multiplier()` dans `update_planet_resources()` (game_logic.rs)
+- [ ] Intégrer `apply_research_bonus()` dans handler de recherche
+- [ ] Tâche périodique pour `cleanup_expired_sabotages()`
+- [ ] Table `casus_belli` pour tracker les droits d'attaque
+
+**Phase 3** (Frontend):
+- [x] UI SpyModal avec options sabotage (déjà fait)
+- [ ] Connecter UI aux endpoints
+- [ ] Dashboard sabotages actifs sur planète
+- [ ] Notifications WebSocket temps réel
+
+---
+
+### 📚 Documentation
+
+**Nouvelle documentation**:
+- `backend/SABOTAGE_SYSTEM.md` - Guide complet (29 sections)
+  - Vue d'ensemble
+  - Prérequis & Installation
+  - Actions détaillées
+  - Endpoints API
+  - Intégration Game Logic
+  - Mécaniques de jeu
+  - Sécurité
+  - Tests
+  - Roadmap
+
+---
+
+### 🎮 Équilibrage
+
+**Risque vs Récompense**:
+| Action | Impact | Durée | Risque Base | Détection |
+|--------|--------|-------|-------------|-----------|
+| disable_mine | -50% prod | 1h | 30% | Notification vague |
+| steal_tech | -20% temps | 7j (1 usage) | 30% | Silencieux |
+
+**Contre-mesures**:
+- Augmenter tech espionnage (réduit détection ennemie)
+- Surveillance active (dashboard)
+- Représailles (Casus Belli)
+
+---
+
+### 🔐 Sécurité
+
+**Protections implémentées**:
+- Authentification JWT requise
+- Validation UUID stricte
+- Empêche auto-sabotage
+- Vérification tech minimale
+- CASCADE DELETE (suppression planète → sabotages)
+
+**À implémenter**:
+- Rate limiting (anti-spam)
+- Logs audit (traçabilité)
+- Détection patterns suspects
+
+---
+
+### 🚀 Performance
+
+**Optimisations**:
+- Index sur colonnes critiques (`target_planet_id`, `expires_at`, `effect_type`)
+- Cleanup périodique des effets expirés
+- Requêtes optimisées (count vs find)
+
+---
+
 ## [1.9.0] - 2026-01-19 - Refonte interface : Production, Énergie et Rapports
 
 ### 🎯 Nouvelles fonctionnalités
