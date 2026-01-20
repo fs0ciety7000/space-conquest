@@ -1,5 +1,269 @@
 # Changelog - Space Conquest
 
+## [2.0.1] - 2026-01-20 - Sécurisation Sabotage & Système Casus Belli
+
+### 🔐 Améliorations Sécurité
+
+#### **Authentification JWT sur endpoints sabotage**
+
+**Description**: Protection complète des endpoints de sabotage avec vérification JWT
+
+**Implémentation**:
+- Helper `extract_user_id_from_headers()` dans `sabotage.rs`
+- Format token: `Bearer jwt-{uuid}`
+- Validation stricte du format et parsing UUID
+- Retour `401 Unauthorized` si token invalide/absent
+
+**Endpoints protégés**:
+- `POST /sabotage` - Tentative de sabotage
+- `GET /planets/:id/sabotages` - Liste sabotages actifs
+
+**Fichiers**:
+- `backend/src/sabotage.rs` (lignes 14-33, 52-61, 171-180)
+
+---
+
+### ⚔️ Nouvelles Fonctionnalités
+
+#### **Système Casus Belli Complet**
+
+**Description**: Droit d'attaque légal accordé à la victime d'un sabotage détecté
+
+**Mécaniques**:
+- **Déclenchement**: Automatique quand saboteur détecté
+- **Durée**: 48 heures (configurable)
+- **Utilisation**: Marqué comme utilisé après attaque
+- **Nettoyage**: Suppression automatique après expiration
+
+**Fonctions implémentées** (`sabotage.rs` lignes 291-405):
+
+1. **`grant_casus_belli()`**
+   - Crée un droit d'attaque pour la victime
+   - Paramètres: victim_user_id, aggressor_user_id, reason
+   - Expire après 48h
+   - Appel automatique si sabotage détecté (lignes 113-117)
+
+2. **`has_casus_belli()`**
+   - Vérifie si un joueur peut légitimement attaquer un autre
+   - Retourne `true` si casus belli actif et non utilisé
+   - Vérifie que l'attaquant est bien la victime légitime
+
+3. **`consume_casus_belli()`**
+   - Marque un casus belli comme utilisé après attaque
+   - Empêche réutilisation multiple
+   - Update `was_used = true`
+
+4. **`cleanup_expired_casus_belli()`**
+   - Nettoyage périodique des droits expirés
+   - Appelé toutes les heures par tâche périodique
+   - Retourne nombre de droits supprimés
+
+5. **`get_active_casus_belli()`**
+   - Récupère tous les casus belli actifs d'un joueur
+   - Pour affichage UI (dashboard futur)
+   - Filtre sur `was_used = false` et `expires_at > NOW()`
+
+**Table `casus_belli`** (migration `m20260120_000003`):
+```sql
+CREATE TABLE casus_belli (
+  id UUID PRIMARY KEY,
+  victim_user_id UUID NOT NULL,
+  aggressor_user_id UUID NOT NULL,
+  reason VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  was_used BOOLEAN DEFAULT FALSE
+);
+```
+
+**Fichiers**:
+- `backend/src/sabotage.rs` (lignes 113-117, 291-405)
+- `backend/migration/src/m20260120_000003_create_casus_belli.rs`
+- `backend/src/entities/casus_belli.rs`
+
+---
+
+#### **Tâche périodique de nettoyage étendue**
+
+**Description**: Maintenance automatique toutes les heures
+
+**Nettoyages effectués**:
+1. Sabotages expirés (`cleanup_expired_sabotages`)
+2. Casus belli expirés (`cleanup_expired_casus_belli`)
+
+**Logs affichés**:
+- "🧹 Nettoyage sabotages: X effet(s) expiré(s) supprimé(s)"
+- "🧹 Nettoyage casus belli: Y droit(s) d'attaque expiré(s)"
+- Erreurs avec emoji ❌ en cas d'échec
+
+**Fichiers**:
+- `backend/src/main.rs` (lignes 301-328)
+
+---
+
+### 🎨 Intégration Frontend
+
+#### **SpyModal connecté au backend**
+
+**Description**: UI sabotage complètement fonctionnelle avec feedback utilisateur
+
+**Implémentation** (`App.tsx` lignes 411-460):
+
+**Fonction `handleSabotage()`**:
+- Appel `POST /sabotage` avec authentification JWT
+- Support 2 types d'actions: `disable_mine` et `steal_tech`
+- Gestion de 3 scénarios:
+
+1. **Sabotage réussi (non détecté)**:
+   - Toast succès avec emoji spécifique:
+     - ⚙️ "MINE DÉSACTIVÉE" pour disable_mine
+     - 📖 "TECHNOLOGIE VOLÉE" pour steal_tech
+   - Son de succès
+   - Fermeture modal + refresh planète
+   - Durée: 5 secondes
+
+2. **Sabotage détecté**:
+   - Toast erreur 🚨 "SABOTAGE DÉTECTÉ !"
+   - Avertissement casus belli: "La cible peut maintenant vous attaquer sans pénalité."
+   - Son d'erreur
+   - Durée: 6 secondes (plus long pour lire l'avertissement)
+
+3. **Erreur (prérequis, réseau)**:
+   - Toast erreur avec message d'erreur backend
+   - Son d'erreur
+   - Modal reste ouvert pour retry
+
+**SpyModal Props** (lignes 622-627):
+```typescript
+<SpyModal
+  report={spyReport}
+  onClose={() => setSpyReport(null)}
+  targetPlanetId={spyReport.target_planet_id}
+  onSabotage={handleSabotage}
+/>
+```
+
+**Fichiers**:
+- `frontend/src/App.tsx` (lignes 411-460, 622-627)
+
+---
+
+### 📚 Documentation
+
+#### **SABOTAGE_SYSTEM.md mis à jour**
+
+**Roadmap actualisée**:
+- ✅ Phase 2 (Backend) marquée comme complète avec détails:
+  - Intégration production resources (main.rs:748-755)
+  - Intégration bonus recherche (main.rs:1090-1098)
+  - Tâche périodique cleanup (main.rs:301-328)
+  - Système Casus Belli complet (5 fonctions)
+
+- ✅ Phase 3 (Frontend) partiellement complète:
+  - Connecter UI SpyModal aux endpoints ✅
+  - Toast notifications (succès/détection/erreur) ✅
+  - Dashboard sabotages actifs ⏳
+  - Notifications WebSocket temps réel ⏳
+
+**Version**: 2.0.0 → 2.0.1
+
+**Fichiers**:
+- `backend/SABOTAGE_SYSTEM.md` (lignes 247-280)
+
+---
+
+### 🔧 Modifications techniques
+
+#### Backend
+
+**Modules modifiés**:
+- `backend/src/sabotage.rs` - JWT auth + Casus Belli (5 fonctions)
+- `backend/src/main.rs` - Periodic cleanup étendu
+
+**Entités**:
+- `backend/src/entities/casus_belli.rs` (nouveau)
+- `backend/src/entities/mod.rs` (ajout casus_belli)
+- `backend/src/entities/prelude.rs` (export CasusBelli)
+
+**Migration**:
+- `backend/migration/src/m20260120_000003_create_casus_belli.rs` (nouveau)
+- `backend/migration/src/lib.rs` (enregistrement migration)
+
+#### Frontend
+
+**Composants modifiés**:
+- `frontend/src/App.tsx` - handleSabotage + SpyModal integration
+
+**Fonctionnalités**:
+- Toast notifications différenciées (Sonner)
+- Feedback sonore (success/error)
+- Auto-refresh planète après sabotage
+- Gestion d'erreurs complète
+
+---
+
+### 🚀 Déploiement
+
+**Migrations**: **OUI - OBLIGATOIRE**
+```bash
+cd migration
+cargo run
+```
+
+**Tests recommandés**:
+1. ✅ Tenter sabotage sans token → 401 Unauthorized
+2. ✅ Sabotage réussi non détecté → Toast succès + refresh
+3. ✅ Sabotage détecté → Toast erreur + casus belli accordé
+4. ✅ Vérifier casus belli créé en DB avec expires_at = +48h
+5. ✅ Attendre cleanup périodique → logs dans console backend
+6. ✅ Vérifier has_casus_belli() retourne true pour victime
+7. ✅ Consommer casus belli → was_used = true
+
+---
+
+### ⚠️ Breaking Changes
+
+Aucun breaking change. Toutes les modifications sont additives et rétrocompatibles.
+
+---
+
+### 📝 Notes techniques
+
+**Flux complet sabotage détecté**:
+1. Joueur tente sabotage via SpyModal
+2. Backend calcule probabilité détection (30% - tech_diff × 5%, min 5%)
+3. Si détecté:
+   - `grant_casus_belli()` crée entrée DB
+   - Response JSON avec `detected: true, casus_belli: true`
+4. Frontend affiche toast warning de 6s avec avertissement
+5. Victime peut maintenant attaquer sans pénalité pendant 48h
+6. Après attaque, `consume_casus_belli()` marque comme utilisé
+7. Après 48h, cleanup automatique si non utilisé
+
+**Sécurité**:
+- JWT vérifié sur tous les endpoints sabotage
+- Impossible de saboter sans authentification
+- Casus belli lie victime et agresseur (pas d'abus tiers)
+- Durée limitée (48h) pour équilibre gameplay
+
+---
+
+### 🔮 Améliorations futures (Phase 3-4)
+
+**Phase 3 (Frontend restant)**:
+- [ ] Dashboard sabotages actifs sur mes planètes
+- [ ] Notifications WebSocket en temps réel (sabotage détecté)
+- [ ] Historique sabotages (tentatives réussies/échouées)
+- [ ] Liste casus belli disponibles (UI attack légal)
+
+**Phase 4 (Backend)**:
+- [ ] API endpoint pour vérifier casus belli avant attaque
+- [ ] Consommation automatique casus belli lors d'attaque
+- [ ] Nouvelles actions sabotage (slow_research, steal_resources)
+- [ ] Contre-sabotage (défenses actives)
+
+---
+
 ## [2.0.0] - 2026-01-20 - Système de Sabotage & Espionnage Avancé
 
 ### 🕵️ Nouvelles Fonctionnalités
