@@ -212,6 +212,9 @@ async fn main() {
         // Tech Tree (Expansion 2.0)
         .route("/planets/:id/tech-tree", get(get_tech_tree_handler))
         .route("/planets/:id/ship-types", get(get_ship_types_handler))
+        .route("/planets/:id/research/:tech_key", post(start_research_handler))
+        // TODO: Fix build_ships_handler trait bound issue
+        // .route("/planets/:id/build-ships/:ship_key/:quantity", post(build_ships_handler))
         .route("/tech/:tech_key", get(get_tech_details_handler))
         .route("/ship/:ship_key", get(get_ship_details_handler))
         // Actions
@@ -3961,4 +3964,240 @@ async fn get_ship_details_handler(
         Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Ship type not found"}))).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
     }
+}
+
+/// POST /planets/:id/research/:tech_key - Start researching a technology
+async fn start_research_handler(
+    Path((planet_id, tech_key)): Path<(Uuid, String)>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    use entities::{prelude::*, technology, planet_technology};
+    use sea_orm::ActiveModelTrait;
+
+    // Get planet
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Get technology
+    let tech = match Technology::find()
+        .filter(technology::Column::TechKey.eq(&tech_key))
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(t)) => t,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Technology not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Check if player can research this tech (requirements met)
+    let can_research = match tech_tree::can_research_tech(&state.db, planet_id, &tech_key).await {
+        Ok(can) => can,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
+    };
+
+    if !can_research {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Tech requirements not met"}))).into_response();
+    }
+
+    // Get current tech level
+    let current_level = match tech_tree::get_planet_tech_level(&state.db, planet_id, &tech_key).await {
+        Ok(level) => level,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Check if already researching
+    let existing_research = PlanetTechnology::find()
+        .filter(planet_technology::Column::PlanetId.eq(planet_id))
+        .filter(planet_technology::Column::TechId.eq(tech.id))
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    if let Some(pt) = &existing_research {
+        if pt.researching_to_level.is_some() {
+            return (StatusCode::CONFLICT, Json(json!({"error": "Already researching this technology"}))).into_response();
+        }
+    }
+
+    // Calculate cost for next level
+    let next_level = current_level + 1;
+    let cost_metal = tech_tree::calculate_tech_cost(tech.base_cost_metal, tech.cost_multiplier, current_level);
+    let cost_crystal = tech_tree::calculate_tech_cost(tech.base_cost_crystal, tech.cost_multiplier, current_level);
+    let cost_deuterium = tech_tree::calculate_tech_cost(tech.base_cost_deuterium, tech.cost_multiplier, current_level);
+    let research_time_seconds = tech_tree::calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level);
+
+    // Check if planet has enough resources
+    if planet.metal_amount < cost_metal as f64
+        || planet.crystal_amount < cost_crystal as f64
+        || planet.deuterium_amount < cost_deuterium as f64
+    {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Insufficient resources"}))).into_response();
+    }
+
+    // Deduct resources
+    let mut active_planet: planet::ActiveModel = planet.clone().into();
+    active_planet.metal_amount = Set(planet.metal_amount - cost_metal as f64);
+    active_planet.crystal_amount = Set(planet.crystal_amount - cost_crystal as f64);
+    active_planet.deuterium_amount = Set(planet.deuterium_amount - cost_deuterium as f64);
+
+    if let Err(_) = active_planet.update(&state.db).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
+    }
+
+    // Start research
+    let end_time = Utc::now().naive_utc() + Duration::seconds(research_time_seconds as i64);
+
+    if let Some(pt) = existing_research {
+        // Update existing record
+        let mut active_pt: planet_technology::ActiveModel = pt.into();
+        active_pt.researching_to_level = Set(Some(next_level));
+        active_pt.research_end_time = Set(Some(end_time));
+
+        if let Err(_) = active_pt.update(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start research"}))).into_response();
+        }
+    } else {
+        // Create new record
+        let new_pt = planet_technology::ActiveModel {
+            planet_id: Set(planet_id),
+            tech_id: Set(tech.id),
+            current_level: Set(0),
+            researching_to_level: Set(Some(next_level)),
+            research_end_time: Set(Some(end_time)),
+        };
+
+        if let Err(_) = new_pt.insert(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start research"}))).into_response();
+        }
+    }
+
+    Json(json!({
+        "success": true,
+        "tech_key": tech_key,
+        "level": next_level,
+        "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
+        "duration_seconds": research_time_seconds
+    })).into_response()
+}
+
+/// POST /planets/:id/build-ships/:ship_key/:quantity - Build ships using relational system
+async fn build_ships_handler(
+    State(state): State<AppState>,
+    Path((planet_id, ship_key, quantity)): Path<(Uuid, String, i32)>,
+) -> impl IntoResponse {
+    use entities::{prelude::*, ship_type, planet_ship};
+    use sea_orm::ActiveModelTrait;
+
+    if quantity <= 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid quantity"}))).into_response();
+    }
+
+    // Get planet
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Get ship type
+    let ship = match ShipType::find()
+        .filter(ship_type::Column::ShipKey.eq(&ship_key))
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(s)) => s,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Ship type not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Check if player can build this ship (tech requirements met)
+    let can_build = match tech_tree::can_build_ship(&state.db, planet_id, &ship_key).await {
+        Ok(can) => can,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
+    };
+
+    if !can_build {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Ship requirements not met"}))).into_response();
+    }
+
+    // Calculate total cost
+    let total_cost_metal = ship.cost_metal * quantity;
+    let total_cost_crystal = ship.cost_crystal * quantity;
+    let total_cost_deuterium = ship.cost_deuterium * quantity;
+
+    // Check if planet has enough resources
+    if planet.metal_amount < total_cost_metal as f64
+        || planet.crystal_amount < total_cost_crystal as f64
+        || planet.deuterium_amount < total_cost_deuterium as f64
+    {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Insufficient resources"}))).into_response();
+    }
+
+    // Check if already building ships
+    let existing_build = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    if let Some(ps) = &existing_build {
+        if ps.building_count.is_some() && ps.building_count.unwrap() > 0 {
+            return (StatusCode::CONFLICT, Json(json!({"error": "Already building this ship type"}))).into_response();
+        }
+    }
+
+    // Deduct resources
+    let mut active_planet: planet::ActiveModel = planet.clone().into();
+    active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
+    active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
+    active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
+
+    if let Err(_) = active_planet.update(&state.db).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
+    }
+
+    // Calculate build time (total time for all ships)
+    let config = state.config.read().unwrap();
+    let build_time_per_ship = ship.build_time_seconds as f64 * config.construction_speed;
+    let total_build_time = (build_time_per_ship * quantity as f64) as i64;
+    let end_time = Utc::now().naive_utc() + Duration::seconds(total_build_time);
+
+    // Start building
+    if let Some(ps) = existing_build {
+        // Update existing record
+        let mut active_ps: planet_ship::ActiveModel = ps.into();
+        active_ps.building_count = Set(Some(quantity));
+        active_ps.build_end_time = Set(Some(end_time));
+
+        if let Err(_) = active_ps.update(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
+        }
+    } else {
+        // Create new record
+        let new_ps = planet_ship::ActiveModel {
+            planet_id: Set(planet_id),
+            ship_type_id: Set(ship.id),
+            count: Set(0),
+            building_count: Set(Some(quantity)),
+            build_end_time: Set(Some(end_time)),
+        };
+
+        if let Err(_) = new_ps.insert(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
+        }
+    }
+
+    Json(json!({
+        "success": true,
+        "ship_key": ship_key,
+        "quantity": quantity,
+        "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
+        "duration_seconds": total_build_time
+    })).into_response()
 }
