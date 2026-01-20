@@ -1,14 +1,16 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  Rocket, Shield, Info, Lock, CheckCircle2, XCircle, Timer, 
-  Hammer, Crosshair, Truck, Box, Zap, Scan, Sword, Warehouse, ShieldCheck 
+import {
+  Rocket, Shield, Info, Lock, CheckCircle2, XCircle, Timer,
+  Hammer, Crosshair, Truck, Box, Zap, Scan, Sword, Warehouse, ShieldCheck
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { checkPrerequisites } from "@/lib/gameRules";
 import { apiUrl } from '@/config/api';
 import { useUnitCosts } from '@/hooks/useUnitCosts';
+import { GameImage } from '@/components/ui/game-image';
+import { getShipImage } from '@/lib/images';
 
 interface ShipyardProps {
   planet: any;
@@ -211,6 +213,15 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
             )}
 
             <CardContent className="p-5 relative z-10 flex flex-col h-full">
+              {/* Image du vaisseau */}
+              <GameImage
+                src={getShipImage(ship.id)}
+                alt={ship.name}
+                className="w-full h-40 mb-4"
+                fallbackIcon={<ship.icon className={`${theme.color} w-20 h-20`} />}
+                loading="lazy"
+              />
+
               <div className="flex justify-between items-start mb-4">
                 <div className="flex gap-4 items-center">
                    <div className={`p-3 rounded-xl border ${theme.border} bg-black/40 shadow-lg group-hover:scale-105 transition-transform`}>

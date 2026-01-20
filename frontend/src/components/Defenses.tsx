@@ -6,6 +6,8 @@ import { apiUrl } from '@/config/api';
 import { useUnitCosts } from '@/hooks/useUnitCosts';
 import { toast } from "sonner";
 import { checkPrerequisites } from "@/lib/gameRules";
+import { GameImage } from '@/components/ui/game-image';
+import { getDefenseImage } from '@/lib/images';
 
 export default function Defenses({ planet, onBuild }: { planet: any, onBuild: () => void }) {
   const [selected, setSelected] = useState<string>('missile_launcher');
@@ -163,6 +165,15 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
            </div>
 
            <div className="relative z-10 space-y-6">
+              {/* Image de la défense */}
+              <GameImage
+                src={getDefenseImage(selected)}
+                alt={selectedConfig.name}
+                className="w-full h-48 mb-4"
+                fallbackIcon={selected === 'plasma_turret' ? <Zap className={`${selectedConfig.color} w-24 h-24`} /> : <Crosshair className={`${selectedConfig.color} w-24 h-24`} />}
+                loading="lazy"
+              />
+
               <div>
                   <h2 className="text-3xl font-black uppercase text-white italic">{selectedConfig.name}</h2>
                   <p className="text-xs text-slate-400">{selectedConfig.desc}</p>

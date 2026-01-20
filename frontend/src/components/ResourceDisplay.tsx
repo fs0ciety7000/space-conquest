@@ -21,6 +21,8 @@ import {
 import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
 import { toast } from "sonner";
+import { GameImage } from '@/components/ui/game-image';
+import { getResourceImage } from '@/lib/images';
 
 interface ResourceSlot {
   id: number;
@@ -266,6 +268,15 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
             <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
             <CardContent className="p-5 relative z-10 flex flex-col h-full justify-between">
+              {/* Image de la mine */}
+              <GameImage
+                src={getResourceImage(build.id)}
+                alt={build.name}
+                className="w-full h-32 mb-4"
+                fallbackIcon={<Icon className={`${theme.color} w-16 h-16`} />}
+                loading="lazy"
+              />
+
               <div>
                 {/* HEADER (Design Riche) */}
                 <div className="flex justify-between items-start mb-6">

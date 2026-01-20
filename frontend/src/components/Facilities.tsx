@@ -8,6 +8,8 @@ import { useState, useEffect } from "react";
 import { checkPrerequisites } from "@/lib/gameRules"; // Importation de ta règle
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
+import { GameImage } from '@/components/ui/game-image';
+import { getBuildingImage } from '@/lib/images';
 interface FacilitiesProps {
   planet: any;
   onUpgrade: () => void;
@@ -155,6 +157,15 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             
             <CardContent className="p-6 relative z-10 flex flex-col h-full justify-between">
+              {/* Image du bâtiment */}
+              <GameImage
+                src={getBuildingImage(fac.id)}
+                alt={fac.name}
+                className="w-full h-40 mb-4"
+                fallbackIcon={<Icon className={`${theme.color} w-20 h-20`} />}
+                loading="lazy"
+              />
+
               <div>
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-4">
