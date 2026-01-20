@@ -174,6 +174,28 @@ let seconds = (base_time * 100.0) / speed_factor;
 
 ---
 
+#### 🚚 Bouton Ravitailler dans Mes Planètes
+
+**Feature**: Accès rapide au transport de ressources depuis la page Mes Planètes
+
+**Fonctionnement**:
+- Nouveau bouton "Ravitailler" à côté de "Naviguer" sur chaque planète
+- Visible uniquement sur les planètes qui ne sont pas la planète actuelle
+- Click ouvre directement le modal de transport avec la planète sélectionnée
+- Utilise le système de transport existant (transporteurs)
+- Design cohérent avec le thème logistique (vert émeraude)
+
+**Amélioration UX**:
+- Plus besoin d'aller dans la galaxie pour ravitailler une colonie
+- Accès direct depuis la page de gestion des planètes
+- Workflow simplifié: Mes Planètes → Ravitailler → Envoyer ressources
+
+**Fichiers**:
+- `frontend/src/components/MyPlanets.tsx` (UI + callback)
+- `frontend/src/App.tsx` (passage du callback onNavigateTransport)
+
+---
+
 ### 📝 Notes techniques
 
 **Capacité cargo combat**:
@@ -213,7 +235,7 @@ let metal = base_metal * recycler_bonus * speed_factor;
 
 ---
 
-### 📦 Fichiers modifiés (14 fichiers)
+### 📦 Fichiers modifiés (15 fichiers)
 
 #### Backend (6 fichiers)
 - ✏️ `backend/src/game_logic.rs` - Cargo capacity, flight time, storage capacity, resource caps
@@ -224,15 +246,16 @@ let metal = base_metal * recycler_bonus * speed_factor;
 - ➕ `backend/migration/src/m20260120_000001_add_resource_storage.rs` - NEW: Migration resource storage
 - ✏️ `backend/migration/src/lib.rs` - Register new migration
 
-#### Frontend (7 fichiers)
+#### Frontend (8 fichiers)
 - ✏️ `frontend/src/components/AttackModal.tsx` - Transporters selection + cargo display
 - ✏️ `frontend/src/components/ExpeditionZone.tsx` - Recyclers selection + defaults to 0
 - ✏️ `frontend/src/components/GalaxyView.tsx` - Colonization modal integration
-- ✏️ `frontend/src/App.tsx` - Updated handlers for new payloads
+- ✏️ `frontend/src/App.tsx` - Updated handlers, transport callback to MyPlanets
 - ➕ `frontend/src/components/ColonizeModal.tsx` - NEW: Resource selection modal for colonization
 - ✏️ `frontend/src/components/Facilities.tsx` - Resource storage building UI
 - ✏️ `frontend/src/components/EmpireBar.tsx` - Storage caps display with progress bar
 - ✏️ `frontend/src/components/PlanetOverview.tsx` - Resource storage label
+- ✏️ `frontend/src/components/MyPlanets.tsx` - Supply button to transport resources
 
 ---
 

@@ -41,9 +41,10 @@ interface Planet {
 interface MyPlanetsProps {
   currentPlanetId: string;
   onSelectPlanet: (planetId: string) => void;
+  onNavigateTransport?: (id: string, name: string, galaxy: number, system: number, position: number) => void;
 }
 
-export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanetsProps) {
+export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateTransport }: MyPlanetsProps) {
   const [planets, setPlanets] = useState<Planet[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanet, setSelectedPlanet] = useState<Planet | null>(null);
@@ -420,22 +421,36 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet }: MyPlanets
                   </div>
                 )}
 
-                {/* Bouton naviguer */}
-                <Button 
-                  onClick={(e) => { e.stopPropagation(); handleSelectPlanet(planet); }}
-                  className={`w-full font-bold uppercase tracking-wider transition-all duration-300 ${
-                    isCurrent 
-                      ? 'bg-slate-700 text-slate-400 cursor-not-allowed' 
-                      : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:scale-[1.02] hover:-translate-y-0.5 hover:shadow-xl card-depth'
-                  }`}
-                  disabled={isCurrent}
-                >
-                  {isCurrent ? (
-                    <span className="flex items-center gap-2"><Crown size={14} /> Position Actuelle</span>
-                  ) : (
-                    <span className="flex items-center gap-2"><ChevronRight size={14} /> Naviguer vers cette planète</span>
+                {/* Boutons d'action */}
+                <div className={isCurrent ? '' : 'grid grid-cols-2 gap-2'}>
+                  <Button
+                    onClick={(e) => { e.stopPropagation(); handleSelectPlanet(planet); }}
+                    className={`${isCurrent ? 'w-full' : ''} font-bold uppercase tracking-wider transition-all duration-300 ${
+                      isCurrent
+                        ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:scale-[1.02] hover:-translate-y-0.5 hover:shadow-xl card-depth'
+                    }`}
+                    disabled={isCurrent}
+                  >
+                    {isCurrent ? (
+                      <span className="flex items-center gap-2"><Crown size={14} /> Position Actuelle</span>
+                    ) : (
+                      <span className="flex items-center gap-2"><ChevronRight size={14} /> Naviguer</span>
+                    )}
+                  </Button>
+
+                  {!isCurrent && onNavigateTransport && (
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNavigateTransport(planet.id, planet.name, planet.galaxy, planet.system, planet.position);
+                      }}
+                      className="font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-[1.02] hover:-translate-y-0.5 hover:shadow-xl card-depth transition-all duration-300"
+                    >
+                      <span className="flex items-center gap-2"><Truck size={14} /> Ravitailler</span>
+                    </Button>
                   )}
-                </Button>
+                </div>
               </CardContent>
             </Card>
           );
