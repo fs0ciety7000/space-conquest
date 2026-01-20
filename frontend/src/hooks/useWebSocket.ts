@@ -84,6 +84,23 @@ export interface WsSpyAlert extends WsEvent {
   };
 }
 
+export interface WsSabotageDetected extends WsEvent {
+  type: 'sabotage_detected';
+  payload: {
+    attacker_name: string;
+    planet_name: string;
+    effect_type: 'disable_mine' | 'steal_tech';
+  };
+}
+
+export interface WsCasusBelliGranted extends WsEvent {
+  type: 'casus_belli_granted';
+  payload: {
+    target_name: string;
+    reason: string;
+  };
+}
+
 export interface WsPlanetStatus extends WsEvent {
   type: 'planet_status';
   payload: {
@@ -251,6 +268,29 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
           toast.warning('🕵️ Espionnage détecté !', {
             description: `Depuis ${spyData.from}`,
           });
+          break;
+
+        case 'sabotage_detected':
+          const sabotageData = (data as WsSabotageDetected).payload;
+          const effectLabel = sabotageData.effect_type === 'disable_mine'
+            ? 'Mine désactivée'
+            : 'Données volées';
+          toast.error('🚨 SABOTAGE DÉTECTÉ !', {
+            description: `${sabotageData.attacker_name} a tenté de saboter ${sabotageData.planet_name} ! ${effectLabel}. Casus Belli accordé !`,
+            duration: 10000,
+            important: true,
+          });
+          window.dispatchEvent(new Event('sabotage-detected'));
+          break;
+
+        case 'casus_belli_granted':
+          const cbData = (data as WsCasusBelliGranted).payload;
+          toast.success('⚔️ CASUS BELLI ACCORDÉ !', {
+            description: `Vous pouvez attaquer ${cbData.target_name} sans pénalité ! Raison: ${cbData.reason}`,
+            duration: 8000,
+            important: true,
+          });
+          window.dispatchEvent(new Event('casus-belli-granted'));
           break;
 
         case 'planet_status':
