@@ -14,10 +14,11 @@ use chrono::Utc;
 use bcrypt;
 
 use crate::entities::{
-    prelude::{Planet, User, ServerConfig},
+    prelude::{Planet, User, ServerConfig, Announcement},
     planet,
     server_config,
     user,
+    announcement,
 };
 use crate::{AppState, game_logic};
 
@@ -718,5 +719,185 @@ pub async fn delete_user_handler(
         })).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la suppression"})))
             .into_response(),
+    }
+}
+
+// ==================== ANNOUNCEMENT SYSTEM ====================
+
+// GET /announcements/active - Public endpoint for active announcements (no admin required)
+pub async fn get_active_announcements_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let announcements = Announcement::find()
+        .filter(announcement::Column::IsActive.eq(true))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    Json(announcements).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct CreateAnnouncement {
+    pub title: String,
+    pub content: String,
+    #[serde(rename = "type")]
+    pub announcement_type: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateAnnouncement {
+    pub title: Option<String>,
+    pub content: Option<String>,
+    #[serde(rename = "type")]
+    pub announcement_type: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+// GET /admin/announcements - List all announcements
+pub async fn get_announcements_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    let announcements = Announcement::find()
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    Json(announcements).into_response()
+}
+
+// POST /admin/announcements - Create a new announcement
+pub async fn create_announcement_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(new_announcement): Json<CreateAnnouncement>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    if new_announcement.title.trim().is_empty() || new_announcement.content.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Le titre et le contenu sont requis"})))
+            .into_response();
+    }
+
+    let now = Utc::now().naive_utc();
+    let active_announcement = announcement::ActiveModel {
+        id: sea_orm::ActiveValue::NotSet,
+        title: Set(new_announcement.title),
+        content: Set(new_announcement.content),
+        announcement_type: Set(new_announcement.announcement_type.unwrap_or_else(|| "info".to_string())),
+        is_active: Set(new_announcement.is_active.unwrap_or(true)),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+
+    match active_announcement.insert(&state.db).await {
+        Ok(created) => Json(json!({
+            "success": true,
+            "message": "Annonce créée avec succès",
+            "announcement": created
+        })).into_response(),
+        Err(e) => {
+            eprintln!("❌ Error creating announcement: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la création"})))
+                .into_response()
+        }
+    }
+}
+
+// PATCH /admin/announcements/:id - Update an announcement
+pub async fn update_announcement_handler(
+    Path(announcement_id): Path<i32>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(updates): Json<UpdateAnnouncement>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    let announcement = Announcement::find_by_id(announcement_id)
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if announcement.is_none() {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Annonce introuvable"})))
+            .into_response();
+    }
+
+    let mut active: announcement::ActiveModel = announcement.unwrap().into();
+
+    if let Some(title) = updates.title {
+        if !title.trim().is_empty() {
+            active.title = Set(title);
+        }
+    }
+
+    if let Some(content) = updates.content {
+        if !content.trim().is_empty() {
+            active.content = Set(content);
+        }
+    }
+
+    if let Some(announcement_type) = updates.announcement_type {
+        active.announcement_type = Set(announcement_type);
+    }
+
+    if let Some(is_active) = updates.is_active {
+        active.is_active = Set(is_active);
+    }
+
+    active.updated_at = Set(Utc::now().naive_utc());
+
+    match active.update(&state.db).await {
+        Ok(updated) => Json(json!({
+            "success": true,
+            "message": "Annonce mise à jour",
+            "announcement": updated
+        })).into_response(),
+        Err(e) => {
+            eprintln!("❌ Error updating announcement: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la mise à jour"})))
+                .into_response()
+        }
+    }
+}
+
+// DELETE /admin/announcements/:id - Delete an announcement
+pub async fn delete_announcement_handler(
+    Path(announcement_id): Path<i32>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    match Announcement::delete_by_id(announcement_id).exec(&state.db).await {
+        Ok(_) => Json(json!({
+            "success": true,
+            "message": "Annonce supprimée avec succès"
+        })).into_response(),
+        Err(e) => {
+            eprintln!("❌ Error deleting announcement: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la suppression"})))
+                .into_response()
+        }
     }
 }

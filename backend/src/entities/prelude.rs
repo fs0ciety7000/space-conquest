@@ -14,6 +14,7 @@ pub use super :: server_resource_stats :: Entity as ServerResourceStats ;
 pub use super :: market_price_history :: Entity as MarketPriceHistory ;
 pub use super :: server_config :: Entity as ServerConfig ;
 pub use super :: resource_slot :: Entity as ResourceSlot ;
+pub use super :: announcement :: Entity as Announcement ;
 
 // Alliance system
 pub use super :: alliance :: Entity as Alliance ;

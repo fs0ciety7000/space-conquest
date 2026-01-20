@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery } from 'lucide-react';
+import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery, Radio } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -85,7 +85,17 @@ interface ServerConfig {
   [key: string]: string;
 }
 
-type AdminTab = 'players' | 'stats' | 'users' | 'config';
+interface Announcement {
+  id: number;
+  title: string;
+  content: string;
+  announcement_type: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+type AdminTab = 'players' | 'stats' | 'users' | 'config' | 'announcements';
 
 interface ConfigCategory {
   id: string;
@@ -189,6 +199,9 @@ export default function AdminPanel() {
   const [config, setConfig] = useState<ServerConfig | null>(null);
   const [editedConfig, setEditedConfig] = useState<Partial<ServerConfig>>({});
   const [loadingConfig, setLoadingConfig] = useState(false);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '', type: 'info', is_active: true });
 
   const token = localStorage.getItem('token');
   const currentUsername = localStorage.getItem('username');
@@ -219,6 +232,9 @@ export default function AdminPanel() {
     if (activeTab === 'stats' || activeTab === 'config') {
       fetchStats();
       fetchConfig();
+    }
+    if (activeTab === 'announcements') {
+      fetchAnnouncements();
     }
   }, [activeTab]);
 
@@ -312,6 +328,94 @@ export default function AdminPanel() {
       toast.error('Erreur réseau');
     } finally {
       setLoadingConfig(false);
+    }
+  };
+
+  // Announcement functions
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch(apiUrl(`/admin/announcements?user_id=${userId}`), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncements(data);
+      }
+    } catch (e) {
+      toast.error('Erreur lors du chargement des annonces');
+    }
+  };
+
+  const createAnnouncement = async () => {
+    if (!newAnnouncement.title.trim() || !newAnnouncement.content.trim()) {
+      toast.error('Le titre et le contenu sont requis');
+      return;
+    }
+
+    try {
+      const res = await fetch(apiUrl(`/admin/announcements?user_id=${userId}`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newAnnouncement)
+      });
+
+      if (res.ok) {
+        toast.success('Annonce créée avec succès');
+        setNewAnnouncement({ title: '', content: '', type: 'info', is_active: true });
+        fetchAnnouncements();
+      } else {
+        toast.error('Erreur lors de la création');
+      }
+    } catch (e) {
+      toast.error('Erreur réseau');
+    }
+  };
+
+  const updateAnnouncement = async (id: number, updates: Partial<Announcement>) => {
+    try {
+      const res = await fetch(apiUrl(`/admin/announcements/${id}?user_id=${userId}`), {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+
+      if (res.ok) {
+        toast.success('Annonce mise à jour');
+        setEditingAnnouncement(null);
+        fetchAnnouncements();
+      } else {
+        toast.error('Erreur lors de la mise à jour');
+      }
+    } catch (e) {
+      toast.error('Erreur réseau');
+    }
+  };
+
+  const deleteAnnouncement = async (id: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette annonce ?')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(apiUrl(`/admin/announcements/${id}?user_id=${userId}`), {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        toast.success('Annonce supprimée');
+        fetchAnnouncements();
+      } else {
+        toast.error('Erreur lors de la suppression');
+      }
+    } catch (e) {
+      toast.error('Erreur réseau');
     }
   };
 
@@ -439,6 +543,18 @@ export default function AdminPanel() {
         >
           <Users size={16} />
           Gestion Utilisateurs
+        </Button>
+        <Button
+          variant={activeTab === 'announcements' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('announcements')}
+          className={`flex items-center gap-2 transition-all duration-300 ${
+            activeTab === 'announcements'
+              ? 'bg-emerald-600 hover:bg-emerald-500 text-white card-depth shadow-lg'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <Radio size={16} />
+          Annonces
         </Button>
       </div>
 
@@ -1581,6 +1697,231 @@ export default function AdminPanel() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* TAB ANNOUNCEMENTS */}
+      {activeTab === 'announcements' && (
+        <div className="space-y-6">
+          {/* Create New Announcement */}
+          <Card className="bg-gradient-to-br from-slate-950 to-emerald-950/20 border-emerald-500/30 card-depth">
+            <CardHeader>
+              <CardTitle className="text-emerald-400 flex items-center gap-2">
+                <Radio size={20} className="animate-pulse" />
+                Créer une Nouvelle Annonce
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-xs text-slate-400 font-bold mb-2 block uppercase tracking-wider">
+                  Titre
+                </label>
+                <Input
+                  value={newAnnouncement.title}
+                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
+                  className="bg-black/40 border-emerald-500/30 text-white font-mono"
+                  placeholder="Titre de l'annonce..."
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 font-bold mb-2 block uppercase tracking-wider">
+                  Contenu
+                </label>
+                <textarea
+                  value={newAnnouncement.content}
+                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
+                  className="w-full bg-black/40 border border-emerald-500/30 text-white font-mono p-2 rounded-md min-h-[100px]"
+                  placeholder="Contenu de l'annonce..."
+                />
+              </div>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-xs text-slate-400 font-bold mb-2 block uppercase tracking-wider">
+                    Type
+                  </label>
+                  <select
+                    value={newAnnouncement.type}
+                    onChange={(e) => setNewAnnouncement({ ...newAnnouncement, type: e.target.value })}
+                    className="w-full bg-black/40 border border-emerald-500/30 text-white font-mono p-2 rounded-md"
+                  >
+                    <option value="info">Info</option>
+                    <option value="warning">Avertissement</option>
+                    <option value="danger">Danger</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newAnnouncement.is_active}
+                      onChange={(e) => setNewAnnouncement({ ...newAnnouncement, is_active: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    Active
+                  </label>
+                </div>
+              </div>
+              <Button
+                onClick={createAnnouncement}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                <Save size={16} className="mr-2" />
+                Créer l'Annonce
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* List of Announcements */}
+          <Card className="bg-slate-950 border-white/10 card-depth">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Radio size={20} />
+                Annonces Existantes ({announcements.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {announcements.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  Aucune annonce pour le moment
+                </div>
+              ) : (
+                announcements.map((announcement) => (
+                  <div
+                    key={announcement.id}
+                    className={`border-2 rounded-lg p-4 ${
+                      announcement.announcement_type === 'danger'
+                        ? 'border-red-500/30 bg-red-950/20'
+                        : announcement.announcement_type === 'warning'
+                        ? 'border-orange-500/30 bg-orange-950/20'
+                        : 'border-cyan-500/30 bg-cyan-950/20'
+                    }`}
+                  >
+                    {editingAnnouncement?.id === announcement.id ? (
+                      // Edit mode
+                      <div className="space-y-3">
+                        <Input
+                          value={editingAnnouncement.title}
+                          onChange={(e) =>
+                            setEditingAnnouncement({ ...editingAnnouncement, title: e.target.value })
+                          }
+                          className="bg-black/40 text-white font-mono"
+                        />
+                        <textarea
+                          value={editingAnnouncement.content}
+                          onChange={(e) =>
+                            setEditingAnnouncement({ ...editingAnnouncement, content: e.target.value })
+                          }
+                          className="w-full bg-black/40 border border-white/10 text-white font-mono p-2 rounded-md min-h-[80px]"
+                        />
+                        <div className="flex gap-2">
+                          <select
+                            value={editingAnnouncement.announcement_type}
+                            onChange={(e) =>
+                              setEditingAnnouncement({ ...editingAnnouncement, announcement_type: e.target.value })
+                            }
+                            className="bg-black/40 border border-white/10 text-white font-mono p-2 rounded-md"
+                          >
+                            <option value="info">Info</option>
+                            <option value="warning">Avertissement</option>
+                            <option value="danger">Danger</option>
+                          </select>
+                          <label className="flex items-center gap-2 text-sm text-slate-400">
+                            <input
+                              type="checkbox"
+                              checked={editingAnnouncement.is_active}
+                              onChange={(e) =>
+                                setEditingAnnouncement({ ...editingAnnouncement, is_active: e.target.checked })
+                              }
+                              className="w-4 h-4"
+                            />
+                            Active
+                          </label>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => updateAnnouncement(announcement.id, editingAnnouncement)}
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-500"
+                            size="sm"
+                          >
+                            <Save size={14} className="mr-1" />
+                            Sauvegarder
+                          </Button>
+                          <Button
+                            onClick={() => setEditingAnnouncement(null)}
+                            variant="outline"
+                            className="flex-1"
+                            size="sm"
+                          >
+                            <X size={14} className="mr-1" />
+                            Annuler
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      // View mode
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-lg font-black text-white uppercase tracking-wider">
+                              {announcement.title}
+                            </h3>
+                            <span
+                              className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${
+                                announcement.is_active
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                              }`}
+                            >
+                              {announcement.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                            <span className="text-[10px] px-2 py-1 rounded-full bg-slate-700/50 text-slate-300 font-mono">
+                              {announcement.announcement_type}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-300">{announcement.content}</p>
+                          <p className="text-xs text-slate-500 mt-2">
+                            Créée le {new Date(announcement.created_at).toLocaleString('fr-FR')}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => setEditingAnnouncement(announcement)}
+                            variant="outline"
+                            size="sm"
+                            className="border-cyan-500/30 hover:bg-cyan-500/10"
+                          >
+                            <Edit size={14} />
+                          </Button>
+                          <Button
+                            onClick={() =>
+                              updateAnnouncement(announcement.id, { is_active: !announcement.is_active })
+                            }
+                            variant="outline"
+                            size="sm"
+                            className={
+                              announcement.is_active
+                                ? 'border-orange-500/30 hover:bg-orange-500/10'
+                                : 'border-emerald-500/30 hover:bg-emerald-500/10'
+                            }
+                          >
+                            {announcement.is_active ? <AlertTriangle size={14} /> : <Zap size={14} />}
+                          </Button>
+                          <Button
+                            onClick={() => deleteAnnouncement(announcement.id)}
+                            variant="outline"
+                            size="sm"
+                            className="border-red-500/30 hover:bg-red-500/10"
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
