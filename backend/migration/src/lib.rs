@@ -50,6 +50,7 @@ mod m20260125_100001_create_tech_tree_system;
 mod m20260125_100002_seed_tech_tree_data;
 mod m20260125_100003_migrate_planet_data;
 mod m20260125_100004_add_research_tracking_columns;
+mod m20260125_100005_add_build_time_columns;
 
 pub struct Migrator;
 
@@ -107,6 +108,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260125_100002_seed_tech_tree_data::Migration),
             Box::new(m20260125_100003_migrate_planet_data::Migration),
             Box::new(m20260125_100004_add_research_tracking_columns::Migration),
+            Box::new(m20260125_100005_add_build_time_columns::Migration),
         ]
     }
 }
