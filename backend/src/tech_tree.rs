@@ -5,6 +5,7 @@ use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySe
 use crate::entities::{prelude::*, technology, planet_technology, ship_type, planet_ship, technology_requirement, ship_requirement};
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
+use uuid::Uuid;
 
 // ========== STRUCTURES ==========
 
@@ -68,7 +69,7 @@ pub struct ShipRequirementInfo {
 /// Get tech level for a planet
 pub async fn get_planet_tech_level(
     db: &DatabaseConnection,
-    planet_id: i32,
+    planet_id: Uuid,
     tech_key: &str,
 ) -> Result<i32, sea_orm::DbErr> {
     // First get the tech id
@@ -95,7 +96,7 @@ pub async fn get_planet_tech_level(
 /// Get all tech levels for a planet as a HashMap
 pub async fn get_all_planet_tech_levels(
     db: &DatabaseConnection,
-    planet_id: i32,
+    planet_id: Uuid,
 ) -> Result<HashMap<String, i32>, sea_orm::DbErr> {
     let planet_techs = PlanetTechnology::find()
         .filter(planet_technology::Column::PlanetId.eq(planet_id))
@@ -117,7 +118,7 @@ pub async fn get_all_planet_tech_levels(
 /// Get all technologies with their requirements for a planet
 pub async fn get_tech_tree_for_planet(
     db: &DatabaseConnection,
-    planet_id: i32,
+    planet_id: Uuid,
 ) -> Result<Vec<TechInfo>, sea_orm::DbErr> {
     // Get all technologies
     let all_techs = Technology::find().all(db).await?;
@@ -155,7 +156,7 @@ pub async fn get_tech_tree_for_planet(
 async fn get_tech_requirements(
     db: &DatabaseConnection,
     tech_id: i32,
-    planet_id: i32,
+    planet_id: Uuid,
 ) -> Result<Vec<TechRequirement>, sea_orm::DbErr> {
     let requirements = TechnologyRequirement::find()
         .filter(technology_requirement::Column::TechId.eq(tech_id))
@@ -184,7 +185,7 @@ async fn get_tech_requirements(
 /// Check if a tech can be researched (all requirements met)
 pub async fn can_research_tech(
     db: &DatabaseConnection,
-    planet_id: i32,
+    planet_id: Uuid,
     tech_key: &str,
 ) -> Result<bool, sea_orm::DbErr> {
     // Get tech
@@ -210,7 +211,7 @@ pub async fn can_research_tech(
 /// Get ship count for a planet
 pub async fn get_planet_ship_count(
     db: &DatabaseConnection,
-    planet_id: i32,
+    planet_id: Uuid,
     ship_key: &str,
 ) -> Result<i32, sea_orm::DbErr> {
     // Get ship type id
@@ -237,7 +238,7 @@ pub async fn get_planet_ship_count(
 /// Get all ship counts for a planet as a HashMap
 pub async fn get_all_planet_ship_counts(
     db: &DatabaseConnection,
-    planet_id: i32,
+    planet_id: Uuid,
 ) -> Result<HashMap<String, i32>, sea_orm::DbErr> {
     let planet_ships = PlanetShip::find()
         .filter(planet_ship::Column::PlanetId.eq(planet_id))
@@ -259,7 +260,7 @@ pub async fn get_all_planet_ship_counts(
 /// Get all ship types with their requirements for a planet
 pub async fn get_ship_types_for_planet(
     db: &DatabaseConnection,
-    planet_id: i32,
+    planet_id: Uuid,
 ) -> Result<Vec<ShipTypeInfo>, sea_orm::DbErr> {
     // Get all ship types
     let all_ships = ShipType::find().all(db).await?;
@@ -302,7 +303,7 @@ pub async fn get_ship_types_for_planet(
 async fn get_ship_requirements(
     db: &DatabaseConnection,
     ship_type_id: i32,
-    planet_id: i32,
+    planet_id: Uuid,
 ) -> Result<Vec<ShipRequirementInfo>, sea_orm::DbErr> {
     let requirements = ShipRequirement::find()
         .filter(ship_requirement::Column::ShipTypeId.eq(ship_type_id))
@@ -333,7 +334,7 @@ async fn get_ship_requirements(
 /// Check if a ship can be built (all requirements met)
 pub async fn can_build_ship(
     db: &DatabaseConnection,
-    planet_id: i32,
+    planet_id: Uuid,
     ship_key: &str,
 ) -> Result<bool, sea_orm::DbErr> {
     // Get ship type

@@ -1169,6 +1169,16 @@ async fn get_planet_handler(
             "energy": format!("+{}%", energy_slots * 50),
             "deuterium": format!("+{}%", deuterium_slots * 50)
         }));
+
+        // ========== EXPANSION 2.0: Add relational tech tree and ship data ==========
+        // Include tech levels and ship counts from relational tables
+        if let Ok(tech_levels) = tech_tree::get_all_planet_tech_levels(&state.db, updated_model.id).await {
+            obj.insert("technologies".into(), json!(tech_levels));
+        }
+
+        if let Ok(ship_counts) = tech_tree::get_all_planet_ship_counts(&state.db, updated_model.id).await {
+            obj.insert("ships".into(), json!(ship_counts));
+        }
     }
 
     Ok(Json(json_response))
@@ -3903,7 +3913,7 @@ async fn toggle_resource_slot_handler(
 /// GET /planets/:id/tech-tree - Get all technologies with requirements for a planet
 async fn get_tech_tree_handler(
     State(state): State<AppState>,
-    Path(planet_id): Path<i32>,
+    Path(planet_id): Path<Uuid>,
 ) -> impl IntoResponse {
     match tech_tree::get_tech_tree_for_planet(&state.db, planet_id).await {
         Ok(tech_tree_data) => Json(json!({ "technologies": tech_tree_data })).into_response(),
@@ -3914,7 +3924,7 @@ async fn get_tech_tree_handler(
 /// GET /planets/:id/ship-types - Get all ship types with requirements for a planet
 async fn get_ship_types_handler(
     State(state): State<AppState>,
-    Path(planet_id): Path<i32>,
+    Path(planet_id): Path<Uuid>,
 ) -> impl IntoResponse {
     match tech_tree::get_ship_types_for_planet(&state.db, planet_id).await {
         Ok(ship_types) => Json(json!({ "ship_types": ship_types })).into_response(),
