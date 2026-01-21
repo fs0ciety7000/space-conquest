@@ -33,6 +33,7 @@ interface BuildingTypeInfo {
   cost_multiplier: number;
   current_level: number;
   requirements: BuildingRequirement[];
+  next_level_time_seconds?: number;
 }
 
 interface FacilitiesProps {
@@ -257,7 +258,12 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                             <span>Temps Construction</span>
                         </div>
                         <div className="text-xs font-mono text-slate-300">
-                            {Math.floor(building.base_time_seconds / 60)}m {building.base_time_seconds % 60}s
+                            {(() => {
+                              const timeSeconds = building.next_level_time_seconds || building.base_time_seconds;
+                              const minutes = Math.floor(timeSeconds / 60);
+                              const seconds = timeSeconds % 60;
+                              return `${minutes}m ${seconds}s`;
+                            })()}
                         </div>
                     </div>
                 )}

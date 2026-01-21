@@ -29,6 +29,7 @@ interface TechInfo {
   cost_multiplier: number;
   current_level: number;
   requirements: TechRequirement[];
+  next_level_time_seconds?: number;
 }
 // --- CONFIGURATION VISUELLE (Design Riche) ---
 const getTechConfig = (id: string, level: number) => {

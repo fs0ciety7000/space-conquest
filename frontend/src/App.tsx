@@ -135,10 +135,11 @@ export default function App() {
     },
     onConstructionComplete: (data) => {
       playSound('build');
-      // fetchPlanet sera appelé via l'événement 'build-complete'
+      fetchPlanet(); // Refresh planet data immediately
     },
     onShipComplete: (data) => {
       playSound('build');
+      fetchPlanet(); // Refresh planet data immediately
     },
     onAttackIncoming: (data) => {
       playSound('alert');

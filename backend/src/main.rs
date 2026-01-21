@@ -4221,7 +4221,8 @@ async fn get_tech_tree_handler(
     State(state): State<AppState>,
     Path(planet_id): Path<Uuid>,
 ) -> impl IntoResponse {
-    match tech_tree::get_tech_tree_for_planet(&state.db, planet_id).await {
+    let config = state.config.read().unwrap().clone();
+    match tech_tree::get_tech_tree_for_planet(&state.db, planet_id, &config).await {
         Ok(tech_tree_data) => Json(json!({ "technologies": tech_tree_data })).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch tech tree"}))).into_response(),
     }
@@ -4277,7 +4278,19 @@ async fn get_building_types_handler(
     State(state): State<AppState>,
     Path(planet_id): Path<Uuid>,
 ) -> impl IntoResponse {
-    match tech_tree::get_building_types_for_planet(&state.db, planet_id).await {
+    // Get planet
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+        Err(e) => {
+            eprintln!("❌ Error fetching planet {}: {:?}", planet_id, e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch planet"}))).into_response();
+        }
+    };
+
+    let config = state.config.read().unwrap().clone();
+
+    match tech_tree::get_building_types_for_planet(&state.db, planet_id, &planet, &config).await {
         Ok(building_types) => Json(json!({ "building_types": building_types })).into_response(),
         Err(e) => {
             eprintln!("❌ Error fetching building types for planet {}: {:?}", planet_id, e);
@@ -4481,13 +4494,56 @@ async fn build_ships_handler(
         .ok()
         .flatten();
 
+    // Calculate build time
+    let config = state.config.read().unwrap().clone();
+    let build_time_per_ship = ship.build_time_seconds as f64 * config.construction_speed;
+    let additional_build_time = (build_time_per_ship * quantity as f64) as i64;
+
+    // If already building, add to the existing queue
     if let Some(ps) = &existing_build {
         if ps.building_count.is_some() && ps.building_count.unwrap() > 0 {
-            return (StatusCode::CONFLICT, Json(json!({"error": "Already building this ship type"}))).into_response();
+            // Calculate remaining build time
+            let now = Utc::now().naive_utc();
+            if let Some(current_end_time) = ps.build_end_time {
+                let remaining_seconds = (current_end_time - now).num_seconds().max(0);
+
+                // New end time = remaining time + additional time
+                let new_end_time = now + Duration::seconds(remaining_seconds + additional_build_time);
+                let new_quantity = ps.building_count.unwrap() + quantity;
+
+                // Deduct resources
+                let mut active_planet: planet::ActiveModel = planet.clone().into();
+                active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
+                active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
+                active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
+
+                if let Err(_) = active_planet.update(&state.db).await {
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
+                }
+
+                // Update the build queue
+                let mut active_ps: planet_ship::ActiveModel = ps.clone().into();
+                active_ps.building_count = Set(Some(new_quantity));
+                active_ps.build_end_time = Set(Some(new_end_time));
+
+                if let Err(_) = active_ps.update(&state.db).await {
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update building queue"}))).into_response();
+                }
+
+                // Return success with updated info
+                return Json(json!({
+                    "success": true,
+                    "ship_key": ship_key,
+                    "quantity": new_quantity,
+                    "added": quantity,
+                    "end_time": new_end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    "total_duration_seconds": remaining_seconds + additional_build_time
+                })).into_response();
+            }
         }
     }
 
-    // Deduct resources
+    // Deduct resources for new build
     let mut active_planet: planet::ActiveModel = planet.clone().into();
     active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
     active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
@@ -4497,11 +4553,7 @@ async fn build_ships_handler(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
     }
 
-    // Calculate build time (total time for all ships)
-    let config = state.config.read().unwrap().clone();
-    let build_time_per_ship = ship.build_time_seconds as f64 * config.construction_speed;
-    let total_build_time = (build_time_per_ship * quantity as f64) as i64;
-    let end_time = Utc::now().naive_utc() + Duration::seconds(total_build_time);
+    let end_time = Utc::now().naive_utc() + Duration::seconds(additional_build_time);
 
     // Start building
     if let Some(ps) = existing_build {
@@ -4533,7 +4585,7 @@ async fn build_ships_handler(
         "ship_key": ship_key,
         "quantity": quantity,
         "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
-        "duration_seconds": total_build_time
+        "duration_seconds": additional_build_time
     })).into_response()
 }
 

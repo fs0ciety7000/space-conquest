@@ -375,6 +375,20 @@ async fn calculate_current_resources(
     db: &DatabaseConnection,
     config: &crate::ServerConfigCache,
 ) -> WsEvent {
+    // Load relational data (buildings, techs, ships, defenses)
+    let planet_data = match crate::tech_tree::PlanetData::load(db, planet.id).await {
+        Ok(data) => data,
+        Err(_) => {
+            // Fallback to empty data if load fails
+            crate::tech_tree::PlanetData {
+                buildings: std::collections::HashMap::new(),
+                technologies: std::collections::HashMap::new(),
+                ships: std::collections::HashMap::new(),
+                defenses: std::collections::HashMap::new(),
+            }
+        }
+    };
+
     // Récupérer les slots de ressources
     let slots = ResourceSlot::find()
         .filter(crate::entities::resource_slot::Column::PlanetId.eq(planet.id))
@@ -400,16 +414,16 @@ async fn calculate_current_resources(
 
     // Calculer le ratio énergétique
     let energy_produced = game_logic::calculate_energy_production_with_slots(
-        planet.solar_plant_level,
-        planet.energy_tech_level,
+        planet_data.building_level("solar_plant"),
+        planet_data.tech_level("energy_tech"),
         &slot_1, &slot_2, &slot_3, &slot_4,
         config,
     );
 
     let energy_consumed = game_logic::calculate_energy_consumption(
-        planet.metal_mine_level,
-        planet.crystal_mine_level,
-        planet.deuterium_mine_level,
+        planet_data.building_level("metal_mine"),
+        planet_data.building_level("crystal_mine"),
+        planet_data.building_level("deuterium_mine"),
         config,
     );
 
@@ -424,15 +438,14 @@ async fn calculate_current_resources(
     let energy_ratio_decimal = energy_ratio_percent / 100.0;
 
     // Calculer les ressources actuelles avec le config
-    // Note: plasma_tech_level will be 0 until planet model is updated
-    let plasma_tech_level = 0; // TODO: Get from planet model once migration is applied
+    let plasma_tech_level = planet_data.tech_level("plasma_tech");
 
     let metal = game_logic::calculate_resources_with_slots(
         game_logic::ResourceType::Metal,
-        planet.metal_mine_level,
+        planet_data.building_level("metal_mine"),
         planet.metal_amount,
         planet.last_update,
-        planet.energy_tech_level,
+        planet_data.tech_level("energy_tech"),
         plasma_tech_level,
         energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
@@ -441,10 +454,10 @@ async fn calculate_current_resources(
 
     let crystal = game_logic::calculate_resources_with_slots(
         game_logic::ResourceType::Crystal,
-        planet.crystal_mine_level,
+        planet_data.building_level("crystal_mine"),
         planet.crystal_amount,
         planet.last_update,
-        planet.energy_tech_level,
+        planet_data.tech_level("energy_tech"),
         plasma_tech_level,
         energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
@@ -453,10 +466,10 @@ async fn calculate_current_resources(
 
     let deuterium = game_logic::calculate_resources_with_slots(
         game_logic::ResourceType::Deuterium,
-        planet.deuterium_mine_level,
+        planet_data.building_level("deuterium_mine"),
         planet.deuterium_amount,
         planet.last_update,
-        planet.energy_tech_level,
+        planet_data.tech_level("energy_tech"),
         plasma_tech_level,
         energy_ratio_decimal,
         &slot_1, &slot_2, &slot_3, &slot_4,
