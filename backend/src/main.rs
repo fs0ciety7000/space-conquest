@@ -50,8 +50,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member
 };
 
 #[derive(Serialize, Clone)]
@@ -3296,13 +3296,13 @@ async fn transport_handler(
     // ═══════════════════════════════════════════════════════════════════════════
     if source_model.owner_id != target_model.owner_id {
         // Vérifier que les deux joueurs sont dans la même alliance
-        let source_member = alliance_member::Entity::find()
+        let source_member = AllianceMember::find()
             .filter(alliance_member::Column::UserId.eq(source_model.owner_id))
             .one(&state.db)
             .await
             .unwrap();
 
-        let target_member = alliance_member::Entity::find()
+        let target_member = AllianceMember::find()
             .filter(alliance_member::Column::UserId.eq(target_model.owner_id))
             .one(&state.db)
             .await
