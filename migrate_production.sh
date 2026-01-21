@@ -107,7 +107,19 @@ echo ""
 
 # Step 4: Drop current database and recreate
 echo -e "${YELLOW}Step 4: Dropping current database and recreating...${NC}"
+
+# Terminate all connections to the database
+echo "  Terminating active connections..."
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d postgres -c \
+"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();" > /dev/null 2>&1 || true
+
+# Drop the database
 PGPASSWORD=$DB_PASSWORD dropdb -h $DB_HOST -U $DB_USER --if-exists $DB_NAME 2>/dev/null || true
+
+# Wait a moment for cleanup
+sleep 1
+
+# Create fresh database
 PGPASSWORD=$DB_PASSWORD createdb -h $DB_HOST -U $DB_USER $DB_NAME
 echo -e "${GREEN}✓ Database recreated${NC}"
 echo ""
