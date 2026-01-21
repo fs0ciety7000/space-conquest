@@ -1,7 +1,7 @@
 // backend/src/tech_tree.rs
 // Tech Tree System - Dynamic relational database queries
 
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySelect};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySelect, ActiveModelTrait, Set};
 use crate::entities::{prelude::*, technology, planet_technology, ship_type, planet_ship, technology_requirement, ship_requirement, building_type, building_requirement, planet_building, defense_type, defense_requirement, planet_defense};
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
@@ -54,6 +54,91 @@ impl PlanetData {
     pub fn defense_count(&self, key: &str) -> i32 {
         *self.defenses.get(key).unwrap_or(&0)
     }
+
+    /// Check if planet has enough ships of a given type
+    pub fn has_ships(&self, ship_key: &str, required: i32) -> bool {
+        self.ship_count(ship_key) >= required
+    }
+}
+
+// ========== SHIP MANAGEMENT HELPERS ==========
+
+/// Deduct ships from a planet (updates planet_ship table)
+pub async fn deduct_ships(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    ship_key: &str,
+    amount: i32,
+) -> Result<(), sea_orm::DbErr> {
+    // Get ship type
+    let ship_type = ShipType::find()
+        .filter(ship_type::Column::ShipKey.eq(ship_key))
+        .one(db)
+        .await?
+        .ok_or(sea_orm::DbErr::Custom("Ship type not found".to_string()))?;
+
+    // Get or create planet_ship record
+    let planet_ship = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .filter(planet_ship::Column::ShipTypeId.eq(ship_type.id))
+        .one(db)
+        .await?;
+
+    if let Some(ps) = planet_ship {
+        let new_count = ps.count - amount;
+        if new_count < 0 {
+            return Err(sea_orm::DbErr::Custom("Insufficient ships".to_string()));
+        }
+
+        let mut active_ps: planet_ship::ActiveModel = ps.into();
+        active_ps.count = Set(new_count);
+        active_ps.update(db).await?;
+    } else {
+        return Err(sea_orm::DbErr::Custom("No ships of this type".to_string()));
+    }
+
+    Ok(())
+}
+
+/// Add ships to a planet (updates planet_ship table)
+pub async fn add_ships(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    ship_key: &str,
+    amount: i32,
+) -> Result<(), sea_orm::DbErr> {
+    // Get ship type
+    let ship_type = ShipType::find()
+        .filter(ship_type::Column::ShipKey.eq(ship_key))
+        .one(db)
+        .await?
+        .ok_or(sea_orm::DbErr::Custom("Ship type not found".to_string()))?;
+
+    // Get or create planet_ship record
+    let planet_ship = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .filter(planet_ship::Column::ShipTypeId.eq(ship_type.id))
+        .one(db)
+        .await?;
+
+    if let Some(ps) = planet_ship {
+        let count = ps.count;
+        let mut active_ps: planet_ship::ActiveModel = ps.into();
+        active_ps.count = Set(count + amount);
+        active_ps.update(db).await?;
+    } else {
+        // Create new record
+        let new_ps = planet_ship::ActiveModel {
+            planet_id: Set(planet_id),
+            ship_type_id: Set(ship_type.id),
+            count: Set(amount),
+            building_count: Set(None),
+            build_end_time: Set(None),
+        };
+        new_ps.insert(db).await?;
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

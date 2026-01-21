@@ -2315,22 +2315,33 @@ async fn spy_handler(
     let att_planet = match att_planet_opt { Some(p) => p, None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Attaquant inconnu"}))).into_response() };
     let def_planet = match def_planet_opt { Some(p) => p, None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible inconnue"}))).into_response() };
 
-    if att_planet.spy_probe_count < 1 {
+    // Load relational data for both planets
+    let att_data = match tech_tree::PlanetData::load(&state.db, att_planet.id).await {
+        Ok(data) => data,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to load attacker data"}))).into_response(),
+    };
+    let def_data = match tech_tree::PlanetData::load(&state.db, def_planet.id).await {
+        Ok(data) => data,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to load defender data"}))).into_response(),
+    };
+
+    if att_data.ship_count("spy_probe") < 1 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucune sonde disponible"}))).into_response();
     }
 
-    let mut att_active: planet::ActiveModel = att_planet.clone().into();
-    att_active.spy_probe_count = Set(att_planet.spy_probe_count - 1);
-    let _ = att_active.update(&state.db).await;
+    // Deduct spy probe from attacker
+    if let Err(_) = tech_tree::deduct_ships(&state.db, att_planet.id, "spy_probe", 1).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct spy probe"}))).into_response();
+    }
 
-    let tech_diff = att_planet.espionage_tech_level - def_planet.espionage_tech_level;
-    
+    let tech_diff = att_data.tech_level("espionage_tech") - def_data.tech_level("espionage_tech");
+
     let mut detection = "none";
     let mut resources = None;
     let mut fleet = None;
     let mut defense = None;
 
-    if tech_diff >= -1 { 
+    if tech_diff >= -1 {
         detection = "resources";
         resources = Some(game_logic::Cost {
             metal: def_planet.metal_amount,
@@ -2338,20 +2349,18 @@ async fn spy_handler(
             deuterium: def_planet.deuterium_amount
         });
     }
-    
-    if tech_diff >= 1 { 
+
+    if tech_diff >= 1 {
         detection = "fleet";
-        let mut fleet_map = HashMap::new();
-        fleet_map.insert("light_hunter".to_string(), def_planet.light_hunter_count);
-        fleet_map.insert("cruiser".to_string(), def_planet.cruiser_count);
-        fleet_map.insert("recycler".to_string(), def_planet.recycler_count);
-        fleet_map.insert("spy_probe".to_string(), def_planet.spy_probe_count);
-        fleet = Some(fleet_map);
+        // Get all ships from relational data
+        fleet = Some(def_data.ships.clone());
     }
 
     if tech_diff >= 2 {
         detection = "full";
-        defense = Some(def_planet.missile_launcher_count + def_planet.plasma_turret_count);
+        // Get all defenses from relational data
+        let total_defense: i32 = def_data.defenses.values().sum();
+        defense = Some(total_defense);
     }
 
     // Notify the defender that they were spied on
