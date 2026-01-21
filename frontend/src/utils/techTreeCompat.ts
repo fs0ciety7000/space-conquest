@@ -25,6 +25,7 @@ export interface Planet {
 
   // New system objects
   technologies?: { [techKey: string]: number };
+  buildings?: { [buildingKey: string]: number };
   ships?: {
     [shipKey: string]: {
       count: number;
@@ -62,6 +63,39 @@ export function getTechLevel(planet: Planet | null | undefined, techKey: string)
   };
 
   const oldColumn = oldColumnMap[techKey];
+  if (oldColumn && planet[oldColumn] !== undefined) {
+    return planet[oldColumn] as number;
+  }
+
+  return 0;
+}
+
+/**
+ * Get building level with fallback to old system
+ */
+export function getBuildingLevel(planet: Planet | null | undefined, buildingKey: string): number {
+  if (!planet) return 0;
+
+  // NEW SYSTEM: Check buildings object first (priority)
+  if (planet.buildings && planet.buildings[buildingKey] !== undefined) {
+    return planet.buildings[buildingKey];
+  }
+
+  // OLD SYSTEM: Fallback to old column names
+  const oldColumnMap: { [key: string]: string } = {
+    'metal_mine': 'metal_mine_level',
+    'crystal_mine': 'crystal_mine_level',
+    'deuterium_mine': 'deuterium_mine_level',
+    'solar_plant': 'solar_plant_level',
+    'fusion_plant': 'fusion_plant_level',
+    'shipyard': 'shipyard_level',
+    'research_lab': 'research_lab_level',
+    'hangar': 'hangar_level',
+    'resource_storage': 'resource_storage_level',
+    // Add more mappings as needed
+  };
+
+  const oldColumn = oldColumnMap[buildingKey];
   if (oldColumn && planet[oldColumn] !== undefined) {
     return planet[oldColumn] as number;
   }

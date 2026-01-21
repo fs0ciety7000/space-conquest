@@ -10,7 +10,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
-import { getTechLevel, getShipCount, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
+import { getTechLevel, getBuildingLevel, getShipCount, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
 // --- Dictionnaire de noms ---
 const getLabel = (id: string | null) => {
     if (!id) return "Inconnu";
@@ -928,11 +928,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
             <CardContent className="space-y-2 relative z-10">
                 {[
-                    { label: "Mine de Métal", level: planet.metal_mine_level, icon: Stone, color: "text-orange-400", border: "border-orange-500/30", bg: "bg-orange-500/10" },
-                    { label: "Mine de Cristal", level: planet.crystal_mine_level, icon: Gem, color: "text-cyan-400", border: "border-cyan-500/30", bg: "bg-cyan-500/10" },
-                    { label: "Synth. Deutérium", level: planet.deuterium_mine_level, icon: Droplets, color: "text-emerald-400", border: "border-emerald-500/30", bg: "bg-emerald-500/10" },
-                    { label: "Centrale Solaire", level: planet.solar_plant_level, icon: Zap, color: "text-yellow-400", border: "border-yellow-500/30", bg: "bg-yellow-500/10" },
-                    { label: "Hangar", level: planet.hangar_level || 0, icon: Warehouse, color: "text-blue-400", border: "border-blue-500/30", bg: "bg-blue-500/10" }, 
+                    { label: "Mine de Métal", level: getBuildingLevel(planet, 'metal_mine'), icon: Stone, color: "text-orange-400", border: "border-orange-500/30", bg: "bg-orange-500/10" },
+                    { label: "Mine de Cristal", level: getBuildingLevel(planet, 'crystal_mine'), icon: Gem, color: "text-cyan-400", border: "border-cyan-500/30", bg: "bg-cyan-500/10" },
+                    { label: "Synth. Deutérium", level: getBuildingLevel(planet, 'deuterium_mine'), icon: Droplets, color: "text-emerald-400", border: "border-emerald-500/30", bg: "bg-emerald-500/10" },
+                    { label: "Centrale Solaire", level: getBuildingLevel(planet, 'solar_plant'), icon: Zap, color: "text-yellow-400", border: "border-yellow-500/30", bg: "bg-yellow-500/10" },
+                    { label: "Hangar", level: getBuildingLevel(planet, 'hangar'), icon: Warehouse, color: "text-blue-400", border: "border-blue-500/30", bg: "bg-blue-500/10" },
                 ].map((mine) => (
                     <div key={mine.label} className={`bg-black/40 border ${mine.border} p-2.5 rounded-lg flex items-center justify-between group hover:${mine.bg} transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg`}>
                         <div className="flex items-center gap-2.5 overflow-hidden">
@@ -955,7 +955,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     <div className="relative h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-white/10">
                         <div
                             className="h-full bg-gradient-to-r from-indigo-600 via-purple-500 to-cyan-400 transition-all duration-500"
-                            style={{ width: `${Math.min(100, ((planet.metal_mine_level + planet.crystal_mine_level + planet.deuterium_mine_level + planet.solar_plant_level) / 80) * 100)}%` }}
+                            style={{ width: `${Math.min(100, ((getBuildingLevel(planet, 'metal_mine') + getBuildingLevel(planet, 'crystal_mine') + getBuildingLevel(planet, 'deuterium_mine') + getBuildingLevel(planet, 'solar_plant')) / 80) * 100)}%` }}
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
                         </div>
