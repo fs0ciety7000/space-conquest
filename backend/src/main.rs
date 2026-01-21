@@ -5564,12 +5564,19 @@ async fn expedition_v2_handler(
     let combat_triggered = rand::random::<f64>() < combat_chance;
 
     let mut logs = Vec::new();
+    let mut ships_lost_total = 0;
     let (final_metal, final_crystal, final_deuterium, winner) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
 
         // Run dynamic combat
         match run_dynamic_expedition_combat(&state.db, id, payload.fleet.clone()).await {
             Ok((combat_report, metal, crystal, deuterium)) => {
+                // Calculate ships lost
+                for (ship_key, &initial_count) in &payload.fleet {
+                    let remaining_count = combat_report.remaining_ships.get(ship_key).copied().unwrap_or(0);
+                    ships_lost_total += initial_count - remaining_count;
+                }
+
                 // Add combat logs
                 logs.extend(combat_report.log);
 
@@ -5628,6 +5635,40 @@ async fn expedition_v2_handler(
     if active.update(&state.db).await.is_err() {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update planet"}))).into_response();
     }
+
+    // Create combat log for expedition report
+    let expedition_report = json!({
+        "winner": winner,
+        "result": winner,  // For consistency with combat_log.result
+        "log": logs,
+        "logs": logs,  // Keep both for compatibility
+        "loot": {
+            "metal": final_metal,
+            "crystal": final_crystal,
+            "deuterium": final_deuterium
+        },
+        "loot_metal": final_metal,
+        "loot_crystal": final_crystal,
+        "loot_deuterium": final_deuterium,
+        "ships_lost": ships_lost_total,
+        "lost_missiles": 0,
+        "lost_plasmas": 0,
+        "mission_type": "expedition"
+    });
+
+    let _ = combat_log::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(id),
+        target_name: Set("Secteur Inconnu".to_string()),
+        opponent_username: Set(None),
+        mission_type: Set("expedition".to_string()),
+        result: Set(winner.to_string()),
+        loot_metal: Set(final_metal),
+        loot_crystal: Set(final_crystal),
+        ships_lost: Set(ships_lost_total),
+        date: Set(Utc::now().naive_utc()),
+        detailed_report: Set(Some(expedition_report.clone())),
+    }.insert(&state.db).await;
 
     // Build response
     Json(json!({

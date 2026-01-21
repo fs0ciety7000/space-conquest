@@ -12,7 +12,7 @@ import ExpeditionZoneV2 from './components/ExpeditionZoneV2';
 import CombatModal from './components/CombatModal';
 import Login from './components/Login';
 import Leaderboard from './components/Leaderboard';
-import AttackModal from './components/AttackModal';
+import AttackModalV2 from './components/AttackModalV2';
 import ReportsTerminal from './components/ReportsTerminal';
 import Defenses from './components/Defenses';
 import PlanetOverview from './components/PlanetOverview';
@@ -619,7 +619,18 @@ export default function App() {
       {/* Modals */}
       <div className="relative z-50">
         {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
-        {targetPlanet && <AttackModal targetName={targetPlanet.name} myFleet={{ hunters: getShipCount(planet, 'light_hunter'), cruisers: getShipCount(planet, 'cruiser'), transporters: getShipCount(planet, 'transporter') }} onConfirm={handleConfirmAttack} onCancel={() => setTargetPlanet(null)} />}
+        {targetPlanet && planetId && (
+          <AttackModalV2
+            planetId={planetId}
+            targetPlanetId={targetPlanet.id}
+            targetName={targetPlanet.name}
+            onSuccess={() => {
+              setTargetPlanet(null);
+              fetchPlanet();
+            }}
+            onCancel={() => setTargetPlanet(null)}
+          />
+        )}
      
         {transportTarget && (
             <TransportModal 

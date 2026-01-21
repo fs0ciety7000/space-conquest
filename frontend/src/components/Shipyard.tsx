@@ -219,7 +219,10 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
         const canAfford = planet.metal_amount >= ship.cost_metal && planet.crystal_amount >= ship.cost_crystal;
 
         const activeItem = shipBuilds.find((sb: any) => sb.ship_key === ship.ship_key);
-        const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.build_end_time).getTime() - now) / 1000)) : null;
+        // Ensure build_end_time is treated as UTC
+        const buildEndTime = activeItem?.build_end_time ?
+          (activeItem.build_end_time.endsWith('Z') ? activeItem.build_end_time : activeItem.build_end_time + 'Z') : null;
+        const timeLeft = buildEndTime ? Math.max(0, Math.floor((new Date(buildEndTime).getTime() - now) / 1000)) : null;
 
         const maxMetal = ship.cost_metal > 0 ? Math.floor(planet.metal_amount / ship.cost_metal) : Infinity;
         const maxCrystal = ship.cost_crystal > 0 ? Math.floor(planet.crystal_amount / ship.cost_crystal) : Infinity;
