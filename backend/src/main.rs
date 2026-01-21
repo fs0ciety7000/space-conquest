@@ -1703,9 +1703,16 @@ async fn attack_handler(
         }
     }
 
-    if payload.hunters > att_planet.light_hunter_count
-        || payload.cruisers > att_planet.cruiser_count
-        || payload.transporters > att_planet.transporter_count {
+    // Load attacker planet data
+    let att_data = match tech_tree::PlanetData::load(&state.db, attacker_id).await {
+        Ok(data) => data,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to load attacker data"}))).into_response(),
+    };
+
+    // Check if attacker has enough ships
+    if !att_data.has_ships("light_hunter", payload.hunters)
+        || !att_data.has_ships("cruiser", payload.cruisers)
+        || !att_data.has_ships("transporter", payload.transporters) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Flotte insuffisante"}))).into_response();
     }
 
@@ -1717,11 +1724,16 @@ async fn attack_handler(
     let travel_time = game_logic::calculate_flight_time(dist, speed_factor);
     let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time);
 
-    let mut att_active: planet::ActiveModel = att_planet.into();
-    att_active.light_hunter_count = Set(att_active.light_hunter_count.unwrap() - payload.hunters);
-    att_active.cruiser_count = Set(att_active.cruiser_count.unwrap() - payload.cruisers);
-    att_active.transporter_count = Set(att_active.transporter_count.unwrap() - payload.transporters);
-    att_active.update(&state.db).await.unwrap();
+    // Deduct ships from attacker using relational tables
+    if let Err(_) = tech_tree::deduct_ships(&state.db, attacker_id, "light_hunter", payload.hunters).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct hunters"}))).into_response();
+    }
+    if let Err(_) = tech_tree::deduct_ships(&state.db, attacker_id, "cruiser", payload.cruisers).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct cruisers"}))).into_response();
+    }
+    if let Err(_) = tech_tree::deduct_ships(&state.db, attacker_id, "transporter", payload.transporters).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct transporters"}))).into_response();
+    }
 
     let new_mission = fleet_mission::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -1791,6 +1803,12 @@ async fn expedition_handler(
         }
     }
 
+    // Load planet data
+    let planet_data = match tech_tree::PlanetData::load(&state.db, id).await {
+        Ok(data) => data,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to load planet data"}))).into_response(),
+    };
+
     // Validation du nombre de vaisseaux
     let hunters = payload.hunters;
     let cruisers = payload.cruisers;
@@ -1798,13 +1816,13 @@ async fn expedition_handler(
     if hunters + cruisers <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
     }
-    if hunters > p.light_hunter_count {
+    if !planet_data.has_ships("light_hunter", hunters) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de chasseurs"}))).into_response();
     }
-    if cruisers > p.cruiser_count {
+    if !planet_data.has_ships("cruiser", cruisers) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de croiseurs"}))).into_response();
     }
-    if recyclers > p.recycler_count {
+    if !planet_data.has_ships("recycler", recyclers) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de recycleurs"}))).into_response();
     }
 
@@ -1854,7 +1872,8 @@ async fn expedition_handler(
 
     let (loot_metal, loot_crystal, loot_deuterium) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
-        let combat_res = game_logic::simulate_combat(total_ships, p.laser_battery_level, &config_clone);
+        let laser_tech = planet_data.tech_level("laser_tech");
+        let combat_res = game_logic::simulate_combat(total_ships, laser_tech, &config_clone);
 
         if combat_res.victory {
             winner = "victory";
@@ -2042,8 +2061,17 @@ async fn expedition_handler(
         (metal, crystal, deuterium)
     };
     
-    active.light_hunter_count = Set(p.light_hunter_count - lost_hunters);
-    active.cruiser_count = Set(p.cruiser_count - lost_cruisers);
+    // Deduct lost ships from relational tables (combat losses)
+    if lost_hunters > 0 {
+        if let Err(_) = tech_tree::deduct_ships(&state.db, id, "light_hunter", lost_hunters).await {
+            eprintln!("Failed to deduct lost hunters from expedition");
+        }
+    }
+    if lost_cruisers > 0 {
+        if let Err(_) = tech_tree::deduct_ships(&state.db, id, "cruiser", lost_cruisers).await {
+            eprintln!("Failed to deduct lost cruisers from expedition");
+        }
+    }
     // Les recycleurs ne participent pas au combat, ils ne sont pas perdus
     // Mais ils sont temporairement indisponibles pendant l'expédition
 
