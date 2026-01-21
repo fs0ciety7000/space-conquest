@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe, UserCircle } from "lucide-react";
+import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe, UserCircle, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
@@ -35,10 +35,11 @@ interface LeaderboardProps {
     currentPlanetId: string;
     onAttack: (id: string, name: string) => void;
     onSpy: (id: string) => void;
+    onTransport: (id: string, name: string, galaxy: number, system: number, position: number) => void;
     onSendMessage: (username: string) => void;
 }
 
-export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMessage }: LeaderboardProps) {
+export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransport, onSendMessage }: LeaderboardProps) {
     const [ranking, setRanking] = useState<RankItem[]>([]);
     const [category, setCategory] = useState<'general' | 'economy' | 'military'>('general');
     const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
@@ -225,7 +226,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                                 </span>
                                             </td>
                                             <td className="p-2 md:p-4">
-                                                {!player.is_me && (
+                                                {!player.is_me ? (
                                                     <div className="flex justify-center gap-1 md:gap-2">
                                                         <Button
                                                             size="icon"
@@ -244,6 +245,27 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onSendMe
                                                             title="Attaquer"
                                                         >
                                                             <Crosshair size={12} className="md:w-3.5 md:h-3.5" />
+                                                        </Button>
+                                                        <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-emerald-500/20 hover:text-emerald-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
+                                                            onClick={() => onTransport(planet.id, planet.name, planet.galaxy, planet.system, planet.position)}
+                                                            title="Ravitailler"
+                                                        >
+                                                            <Truck size={12} className="md:w-3.5 md:h-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex justify-center gap-1 md:gap-2">
+                                                        <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-emerald-500/20 hover:text-emerald-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
+                                                            onClick={() => onTransport(planet.id, planet.name, planet.galaxy, planet.system, planet.position)}
+                                                            title="Ravitailler"
+                                                        >
+                                                            <Truck size={12} className="md:w-3.5 md:h-3.5" />
                                                         </Button>
                                                     </div>
                                                 )}
