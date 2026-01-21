@@ -779,65 +779,73 @@ export default function App() {
         )}
 
         <main className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent">
-            {/* Announcement Banner */}
-            <AnnouncementBanner />
+            {/* TechTree full screen mode - render outside container */}
+            {activeTab === 'tech' ? (
+              <div className="h-full w-full">
+                <TechTree planet={planet} onUpdate={fetchPlanet} />
+              </div>
+            ) : (
+              <>
+                {/* Announcement Banner */}
+                <AnnouncementBanner />
 
-            <div className="p-3 md:p-4 lg:p-8">
-              {/* BuildQueue en haut si actif */}
-              {buildQueueItems.length > 0 && (
-                <div className="max-w-7xl mx-auto mb-6">
-                  <BuildQueue items={buildQueueItems} />
+                <div className="p-3 md:p-4 lg:p-8">
+                  {/* BuildQueue en haut si actif */}
+                  {buildQueueItems.length > 0 && (
+                    <div className="max-w-7xl mx-auto mb-6">
+                      <BuildQueue items={buildQueueItems} />
+                    </div>
+                  )}
+
+                <div className="max-w-7xl mx-auto pb-4 md:pb-0 min-h-full">
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={activeTab}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                      >
+                        {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
+                        {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} onNavigateTransport={handlePrepareTransport} />}
+                        {activeTab === 'myplanets' && <MyPlanets currentPlanetId={planet.id} onSelectPlanet={(id) => { switchPlanet(id); setActiveTab('overview'); }} onNavigateTransport={handlePrepareTransport} />}
+                        {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
+                        {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
+                        {activeTab === 'alliance' && <AllianceView userId={userId!} token={token!} onOpenMessage={handleOpenMessage} />}
+                        {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
+                        {activeTab === 'officers' && <Officers />}
+                        {activeTab === 'stats' && <ProductionStats planet={planet} speedFactor={speedFactor} />}
+
+                        {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
+                        {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}
+                        {activeTab === 'market' && <Marketplace planet={planet} userId={userId!} onUpdate={fetchPlanet} />}
+
+                        {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
+                        {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
+                        {activeTab === 'expedition' && <ExpeditionZoneV2 planet={planet} onAction={fetchPlanet} />}
+
+                        {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
+                        {activeTab === 'changelog' && <Changelog />}
+                        {activeTab === 'settings' && (
+                            <Settings
+                                planet={planet}
+                                onUpdate={fetchPlanet}
+                                onLogout={handleLogout}
+                                soundEnabled={soundEnabled}
+                                onToggleSound={handleToggleSound}
+                                onStartTutorial={handleStartTutorial}
+                                musicVolume={musicVolume}
+                                sfxVolume={sfxVolume}
+                                onVolumeChange={handleVolumeChange}
+                            />
+                        )}
+                        {activeTab === 'admin' && isAdmin && <AdminPanel />}
+                      </motion.div>
+                    </AnimatePresence>
                 </div>
-              )}
-
-            <div className="max-w-7xl mx-auto pb-4 md:pb-0 min-h-full">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeTab}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-                  >
-                    {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
-                    {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} onNavigateTransport={handlePrepareTransport} />}
-                    {activeTab === 'myplanets' && <MyPlanets currentPlanetId={planet.id} onSelectPlanet={(id) => { switchPlanet(id); setActiveTab('overview'); }} onNavigateTransport={handlePrepareTransport} />}
-                    {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
-                    {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
-                    {activeTab === 'alliance' && <AllianceView userId={userId!} token={token!} onOpenMessage={handleOpenMessage} />}
-                    {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
-                    {activeTab === 'officers' && <Officers />}
-                    {activeTab === 'stats' && <ProductionStats planet={planet} speedFactor={speedFactor} />}
-                    
-                    {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
-                    {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}
-                    {activeTab === 'tech' && <TechTree planet={planet} onUpdate={fetchPlanet} />}
-                    {activeTab === 'market' && <Marketplace planet={planet} userId={userId!} onUpdate={fetchPlanet} />}
-
-                    {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
-                    {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
-                    {activeTab === 'expedition' && <ExpeditionZoneV2 planet={planet} onAction={fetchPlanet} />}
-                    
-                    {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
-                    {activeTab === 'changelog' && <Changelog />}
-                    {activeTab === 'settings' && (
-                        <Settings 
-                            planet={planet} 
-                            onUpdate={fetchPlanet} 
-                            onLogout={handleLogout} 
-                            soundEnabled={soundEnabled}
-                            onToggleSound={handleToggleSound}
-                            onStartTutorial={handleStartTutorial}
-                            musicVolume={musicVolume}
-                            sfxVolume={sfxVolume}
-                            onVolumeChange={handleVolumeChange}
-                        />
-                    )}
-                    {activeTab === 'admin' && isAdmin && <AdminPanel />}
-                  </motion.div>
-                </AnimatePresence>
-            </div>
-          </div>
+              </div>
+              </>
+            )}
         </main>
 
         

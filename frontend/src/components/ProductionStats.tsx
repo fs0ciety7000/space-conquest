@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, Zap, Activity, Award, Rocket, Shield,
   Pickaxe, Gem, Droplets, Layers, Target, Trophy,
-  Clock, Percent, AlertCircle, CheckCircle2, XCircle, BarChart3
+  Clock, Percent, AlertCircle, CheckCircle2, XCircle, BarChart3,
+  Crosshair, Ship, Radio
 } from 'lucide-react';
 import { apiUrl } from '@/config/api';
 import { Progress } from '@/components/ui/progress';
@@ -51,6 +52,8 @@ interface Planet {
 export default function ProductionStats({ planet, speedFactor = 10 }: { planet: Planet; speedFactor: number }) {
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
   const [combatLogs, setCombatLogs] = useState<CombatLog[]>([]);
+  const [shipTypes, setShipTypes] = useState<any[]>([]);
+  const [defenseTypes, setDefenseTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<any>({
     production_metal_base: 30,
@@ -97,6 +100,24 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
             return diff <= 72 * 60 * 60 * 1000; // 72 heures
           });
           setCombatLogs(last72h);
+        }
+
+        // Récupérer les types de vaisseaux
+        const shipsRes = await fetch(apiUrl(`/planets/${planet.id}/ship-types`), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (shipsRes.ok) {
+          const shipsData = await shipsRes.json();
+          setShipTypes(shipsData.ship_types || []);
+        }
+
+        // Récupérer les types de défenses
+        const defensesRes = await fetch(apiUrl(`/planets/${planet.id}/defense-types`), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (defensesRes.ok) {
+          const defensesData = await defensesRes.json();
+          setDefenseTypes(defensesData.defense_types || []);
         }
       } catch (error) {
         console.error('Erreur chargement stats:', error);
@@ -651,6 +672,102 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
               </CardContent>
             </Card>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Inventaire de la Flotte */}
+      <Card className="border-blue-500/30 bg-gradient-to-br from-slate-950 to-blue-950/20 overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-cyan-500/5"></div>
+        <CardHeader className="relative z-10">
+          <CardTitle className="flex items-center gap-2 text-blue-300">
+            <Rocket size={20} />
+            Inventaire de la Flotte
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="relative z-10">
+          {shipTypes.length === 0 ? (
+            <div className="text-center py-6 text-slate-500">
+              <Radio className="mx-auto mb-2" size={24} />
+              <p className="text-sm">Aucun vaisseau disponible</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {shipTypes.map((ship: any) => (
+                <div
+                  key={ship.ship_key}
+                  className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-blue-500/30 hover:bg-blue-950/30 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-blue-500/20 border border-blue-500/30">
+                      <Ship className="text-blue-400" size={16} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-white">
+                        {ship.display_name || ship.name}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Attaque: {ship.attack} • Bouclier: {ship.shield}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-black font-mono text-blue-400 group-hover:drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
+                      {ship.current_count || 0}
+                    </div>
+                    <div className="text-[9px] text-slate-500 uppercase">Unités</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Inventaire des Défenses */}
+      <Card className="border-red-500/30 bg-gradient-to-br from-slate-950 to-red-950/20 overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-orange-500/5"></div>
+        <CardHeader className="relative z-10">
+          <CardTitle className="flex items-center gap-2 text-red-300">
+            <Shield size={20} />
+            Systèmes Défensifs
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="relative z-10">
+          {defenseTypes.length === 0 ? (
+            <div className="text-center py-6 text-slate-500">
+              <AlertCircle className="mx-auto mb-2" size={24} />
+              <p className="text-sm">Aucune défense disponible</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {defenseTypes.map((defense: any) => (
+                <div
+                  key={defense.defense_key}
+                  className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-red-500/30 hover:bg-red-950/30 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-red-500/20 border border-red-500/30">
+                      <Crosshair className="text-red-400" size={16} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-white">
+                        {defense.name}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Attaque: {defense.attack} • Bouclier: {defense.shield}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-black font-mono text-red-400 group-hover:drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                      {defense.current_count || 0}
+                    </div>
+                    <div className="text-[9px] text-slate-500 uppercase">Unités</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

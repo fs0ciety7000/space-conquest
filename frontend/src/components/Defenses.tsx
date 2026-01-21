@@ -41,29 +41,30 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
   const [defenseTypes, setDefenseTypes] = useState<DefenseTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchDefenseTypes = async () => {
-      const token = localStorage.getItem('token');
-      try {
-        const response = await fetch(apiUrl(`/planets/${planet.id}/defense-types`), {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const types = data.defense_types || [];
-          setDefenseTypes(types);
-          if (types.length > 0 && !selected) {
-            setSelected(types[0].defense_key);
-          }
+  const fetchDefenseTypes = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(apiUrl(`/planets/${planet.id}/defense-types`), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const types = data.defense_types || [];
+        setDefenseTypes(types);
+        if (types.length > 0 && !selected) {
+          setSelected(types[0].defense_key);
         }
-      } catch (e) {
-        console.error("Failed to fetch defense types:", e);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (e) {
+      console.error("Failed to fetch defense types:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDefenseTypes();
-  }, [planet.id]);
+  }, [planet.id, planet.metal_amount, planet.crystal_amount]);
 
   const getDefenseTheme = (defense_key: string) => {
     // Color themes based on defense type
@@ -104,7 +105,10 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
         setTimeLeft(diff);
         if (diff <= 0) {
           clearInterval(interval);
-          setTimeout(onBuild, 500);
+          setTimeout(() => {
+            onBuild();
+            fetchDefenseTypes(); // Refresh defense counts after build completes
+          }, 500);
         }
       }, 1000);
       return () => clearInterval(interval);
@@ -126,6 +130,8 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
       if (res.ok) {
         toast.success(`Construction lancée : ${qty}x ${selectedDefense.name}`);
         onBuild();
+        // Refresh defense types to update current counts
+        fetchDefenseTypes();
       } else if (res.status === 403) {
         toast.error("Prérequis non satisfaits");
       } else if (res.status === 400) {

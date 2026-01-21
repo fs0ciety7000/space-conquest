@@ -39,6 +39,16 @@ const getLabel = (id: string | null) => {
         armour_tech: "Tech. Protection",
         espionage: "Tech. Espionnage",
         espionage_tech: "Tech. Espionnage",
+        ion_tech: "Tech. Ions",
+        plasma_tech: "Tech. Plasma",
+        shield_tech: "Tech. Boucliers",
+        weapons_tech: "Tech. Armes",
+        computer_tech: "Tech. Ordinateurs",
+        astrophysics: "Astrophysique",
+        // Propulsion
+        combustion_drive: "Propulsion Combustion",
+        impulse_drive: "Réacteur à Impulsion",
+        hyperspace_drive: "Propulsion Hyperespace",
         // Ships
         light_hunter: "Chasseur Léger",
         cruiser: "Croiseur",
@@ -46,17 +56,23 @@ const getLabel = (id: string | null) => {
         transporter: "Transporteur",
         recycler: "Recycleur",
         spy_probe: "Sonde Espionnage",
+        battleship: "Cuirassé",
+        destroyer: "Destructeur",
+        death_star: "Étoile de la Mort",
         // Defenses
         missile_launcher: "Lanceur Missiles",
-        plasma_turret: "Tourelle Plasma"
+        plasma_turret: "Tourelle Plasma",
+        laser_cannon: "Canon Laser",
+        ion_cannon: "Canon à Ions",
+        gauss_cannon: "Canon de Gauss"
     };
     return labels[id] || id;
 };
 
 const getItemType = (id: string) => {
-    if (['light_hunter', 'cruiser', 'colony_ship', 'transporter', 'recycler', 'spy_probe'].includes(id)) return 'fleet';
-    if (['missile_launcher', 'plasma_turret'].includes(id)) return 'defense';
-    if (['research', 'energy_tech', 'laser', 'espionage', 'armour'].includes(id)) return 'tech';
+    if (['light_hunter', 'cruiser', 'colony_ship', 'transporter', 'recycler', 'spy_probe', 'battleship', 'destroyer', 'death_star'].includes(id)) return 'fleet';
+    if (['missile_launcher', 'plasma_turret', 'laser_cannon', 'ion_cannon', 'gauss_cannon'].includes(id)) return 'defense';
+    if (['research', 'energy_tech', 'laser', 'espionage', 'armour', 'laser_tech', 'armour_tech', 'espionage_tech', 'ion_tech', 'plasma_tech', 'shield_tech', 'weapons_tech', 'computer_tech', 'astrophysics', 'combustion_drive', 'impulse_drive', 'hyperspace_drive'].includes(id)) return 'tech';
     return 'building';
 };
 
