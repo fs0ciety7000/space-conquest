@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "planet_buildings")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id: i32,
     pub planet_id: Uuid,
+    #[sea_orm(primary_key)]
     pub building_type_id: i32,
-    pub current_level: i32,
+    pub level: i32,
     pub upgrading_to_level: Option<i32>,
     pub upgrade_end_time: Option<DateTime>,
     pub updated_at: Option<DateTime>,

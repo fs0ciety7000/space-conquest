@@ -479,7 +479,7 @@ pub async fn get_planet_building_level(
         .one(db)
         .await?;
 
-    Ok(planet_building.map(|pb| pb.current_level).unwrap_or(0))
+    Ok(planet_building.map(|pb| pb.level).unwrap_or(0))
 }
 
 /// Get all building levels for a planet as a HashMap
@@ -496,7 +496,7 @@ pub async fn get_all_planet_building_levels(
 
     for pb in planet_buildings {
         if let Some(building) = BuildingType::find_by_id(pb.building_type_id).one(db).await? {
-            result.insert(building.building_key, pb.current_level);
+            result.insert(building.building_key, pb.level);
         }
     }
 
@@ -629,7 +629,7 @@ pub async fn get_planet_defense_count(
         .one(db)
         .await?;
 
-    Ok(planet_defense.map(|pd| pd.defense_count).unwrap_or(0))
+    Ok(planet_defense.map(|pd| pd.count).unwrap_or(0))
 }
 
 /// Get all defense counts for a planet as a HashMap
@@ -646,7 +646,7 @@ pub async fn get_all_planet_defense_counts(
 
     for pd in planet_defenses {
         if let Some(defense_type) = DefenseType::find_by_id(pd.defense_type_id).one(db).await? {
-            result.insert(defense_type.defense_key, pd.defense_count);
+            result.insert(defense_type.defense_key, pd.count);
         }
     }
 
