@@ -8,44 +8,53 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
 
+        // Fix sequence for server_config auto-increment
+        // Previous migrations used hardcoded IDs, so we need to update the sequence
+        db.execute_unprepared(
+            "SELECT setval(pg_get_serial_sequence('server_config', 'id'),
+                          COALESCE((SELECT MAX(id) FROM server_config), 0) + 1,
+                          false)"
+        ).await?;
+
         // Ajouter les configurations de maintenance
-        let _ = db.execute_unprepared(
-            "INSERT INTO server_config (config_key, config_value, updated_at)
-             VALUES ('maintenance_enabled', 'false', NOW())
+        db.execute_unprepared(
+            "INSERT INTO server_config (config_key, config_value)
+             VALUES ('maintenance_enabled', 'false')
              ON CONFLICT (config_key) DO NOTHING"
-        ).await;
+        ).await?;
 
-        let _ = db.execute_unprepared(
-            "INSERT INTO server_config (config_key, config_value, updated_at)
-             VALUES ('maintenance_message_title', 'MAINTENANCE PROGRAMMÉE', NOW())
+        db.execute_unprepared(
+            "INSERT INTO server_config (config_key, config_value)
+             VALUES ('maintenance_message_title', 'MAINTENANCE PROGRAMMÉE')
              ON CONFLICT (config_key) DO NOTHING"
-        ).await;
+        ).await?;
 
-        let _ = db.execute_unprepared(
-            "INSERT INTO server_config (config_key, config_value, updated_at)
+        db.execute_unprepared(
+            "INSERT INTO server_config (config_key, config_value)
              VALUES ('maintenance_message_description',
-                     'Le serveur est en maintenance pour une mise à jour majeure.|Vos comptes et ressources seront préservés.|Merci de votre patience !',
-                     NOW())
+                     'Le serveur est en maintenance pour une mise à jour majeure.
+Vos comptes et ressources seront préservés.
+Merci de votre patience !')
              ON CONFLICT (config_key) DO NOTHING"
-        ).await;
+        ).await?;
 
-        let _ = db.execute_unprepared(
-            "INSERT INTO server_config (config_key, config_value, updated_at)
-             VALUES ('maintenance_estimated_duration', '15-30 minutes', NOW())
+        db.execute_unprepared(
+            "INSERT INTO server_config (config_key, config_value)
+             VALUES ('maintenance_estimated_duration', '15-30 minutes')
              ON CONFLICT (config_key) DO NOTHING"
-        ).await;
+        ).await?;
 
-        let _ = db.execute_unprepared(
-            "INSERT INTO server_config (config_key, config_value, updated_at)
-             VALUES ('maintenance_start_time', '', NOW())
+        db.execute_unprepared(
+            "INSERT INTO server_config (config_key, config_value)
+             VALUES ('maintenance_start_time', '')
              ON CONFLICT (config_key) DO NOTHING"
-        ).await;
+        ).await?;
 
-        let _ = db.execute_unprepared(
-            "INSERT INTO server_config (config_key, config_value, updated_at)
-             VALUES ('maintenance_auto_disable_at', '', NOW())
+        db.execute_unprepared(
+            "INSERT INTO server_config (config_key, config_value)
+             VALUES ('maintenance_auto_disable_at', '')
              ON CONFLICT (config_key) DO NOTHING"
-        ).await;
+        ).await?;
 
         Ok(())
     }
