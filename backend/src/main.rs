@@ -5466,6 +5466,7 @@ async fn tick_handler(
                 "research_completed": stats.research_completed,
                 "ships_completed": stats.ships_completed,
                 "defenses_completed": stats.defenses_completed,
+                "buildings_completed": stats.buildings_completed,
             })).into_response()
         }
         Err(e) => {
