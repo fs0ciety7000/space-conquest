@@ -200,8 +200,34 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const totalDefense = (planet.missile_launcher_count || 0) + (planet.plasma_turret_count || 0);
 
   const fmt = (n: number) => Math.floor(n).toLocaleString();
-  const constructionQueue = planet.constructions || [];
-  const slotsUsed = constructionQueue.length;
+
+  // Combine all construction queues: buildings/tech + ships + defenses
+  const buildingQueue = planet.constructions || [];
+  const shipBuilds = planet.ship_builds || [];
+  const defenseBuilds = planet.defense_builds || [];
+
+  // Create a unified queue with all construction types
+  const constructionQueue = [
+    ...buildingQueue,
+    ...shipBuilds.map((sb: any) => ({
+      id: `ship_${sb.ship_key}`,
+      building_type: sb.ship_key,
+      end_time: sb.build_end_time,
+      level: sb.building_count, // quantity
+      is_ship: true,
+      name: sb.name
+    })),
+    ...defenseBuilds.map((db: any) => ({
+      id: `defense_${db.defense_key}`,
+      building_type: db.defense_key,
+      end_time: db.build_end_time,
+      level: db.building_count, // quantity
+      is_defense: true,
+      name: db.name
+    }))
+  ].sort((a, b) => new Date(a.end_time).getTime() - new Date(b.end_time).getTime());
+
+  const slotsUsed = buildingQueue.length; // Only buildings/tech count towards the 3-slot limit
   const maxSlots = 3;
 
   // --- MISSIONS (Backend enrichit l'objet planet avec ces listes) ---
@@ -419,8 +445,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         {constructionQueue.length > 0 ? (
                             constructionQueue.map((item: any, index: number) => {
                                 const tl = getTimeLeft(item.end_time);
-                                const type = getItemType(item.building_type);
-                                const label = getLabel(item.building_type);
+                                // Determine type based on flags or building_type
+                                const type = item.is_ship ? 'fleet' : item.is_defense ? 'defense' : getItemType(item.building_type);
+                                // Use name if available (for ships/defenses), otherwise lookup label
+                                const label = item.name || getLabel(item.building_type);
                                 const refundPercent = index === 0 ? Math.max(0, Math.min(95, Math.round((tl / 60) * 100))) : 95;
                                 const progress = index === 0 ? Math.max(0, 100 - (tl / 3)) : 0;
 

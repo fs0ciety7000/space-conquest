@@ -130,7 +130,11 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
         });
         if (response.ok) {
           const data = await response.json();
-          setBuildingTypes(data.building_types || []);
+          // Filter out resource buildings (mines and solar plant) as they're shown in Resources page
+          const filtered = (data.building_types || []).filter((b: BuildingTypeInfo) =>
+            !['metal', 'crystal', 'deuterium', 'solar_plant'].includes(b.building_key)
+          );
+          setBuildingTypes(filtered);
         }
       } catch (e) {
         console.error("Failed to fetch building types:", e);
