@@ -180,7 +180,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     prod *= slotBonus;
 
     // Speed factor ET mining speed multiplier
-    prod *= speedFactor * (config?.mining_speed_multiplier || 1.0);
+    prod *= speedFactor * (config.mining_speed_multiplier || 1.0);
 
     return Math.floor(prod);
   };
