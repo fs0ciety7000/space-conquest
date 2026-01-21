@@ -1372,11 +1372,13 @@ async fn get_planet_handler(
         let mut enriched_ship_builds = Vec::new();
         for build in active_ship_builds {
             if let Some(ship_type) = ShipType::find_by_id(build.ship_type_id).one(&state.db).await.unwrap_or(None) {
+                // Format build_end_time as string for consistent parsing
+                let end_time_str = build.build_end_time.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string());
                 enriched_ship_builds.push(json!({
                     "ship_key": ship_type.ship_key,
                     "name": ship_type.display_name,
                     "building_count": build.building_count,
-                    "build_end_time": build.build_end_time,
+                    "build_end_time": end_time_str,
                 }));
             }
         }
@@ -1394,11 +1396,13 @@ async fn get_planet_handler(
         let mut enriched_defense_builds = Vec::new();
         for build in active_defense_builds {
             if let Some(defense_type) = DefenseType::find_by_id(build.defense_type_id).one(&state.db).await.unwrap_or(None) {
+                // Format build_end_time as string for consistent parsing
+                let end_time_str = build.build_end_time.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string());
                 enriched_defense_builds.push(json!({
                     "defense_key": defense_type.defense_key,
                     "name": defense_type.name,
                     "building_count": build.building_count,
-                    "build_end_time": build.build_end_time,
+                    "build_end_time": end_time_str,
                 }));
             }
         }
