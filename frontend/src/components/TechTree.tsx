@@ -4,9 +4,32 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Zap, Target, Atom, Microscope, Cpu, ArrowUpCircle, Sparkles, Eye, ScanLine, Lock, Loader2, AlertTriangle, ChevronRight, Box, Gem, Droplets, TrendingUp, Network, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiUrl } from '@/config/api';
+import { toast } from "sonner";
 import { GameImage } from '@/components/ui/game-image';
 import { getTechImage } from '@/lib/images';
 import TechTreeVisual from './TechTreeVisual';
+
+interface TechRequirement {
+  required_tech_key: string;
+  required_tech_name: string;
+  required_level: number;
+  current_level: number;
+  met: boolean;
+}
+
+interface TechInfo {
+  id: number;
+  tech_key: string;
+  display_name: string;
+  description: string | null;
+  base_cost_metal: number;
+  base_cost_crystal: number;
+  base_cost_deuterium: number;
+  base_time_seconds: number;
+  cost_multiplier: number;
+  current_level: number;
+  requirements: TechRequirement[];
+}
 // --- CONFIGURATION VISUELLE (Design Riche) ---
 const getTechConfig = (id: string, level: number) => {
   const tier = Math.floor(level / 5) + 1; 
@@ -31,52 +54,97 @@ const getBonusInfo = (id: string, level: number) => {
     }
 };
 
-// --- COÛTS ---
-const getCost = (type: string, level: number) => {
-    const factor = Math.pow(2, level - 1);
-    switch(type) {
-        case 'research': return { m: 200 * factor, c: 400 * factor, d: 200 * factor };
-        case 'energy_tech': return { m: 0, c: 800 * factor, d: 400 * factor };
-        case 'laser': return { m: 1500 * factor, c: 500 * factor, d: 100 * factor };
-        case 'espionage': return { m: 200 * factor, c: 1000 * factor, d: 200 * factor };
-        default: return { m: 0, c: 0, d: 0 };
-    }
+// --- COÛTS DYNAMIQUES ---
+const getCost = (tech: TechInfo) => {
+    const level = tech.current_level;
+    const multiplier = tech.cost_multiplier;
+    return {
+        m: Math.floor(tech.base_cost_metal * Math.pow(multiplier, level)),
+        c: Math.floor(tech.base_cost_crystal * Math.pow(multiplier, level)),
+        d: Math.floor(tech.base_cost_deuterium * Math.pow(multiplier, level))
+    };
 };
 
 export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: () => void }) {
   // Timer unique pour rafraîchir l'affichage toutes les secondes
   const [now, setNow] = useState(new Date().getTime());
   const [viewMode, setViewMode] = useState<'grid' | 'tree'>('tree'); // 'tree' par défaut pour montrer la nouvelle feature
+  const [technologies, setTechnologies] = useState<TechInfo[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleResearch = async (type: string) => {
+  useEffect(() => {
+    const fetchTechnologies = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const response = await fetch(apiUrl(`/planets/${planet.id}/tech-tree`), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setTechnologies(data.technologies || []);
+        }
+      } catch (e) {
+        console.error("Failed to fetch technologies:", e);
+        toast.error("Erreur lors du chargement des technologies");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTechnologies();
+  }, [planet.id]);
+
+  const handleResearch = async (tech_key: string) => {
+    const tech = technologies.find(t => t.tech_key === tech_key);
+    if (!tech) return;
+
+    // Check tech requirements
+    const hasUnmetRequirements = tech.requirements.some(req => !req.met);
+    if (hasUnmetRequirements) {
+        toast.error("Prérequis technologiques non satisfaits");
+        return;
+    }
+
     try {
-      const res = await fetch(apiUrl(`/planets/${planet.id}/upgrade/${type}`), { 
+      const res = await fetch(apiUrl(`/planets/${planet.id}/research/${tech_key}`), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      if (res.ok) onUpdate();
-    } catch (e) { console.error(e); }
+      if (res.ok) {
+        toast.success(`Recherche lancée : ${tech.display_name}`);
+        onUpdate();
+      } else if (res.status === 403) {
+        toast.error("Prérequis non satisfaits");
+      } else if (res.status === 400) {
+        toast.error("Ressources insuffisantes");
+      } else if (res.status === 409) {
+        toast.error("Recherche déjà en cours");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erreur lors de la recherche");
+    }
   };
-
-  const techs = [
-    { id: 'research', name: 'Labo de Recherche', lv: planet.research_lab_level ?? 0 },
-    { id: 'energy_tech', name: 'Technologie Énergie', lv: getTechLevel(planet, 'energy_tech') ?? 0 },
-    { id: 'laser', name: 'Batterie Laser', lv: getTechLevel(planet, 'laser_tech') ?? 0 },
-    { id: 'espionage', name: 'Tech. Espionnage', lv: getTechLevel(planet, 'espionage') ?? 0 }
-  ];
 
   // --- LOGIQUE FILE D'ATTENTE MULTIPLE ---
   const queue = planet.constructions || [];
   const isQueueFull = queue.length >= 3;
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-slate-400 animate-pulse">Chargement des technologies...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      
+
       {/* HEADER (Design Riche) */}
       <header className="relative pl-6 py-2 overflow-hidden rounded-r-xl border-l-4 border-purple-500 bg-gradient-to-r from-purple-900/20 to-transparent">
         <div className="absolute -left-2 top-0 bottom-0 w-1 bg-purple-400 blur-[2px]"></div>
@@ -128,19 +196,22 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
       {/* GRID Vue classique */}
       {viewMode === 'grid' && (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {techs.map(t => {
-          const style = getTechConfig(t.id, t.lv);
+        {technologies.map(t => {
+          const style = getTechConfig(t.tech_key, t.current_level);
           const Icon = style.icon;
           const SubIcon = style.subIcon;
-          
+
           // --- LOGIQUE ITEM ACTIF ---
           // On cherche si CETTE technologie est dans la file
-          const activeItem = queue.find((q: any) => q.building_type === t.id);
+          const activeItem = queue.find((q: any) => q.building_type === t.tech_key);
           const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
           const isResearchingThis = activeItem !== undefined;
 
-          const cost = getCost(t.id, t.lv + 1);
-          const bonus = getBonusInfo(t.id, t.lv);
+          // Check prerequisites
+          const locked = t.requirements.some(req => !req.met);
+
+          const cost = getCost(t);
+          const bonus = getBonusInfo(t.tech_key, t.current_level);
           const canAfford = planet.metal_amount >= cost.m && planet.crystal_amount >= cost.c && planet.deuterium_amount >= cost.d;
           
           return (
@@ -154,8 +225,8 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
 
                 {/* Image de la technologie */}
                 <GameImage
-                  src={getTechImage(t.id)}
-                  alt={t.name}
+                  src={getTechImage(t.tech_key)}
+                  alt={t.display_name}
                   className="w-full h-36 mb-4"
                   fallbackIcon={<Icon className={`${style.color} w-20 h-20`} />}
                   loading="lazy"
@@ -168,7 +239,7 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
                             <div className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${style.color}`}>
                                 <SubIcon size={10} /> {style.tierLabel}
                             </div>
-                            <h3 className="text-lg font-black uppercase text-white italic tracking-wide break-words leading-none">{t.name}</h3>
+                            <h3 className="text-lg font-black uppercase text-white italic tracking-wide break-words leading-none">{t.display_name}</h3>
                         </div>
                         <div className={`p-3 rounded-xl bg-black/50 border border-white/5 ${style.glow} ${isResearchingThis ? 'animate-pulse' : ''} group-hover:scale-110 transition-transform duration-300`}>
                             <Icon size={24} className={`${style.color} ${isResearchingThis ? 'animate-spin-slow' : ''}`} />
@@ -236,16 +307,18 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
                         </Button>
                     ) : (
                         // Bouton "Lancer" avec effet SWIPE original
-                        <Button 
-                            onClick={() => handleResearch(t.id)} 
-                            className={`w-full h-12 font-black uppercase tracking-[0.2em] text-[10px] transition-all relative overflow-hidden group/btn bg-black hover:bg-slate-900 border border-white/10 hover:border-white/30 text-white shadow-lg`}
+                        <Button
+                            onClick={() => handleResearch(t.tech_key)}
+                            disabled={locked}
+                            className={`w-full h-12 font-black uppercase tracking-[0.2em] text-[10px] transition-all relative overflow-hidden group/btn ${locked ? 'bg-red-950/20 border-red-900/50 text-red-500 grayscale cursor-not-allowed' : 'bg-black hover:bg-slate-900 border border-white/10 hover:border-white/30 text-white shadow-lg'}`}
                         >
                             <div className={`absolute inset-0 opacity-0 group-hover/btn:opacity-10 ${style.bg.replace('/10', '')} transition-opacity`}></div>
                             {/* Effet Swipe restauré */}
                             <div className={`absolute top-0 bottom-0 w-2 bg-white/20 blur-md -skew-x-12 -left-10 group-hover/btn:left-[120%] transition-all duration-700`}></div>
-                            
+
                             <span className="flex items-center gap-2 relative z-10">
-                                <ArrowUpCircle size={14} className={style.color} /> Rechercher Niv. {t.lv + 1}
+                                {locked ? <Lock size={14} /> : <ArrowUpCircle size={14} className={style.color} />}
+                                {locked ? 'Prérequis Non Satisfaits' : `Rechercher Niv. ${t.current_level + 1}`}
                             </span>
                         </Button>
                     )}

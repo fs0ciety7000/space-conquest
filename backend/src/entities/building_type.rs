@@ -16,7 +16,7 @@ pub struct Model {
     pub base_cost_crystal: i32,
     pub base_cost_deuterium: i32,
     pub base_time_seconds: i32,
-    pub cost_multiplier: f32,
+    pub cost_multiplier: f64,
     pub description: Option<String>,
     pub created_at: Option<DateTime>,
 }

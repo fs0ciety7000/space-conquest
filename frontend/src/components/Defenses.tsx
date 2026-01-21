@@ -26,7 +26,7 @@ interface DefenseTypeInfo {
   base_cost_metal: number;
   base_cost_crystal: number;
   base_cost_deuterium: number;
-  base_time_seconds: number;
+  build_time_seconds: number;
   attack: number;
   shield: number;
   hull: number;
@@ -201,7 +201,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                    <div className="text-[9px] font-mono text-slate-400">
                      {Math.floor(defense.base_cost_metal).toLocaleString()}M {defense.base_cost_crystal > 0 && `/ ${Math.floor(defense.base_cost_crystal).toLocaleString()}C`}
                    </div>
-                   <span className="text-[10px] font-mono text-slate-500">{defense.base_time_seconds}s / unité</span>
+                   <span className="text-[10px] font-mono text-slate-500">{defense.build_time_seconds}s / unité</span>
                  </div>
               </button>
             );
