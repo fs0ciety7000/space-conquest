@@ -1877,8 +1877,10 @@ async fn attack_handler(
         (att_planet.galaxy, att_planet.system, att_planet.position),
         (target_planet.galaxy, target_planet.system, target_planet.position)
     );
-    let speed_factor = state.config.read().unwrap().speed_factor;
-    let travel_time = game_logic::calculate_flight_time(dist, speed_factor);
+    let config = state.config.read().unwrap();
+    let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
+    let travel_time = game_logic::calculate_flight_time(dist, flight_speed);
+    drop(config); // Release lock
     let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time);
 
     // Deduct ships from attacker using relational tables
@@ -2033,8 +2035,10 @@ async fn attack_v2_handler(
         (att_planet.galaxy, att_planet.system, att_planet.position),
         (target_planet.galaxy, target_planet.system, target_planet.position)
     );
-    let speed_factor = state.config.read().unwrap().speed_factor;
-    let travel_time = game_logic::calculate_flight_time(dist, speed_factor);
+    let config = state.config.read().unwrap();
+    let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
+    let travel_time = game_logic::calculate_flight_time(dist, flight_speed);
+    drop(config); // Release lock
     let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time);
 
     // Serialize fleet to JSON
@@ -3242,7 +3246,8 @@ async fn transport_handler(
         (source_model.galaxy, source_model.system, source_model.position),
         (target_model.galaxy, target_model.system, target_model.position)
     );
-    let flight_duration = game_logic::calculate_flight_time(dist, config_clone.speed_factor);
+    let flight_speed = config_clone.get_config("flight_speed_multiplier", 5.0);
+    let flight_duration = game_logic::calculate_flight_time(dist, flight_speed);
     let arrival = Utc::now().naive_utc() + Duration::seconds(flight_duration);
 
     let mut source: planet::ActiveModel = source_model.into();

@@ -1042,7 +1042,7 @@ pub fn calculate_distance(start: (i32, i32, i32), end: (i32, i32, i32)) -> f64 {
     5.0 // Même planète
 }
 
-pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
+pub fn calculate_flight_time(dist: f64, flight_speed_multiplier: f64) -> i64 {
     // Calculate base time based on distance ranges for more realistic travel times
     let base_time = if dist < 1000.0 {
         // Same system, different position: 30s to 2 minutes
@@ -1055,8 +1055,9 @@ pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
         dist / 2.0 + 500.0
     };
 
-    // Apply speed factor (typically 500 = 5x speed)
-    let seconds = (base_time * 100.0) / speed_factor;
+    // Apply flight speed multiplier (higher = faster travel)
+    // Default 5.0 = 5x speed (same as original with speed_factor=500)
+    let seconds = base_time / flight_speed_multiplier;
     seconds.max(5.0) as i64
 }
 

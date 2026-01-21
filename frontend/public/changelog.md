@@ -1,5 +1,153 @@
 # Changelog - Space Conquest
 
+## [2.2.1] - 2026-01-21 - Rapports de Combat Améliorés & Système d'Attaque Dynamique
+
+### 🎯 Nouvelles Fonctionnalités
+
+#### 🎬 Intégration du Replay de Combat
+**Feature**: Visualisation animée des combats avec le composant CombatReplay
+
+**Détails**:
+- Bouton "Voir le replay" ajouté dans tous les rapports de combat détaillés
+- Compatible avec tous les types de rapports:
+  - Combats PvP (attaque/défense)
+  - Expéditions
+  - Conquêtes de planètes
+- Affichage modal remplaçant le rapport détaillé lors du visionnage
+
+**Fichiers**:
+- `frontend/src/components/CombatModal.tsx` - Ajout bouton replay et logique d'affichage
+
+---
+
+#### 📊 Composition Détaillée des Flottes dans les Rapports
+**Feature**: Affichage complet de la composition des flottes engagées dans les combats
+
+**Détails**:
+- Nouvelle section "Composition des flottes" dans CombatModal
+- Affichage pour chaque vaisseau:
+  - Nombre initial
+  - Nombre restant (affiché en grand)
+  - Pertes avec pourcentage
+  - Nom français du vaisseau (Chasseur Léger, Croiseur, etc.)
+- Deux colonnes: Flotte Attaquante (rouge) et Flotte Défensive (bleue)
+- Mapping complet des noms de vaisseaux et défenses en français
+
+**Backend**:
+- Ajout de `attacker_initial`, `defender_initial` dans `PvpCombatReport`
+- Inclusion des flottes initiales dans `detailed_report` JSON
+
+**Fichiers**:
+- `backend/src/combat.rs` - Structure PvpCombatReport étendue
+- `backend/src/main.rs` - Inclusion des flottes dans les rapports
+- `frontend/src/components/CombatModal.tsx` - Composant FleetComposition
+
+---
+
+#### ⚔️ Système d'Attaque PvP Dynamique
+**Feature**: Attaque avec tous les types de vaisseaux disponibles
+
+**Avant**: Limité à Chasseurs Légers, Croiseurs et Transporteurs
+
+**Maintenant**: Sélection dynamique de TOUS les types de vaisseaux
+- Cuirassés
+- Destroyers
+- Sondes d'Espionnage
+- Recycleurs
+- Vaisseaux de Colonisation
+- Et tous les futurs vaisseaux ajoutés au jeu
+
+**Interface AttackModalV2**:
+- Chargement dynamique depuis `/planets/:id/ship-types`
+- Contrôles +/- et bouton MAX pour chaque type
+- Affichage de:
+  - Nombre de vaisseaux total
+  - Puissance de feu totale
+  - Capacité cargo totale
+- Envoi vers `/attack/v2` avec format `{fleet: {ship_key: count}}`
+
+**Fichiers**:
+- `frontend/src/components/AttackModalV2.tsx` (nouveau)
+- `frontend/src/App.tsx` - Utilisation d'AttackModalV2
+
+---
+
+### 🐛 Corrections
+
+#### ⏱️ Correction des Timers de Construction
+**Problème**: Les timers affichaient "0s" au lieu du temps restant réel
+
+**Cause**: Problème de fuseau horaire - `build_end_time` n'avait pas le suffixe 'Z' pour UTC
+
+**Solution**:
+```typescript
+const buildEndTime = activeItem.build_end_time.endsWith('Z')
+  ? activeItem.build_end_time
+  : activeItem.build_end_time + 'Z';
+```
+
+**Composants corrigés**:
+- `frontend/src/components/Shipyard.tsx` - Timers de vaisseaux
+- `frontend/src/components/Defenses.tsx` - Timers de défenses
+
+---
+
+#### 📋 Rapports d'Expédition dans le Listing
+**Problème**: Les rapports d'expédition V2 n'apparaissaient pas dans le listing des rapports
+
+**Solution**: Ajout de la création de `combat_log` dans `expedition_v2_handler`
+
+**Détails**:
+- Insertion dans la table `combat_log` avec:
+  - `mission_type: "expedition"`
+  - `result: "victory" | "defeat" | "calm"`
+  - `detailed_report` contenant logs, loot, pertes
+- Calcul des pertes de vaisseaux (initial vs restant)
+
+**Fichiers**:
+- `backend/src/main.rs` - expedition_v2_handler
+
+---
+
+#### 🔢 Calcul des Pertes de Vaisseaux
+**Amélioration**: Calcul précis des pertes dans les expéditions
+
+**Avant**: `ships_lost: 0` (hardcodé)
+
+**Maintenant**: Calcul réel par comparaison:
+```rust
+for (ship_key, &initial_count) in &payload.fleet {
+    let remaining = combat_report.remaining_ships.get(ship_key).unwrap_or(0);
+    ships_lost_total += initial_count - remaining;
+}
+```
+
+**Fichiers**:
+- `backend/src/main.rs` - expedition_v2_handler
+
+---
+
+### 🎨 Améliorations Visuelles
+
+#### Noms de Vaisseaux en Français
+Mapping complet ajouté dans CombatModal:
+- Chasseur Léger
+- Croiseur
+- Transporteur
+- Sonde d'Espionnage
+- Recycleur
+- Vaisseau de Colonisation
+- Cuirassé
+- Destructeur
+- Étoile de la Mort
+- Lanceur de Missiles
+- Tourelle à Plasma
+- Canon Laser
+- Canon à Ions
+- Canon de Gauss
+
+---
+
 ## [2.2.0] - 2026-01-20 - Configuration Serveur Complète & Correctifs Production
 
 ### 🎯 Nouvelles Fonctionnalités
