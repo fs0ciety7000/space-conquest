@@ -78,7 +78,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const fetchPlayerPlanets = async () => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(apiUrl('/user/planets'), {
+            const res = await fetch(apiUrl('/my-planets'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
