@@ -1,1 +1,9 @@
 .VSCodeCounter
+
+# Migration files with credentials
+.env.migration
+
+# Database backups (in root only)
+/lastbackup.sql
+/production_backup_*.sql
+/spacedb_backup_*.sql
