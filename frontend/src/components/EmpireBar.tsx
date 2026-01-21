@@ -113,7 +113,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             });
             if (res.ok) {
                 const data = await res.json();
-                setMyPlanets(data);
+                // Le backend renvoie { planets: [...], colony_count: ..., ... }
+                const planetsData = data.planets || data;
+                setMyPlanets(planetsData);
             }
         } catch (e) {
             console.error("Erreur chargement planètes", e);

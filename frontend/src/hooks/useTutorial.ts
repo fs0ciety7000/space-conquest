@@ -9,12 +9,14 @@ export function useTutorial() {
   const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
+    // Tutorial désactivé - ne s'affiche plus automatiquement
+    // Les joueurs peuvent toujours le relancer depuis les paramètres si besoin
     const completedVersion = localStorage.getItem('tutorial_completed');
-    
-    // ✅ Afficher uniquement si jamais complété OU si version différente
-    if (!completedVersion || completedVersion !== TUTORIAL_VERSION) {
-      setShowTutorial(true);
-    }
+
+    // ❌ DÉSACTIVÉ - Afficher uniquement si jamais complété OU si version différente
+    // if (!completedVersion || completedVersion !== TUTORIAL_VERSION) {
+    //   setShowTutorial(true);
+    // }
   }, []);
 
   const startTutorial = () => {

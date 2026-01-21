@@ -59,25 +59,28 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
       });
       if (res.ok) {
         const data = await res.json();
+        // Le backend renvoie maintenant { planets: [...], colony_count: ..., max_colonies: ..., astrophysics_level: ... }
+        const planetsData = data.planets || data;
+
         // Vérifier si on a reçu des données valides avec tous les champs nécessaires
-        if (Array.isArray(data) && data.length > 0 && data[0].metal_amount !== undefined) {
-          const planetsWithMeta = data.map((p: Planet) => ({
+        if (Array.isArray(planetsData) && planetsData.length > 0 && planetsData[0].metal_amount !== undefined) {
+          const planetsWithMeta = planetsData.map((p: Planet) => ({
             ...p,
             is_current: p.id === currentPlanetId
           }));
-          // Trier: planète mère (1:1:1) en premier, puis le reste
+          // Trier: planète mère en premier (is_homeworld ou 1:1:1), puis le reste
           const sortedPlanets = planetsWithMeta.sort((a: Planet, b: Planet) => {
-            const aIsHome = a.galaxy === 1 && a.system === 1 && a.position === 1;
-            const bIsHome = b.galaxy === 1 && b.system === 1 && b.position === 1;
+            const aIsHome = a.is_homeworld || (a.galaxy === 1 && a.system === 1 && a.position === 1);
+            const bIsHome = b.is_homeworld || (b.galaxy === 1 && b.system === 1 && b.position === 1);
             if (aIsHome) return -1;
             if (bIsHome) return 1;
             return 0;
           });
           setPlanets(sortedPlanets);
-        } else if (Array.isArray(data) && data.length > 0) {
+        } else if (Array.isArray(planetsData) && planetsData.length > 0) {
           // Le backend retourne des données partielles, on doit récupérer les détails complets
           // Pour l'instant, on affiche ce qu'on a
-          const planetsWithDefaults = data.map((p: any) => ({
+          const planetsWithDefaults = planetsData.map((p: any) => ({
             ...p,
             is_current: p.id === currentPlanetId,
             // Valeurs par défaut si manquantes
@@ -101,10 +104,10 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
             plasma_turret_count: p.plasma_turret_count ?? 0,
             energy_tech_level: getTechLevel(p, 'energy_tech'),
           }));
-          // Trier: planète mère (1:1:1) en premier, puis le reste
+          // Trier: planète mère en premier (is_homeworld ou 1:1:1), puis le reste
           const sortedPlanets = planetsWithDefaults.sort((a: any, b: any) => {
-            const aIsHome = a.galaxy === 1 && a.system === 1 && a.position === 1;
-            const bIsHome = b.galaxy === 1 && b.system === 1 && b.position === 1;
+            const aIsHome = a.is_homeworld || (a.galaxy === 1 && a.system === 1 && a.position === 1);
+            const bIsHome = b.is_homeworld || (b.galaxy === 1 && b.system === 1 && b.position === 1);
             if (aIsHome) return -1;
             if (bIsHome) return 1;
             return 0;
