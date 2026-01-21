@@ -69,7 +69,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
     production_metal_growth: 1.1,
     production_crystal_growth: 1.1,
     production_deuterium_growth: 1.05,
-    energy_tech_bonus: 0.01,
+    energy_tech_bonus: 0.10,
     energy_solar_base: 20,
     energy_solar_growth: 1.1,
     energy_mine_consumption_base: 10,
