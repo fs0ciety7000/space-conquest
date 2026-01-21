@@ -96,6 +96,8 @@ pub fn get_unit_cost(unit_type: &str, config: &ServerConfigCache) -> (f64, f64) 
 }
 
 // --- VÉRIFICATION DES PRÉREQUIS ---
+// DEPRECATED: Use tech_tree::can_build_ship() or tech_tree::can_research_tech() instead
+// This function uses old column-based tech levels and will be removed in future versions
 pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<(), String> {
     match item_type {
         // 🔬 Technologies de Base
@@ -1060,7 +1062,10 @@ pub fn calculate_flight_time(dist: f64, speed_factor: f64) -> i64 {
 
 
 // 📊 CALCUL DES POINTS D'UNE PLANÈTE (utilisé par leaderboard et profil)
-pub fn calculate_planet_points(p: &crate::entities::planet::Model, config: &ServerConfigCache) -> (i32, i32, i32) {
+// NEW: Now uses tech tree system for technologies and ships
+pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &sea_orm::DatabaseConnection, config: &ServerConfigCache) -> (i32, i32, i32) {
+    use crate::tech_tree;
+
     // Points économie (bâtiments) - DRASTIQUEMENT réduit
     let buildings =
         (p.metal_mine_level * p.metal_mine_level * 10) +      // 50 → 10
@@ -1071,58 +1076,133 @@ pub fn calculate_planet_points(p: &crate::entities::planet::Model, config: &Serv
         (p.research_lab_level * p.research_lab_level * 50) +  // 300 → 50
         (p.hangar_level * p.hangar_level * 35);               // 180 → 35
 
-    // Points recherche (technologies) - DRASTIQUEMENT réduit
-    let research =
-        (p.energy_tech_level * p.energy_tech_level * 50) +      // 400 → 50
-        (p.laser_battery_level * p.laser_battery_level * 40) +  // 350 → 40
-        (p.espionage_tech_level * p.espionage_tech_level * 60) + // 500 → 60
-        (p.armour_tech_level * p.armour_tech_level * 70);       // 600 → 70
+    // Points recherche (technologies) - Use tech tree system DYNAMICALLY
+    let tech_levels = tech_tree::get_all_planet_tech_levels(db, p.id)
+        .await
+        .unwrap_or_default();
 
-    // Points militaire (flotte + défenses) - DRASTIQUEMENT réduit
-    let military =
-        (p.light_hunter_count * 5) +            // 40 → 5
-        (p.cruiser_count * 30) +                // 270 → 30
-        (p.recycler_count * 20) +               // 160 → 20
-        (p.transporter_count * 10) +            // 80 → 10
-        (p.spy_probe_count * 1) +               // 10 → 1
-        (p.colony_ship_count * 40) +            // 300 → 40
-        (p.missile_launcher_count * 2) +        // 20 → 2
-        (p.plasma_turret_count * 100);          // 1000 → 100
+    // Dynamic tech points calculation: level² × base_points
+    // Base points vary by tech importance (50-100 per tech)
+    let tech_base_points: std::collections::HashMap<&str, i32> = [
+        ("energy_tech", 50),
+        ("laser_tech", 40),
+        ("espionage", 60),
+        ("armour_tech", 70),
+        ("ion_tech", 80),
+        ("plasma_tech", 100),
+        ("shield_tech", 75),
+        ("weapons_tech", 85),
+        ("computer_tech", 45),
+        ("combustion_drive", 55),
+        ("impulse_drive", 65),
+        ("hyperspace_drive", 90),
+        ("astrophysics", 95),
+        ("logistics_tech", 50),
+        ("intergalactic_network", 100),
+    ].iter().copied().collect();
+
+    let mut research = 0;
+    for (tech_key, level) in &tech_levels {
+        let base = tech_base_points.get(tech_key.as_str()).unwrap_or(&50); // Default 50 for unknown techs
+        research += level * level * base;
+    }
+
+    // Fallback to old system if no tech tree data
+    let research = if research == 0 {
+        (p.energy_tech_level * p.energy_tech_level * 50) +
+        (p.laser_battery_level * p.laser_battery_level * 40) +
+        (p.espionage_tech_level * p.espionage_tech_level * 60) +
+        (p.armour_tech_level * p.armour_tech_level * 70)
+    } else {
+        research
+    };
+
+    // Points militaire (flotte + défenses) - Use tech tree system DYNAMICALLY
+    let ship_counts = tech_tree::get_all_planet_ship_counts(db, p.id)
+        .await
+        .unwrap_or_default();
+
+    // Dynamic ship points calculation based on ship strength
+    let ship_base_points: std::collections::HashMap<&str, i32> = [
+        // Basic ships
+        ("light_hunter", 5),
+        ("cruiser", 30),
+        ("recycler", 20),
+        ("transporter", 10),
+        ("spy_probe", 1),
+        ("colony_ship", 40),
+        // Advanced ships (EXPANSION 2.0)
+        ("heavy_hunter", 15),
+        ("battleship", 80),
+        ("bomber", 100),
+        ("destroyer", 120),
+        ("death_star", 500),
+        // Utility ships
+        ("solar_satellite", 2),
+    ].iter().copied().collect();
+
+    let mut fleet_points = 0;
+    for (ship_key, count) in &ship_counts {
+        let base = ship_base_points.get(ship_key.as_str()).unwrap_or(&10); // Default 10 for unknown ships
+        fleet_points += count * base;
+    }
+
+    // Add defense points
+    let defense_points = (p.missile_launcher_count * 2 + p.plasma_turret_count * 100) as i32;
+    let military = fleet_points + defense_points;
+
+    // Fallback to old system if no ship data
+    let military = if fleet_points == 0 && (p.light_hunter_count > 0 || p.cruiser_count > 0) {
+        (p.light_hunter_count * 5) +
+        (p.cruiser_count * 30) +
+        (p.recycler_count * 20) +
+        (p.transporter_count * 10) +
+        (p.spy_probe_count * 1) +
+        (p.colony_ship_count * 40) +
+        defense_points
+    } else {
+        military
+    };
 
     // Points production (basé sur la production horaire)
     // Calculer la production horaire avec tous les bonus
+    let energy_tech_level = *tech_levels.get("energy_tech").unwrap_or(&0);
+    let plasma_tech_level = *tech_levels.get("plasma_tech").unwrap_or(&0);
+
+    // Fallback to old columns if no tech tree data
+    let energy_tech_level = if energy_tech_level == 0 { p.energy_tech_level } else { energy_tech_level };
+
     let energy_ratio = calculate_energy_ratio(
         p.solar_plant_level,
-        p.energy_tech_level,
+        energy_tech_level,
         p.metal_mine_level,
         p.crystal_mine_level,
         p.deuterium_mine_level,
         config
     );
 
-    // Production de base avec bonus tech et énergie (slots non pris en compte ici car on n'a pas accès)
-    // Note: plasma_tech_level set to 0 as it's not in the current planet model yet
+    // Production de base avec bonus tech et énergie
     let prod_metal = calculate_resource_production(
         ResourceType::Metal,
         p.metal_mine_level,
-        p.energy_tech_level,
-        0, // plasma_tech_level - will be added to planet model
+        energy_tech_level,
+        plasma_tech_level,
         energy_ratio,
         config
     );
     let prod_crystal = calculate_resource_production(
         ResourceType::Crystal,
         p.crystal_mine_level,
-        p.energy_tech_level,
-        0, // plasma_tech_level - will be added to planet model
+        energy_tech_level,
+        plasma_tech_level,
         energy_ratio,
         config
     );
     let prod_deuterium = calculate_resource_production(
         ResourceType::Deuterium,
         p.deuterium_mine_level,
-        p.energy_tech_level,
-        0, // plasma_tech_level - will be added to planet model
+        energy_tech_level,
+        plasma_tech_level,
         energy_ratio,
         config
     );
