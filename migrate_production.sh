@@ -131,9 +131,9 @@ echo ""
 
 # Step 5: Run fresh migrations
 echo -e "${YELLOW}Step 5: Running fresh migrations...${NC}"
-cd backend
-cargo run --release --bin migration -- fresh
-cd ..
+cd backend/migration
+cargo run --release -- fresh
+cd ../..
 echo -e "${GREEN}✓ All migrations applied${NC}"
 echo ""
 
