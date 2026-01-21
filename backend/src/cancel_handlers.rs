@@ -14,7 +14,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::entities::{prelude::*, planet, planet_defense, planet_ship, defense_type, ship_type};
+use crate::entities::{prelude::*, planet, planet_defense, planet_ship};
 use crate::AppState;
 
 /// Cancel an ongoing ship build
@@ -28,7 +28,7 @@ pub async fn cancel_ship_build_handler(
     Path((planet_id, ship_key)): Path<(Uuid, String)>,
     State(state): State<AppState>,
 ) -> Response {
-    use entities::ship_type;
+    use crate::entities::ship_type;
 
     // Get planet
     let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
@@ -129,7 +129,7 @@ pub async fn cancel_defense_build_handler(
     Path((planet_id, defense_key)): Path<(Uuid, String)>,
     State(state): State<AppState>,
 ) -> Response {
-    use entities::defense_type;
+    use crate::entities::defense_type;
 
     // Get planet
     let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
