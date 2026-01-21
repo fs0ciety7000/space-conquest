@@ -94,17 +94,24 @@ echo ""
 echo -e "${YELLOW}Step 3: Calculating planet resource averages per user...${NC}"
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d space_db_old -t -A -F"," -c \
 "SELECT
-    owner_id,
-    ROUND(AVG(COALESCE(metal_amount, 0)))::bigint as avg_metal,
-    ROUND(AVG(COALESCE(crystal_amount, 0)))::bigint as avg_crystal,
-    ROUND(AVG(COALESCE(deuterium_amount, 0)))::bigint as avg_deuterium,
-    ROUND(AVG(COALESCE(metal_mine_level, 1)))::int as avg_metal_mine,
-    ROUND(AVG(COALESCE(crystal_mine_level, 1)))::int as avg_crystal_mine,
-    ROUND(AVG(COALESCE(deuterium_mine_level, 1)))::int as avg_deuterium_mine,
-    ROUND(AVG(COALESCE(solar_plant_level, 0)))::int as avg_solar_plant,
-    MIN(name) as first_planet_name
-FROM planet
-GROUP BY owner_id" > /tmp/planet_averages.csv
+    p1.owner_id,
+    ROUND(AVG(COALESCE(p2.metal_amount, 0)))::bigint as avg_metal,
+    ROUND(AVG(COALESCE(p2.crystal_amount, 0)))::bigint as avg_crystal,
+    ROUND(AVG(COALESCE(p2.deuterium_amount, 0)))::bigint as avg_deuterium,
+    ROUND(AVG(COALESCE(p2.metal_mine_level, 1)))::int as avg_metal_mine,
+    ROUND(AVG(COALESCE(p2.crystal_mine_level, 1)))::int as avg_crystal_mine,
+    ROUND(AVG(COALESCE(p2.deuterium_mine_level, 1)))::int as avg_deuterium_mine,
+    ROUND(AVG(COALESCE(p2.solar_plant_level, 0)))::int as avg_solar_plant,
+    (
+        SELECT name
+        FROM planet
+        WHERE owner_id = p1.owner_id
+        ORDER BY created_at ASC NULLS LAST, id ASC
+        LIMIT 1
+    ) as first_planet_name
+FROM (SELECT DISTINCT owner_id FROM planet) p1
+LEFT JOIN planet p2 ON p1.owner_id = p2.owner_id
+GROUP BY p1.owner_id" > /tmp/planet_averages.csv
 
 PLANET_DATA_COUNT=$(wc -l < /tmp/planet_averages.csv)
 echo -e "${GREEN}✓ Calculated averages for $PLANET_DATA_COUNT users${NC}"
