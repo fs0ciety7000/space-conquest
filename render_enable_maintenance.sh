@@ -13,6 +13,29 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# Usage function
+usage() {
+    echo -e "${CYAN}Usage:${NC}"
+    echo "  $0 [TITLE] [DURATION] [DESCRIPTION]"
+    echo ""
+    echo -e "${CYAN}Arguments:${NC}"
+    echo "  TITLE        - Titre du message de maintenance (défaut: 'MAINTENANCE PROGRAMMÉE')"
+    echo "  DURATION     - Durée estimée (défaut: '15-30 minutes')"
+    echo "  DESCRIPTION  - Description détaillée de la maintenance (multilignes supportées)"
+    echo ""
+    echo -e "${CYAN}Exemples:${NC}"
+    echo "  $0"
+    echo "  $0 'MISE À JOUR' '1 heure'"
+    echo "  $0 'MISE À JOUR' '1 heure' 'Ajout de nouvelles fonctionnalités'"
+    echo ""
+    exit 0
+}
+
+# Check for help flag
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    usage
+fi
+
 # Load environment variables
 if [ ! -f .env.migration ]; then
     echo -e "${RED}❌ ERROR: .env.migration file not found!${NC}"
