@@ -41,6 +41,10 @@ use backend::{
     auth, game_logic, combat, entities, config, admin,
     messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, AppState
 };
+
+// Cancel handlers for ship/defense builds
+mod cancel_handlers;
+use cancel_handlers::{cancel_ship_build_handler, cancel_defense_build_handler};
 use config::Config;
 use websocket::WsState;
 
@@ -239,6 +243,8 @@ async fn main() {
         .route("/planets/:id/research/:tech_key", post(start_research_handler))
         .route("/planets/:id/build-ships/:ship_key/:quantity", post(build_ships_handler))
         .route("/planets/:id/build-defenses/:defense_key/:quantity", post(build_defenses_handler))
+        .route("/planets/:id/cancel-ship-build/:ship_key", delete(cancel_ship_build_handler))
+        .route("/planets/:id/cancel-defense-build/:defense_key", delete(cancel_defense_build_handler))
         .route("/tech/:tech_key", get(get_tech_details_handler))
         .route("/ship/:ship_key", get(get_ship_details_handler))
         // Actions
@@ -1432,6 +1438,11 @@ async fn get_planet_handler(
         }));
 
         // ========== EXPANSION 2.0: Add relational tech tree and ship data ==========
+        // Include building levels from relational tables
+        if let Ok(building_levels) = tech_tree::get_all_planet_building_levels(&state.db, updated_model.id).await {
+            obj.insert("buildings".into(), json!(building_levels));
+        }
+
         // Include tech levels and ship counts from relational tables
         if let Ok(tech_levels) = tech_tree::get_all_planet_tech_levels(&state.db, updated_model.id).await {
             obj.insert("technologies".into(), json!(tech_levels));

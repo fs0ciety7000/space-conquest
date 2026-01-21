@@ -95,7 +95,7 @@ const TechNode = ({ data }: { data: any }) => {
 
   return (
     <Card className={`
-      relative overflow-hidden w-[280px] transition-all duration-300
+      relative overflow-hidden w-[280px] min-h-[320px] transition-all duration-300
       ${isLocked
         ? 'bg-red-950/20 border-red-900/50 opacity-70'
         : `bg-slate-950 border ${config.border}`
@@ -339,7 +339,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     const indexAtDepth = techsAtDepth.findIndex(t => t.tech_key === tech_key);
 
     // Layout vertical : profondeur = Y, index à cette profondeur = X
-    const spacingY = 280; // Espacement vertical entre niveaux
+    const spacingY = 450; // Espacement vertical entre niveaux (augmenté pour éviter les chevauchements)
     const spacingX = 350; // Espacement horizontal entre techs du même niveau
     const startY = 100;
 
