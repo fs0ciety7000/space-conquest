@@ -770,11 +770,11 @@ pub fn calculate_tech_time(base_time: i32, multiplier: f64, current_level: i32) 
 }
 
 /// Calculate cost for a building at a specific level (exponential growth)
-pub fn calculate_building_cost(base_cost: i32, multiplier: f32, current_level: i32) -> i32 {
-    (base_cost as f32 * multiplier.powi(current_level)).ceil() as i32
+pub fn calculate_building_cost(base_cost: i32, multiplier: f64, current_level: i32) -> i32 {
+    (base_cost as f64 * multiplier.powi(current_level)).ceil() as i32
 }
 
 /// Calculate time for a building at a specific level
-pub fn calculate_building_time(base_time: i32, multiplier: f32, current_level: i32) -> i32 {
-    (base_time as f32 * multiplier.powi(current_level)).ceil() as i32
+pub fn calculate_building_time(base_time: i32, multiplier: f64, current_level: i32) -> i32 {
+    (base_time as f64 * multiplier.powi(current_level)).ceil() as i32
 }
