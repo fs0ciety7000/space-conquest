@@ -4120,7 +4120,10 @@ async fn get_building_types_handler(
 ) -> impl IntoResponse {
     match tech_tree::get_building_types_for_planet(&state.db, planet_id).await {
         Ok(building_types) => Json(json!({ "building_types": building_types })).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch building types"}))).into_response(),
+        Err(e) => {
+            eprintln!("❌ Error fetching building types for planet {}: {:?}", planet_id, e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch building types"}))).into_response()
+        }
     }
 }
 
@@ -4131,7 +4134,10 @@ async fn get_defense_types_handler(
 ) -> impl IntoResponse {
     match tech_tree::get_defense_types_for_planet(&state.db, planet_id).await {
         Ok(defense_types) => Json(json!({ "defense_types": defense_types })).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch defense types"}))).into_response(),
+        Err(e) => {
+            eprintln!("❌ Error fetching defense types for planet {}: {:?}", planet_id, e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch defense types"}))).into_response()
+        }
     }
 }
 
