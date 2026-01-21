@@ -31,7 +31,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 use uuid::Uuid;
-use chrono::{Utc, Duration};
+use chrono::{Utc, Duration, DateTime};
 use rand::Rng;
 
 use sea_orm_migration::MigratorTrait;
@@ -110,6 +110,12 @@ struct ExpeditionPayload {
 struct ExpeditionPayloadV2 {
     // Generic fleet composition using ship_key -> count mapping
     fleet: HashMap<String, i32>,
+}
+
+#[derive(Deserialize)]
+struct ScanNearbyPayload {
+    current_planet_id: Uuid,
+    max_results: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -270,6 +276,7 @@ async fn main() {
         .route("/ranking", get(get_ranking_handler))
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
         .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
+        .route("/galaxy/scan/nearby", post(scan_nearby_planets_handler))
         // Messagerie V2 (via module)
         // Dans la section des routes de messagerie
 .route("/conversations", get(messaging::get_conversations_handler))
@@ -3186,6 +3193,83 @@ async fn get_galaxy_scan_handler(
 
     let results: Vec<SystemSummary> = systems_map.into_values().collect();
     Json(results)
+}
+
+async fn scan_nearby_planets_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<ScanNearbyPayload>,
+) -> impl IntoResponse {
+    let current_planet = match Planet::find_by_id(payload.current_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Planet not found"}))).into_response(),
+    };
+
+    let max_results = payload.max_results.unwrap_or(20).min(50); // Cap at 50 for performance
+    let search_radius = 20; // Systems to search around current system
+
+    // Find all planets in nearby systems (same galaxy, systems within radius)
+    let min_system = (current_planet.system - search_radius).max(1);
+    let max_system = (current_planet.system + search_radius).min(499);
+
+    let nearby_planets = Planet::find()
+        .filter(planet::Column::Galaxy.eq(current_planet.galaxy))
+        .filter(planet::Column::System.between(min_system, max_system))
+        .filter(planet::Column::Id.ne(payload.current_planet_id))  // Exclude current planet
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    // Get owner information for planets
+    let mut owner_map: HashMap<Uuid, String> = HashMap::new();
+    let mut protection_map: HashMap<Uuid, Option<chrono::NaiveDateTime>> = HashMap::new();
+
+    for planet in &nearby_planets {
+        let owner_id = planet.owner_id;
+        if !owner_map.contains_key(&owner_id) {
+            if let Ok(Some(user)) = User::find_by_id(owner_id).one(&state.db).await {
+                owner_map.insert(owner_id, user.username.clone());
+                protection_map.insert(owner_id, user.protection_until);
+            }
+        }
+    }
+
+    // Calculate distances and prepare response
+    let mut planets_with_distance: Vec<serde_json::Value> = nearby_planets
+        .into_iter()
+        .map(|p| {
+            let distance = game_logic::calculate_distance(
+                (current_planet.galaxy, current_planet.system, current_planet.position),
+                (p.galaxy, p.system, p.position)
+            );
+
+            let owner_name = owner_map.get(&p.owner_id).cloned();
+            let protection_until = protection_map.get(&p.owner_id).cloned().flatten();
+            let is_my_planet = p.owner_id == current_planet.owner_id;
+
+            json!({
+                "id": p.id,
+                "name": p.name,
+                "galaxy": p.galaxy,
+                "system": p.system,
+                "position": p.position,
+                "owner_name": owner_name,
+                "is_my_planet": is_my_planet,
+                "protection_until": protection_until,
+                "distance": distance,
+            })
+        })
+        .collect();
+
+    // Sort by distance and limit results
+    planets_with_distance.sort_by(|a, b| {
+        let dist_a = a["distance"].as_f64().unwrap_or(f64::MAX);
+        let dist_b = b["distance"].as_f64().unwrap_or(f64::MAX);
+        dist_a.partial_cmp(&dist_b).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    planets_with_distance.truncate(max_results as usize);
+
+    Json(planets_with_distance).into_response()
 }
 
 fn generate_colony_name() -> String {
