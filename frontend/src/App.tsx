@@ -33,6 +33,7 @@ import { SabotagesDashboard } from './components/SabotagesDashboard';
 import { SabotagesSufferedDashboard } from './components/SabotagesSufferedDashboard';
 import { CasusBelliList } from './components/CasusBelliList';
 import { Sidebar, type MenuItem } from './components/Sidebar';
+import MaintenancePage from './components/MaintenancePage';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
@@ -65,13 +66,23 @@ export default function App() {
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
   const [userId, setUserId] = useState<string | null>(localStorage.getItem('user_id'));
   const [username, setUsername] = useState<string | null>(localStorage.getItem('username'));
-  
+
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [speedFactor, setSpeedFactor] = useState<number>(1);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
-  
+
   const [messageRecipient, setMessageRecipient] = useState<string | null>(null);
+
+  // Maintenance status
+  const [maintenanceStatus, setMaintenanceStatus] = useState<{
+    enabled: boolean;
+    title: string;
+    description: string[];
+    estimatedDuration: string;
+    startTime: string;
+    autoDisableAt?: string;
+  } | null>(null);
 
   const [planet, setPlanet] = useState<any>(null);
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
@@ -233,6 +244,18 @@ export default function App() {
       setActiveTab('messages');
       setSidebarOpen(false);
   };
+
+  const fetchMaintenanceStatus = useCallback(async () => {
+    try {
+      const res = await fetch(apiUrl('/maintenance/status'));
+      if (res.ok) {
+        const data = await res.json();
+        setMaintenanceStatus(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch maintenance status:', e);
+    }
+  }, []);
 
   const fetchPlanet = useCallback(async () => {
     if (!planetId || !token) return;
@@ -532,6 +555,13 @@ export default function App() {
     });
   }
 
+  // Check maintenance status on mount and periodically
+  useEffect(() => {
+    fetchMaintenanceStatus();
+    const interval = setInterval(fetchMaintenanceStatus, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, [fetchMaintenanceStatus]);
+
   useEffect(() => {
     fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor))
       .catch(console.error);
@@ -544,15 +574,26 @@ export default function App() {
       return () => clearInterval(interval);
     }
   }, [token, planetId, fetchPlanet, wsConnected]);
-  
+
+  // Show maintenance page if maintenance is enabled
+  if (maintenanceStatus?.enabled) {
+    return <MaintenancePage message={{
+      title: maintenanceStatus.title,
+      description: maintenanceStatus.description,
+      estimatedDuration: maintenanceStatus.estimatedDuration,
+      startTime: maintenanceStatus.startTime,
+      status: 'in_progress'
+    }} />;
+  }
+
   if (!token || !planetId || !userId) {
-    return <Login onLogin={(t, p, u, user) => { 
-        localStorage.setItem('token', t); 
+    return <Login onLogin={(t, p, u, user) => {
+        localStorage.setItem('token', t);
         localStorage.setItem('planet_id', p);
         localStorage.setItem('user_id', u);
         localStorage.setItem('username', user);
-        setToken(t); 
-        setPlanetId(p); 
+        setToken(t);
+        setPlanetId(p);
         setUserId(u);
         setUsername(user);
         console.log('👤 Utilisateur connecté:', user); // DEBUG

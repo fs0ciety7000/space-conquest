@@ -39,7 +39,7 @@ use sea_orm_migration::MigratorTrait;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -219,6 +219,8 @@ async fn main() {
         .route("/register", post(auth::register_handler))
         .route("/login", post(auth::login_handler))
         .route("/config", get(get_game_config_handler))
+        // Maintenance
+        .route("/maintenance/status", get(maintenance::get_maintenance_status_handler))
         // Planets
         .route("/planets/:id", get(get_planet_handler))
         .route("/planets/:id/upgrade/:type", post(upgrade_mine_handler))
