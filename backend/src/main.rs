@@ -387,7 +387,7 @@ async fn main() {
 
     // Start automatic tick processing loop
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(2));
         loop {
             interval.tick().await;
             match tick_system::process_tick(&db_tick).await {
@@ -403,7 +403,7 @@ async fn main() {
             }
         }
     });
-    println!("⏱️  Automatic tick system started (interval: 5s)");
+    println!("⏱️  Automatic tick system started (interval: 2s)");
 
     println!("🚀 SPEED_GAME Backend opérationnel sur http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -482,21 +482,34 @@ async fn resolve_attack_mission(
     // NEW: Use dynamic combat system
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Build attacker fleet from mission data (legacy format)
-    let mut attacker_ships = HashMap::new();
-    let att_hunters = mission.metal as i32;
-    let att_cruisers = mission.crystal as i32;
-    let att_transporters = mission.deuterium as i32;
+    // Build attacker fleet from mission data
+    let attacker_ships = if let Some(ref fleet_data) = mission.fleet_data {
+        // New format: fleet stored as JSON in fleet_data
+        match serde_json::from_str::<HashMap<String, i32>>(fleet_data) {
+            Ok(fleet) => fleet,
+            Err(e) => {
+                eprintln!("Failed to parse fleet_data: {}", e);
+                HashMap::new()
+            }
+        }
+    } else {
+        // Legacy format: fleet stored in metal/crystal/deuterium fields
+        let mut ships = HashMap::new();
+        let att_hunters = mission.metal as i32;
+        let att_cruisers = mission.crystal as i32;
+        let att_transporters = mission.deuterium as i32;
 
-    if att_hunters > 0 {
-        attacker_ships.insert("light_hunter".to_string(), att_hunters);
-    }
-    if att_cruisers > 0 {
-        attacker_ships.insert("cruiser".to_string(), att_cruisers);
-    }
-    if att_transporters > 0 {
-        attacker_ships.insert("transporter".to_string(), att_transporters);
-    }
+        if att_hunters > 0 {
+            ships.insert("light_hunter".to_string(), att_hunters);
+        }
+        if att_cruisers > 0 {
+            ships.insert("cruiser".to_string(), att_cruisers);
+        }
+        if att_transporters > 0 {
+            ships.insert("transporter".to_string(), att_transporters);
+        }
+        ships
+    };
 
     // Load defender ships from database
     let defender_ships = load_planet_ships_for_combat(db, mission.target_planet_id)
@@ -5572,12 +5585,18 @@ async fn expedition_v2_handler(
 
     let mut logs = Vec::new();
     let mut ships_lost_total = 0;
+    let mut initial_fleet = payload.fleet.clone();
+    let mut remaining_fleet = payload.fleet.clone();
+
     let (final_metal, final_crystal, final_deuterium, winner) = if combat_triggered {
         logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
 
         // Run dynamic combat
         match run_dynamic_expedition_combat(&state.db, id, payload.fleet.clone()).await {
             Ok((combat_report, metal, crystal, deuterium)) => {
+                // Store remaining ships for report
+                remaining_fleet = combat_report.remaining_ships.clone();
+
                 // Calculate ships lost
                 for (ship_key, &initial_count) in &payload.fleet {
                     let remaining_count = combat_report.remaining_ships.get(ship_key).copied().unwrap_or(0);
@@ -5660,7 +5679,15 @@ async fn expedition_v2_handler(
         "ships_lost": ships_lost_total,
         "lost_missiles": 0,
         "lost_plasmas": 0,
-        "mission_type": "expedition"
+        "mission_type": "expedition",
+        // Fleet composition (same format as PvP reports)
+        "attacker_initial": initial_fleet,
+        "attacker_remaining": remaining_fleet,
+        "attacker_losses": ships_lost_total,
+        // For expeditions, there's no defender fleet (pirates are abstracted)
+        "defender_initial": {},
+        "defender_remaining": {},
+        "defender_losses": 0
     });
 
     let _ = combat_log::ActiveModel {

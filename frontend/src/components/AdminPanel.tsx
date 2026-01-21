@@ -127,6 +127,137 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     ]
   },
   {
+    id: 'combat_stats',
+    title: 'Statistiques de Combat',
+    icon: Target,
+    color: 'orange',
+    configs: [
+      { key: 'combat_light_hunter_attack', label: 'Chasseur - Attaque', description: 'Puissance attaque chasseur léger', defaultValue: '50.0' },
+      { key: 'combat_light_hunter_shield', label: 'Chasseur - Bouclier', description: 'Puissance bouclier chasseur léger', defaultValue: '10.0' },
+      { key: 'combat_light_hunter_hull', label: 'Chasseur - Coque', description: 'Points de structure chasseur léger', defaultValue: '400.0' },
+      { key: 'combat_cruiser_attack', label: 'Croiseur - Attaque', description: 'Puissance attaque croiseur', defaultValue: '400.0' },
+      { key: 'combat_cruiser_shield', label: 'Croiseur - Bouclier', description: 'Puissance bouclier croiseur', defaultValue: '50.0' },
+      { key: 'combat_cruiser_hull', label: 'Croiseur - Coque', description: 'Points de structure croiseur', defaultValue: '2700.0' },
+      { key: 'combat_missile_launcher_attack', label: 'Missile - Attaque', description: 'Puissance attaque lanceur missiles', defaultValue: '80.0' },
+      { key: 'combat_missile_launcher_shield', label: 'Missile - Bouclier', description: 'Puissance bouclier lanceur missiles', defaultValue: '20.0' },
+      { key: 'combat_missile_launcher_hull', label: 'Missile - Coque', description: 'Points de structure lanceur missiles', defaultValue: '200.0' },
+      { key: 'combat_plasma_turret_attack', label: 'Plasma - Attaque', description: 'Puissance attaque tourelle plasma', defaultValue: '3000.0' },
+      { key: 'combat_plasma_turret_shield', label: 'Plasma - Bouclier', description: 'Puissance bouclier tourelle plasma', defaultValue: '300.0' },
+      { key: 'combat_plasma_turret_hull', label: 'Plasma - Coque', description: 'Points de structure tourelle plasma', defaultValue: '10000.0' },
+    ]
+  },
+  {
+    id: 'combat_rf',
+    title: 'Tirs Rapides (Rapid Fire)',
+    icon: Crosshair,
+    color: 'purple',
+    configs: [
+      { key: 'combat_rf_cruiser_vs_light_hunter', label: 'Croiseur vs Chasseur', description: 'Multiplicateur rapid fire croiseur contre chasseur', defaultValue: '6.0' },
+      { key: 'combat_rf_cruiser_vs_missile_launcher', label: 'Croiseur vs Missile', description: 'Multiplicateur rapid fire croiseur contre missile', defaultValue: '10.0' },
+      { key: 'combat_rf_plasma_vs_light_hunter', label: 'Plasma vs Chasseur', description: 'Multiplicateur rapid fire plasma contre chasseur', defaultValue: '5.0' },
+      { key: 'combat_rf_plasma_vs_cruiser', label: 'Plasma vs Croiseur', description: 'Multiplicateur rapid fire plasma contre croiseur', defaultValue: '3.0' },
+    ]
+  },
+  {
+    id: 'combat_tech',
+    title: 'Bonus Technologiques Combat',
+    icon: Award,
+    color: 'pink',
+    configs: [
+      { key: 'combat_tech_laser_bonus', label: 'Bonus Tech Laser', description: 'Bonus attaque par niveau tech laser (+10%)', defaultValue: '0.1' },
+      { key: 'combat_tech_energy_bonus', label: 'Bonus Tech Énergie', description: 'Bonus bouclier par niveau tech énergie (+10%)', defaultValue: '0.1' },
+      { key: 'combat_tech_armour_bonus', label: 'Bonus Tech Protection', description: 'Bonus coque par niveau tech armure (+10%)', defaultValue: '0.1' },
+    ]
+  },
+  {
+    id: 'loot',
+    title: 'Pillage & Débris',
+    icon: Package,
+    color: 'amber',
+    configs: [
+      { key: 'loot_percentage', label: 'Pourcentage Pillage', description: 'Pourcentage ressources pillables (50%)', defaultValue: '0.5' },
+      { key: 'loot_max_per_resource', label: 'Max par Ressource', description: 'Maximum pillable par type ressource', defaultValue: '50000.0' },
+      { key: 'debris_percentage', label: 'Pourcentage Débris', description: 'Pourcentage débris générés (30%)', defaultValue: '0.3' },
+    ]
+  },
+  {
+    id: 'cargo',
+    title: 'Capacités de Chargement',
+    icon: Box,
+    color: 'teal',
+    configs: [
+      { key: 'cargo_light_hunter', label: 'Chasseur - Cargo', description: 'Capacité cargo chasseur léger', defaultValue: '50.0' },
+      { key: 'cargo_cruiser', label: 'Croiseur - Cargo', description: 'Capacité cargo croiseur', defaultValue: '800.0' },
+      { key: 'cargo_transporter_base', label: 'Transporteur - Base', description: 'Capacité base transporteur', defaultValue: '10000.0' },
+      { key: 'cargo_transporter_bonus_per_hangar', label: 'Transporteur - Bonus Hangar', description: 'Bonus par niveau hangar (+5%)', defaultValue: '0.05' },
+    ]
+  },
+  {
+    id: 'expedition',
+    title: 'Expéditions - Général',
+    icon: Map,
+    color: 'lime',
+    configs: [
+      { key: 'expedition_combat_chance', label: 'Chance de Combat', description: 'Probabilité rencontre pirates (30%)', defaultValue: '0.3' },
+      { key: 'expedition_deuterium_chance', label: 'Chance Deutérium', description: 'Probabilité découverte deutérium (50%)', defaultValue: '0.5' },
+      { key: 'expedition_recycler_bonus_multiplier', label: 'Bonus Recycleur', description: 'Multiplicateur bonus recycleur (x2)', defaultValue: '2.0' },
+      { key: 'expedition_calm_sector_bonus', label: 'Bonus Secteur Calme', description: 'Multiplicateur secteur calme (+20%)', defaultValue: '1.2' },
+      { key: 'expedition_base_duration', label: 'Durée Base', description: 'Durée base expédition (secondes)', defaultValue: '600.0' },
+      { key: 'expedition_defense_bonus_multiplier', label: 'Bonus Défense Pirates', description: 'Multiplicateur puissance défense pirates', defaultValue: '5.0' },
+    ]
+  },
+  {
+    id: 'expedition_rewards',
+    title: 'Expéditions - Récompenses',
+    icon: Award,
+    color: 'emerald',
+    configs: [
+      { key: 'expedition_hunter_metal_min', label: 'Chasseur - Métal Min', description: 'Métal min par chasseur', defaultValue: '50.0' },
+      { key: 'expedition_hunter_metal_range', label: 'Chasseur - Métal Range', description: 'Variation métal chasseur', defaultValue: '50.0' },
+      { key: 'expedition_hunter_crystal_min', label: 'Chasseur - Cristal Min', description: 'Cristal min par chasseur', defaultValue: '20.0' },
+      { key: 'expedition_hunter_crystal_range', label: 'Chasseur - Cristal Range', description: 'Variation cristal chasseur', defaultValue: '30.0' },
+      { key: 'expedition_hunter_deut_min', label: 'Chasseur - Deut Min', description: 'Deutérium min par chasseur', defaultValue: '10.0' },
+      { key: 'expedition_hunter_deut_range', label: 'Chasseur - Deut Range', description: 'Variation deutérium chasseur', defaultValue: '15.0' },
+      { key: 'expedition_cruiser_metal_min', label: 'Croiseur - Métal Min', description: 'Métal min par croiseur', defaultValue: '150.0' },
+      { key: 'expedition_cruiser_metal_range', label: 'Croiseur - Métal Range', description: 'Variation métal croiseur', defaultValue: '100.0' },
+      { key: 'expedition_cruiser_crystal_min', label: 'Croiseur - Cristal Min', description: 'Cristal min par croiseur', defaultValue: '60.0' },
+      { key: 'expedition_cruiser_crystal_range', label: 'Croiseur - Cristal Range', description: 'Variation cristal croiseur', defaultValue: '40.0' },
+      { key: 'expedition_cruiser_deut_min', label: 'Croiseur - Deut Min', description: 'Deutérium min par croiseur', defaultValue: '30.0' },
+      { key: 'expedition_cruiser_deut_range', label: 'Croiseur - Deut Range', description: 'Variation deutérium croiseur', defaultValue: '30.0' },
+    ]
+  },
+  {
+    id: 'expedition_combat',
+    title: 'Expéditions - Combat',
+    icon: Crosshair,
+    color: 'rose',
+    configs: [
+      { key: 'expedition_pirate_strength_min', label: 'Force Pirates Min', description: 'Force min flotte pirates', defaultValue: '10.0' },
+      { key: 'expedition_pirate_strength_max', label: 'Force Pirates Max', description: 'Force max flotte pirates', defaultValue: '100.0' },
+      { key: 'expedition_victory_loss_min', label: 'Perte Victoire Min', description: 'Perte min en victoire (3%)', defaultValue: '0.03' },
+      { key: 'expedition_victory_loss_max', label: 'Perte Victoire Max', description: 'Perte max en victoire (15%)', defaultValue: '0.15' },
+      { key: 'expedition_victory_loss_variation', label: 'Variation Perte Victoire', description: 'Variation perte victoire (±10%)', defaultValue: '0.1' },
+      { key: 'expedition_defeat_loss_min', label: 'Perte Défaite Min', description: 'Perte min en défaite (30%)', defaultValue: '0.30' },
+      { key: 'expedition_defeat_loss_max', label: 'Perte Défaite Max', description: 'Perte max en défaite (60%)', defaultValue: '0.60' },
+      { key: 'expedition_defeat_loss_variation', label: 'Variation Perte Défaite', description: 'Variation perte défaite (±15%)', defaultValue: '0.15' },
+      { key: 'expedition_hunter_vulnerability', label: 'Vulnérabilité Chasseur', description: 'Multiplicateur vulnérabilité chasseur', defaultValue: '1.0' },
+      { key: 'expedition_cruiser_vulnerability', label: 'Vulnérabilité Croiseur', description: 'Multiplicateur vulnérabilité croiseur', defaultValue: '0.5' },
+    ]
+  },
+  {
+    id: 'buildings',
+    title: 'Bâtiments & Stockage',
+    icon: Warehouse,
+    color: 'slate',
+    configs: [
+      { key: 'hangar_capacity_base', label: 'Hangar - Capacité Base', description: 'Capacité base hangar niveau 1', defaultValue: '500.0' },
+      { key: 'hangar_capacity_per_level', label: 'Hangar - Par Niveau', description: 'Capacité ajoutée par niveau', defaultValue: '500.0' },
+      { key: 'storage_capacity_base', label: 'Stockage - Capacité Base', description: 'Capacité base stockage niveau 1', defaultValue: '600000.0' },
+      { key: 'storage_capacity_growth', label: 'Stockage - Croissance', description: 'Facteur croissance stockage', defaultValue: '1.6' },
+      { key: 'slot_bonus_per_slot', label: 'Bonus par Slot', description: 'Bonus production par slot actif (+50%)', defaultValue: '0.5' },
+    ]
+  },
+  {
     id: 'ships',
     title: 'Coûts des Vaisseaux',
     icon: Rocket,
