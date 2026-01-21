@@ -54,6 +54,31 @@ Placer les images dans : `frontend/public/images/ships/`
 
 ---
 
+## 🛡️ DÉFENSES (Defenses)
+
+Placer les images dans : `frontend/public/images/defenses/`
+
+### Noms de fichiers exacts à créer :
+
+| Nom du fichier | Description | Clé système |
+|----------------|-------------|-------------|
+| `defense-missile-launcher.webp` | Lance-roquettes | `missile_launcher` |
+| `defense-light-laser.webp` | Laser Léger | `light_laser` |
+| `defense-heavy-laser.webp` | Laser Lourd | `heavy_laser` |
+| `defense-gauss-cannon.webp` | Canon de Gauss | `gauss_cannon` |
+| `defense-ion-cannon.webp` | Canon à Ions | `ion_cannon` |
+| `defense-plasma-turret.webp` | Tourelle à Plasma | `plasma_turret` |
+| `defense-small-shield.webp` | Petit Bouclier | `small_shield` |
+| `defense-large-shield.webp` | Grand Bouclier | `large_shield` |
+| `defense-antiballistic-missile.webp` | Missile Anti-Balistique | `antiballistic_missile` |
+| `defense-interplanetary-missile.webp` | Missile Interplanétaire | `interplanetary_missile` |
+
+**Format de nommage** : `defense-<key>.webp`
+- Remplacer les underscores `_` par des tirets `-`
+- Exemple : `light_laser` → `defense-light-laser.webp`
+
+---
+
 ## 📋 Processus Étape par Étape
 
 ### 1. Préparer vos images sources (PNG/JPG)
@@ -63,11 +88,13 @@ Organisez vos images sources dans un dossier temporaire :
 ```bash
 mkdir -p /tmp/images-sources/buildings
 mkdir -p /tmp/images-sources/ships
+mkdir -p /tmp/images-sources/defenses
 
 # Placer vos PNG/JPG dans ces dossiers
 # Exemple :
 #   /tmp/images-sources/buildings/research-lab.png
 #   /tmp/images-sources/ships/heavy-hunter.png
+#   /tmp/images-sources/defenses/light-laser.png
 ```
 
 ### 2. Renommer selon la nomenclature
@@ -101,12 +128,30 @@ mv "bombardier.png" "ship-bomber.png"
 mv "etoile-mort.png" "ship-deathstar.png"
 ```
 
+**Pour les défenses** :
+```bash
+cd /tmp/images-sources/defenses
+
+# Exemples :
+mv "lance-roquettes.png" "defense-missile-launcher.png"
+mv "laser-leger.png" "defense-light-laser.png"
+mv "laser-lourd.png" "defense-heavy-laser.png"
+mv "canon-gauss.png" "defense-gauss-cannon.png"
+mv "canon-ions.png" "defense-ion-cannon.png"
+mv "tourelle-plasma.png" "defense-plasma-turret.png"
+mv "petit-bouclier.png" "defense-small-shield.png"
+mv "grand-bouclier.png" "defense-large-shield.png"
+mv "missile-antibalistique.png" "defense-antiballistic-missile.png"
+mv "missile-interplanetaire.png" "defense-interplanetary-missile.png"
+```
+
 ### 3. Copier dans le projet
 
 ```bash
 # Copier toutes les images sources dans le projet
 cp /tmp/images-sources/buildings/*.{png,jpg} /home/user/space-conquest/frontend/public/images/buildings/
 cp /tmp/images-sources/ships/*.{png,jpg} /home/user/space-conquest/frontend/public/images/ships/
+cp /tmp/images-sources/defenses/*.{png,jpg} /home/user/space-conquest/frontend/public/images/defenses/
 ```
 
 ### 4. Lancer le script d'optimisation
@@ -129,6 +174,7 @@ Le script va :
 # Lister les images converties
 ls -lh frontend/public/images/buildings/*.webp
 ls -lh frontend/public/images/ships/*.webp
+ls -lh frontend/public/images/defenses/*.webp
 ```
 
 Vous devriez voir :
@@ -140,6 +186,10 @@ building-resource-storage.webp
 ship-heavy-hunter.webp        (~50-100 Ko)
 ship-battleship.webp
 ship-destroyer.webp
+...
+defense-light-laser.webp      (~50-100 Ko)
+defense-gauss-cannon.webp
+defense-plasma-turret.webp
 ...
 ```
 
@@ -174,6 +224,13 @@ high-tech facility, cinematic lighting, 4K quality"
 "Sci-fi spaceship [SHIP_NAME], side view, metallic hull with blue energy trails,
 advanced weapons systems, glowing engines, space combat vessel,
 cinematic lighting, detailed design, 4K quality"
+```
+
+**Défenses** :
+```
+"Futuristic defense system [DEFENSE_NAME], military structure, armored plating,
+energy weapons or shield generators, turret mounted, sci-fi defense installation,
+blue energy effects, dark metal construction, isometric view, cinematic lighting, 4K quality"
 ```
 
 ---
@@ -213,6 +270,42 @@ death star inspired, cinematic space scene, enormous scale"
 ```
 
 **Fichier** : `ship-deathstar.webp`
+
+---
+
+### Canon de Gauss
+**Prompt suggéré** :
+```
+"Futuristic gauss cannon turret, electromagnetic railgun, blue energy coils,
+armored rotating base, heavy military defense structure, sci-fi weapon system,
+metallic construction, energy effects, isometric view, cinematic lighting"
+```
+
+**Fichier** : `defense-gauss-cannon.webp`
+
+---
+
+### Tourelle à Plasma
+**Prompt suggéré** :
+```
+"Advanced plasma turret defense system, purple energy weapon, glowing plasma core,
+rotating turret mount, futuristic military installation, energy shields,
+sci-fi defense structure, armored plating, cinematic lighting"
+```
+
+**Fichier** : `defense-plasma-turret.webp`
+
+---
+
+### Grand Bouclier
+**Prompt suggéré** :
+```
+"Massive energy shield generator, dome-shaped protective barrier, blue force field,
+large defense installation, energy patterns, sci-fi shield technology,
+hexagonal energy panels, glowing power core, isometric view, cinematic lighting"
+```
+
+**Fichier** : `defense-large-shield.webp`
 
 ---
 
@@ -288,6 +381,20 @@ spy_probe           → Sonde d'Espionnage
 transporter         → Transporteur
 colony_ship         → Vaisseau de Colonisation
 recycler            → Recycleur
+```
+
+### Toutes les défenses existantes
+```
+missile_launcher       → Lance-roquettes ⭐ NOUVEAU
+light_laser           → Laser Léger ⭐ NOUVEAU
+heavy_laser           → Laser Lourd ⭐ NOUVEAU
+gauss_cannon          → Canon de Gauss ⭐ NOUVEAU
+ion_cannon            → Canon à Ions ⭐ NOUVEAU
+plasma_turret         → Tourelle à Plasma ⭐ NOUVEAU
+small_shield          → Petit Bouclier ⭐ NOUVEAU
+large_shield          → Grand Bouclier ⭐ NOUVEAU
+antiballistic_missile → Missile Anti-Balistique ⭐ NOUVEAU
+interplanetary_missile → Missile Interplanétaire ⭐ NOUVEAU
 ```
 
 ---
