@@ -1,5 +1,95 @@
 # Changelog - Space Conquest
 
+## [2.3.0] - 2026-01-21 - Système de Protection Débutant & Panel Admin
+
+### 🛡️ Nouvelles Fonctionnalités
+
+#### 🆕 Système de Protection Débutant
+**Feature**: Protection automatique pour les nouveaux joueurs
+
+**Détails**:
+- **Bouclier de 3 jours**: Tous les nouveaux comptes bénéficient d'une protection automatique de 3 jours
+  - Impossible d'être attaqué pendant cette période
+  - Compte à rebours visible dans l'interface
+  - Badge animé indiquant la protection active
+- **Zone Débutant**: La galaxie 1 est désormais une zone protégée
+  - Les planètes dans cette galaxie ne peuvent pas être attaquées
+  - Badge "Zone Débutant" visible sur les planètes concernées
+- **Restrictions d'attaque par points**:
+  - Ratio minimum: 0.2 (impossible d'attaquer un joueur avec moins de 20% de vos points)
+  - Ratio maximum: 5.0 (impossible d'attaquer un joueur avec plus de 500% de vos points)
+  - Système équitable encourageant les combats équilibrés
+
+**Visibilité**:
+- Badges de protection affichés dans:
+  - Vue galaxie (carte et liste)
+  - Classement des joueurs
+  - Profils des joueurs
+- Affichage des points totaux et du temps de protection restant
+- Animations et indicateurs visuels clairs
+
+**Fichiers**:
+- `backend/src/protection.rs` - Logique de protection
+- `frontend/src/components/BeginnerProtectionBadge.tsx` - Badge UI
+- Migration base de données pour les nouveaux champs
+
+---
+
+#### ⚙️ Panel Admin - Gestion du Contenu
+**Feature**: Interface d'administration complète pour gérer le contenu du jeu
+
+**Détails**:
+- **Gestion des vaisseaux**:
+  - Créer, modifier, supprimer des types de vaisseaux
+  - Configuration des coûts, statistiques, prérequis
+  - Temps de construction personnalisables
+- **Gestion des bâtiments**:
+  - CRUD complet pour tous les types de bâtiments
+  - Configuration des bonus de production
+  - Gestion des prérequis et dépendances
+- **Gestion des défenses**:
+  - Ajout/modification des systèmes défensifs
+  - Statistiques de combat personnalisables
+- **Interface intuitive**:
+  - Édition en ligne
+  - Confirmations de suppression
+  - Onglets organisés (Vaisseaux, Bâtiments, Défenses)
+
+**Accès**: Réservé aux administrateurs avec rôle "admin"
+
+**Fichiers**:
+- `backend/src/admin_content.rs` - API CRUD
+- `frontend/src/components/AdminContentManager.tsx` - Interface UI
+
+---
+
+#### 📊 Mise à Jour Automatique des Points
+**Feature**: Calcul et mise à jour périodique des points des joueurs
+
+**Détails**:
+- Recalcul automatique après chaque construction/recherche
+- Prise en compte de:
+  - Ressources stockées (divisées par 1000)
+  - Niveaux des bâtiments (multiplicateurs selon le type)
+  - Flottes (valeur des vaisseaux × quantité)
+  - Technologies
+- Mise à jour dans le système de tick (toutes les 10 secondes)
+- Garantit des restrictions d'attaque toujours à jour
+
+**Fichiers**:
+- `backend/src/tick_system.rs` - Fonction update_all_user_points
+
+---
+
+### 🐛 Corrections
+
+#### 🔧 Correction du Mot Réservé "protected"
+**Problème**: Erreur de build causée par l'utilisation du mot réservé JavaScript "protected"
+
+**Solution**: Renommé en "hasProtection" dans le composant BeginnerProtectionBadge
+
+---
+
 ## [2.2.1] - 2026-01-21 - Rapports de Combat Améliorés & Système d'Attaque Dynamique
 
 ### 🎯 Nouvelles Fonctionnalités
