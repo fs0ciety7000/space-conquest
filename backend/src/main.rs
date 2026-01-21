@@ -3291,6 +3291,38 @@ async fn transport_handler(
     let source_user = User::find_by_id(source_model.owner_id).one(&state.db).await.unwrap().unwrap();
     let target_user = User::find_by_id(target_model.owner_id).one(&state.db).await.unwrap().unwrap();
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VÉRIFICATION ALLIANCE - Transfer vers autre joueur nécessite même alliance
+    // ═══════════════════════════════════════════════════════════════════════════
+    if source_model.owner_id != target_model.owner_id {
+        // Vérifier que les deux joueurs sont dans la même alliance
+        let source_member = alliance_member::Entity::find()
+            .filter(alliance_member::Column::UserId.eq(source_model.owner_id))
+            .one(&state.db)
+            .await
+            .unwrap();
+
+        let target_member = alliance_member::Entity::find()
+            .filter(alliance_member::Column::UserId.eq(target_model.owner_id))
+            .one(&state.db)
+            .await
+            .unwrap();
+
+        match (source_member, target_member) {
+            (Some(src), Some(tgt)) if src.alliance_id == tgt.alliance_id => {
+                // OK : même alliance
+            },
+            _ => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({
+                        "error": "Transfer impossible : Vous devez être dans la même alliance que le destinataire pour envoyer des ressources."
+                    }))
+                ).into_response();
+            }
+        }
+    }
+
     let source_name = source_model.name.clone();
     let source_id = source_model.id;
     let target_name = target_model.name.clone();
