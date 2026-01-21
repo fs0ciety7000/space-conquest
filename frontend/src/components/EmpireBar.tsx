@@ -66,15 +66,8 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
-  const [config, setConfig] = useState<any>({
-    production_metal_base: 30,
-    production_crystal_base: 20,
-    production_deuterium_base: 10,
-    production_metal_growth: 1.1,
-    production_crystal_growth: 1.1,
-    production_deuterium_growth: 1.05,
-    energy_tech_bonus: 0.01
-  });
+  const [config, setConfig] = useState<any>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
 
   // Hook pour ressources en temps réel
   const realtimeResources = useRealtimeResources(planet, speedFactor, config);
@@ -87,9 +80,21 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         if (res.ok) {
           const data = await res.json();
           setConfig(data);
+          setConfigLoaded(true);
         }
       } catch (e) {
         console.error("Erreur chargement config", e);
+        // Use fallback config on error
+        setConfig({
+          production_metal_base: 30,
+          production_crystal_base: 20,
+          production_deuterium_base: 10,
+          production_metal_growth: 1.1,
+          production_crystal_growth: 1.1,
+          production_deuterium_growth: 1.05,
+          energy_tech_bonus: 0.01
+        });
+        setConfigLoaded(true);
       }
     };
 
@@ -177,9 +182,10 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     return Math.floor(prod);
   };
 
-  const prodMetal = calculateProduction(planet.metal_mine_level || 0, config.production_metal_base || 30, config.production_metal_growth || 1.1, 'metal');
-  const prodCrystal = calculateProduction(planet.crystal_mine_level || 0, config.production_crystal_base || 20, config.production_crystal_growth || 1.1, 'crystal');
-  const prodDeut = calculateProduction(planet.deuterium_mine_level || 0, config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05, 'deuterium');
+  // Only calculate production if config is loaded
+  const prodMetal = configLoaded ? calculateProduction(planet.metal_mine_level || 0, config.production_metal_base || 30, config.production_metal_growth || 1.1, 'metal') : 0;
+  const prodCrystal = configLoaded ? calculateProduction(planet.crystal_mine_level || 0, config.production_crystal_base || 20, config.production_crystal_growth || 1.1, 'crystal') : 0;
+  const prodDeut = configLoaded ? calculateProduction(planet.deuterium_mine_level || 0, config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05, 'deuterium') : 0;
 
   // Calcul de la capacité de stockage (600k base, x1.6 par niveau)
   const storageLevel = planet.resource_storage_level || 0;
