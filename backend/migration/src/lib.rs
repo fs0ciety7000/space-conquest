@@ -55,6 +55,7 @@ mod m20260125_100006_add_ship_building_columns;
 mod m20260125_200001_create_complete_expansion_system;
 mod m20260125_200002_seed_complete_expansion_data;
 mod m20260125_200003_fix_missing_time_columns;
+mod m20260126_000001_add_fleet_data_column;
 
 pub struct Migrator;
 
@@ -117,6 +118,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260125_200001_create_complete_expansion_system::Migration),
             Box::new(m20260125_200002_seed_complete_expansion_data::Migration),
             Box::new(m20260125_200003_fix_missing_time_columns::Migration),
+            Box::new(m20260126_000001_add_fleet_data_column::Migration),
         ]
     }
 }

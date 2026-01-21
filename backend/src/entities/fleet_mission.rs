@@ -14,6 +14,7 @@ pub struct Model {
     pub crystal: f64,
     pub deuterium: f64,
     pub ships_count: i32,
+    pub fleet_data: Option<String>, // JSON-encoded fleet composition for v2 endpoints
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

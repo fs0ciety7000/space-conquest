@@ -1265,30 +1265,28 @@ async fn join_alliance_directly(
 }
 
 async fn calculate_planet_score(planet: &planet::Model, db: &DatabaseConnection) -> i64 {
-    let building_score = (
-        planet.metal_mine_level +
-        planet.crystal_mine_level +
-        planet.deuterium_mine_level +
-        planet.solar_plant_level +
-        planet.shipyard_level +
-        planet.research_lab_level +
-        planet.hangar_level
-    ) as i64 * 100;
+    // Load all relational data at once
+    let planet_data = match tech_tree::PlanetData::load(db, planet.id).await {
+        Ok(data) => data,
+        Err(_) => return 0, // Return 0 score if data load fails
+    };
 
-    // Calculate tech score from tech tree system (NEW) - DYNAMIC
-    let tech_levels = tech_tree::get_all_planet_tech_levels(db, planet.id)
-        .await
-        .unwrap_or_default();
+    // Calculate building score from relational data
+    let building_types = vec![
+        "metal_mine", "crystal_mine", "deuterium_mine", "solar_plant",
+        "shipyard", "research_lab", "hangar", "resource_storage",
+        "alliance_depot", "missile_silo", "nanite_factory", "terraformer",
+        "fusion_plant",
+    ];
 
-    // Dynamic tech score: sum all tech levels with weight
-    let tech_score = tech_levels.values().sum::<i32>() as i64 * 150;
+    let building_score: i64 = building_types.iter()
+        .map(|&building| planet_data.building_level(building) as i64)
+        .sum::<i64>() * 100;
 
-    // Calculate fleet score from tech tree system (NEW) - DYNAMIC
-    let ship_counts = tech_tree::get_all_planet_ship_counts(db, planet.id)
-        .await
-        .unwrap_or_default();
+    // Calculate tech score from all technologies
+    let tech_score = planet_data.technologies.values().sum::<i32>() as i64 * 150;
 
-    // Dynamic ship score calculation
+    // Calculate fleet score with dynamic ship values
     let ship_base_points: std::collections::HashMap<&str, i64> = [
         ("light_hunter", 10),
         ("cruiser", 50),
@@ -1304,41 +1302,34 @@ async fn calculate_planet_score(planet: &planet::Model, db: &DatabaseConnection)
         ("solar_satellite", 3),
     ].iter().copied().collect();
 
-    let mut fleet_score = 0i64;
-    for (ship_key, count) in &ship_counts {
-        let base = ship_base_points.get(ship_key.as_str()).unwrap_or(&15);
-        fleet_score += (*count as i64) * base;
-    }
+    let fleet_score: i64 = planet_data.ships.iter()
+        .map(|(ship_key, count)| {
+            let base = ship_base_points.get(ship_key.as_str()).unwrap_or(&15);
+            (*count as i64) * base
+        })
+        .sum();
 
-    // OLD SYSTEM FALLBACK: If no data in tech tree, use old columns
-    let tech_score_fallback = if tech_score == 0 {
-        (
-            planet.energy_tech_level +
-            planet.laser_battery_level +
-            planet.espionage_tech_level +
-            planet.armour_tech_level
-        ) as i64 * 150
-    } else {
-        tech_score
-    };
+    // Calculate defense score from all defenses
+    let defense_base_points: std::collections::HashMap<&str, i64> = [
+        ("rocket_launcher", 2),
+        ("light_laser", 3),
+        ("heavy_laser", 8),
+        ("gauss_cannon", 20),
+        ("ion_cannon", 50),
+        ("plasma_turret", 100),
+        ("small_shield", 50),
+        ("large_shield", 200),
+        ("anti_missile", 20),
+        ("interplanetary_missile", 120),
+        ("missile_launcher", 5), // Legacy compatibility
+    ].iter().copied().collect();
 
-    let fleet_score_fallback = if fleet_score == 0 {
-        (
-            planet.light_hunter_count * 10 +
-            planet.cruiser_count * 50 +
-            planet.transporter_count * 5 +
-            planet.colony_ship_count * 100 +
-            planet.recycler_count * 20 +
-            planet.spy_probe_count * 1
-        ) as i64
-    } else {
-        fleet_score
-    };
+    let defense_score: i64 = planet_data.defenses.iter()
+        .map(|(defense_key, count)| {
+            let base = defense_base_points.get(defense_key.as_str()).unwrap_or(&10);
+            (*count as i64) * base
+        })
+        .sum();
 
-    let defense_score = (
-        planet.missile_launcher_count * 5 +
-        planet.plasma_turret_count * 50
-    ) as i64;
-
-    building_score + tech_score_fallback + fleet_score_fallback + defense_score
+    building_score + tech_score + fleet_score + defense_score
 }
