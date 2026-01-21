@@ -132,7 +132,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
           const data = await response.json();
           // Filter out resource buildings (mines and solar plant) as they're shown in Resources page
           const filtered = (data.building_types || []).filter((b: BuildingTypeInfo) =>
-            !['metal', 'crystal', 'deuterium', 'solar_plant'].includes(b.building_key)
+            !['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'fusion_plant'].includes(b.building_key)
           );
           setBuildingTypes(filtered);
         }
