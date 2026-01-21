@@ -25,10 +25,10 @@ export default function BeginnerProtectionBadge({
       const checkProtection = () => {
         const now = new Date();
         const protectionDate = new Date(protectionUntil);
-        const protected = protectionDate > now;
-        setIsProtected(protected);
+        const hasProtection = protectionDate > now;
+        setIsProtected(hasProtection);
 
-        if (protected) {
+        if (hasProtection) {
           const diff = protectionDate.getTime() - now.getTime();
           const days = Math.floor(diff / (1000 * 60 * 60 * 24));
           const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
