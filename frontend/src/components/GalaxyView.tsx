@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
     ChevronLeft, ChevronRight, Search,
     Crosshair, Eye, Send, Recycle, MapPin,
-    Rocket, User, List, LayoutGrid, Sparkles, X, ShieldCheck, Crown, Flag, Truck
+    Rocket, User, List, LayoutGrid, Sparkles, X, ShieldCheck, Crown, Flag, Truck, Globe
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import {
 import { apiUrl } from '@/config/api';
 import ColonizeModal from './ColonizeModal';
 import BeginnerProtectionBadge from './BeginnerProtectionBadge';
+import Galaxy3DView from './galaxy3d/Galaxy3DView';
 // --- INTERFACES ---
 
 interface GalaxySlot {
@@ -48,7 +49,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const [system, setSystem] = useState(planet.system);
     const [slots, setSlots] = useState<GalaxySlot[]>([]);
     const [loading, setLoading] = useState(false);
-    const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
+    const [viewMode, setViewMode] = useState<'list' | 'map' | '3d'>('map');
     const [selectedSlot, setSelectedSlot] = useState<GalaxySlot | null>(null);
     const [showColonizeModal, setShowColonizeModal] = useState(false);
     const [colonizePosition, setColonizePosition] = useState<number>(0); 
@@ -178,6 +179,9 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                     <button onClick={() => setViewMode('map')} className={`px-4 py-2 rounded-md text-xs font-bold uppercase flex items-center gap-2 transition-all hover:scale-105 ${viewMode === 'map' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-white/5'}`}>
                         <LayoutGrid size={16} /> Carte
                     </button>
+                    <button onClick={() => setViewMode('3d')} className={`px-4 py-2 rounded-md text-xs font-bold uppercase flex items-center gap-2 transition-all hover:scale-105 ${viewMode === '3d' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-white/5'}`}>
+                        <Globe size={16} /> Galaxie 3D
+                    </button>
                 </div>
 
                 <Button onClick={fetchSystem} disabled={loading} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 shadow-lg shadow-indigo-500/20 card-depth hover:scale-105 hover:shadow-2xl transition-all duration-300">
@@ -185,16 +189,27 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                 </Button>
             </div>
 
-            {viewMode === 'list' ? (
+            {viewMode === '3d' ? (
+                <Galaxy3DView
+                    galaxy={galaxy}
+                    system={system}
+                    currentPlanet={planet}
+                    onSystemSelect={(sys) => setSystem(sys)}
+                    onNavigateAttack={(id, name, g, s, p) => onNavigateAttack(id, name)}
+                    onNavigateSpy={(id, name, g, s, p) => onNavigateSpy(id)}
+                    onNavigateTransport={(id, name, g, s, p) => onNavigateTransport(id, name, g, s, p)}
+                    onColonizeClick={handleColonize}
+                />
+            ) : viewMode === 'list' ? (
                 <div className="rounded-xl border border-white/5 overflow-hidden bg-slate-950/50 shadow-2xl card-depth glass-card animate-slide-up hover:shadow-3xl transition-all duration-500">
-                    <ListView 
-                        slots={slots} 
-                        onNavigateAttack={onNavigateAttack} 
-                        onNavigateSpy={onNavigateSpy} 
-                        onNavigateTransport={(id: string, name: string, position: number) => onNavigateTransport(id, name, galaxy, system, position)} 
-                        handleColonize={handleColonize} 
-                        handleRecycle={handleRecycle} 
-                        getPlanetStyle={getPlanetStyle} 
+                    <ListView
+                        slots={slots}
+                        onNavigateAttack={onNavigateAttack}
+                        onNavigateSpy={onNavigateSpy}
+                        onNavigateTransport={(id: string, name: string, position: number) => onNavigateTransport(id, name, galaxy, system, position)}
+                        handleColonize={handleColonize}
+                        handleRecycle={handleRecycle}
+                        getPlanetStyle={getPlanetStyle}
                     />
                 </div>
             ) : (
