@@ -106,6 +106,20 @@ struct ExpeditionPayloadV2 {
 }
 
 #[derive(Deserialize)]
+struct AttackPayloadV2 {
+    target_planet_id: Uuid,
+    // Generic fleet composition using ship_key -> count mapping
+    fleet: HashMap<String, i32>,
+}
+
+#[derive(Deserialize)]
+struct SpyPayloadV2 {
+    target_planet_id: Uuid,
+    // Generic fleet composition using ship_key -> count mapping (usually just spy_probe)
+    fleet: HashMap<String, i32>,
+}
+
+#[derive(Deserialize)]
 struct TransportPayload {
     target_planet_id: Uuid,
     transporters: i32,
@@ -227,7 +241,9 @@ async fn main() {
         .route("/ship/:ship_key", get(get_ship_details_handler))
         // Actions
         .route("/attack", post(attack_handler))
+        .route("/attack/v2", post(attack_v2_handler))
         .route("/spy", post(spy_handler))
+        .route("/spy/v2", post(spy_v2_handler))
         .route("/recycle", post(recycle_handler))
         .route("/transport", post(transport_handler))
         .route("/colonize", post(colonize_handler))
@@ -1785,6 +1801,158 @@ async fn attack_handler(
     }))).into_response()
 }
 
+async fn attack_v2_handler(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+    Json(payload): Json<AttackPayloadV2>,
+) -> impl IntoResponse {
+    let attacker_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let attacker_id = match Uuid::parse_str(&attacker_id_str) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "ID Attaquant invalide"}))).into_response(),
+    };
+
+    let att_planet = match Planet::find_by_id(attacker_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Attaquant introuvable"}))).into_response(),
+    };
+
+    let target_planet = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible introuvable"}))).into_response(),
+    };
+
+    // Validate fleet
+    if payload.fleet.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "No ships selected"}))).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // ═══════════════════════════════════════════════════════════════════════════
+    let attacker_owner_id = att_planet.owner_id;
+    let defender_owner_id = target_planet.owner_id;
+
+    let mut used_casus_belli = false;
+    if let Ok(has_cb) = sabotage::has_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {
+        if has_cb {
+            // Consommer le casus belli
+            if let Ok(_) = sabotage::consume_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {
+                used_casus_belli = true;
+                println!("⚔️ Casus Belli consommé: attacker {} vs defender {}", attacker_owner_id, defender_owner_id);
+            }
+        }
+    }
+
+    // Verify planet has all requested ships
+    let mut total_ships = 0;
+    for (ship_key, &count) in &payload.fleet {
+        if count <= 0 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
+        }
+
+        // Get ship type
+        let ship = match ShipType::find()
+            .filter(ship_type::Column::ShipKey.eq(ship_key))
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(s)) => s,
+            Ok(None) => return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Unknown ship type: {}", ship_key)}))).into_response(),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+        };
+
+        // Check if planet has enough of this ship
+        let planet_ship_count = match PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(attacker_id))
+            .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(ps)) => ps.count,
+            Ok(None) => 0,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+        };
+
+        if count > planet_ship_count {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Not enough {}", ship.display_name)}))).into_response();
+        }
+
+        total_ships += count;
+    }
+
+    // Deduct ships from attacker
+    for (ship_key, &count) in &payload.fleet {
+        if let Err(_) = tech_tree::deduct_ships(&state.db, attacker_id, ship_key, count).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to deduct {}", ship_key)}))).into_response();
+        }
+    }
+
+    let dist = game_logic::calculate_distance(
+        (att_planet.galaxy, att_planet.system, att_planet.position),
+        (target_planet.galaxy, target_planet.system, target_planet.position)
+    );
+    let speed_factor = state.config.read().unwrap().speed_factor;
+    let travel_time = game_logic::calculate_flight_time(dist, speed_factor);
+    let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time);
+
+    // Serialize fleet to JSON
+    let fleet_json = match serde_json::to_string(&payload.fleet) {
+        Ok(json) => json,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to serialize fleet"}))).into_response(),
+    };
+
+    let new_mission = fleet_mission::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        source_planet_id: Set(attacker_id),
+        target_planet_id: Set(payload.target_planet_id),
+        mission_type: Set("attack".to_string()),
+        arrival_time: Set(arrival),
+        metal: Set(0.0),
+        crystal: Set(0.0),
+        deuterium: Set(0.0),
+        ships_count: Set(total_ships),
+        fleet_data: Set(Some(fleet_json)),
+        ..Default::default()
+    };
+    new_mission.insert(&state.db).await.unwrap();
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NOTIFICATION WEBSOCKET - Alerter le défenseur de l'attaque entrante
+    // ═══════════════════════════════════════════════════════════════════════════
+    if let Ok(Some(attacker_planet)) = Planet::find_by_id(attacker_id).one(&state.db).await {
+        let attacker_owner_id = attacker_planet.owner_id;
+
+        // Mise à jour missions quotidiennes & achievements
+        missions::update_mission_progress(&state, attacker_owner_id, "attack", "any", 1).await;
+        missions::update_achievement_progress(&state, attacker_owner_id, "attacks", 1).await;
+
+        if let Some(ref ws) = state.ws {
+            if let Ok(Some(attacker_user)) = User::find_by_id(attacker_owner_id).one(&state.db).await {
+                let source_coords = format!(
+                    "[{}:{}:{}]",
+                    attacker_planet.galaxy, attacker_planet.system, attacker_planet.position
+                );
+                websocket::notify_attack_incoming(
+                    ws,
+                    payload.target_planet_id,
+                    &attacker_user.username,
+                    &source_coords,
+                    &arrival.to_string(),
+                    total_ships,
+                );
+            }
+        }
+    }
+
+    (StatusCode::OK, Json(json!({
+        "status": "success",
+        "message": "Flotte en route",
+        "arrival": arrival,
+        "used_casus_belli": used_casus_belli
+    }))).into_response()
+}
+
 async fn expedition_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
@@ -2444,6 +2612,157 @@ async fn spy_handler(
     }))).into_response()
 }
 
+async fn spy_v2_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<SpyPayloadV2>,
+) -> impl IntoResponse {
+
+    let attacker_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let attacker_id = Uuid::parse_str(&attacker_id_str).unwrap_or_default();
+
+    let att_planet_opt = Planet::find_by_id(attacker_id).one(&state.db).await.unwrap();
+    let def_planet_opt = Planet::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap();
+
+    let att_planet = match att_planet_opt { Some(p) => p, None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Attaquant inconnu"}))).into_response() };
+    let def_planet = match def_planet_opt { Some(p) => p, None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible inconnue"}))).into_response() };
+
+    // Validate fleet
+    if payload.fleet.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "No ships selected"}))).into_response();
+    }
+
+    // Verify planet has all requested ships and deduct them
+    for (ship_key, &count) in &payload.fleet {
+        if count <= 0 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
+        }
+
+        // Get ship type
+        let ship = match ShipType::find()
+            .filter(ship_type::Column::ShipKey.eq(ship_key))
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(s)) => s,
+            Ok(None) => return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Unknown ship type: {}", ship_key)}))).into_response(),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+        };
+
+        // Check if planet has enough of this ship
+        let planet_ship_count = match PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(attacker_id))
+            .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(ps)) => ps.count,
+            Ok(None) => 0,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+        };
+
+        if count > planet_ship_count {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Not enough {}", ship.display_name)}))).into_response();
+        }
+
+        // Deduct ships
+        if let Err(_) = tech_tree::deduct_ships(&state.db, att_planet.id, ship_key, count).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to deduct {}", ship_key)}))).into_response();
+        }
+    }
+
+    // Load relational data for both planets
+    let att_data = match tech_tree::PlanetData::load(&state.db, att_planet.id).await {
+        Ok(data) => data,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to load attacker data"}))).into_response(),
+    };
+    let def_data = match tech_tree::PlanetData::load(&state.db, def_planet.id).await {
+        Ok(data) => data,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to load defender data"}))).into_response(),
+    };
+
+    let tech_diff = att_data.tech_level("espionage_tech") - def_data.tech_level("espionage_tech");
+
+    let mut detection = "none";
+    let mut resources = None;
+    let mut fleet = None;
+    let mut defense = None;
+
+    if tech_diff >= -1 {
+        detection = "resources";
+        resources = Some(game_logic::Cost {
+            metal: def_planet.metal_amount,
+            crystal: def_planet.crystal_amount,
+            deuterium: def_planet.deuterium_amount
+        });
+    }
+
+    if tech_diff >= 1 {
+        detection = "fleet";
+        // Get all ships from relational data
+        fleet = Some(def_data.ships.clone());
+    }
+
+    if tech_diff >= 2 {
+        detection = "full";
+        // Get all defenses from relational data
+        let total_defense: i32 = def_data.defenses.values().sum();
+        defense = Some(total_defense);
+    }
+
+    // Notify the defender that they were spied on
+    let mut def_active: planet::ActiveModel = def_planet.clone().into();
+    def_active.unread_report = Set(Some(json!({
+        "type": "spy_alert",
+        "message": "Votre planète a été espionnée !"
+    }).to_string()));
+    let _ = def_active.update(&state.db).await;
+
+    // Create a spy report in combat_log for the defender
+    let att_user = User::find_by_id(att_planet.owner_id).one(&state.db).await.unwrap();
+    let attacker_username = att_user.map(|u| u.username.clone()).unwrap_or("Inconnu".to_string());
+
+    let spy_log = combat_log::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(def_planet.id),
+        target_name: Set(att_planet.name.clone()),
+        opponent_username: Set(Some(attacker_username.clone())),
+        mission_type: Set("spy_defense".to_string()),
+        result: Set("alert".to_string()),
+        loot_metal: Set(0.0),
+        loot_crystal: Set(0.0),
+        ships_lost: Set(0),
+        date: Set(Utc::now().naive_utc()),
+        detailed_report: Set(None), // Pas de détails de combat pour l'espionnage
+    };
+    let _ = spy_log.insert(&state.db).await;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NOTIFICATION WEBSOCKET - Alerter le défenseur de l'espionnage
+    // ═══════════════════════════════════════════════════════════════════════════
+    if let Some(ref ws) = state.ws {
+        websocket::notify_spy_alert(ws, def_planet.id, &attacker_username);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MISE À JOUR MISSIONS QUOTIDIENNES & ACHIEVEMENTS
+    // ═══════════════════════════════════════════════════════════════════════════
+    missions::update_mission_progress(&state, att_planet.owner_id, "spy", "any", 1).await;
+    missions::update_achievement_progress(&state, att_planet.owner_id, "spy_missions", 1).await;
+
+    (StatusCode::OK, Json(json!({
+        "status": "success",
+        "report": {
+            "success": true,
+            "tech_difference": tech_diff,
+            "detection_level": detection,
+            "resources": resources,
+            "fleet": fleet,
+            "defense": defense
+        }
+    }))).into_response()
+}
+
 async fn recycle_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -2794,6 +3113,7 @@ async fn transport_handler(
     let mission = fleet_mission::ActiveModel {
         id: Set(Uuid::new_v4()), source_planet_id: Set(source_id), target_planet_id: Set(target_id), mission_type: Set("transport".to_string()), arrival_time: Set(arrival),
         metal: Set(payload.metal), crystal: Set(payload.crystal), deuterium: Set(payload.deuterium), ships_count: Set(payload.transporters),
+        fleet_data: Set(None),
     };
 
     let log = transport_log::ActiveModel {
