@@ -73,7 +73,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     production_metal_growth: 1.1,
     production_crystal_growth: 1.1,
     production_deuterium_growth: 1.05,
-    energy_tech_bonus: 0.01,
+    energy_tech_bonus: 0.10,
     mining_speed_multiplier: 1.0
   });
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -101,7 +101,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
           production_metal_growth: 1.1,
           production_crystal_growth: 1.1,
           production_deuterium_growth: 1.05,
-          energy_tech_bonus: 0.01,
+          energy_tech_bonus: 0.10,
           mining_speed_multiplier: 1.0
         });
         setConfigLoaded(true);
