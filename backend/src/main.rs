@@ -4221,7 +4221,8 @@ async fn get_tech_tree_handler(
     State(state): State<AppState>,
     Path(planet_id): Path<Uuid>,
 ) -> impl IntoResponse {
-    match tech_tree::get_tech_tree_for_planet(&state.db, planet_id).await {
+    let config = state.config.read().unwrap().clone();
+    match tech_tree::get_tech_tree_for_planet(&state.db, planet_id, &config).await {
         Ok(tech_tree_data) => Json(json!({ "technologies": tech_tree_data })).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch tech tree"}))).into_response(),
     }
@@ -4277,7 +4278,19 @@ async fn get_building_types_handler(
     State(state): State<AppState>,
     Path(planet_id): Path<Uuid>,
 ) -> impl IntoResponse {
-    match tech_tree::get_building_types_for_planet(&state.db, planet_id).await {
+    // Get planet
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+        Err(e) => {
+            eprintln!("❌ Error fetching planet {}: {:?}", planet_id, e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch planet"}))).into_response();
+        }
+    };
+
+    let config = state.config.read().unwrap().clone();
+
+    match tech_tree::get_building_types_for_planet(&state.db, planet_id, &planet, &config).await {
         Ok(building_types) => Json(json!({ "building_types": building_types })).into_response(),
         Err(e) => {
             eprintln!("❌ Error fetching building types for planet {}: {:?}", planet_id, e);

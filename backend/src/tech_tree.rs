@@ -22,6 +22,7 @@ pub struct TechInfo {
     pub cost_multiplier: f64,
     pub current_level: i32,
     pub requirements: Vec<TechRequirement>,
+    pub next_level_time_seconds: Option<i64>, // Calculated time for next level research
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +78,7 @@ pub struct BuildingTypeInfo {
     pub cost_multiplier: f64,
     pub current_level: i32,
     pub requirements: Vec<BuildingRequirementInfo>,
+    pub next_level_time_seconds: Option<i64>, // Calculated time for next level upgrade
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,6 +177,7 @@ pub async fn get_all_planet_tech_levels(
 pub async fn get_tech_tree_for_planet(
     db: &DatabaseConnection,
     planet_id: Uuid,
+    config: &crate::ServerConfigCache,
 ) -> Result<Vec<TechInfo>, sea_orm::DbErr> {
     // Get all technologies
     let all_techs = Technology::find().all(db).await?;
@@ -190,6 +193,16 @@ pub async fn get_tech_tree_for_planet(
         // Get requirements for this tech
         let requirements = get_tech_requirements(db, tech.id, planet_id).await?;
 
+        // Calculate next level research time
+        let next_level_time = if current_level >= 0 {
+            let time = calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level);
+            // Apply construction speed multiplier
+            let speed_factor = (config.speed_factor / 100.0) * config.construction_speed;
+            Some(std::cmp::max(10, (time as f64 / speed_factor) as i64))
+        } else {
+            None
+        };
+
         result.push(TechInfo {
             id: tech.id,
             tech_key: tech.tech_key,
@@ -202,6 +215,7 @@ pub async fn get_tech_tree_for_planet(
             cost_multiplier: tech.cost_multiplier,
             current_level,
             requirements,
+            next_level_time_seconds: next_level_time,
         });
     }
 
@@ -507,15 +521,31 @@ pub async fn get_all_planet_building_levels(
 pub async fn get_building_types_for_planet(
     db: &DatabaseConnection,
     planet_id: Uuid,
+    _planet: &crate::entities::planet::Model,
+    config: &crate::ServerConfigCache,
 ) -> Result<Vec<BuildingTypeInfo>, sea_orm::DbErr> {
+    use crate::game_logic;
+
     let all_buildings = BuildingType::find().all(db).await?;
     let planet_building_levels = get_all_planet_building_levels(db, planet_id).await?;
+
+    // Get shipyard level from relational table
+    let shipyard_level = *planet_building_levels.get("shipyard").unwrap_or(&0);
 
     let mut result = Vec::new();
 
     for building in all_buildings {
         let current_level = *planet_building_levels.get(&building.building_key).unwrap_or(&0);
         let requirements = get_building_requirements(db, building.id, planet_id).await?;
+
+        // Calculate next level build time
+        let next_level_time = if current_level >= 0 {
+            let next_cost_metal = calculate_building_cost(building.base_cost_metal, building.cost_multiplier, current_level);
+            let next_cost_crystal = calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, current_level);
+            Some(game_logic::get_build_time(next_cost_metal as f64, next_cost_crystal as f64, shipyard_level, config))
+        } else {
+            None
+        };
 
         result.push(BuildingTypeInfo {
             id: building.id,
@@ -529,6 +559,7 @@ pub async fn get_building_types_for_planet(
             cost_multiplier: building.cost_multiplier,
             current_level,
             requirements,
+            next_level_time_seconds: next_level_time,
         });
     }
 
