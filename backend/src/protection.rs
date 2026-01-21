@@ -73,6 +73,8 @@ pub async fn calculate_user_points(
     db: &DatabaseConnection,
     user_id: Uuid,
 ) -> Result<i64, sea_orm::DbErr> {
+    use crate::entities::{prelude::*, planet_ship, ship_type, planet_building, building_type};
+
     // Get all planets owned by this user
     let planets = Planet::find()
         .filter(planet::Column::OwnerId.eq(user_id))
@@ -87,18 +89,40 @@ pub async fn calculate_user_points(
         total_points += (planet.crystal_amount / 1000.0) as i64;
         total_points += (planet.deuterium_amount / 1000.0) as i64;
 
-        // Buildings (1000 points per level)
-        total_points += (planet.metal_mine_level as i64) * 1000;
-        total_points += (planet.crystal_mine_level as i64) * 1000;
-        total_points += (planet.deuterium_mine_level as i64) * 1000;
-        total_points += (planet.solar_plant_level as i64) * 1000;
-        total_points += (planet.shipyard_level as i64) * 2000;
-        total_points += (planet.research_lab_level as i64) * 3000;
+        // Buildings from planet_buildings table
+        let planet_buildings = PlanetBuilding::find()
+            .filter(planet_building::Column::PlanetId.eq(planet.id))
+            .all(db)
+            .await?;
 
-        // Ships (from legacy columns - TODO: update when using ship_types table)
-        total_points += (planet.light_hunter_count as i64) * 3000;
-        total_points += (planet.cruiser_count as i64) * 27000;
-        total_points += (planet.transporter_count as i64) * 4000;
+        for pb in planet_buildings {
+            // Each building level = 1000 points
+            // Special buildings get more points
+            if let Ok(Some(building)) = BuildingType::find_by_id(pb.building_type_id).one(db).await {
+                let multiplier = match building.building_key.as_str() {
+                    "shipyard" => 2000,
+                    "research_lab" => 3000,
+                    "missile_silo" => 2000,
+                    _ => 1000,
+                };
+                total_points += (pb.level as i64) * multiplier;
+            }
+        }
+
+        // Ships from planet_ships table
+        let planet_ships = PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(planet.id))
+            .all(db)
+            .await?;
+
+        for ps in planet_ships {
+            // Get ship cost from ship_types table and calculate points
+            if let Ok(Some(ship)) = ShipType::find_by_id(ps.ship_type_id).one(db).await {
+                // Points = (metal + crystal + deuterium) * count
+                let ship_value = ship.cost_metal + ship.cost_crystal + ship.cost_deuterium;
+                total_points += (ship_value as i64) * (ps.count as i64);
+            }
+        }
     }
 
     Ok(total_points)
