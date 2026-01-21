@@ -4078,7 +4078,10 @@ async fn get_ship_types_handler(
 ) -> impl IntoResponse {
     match tech_tree::get_ship_types_for_planet(&state.db, planet_id).await {
         Ok(ship_types) => Json(json!({ "ship_types": ship_types })).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch ship types"}))).into_response(),
+        Err(e) => {
+            eprintln!("❌ Error fetching ship types for planet {}: {:?}", planet_id, e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to fetch ship types"}))).into_response()
+        }
     }
 }
 
