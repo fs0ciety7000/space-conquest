@@ -111,3 +111,4 @@ pub async fn reload_server_config(state: &AppState) {
 
 // Admin doit être déclaré APRÈS AppState et ServerConfigCache
 pub mod admin;
+pub mod admin_content;

@@ -38,7 +38,7 @@ use sea_orm_migration::MigratorTrait;
 
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
-    auth, game_logic, combat, entities, config, admin,
+    auth, game_logic, combat, entities, config, admin, admin_content,
     messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, AppState
 };
 
@@ -307,6 +307,32 @@ async fn main() {
         .route("/admin/announcements", post(admin::create_announcement_handler))
         .route("/admin/announcements/:id", patch(admin::update_announcement_handler))
         .route("/admin/announcements/:id", delete(admin::delete_announcement_handler))
+        // Admin Content Management - Ships
+        .route("/admin/ships", get(admin_content::list_ship_types_handler))
+        .route("/admin/ships", post(admin_content::create_ship_type_handler))
+        .route("/admin/ships/:id", patch(admin_content::update_ship_type_handler))
+        .route("/admin/ships/:id", delete(admin_content::delete_ship_type_handler))
+        .route("/admin/ships/:ship_type_id/requirements", get(admin_content::list_ship_requirements_handler))
+        .route("/admin/ships/requirements", post(admin_content::create_ship_requirement_handler))
+        .route("/admin/ships/requirements/:id", delete(admin_content::delete_ship_requirement_handler))
+        // Admin Content Management - Buildings
+        .route("/admin/buildings", get(admin_content::list_building_types_handler))
+        .route("/admin/buildings", post(admin_content::create_building_type_handler))
+        .route("/admin/buildings/:id", patch(admin_content::update_building_type_handler))
+        .route("/admin/buildings/:id", delete(admin_content::delete_building_type_handler))
+        .route("/admin/buildings/:building_type_id/requirements", get(admin_content::list_building_requirements_handler))
+        .route("/admin/buildings/requirements", post(admin_content::create_building_requirement_handler))
+        .route("/admin/buildings/requirements/:id", delete(admin_content::delete_building_requirement_handler))
+        // Admin Content Management - Defenses
+        .route("/admin/defenses", get(admin_content::list_defense_types_handler))
+        .route("/admin/defenses", post(admin_content::create_defense_type_handler))
+        .route("/admin/defenses/:id", patch(admin_content::update_defense_type_handler))
+        .route("/admin/defenses/:id", delete(admin_content::delete_defense_type_handler))
+        .route("/admin/defenses/:defense_type_id/requirements", get(admin_content::list_defense_requirements_handler))
+        .route("/admin/defenses/requirements", post(admin_content::create_defense_requirement_handler))
+        .route("/admin/defenses/requirements/:id", delete(admin_content::delete_defense_requirement_handler))
+        // Admin Content Management - Technologies (read-only for reference)
+        .route("/admin/technologies", get(admin_content::list_technologies_handler))
         // Game tick system
         .route("/tick", post(tick_handler))
         // Alliance system
