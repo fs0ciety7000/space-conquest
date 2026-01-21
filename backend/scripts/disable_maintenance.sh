@@ -39,8 +39,16 @@ echo "✅ Désactivation du mode maintenance..."
 echo "   Base de données: $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME"
 
 PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" <<EOF
--- Désactiver la maintenance
-UPDATE server_config SET config_value = 'false', updated_at = NOW() WHERE config_key = 'maintenance_enabled';
+-- Fix sequence for server_config auto-increment (in case this is first insert)
+SELECT setval(pg_get_serial_sequence('server_config', 'id'),
+              COALESCE((SELECT MAX(id) FROM server_config), 0) + 1,
+              false);
+
+-- Désactiver la maintenance (INSERT if not exists, UPDATE if exists)
+INSERT INTO server_config (config_key, config_value, updated_at)
+VALUES ('maintenance_enabled', 'false', NOW())
+ON CONFLICT (config_key) DO UPDATE
+SET config_value = 'false', updated_at = NOW();
 
 -- Vérifier
 SELECT config_key, config_value FROM server_config WHERE config_key = 'maintenance_enabled';
