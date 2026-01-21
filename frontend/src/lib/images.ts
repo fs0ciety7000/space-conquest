@@ -39,10 +39,15 @@ export const getBuildingImage = (buildingType: string): string => {
  */
 export const getResourceImage = (resourceType: string): string => {
   const images: Record<string, string> = {
+    // Old system keys (backward compatibility)
     metal: '/images/resources/resource-metal-mine.webp',
     crystal: '/images/resources/resource-crystal-mine.webp',
     deuterium: '/images/resources/resource-deuterium-synth.webp',
-    solar_plant: '/images/buildings/building-solar-plant.webp', // Même image que bâtiment
+    // New system keys
+    metal_mine: '/images/resources/resource-metal-mine.webp',
+    crystal_mine: '/images/resources/resource-crystal-mine.webp',
+    deuterium_mine: '/images/resources/resource-deuterium-synth.webp',
+    solar_plant: '/images/buildings/building-solar-plant.webp',
   };
 
   return images[resourceType] || '/images/misc/placeholder.svg';
