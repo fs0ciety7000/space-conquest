@@ -9,6 +9,53 @@ use uuid::Uuid;
 
 // ========== STRUCTURES ==========
 
+/// Consolidated planet data from relational tables
+/// Use this instead of accessing planet.xxx_level directly
+#[derive(Debug, Clone)]
+pub struct PlanetData {
+    pub buildings: HashMap<String, i32>,
+    pub technologies: HashMap<String, i32>,
+    pub ships: HashMap<String, i32>,
+    pub defenses: HashMap<String, i32>,
+}
+
+impl PlanetData {
+    /// Load all relational data for a planet in one go
+    pub async fn load(db: &DatabaseConnection, planet_id: Uuid) -> Result<Self, sea_orm::DbErr> {
+        let buildings = get_all_planet_building_levels(db, planet_id).await?;
+        let technologies = get_all_planet_tech_levels(db, planet_id).await?;
+        let ships = get_all_planet_ship_counts(db, planet_id).await?;
+        let defenses = get_all_planet_defense_counts(db, planet_id).await?;
+
+        Ok(PlanetData {
+            buildings,
+            technologies,
+            ships,
+            defenses,
+        })
+    }
+
+    /// Get building level (returns 0 if not found)
+    pub fn building_level(&self, key: &str) -> i32 {
+        *self.buildings.get(key).unwrap_or(&0)
+    }
+
+    /// Get technology level (returns 0 if not found)
+    pub fn tech_level(&self, key: &str) -> i32 {
+        *self.technologies.get(key).unwrap_or(&0)
+    }
+
+    /// Get ship count (returns 0 if not found)
+    pub fn ship_count(&self, key: &str) -> i32 {
+        *self.ships.get(key).unwrap_or(&0)
+    }
+
+    /// Get defense count (returns 0 if not found)
+    pub fn defense_count(&self, key: &str) -> i32 {
+        *self.defenses.get(key).unwrap_or(&0)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TechInfo {
     pub id: i32,
