@@ -3094,8 +3094,8 @@ async fn colonize_handler(
         .await
         .unwrap_or(0);
 
-    // Récupérer le niveau d'astrophysique
-    let astrophysics_level = match tech_tree::get_player_tech_level(&state.db, owner_id, "astrophysics").await {
+    // Récupérer le niveau d'astrophysique depuis la planète actuelle
+    let astrophysics_level = match tech_tree::get_planet_tech_level(&state.db, current_id, "astrophysics").await {
         Ok(level) => level,
         Err(_) => 0
     };
@@ -3223,8 +3223,8 @@ async fn get_my_planets_handler(
         let owner_id = p.owner_id;
         let my_planets = Planet::find().filter(planet::Column::OwnerId.eq(owner_id)).all(&state.db).await.unwrap_or_default();
 
-        // Récupérer le niveau d'astrophysique pour calculer la limite
-        let astrophysics_level = tech_tree::get_player_tech_level(&state.db, owner_id, "astrophysics").await.unwrap_or(0);
+        // Récupérer le niveau d'astrophysique pour calculer la limite depuis la planète actuelle
+        let astrophysics_level = tech_tree::get_planet_tech_level(&state.db, current_id, "astrophysics").await.unwrap_or(0);
         let max_colonies = std::cmp::min(astrophysics_level, 10);
         let colony_count = my_planets.iter().filter(|p| !p.is_homeworld).count();
 
