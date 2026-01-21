@@ -54,7 +54,7 @@ echo -e "${CYAN}USER DATA ANALYSIS${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
-USER_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d space_db_verify -t -A -c "SELECT COUNT(*) FROM "user"")
+USER_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d space_db_verify -t -A -c 'SELECT COUNT(*) FROM "user"')
 echo -e "${GREEN}Total users to migrate: $USER_COUNT${NC}"
 echo ""
 
@@ -65,11 +65,11 @@ PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d space_db_verify -c \
     email,
     COALESCE(role, 'player') as role,
     COALESCE(created_at::date::text, 'Unknown') as created
-FROM "user"
+FROM \"user\"
 ORDER BY created_at ASC
 LIMIT 10" 2>/dev/null || \
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d space_db_verify -c \
-"SELECT username, email FROM "user" LIMIT 10"
+'SELECT username, email FROM "user" LIMIT 10'
 
 if [ $USER_COUNT -gt 10 ]; then
     echo -e "${BLUE}... and $((USER_COUNT - 10)) more users${NC}"
@@ -98,7 +98,7 @@ PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d space_db_verify -c \
     ROUND(AVG(COALESCE(p.crystal_mine_level, 1)))::int as avg_crystal_mine,
     ROUND(AVG(COALESCE(p.deuterium_mine_level, 1)))::int as avg_deut_mine
 FROM planet p
-JOIN "user" u ON p.owner_id = u.id
+JOIN \"user\" u ON p.owner_id = u.id
 GROUP BY u.id, u.username
 ORDER BY u.username
 LIMIT 10" 2>/dev/null || echo "Could not calculate averages - table structure may differ"
@@ -121,7 +121,7 @@ PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d space_db_verify -c \
     SUM(COALESCE(p.colony_ship_count, 0)) as colony_ships,
     SUM(COALESCE(p.transporter_count, 0)) as transporters
 FROM planet p
-JOIN "user" u ON p.owner_id = u.id
+JOIN \"user\" u ON p.owner_id = u.id
 GROUP BY u.id, u.username
 ORDER BY u.username
 LIMIT 10" 2>/dev/null || echo "Could not analyze fleet data - columns may not exist"
@@ -153,7 +153,7 @@ PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d space_db_verify -c \
     MAX(COALESCE(p.espionage_tech_level, 0)) as espionage_tech,
     MAX(COALESCE(p.armour_tech_level, 0)) as armour_tech
 FROM planet p
-JOIN "user" u ON p.owner_id = u.id
+JOIN \"user\" u ON p.owner_id = u.id
 GROUP BY u.id, u.username
 ORDER BY u.username
 LIMIT 10" 2>/dev/null || echo "Could not analyze technology data"
