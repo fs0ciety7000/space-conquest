@@ -64,13 +64,22 @@ echo -e "${YELLOW}Application du patch...${NC}"
 PGPASSWORD=$SOURCE_DB_PASSWORD psql -h $SOURCE_DB_HOST -U $SOURCE_DB_USER -d $SOURCE_DB_NAME <<'EOF'
 BEGIN;
 
+-- Create a temporary view to identify homeworlds (oldest planet per player)
+CREATE TEMP VIEW homeworld_planets AS
+SELECT id, owner_id FROM (
+    SELECT id, owner_id,
+           ROW_NUMBER() OVER (PARTITION BY owner_id ORDER BY created_at ASC) as rn
+    FROM planet
+) as ranked
+WHERE rn = 1;
+
 -- 1. Ajouter des ressources à toutes les planètes homeworld
 UPDATE planet
 SET
     metal_amount = metal_amount + 250000,
     crystal_amount = crystal_amount + 125000,
     deuterium_amount = deuterium_amount + 75000
-WHERE is_homeworld = true;
+WHERE id IN (SELECT id FROM homeworld_planets);
 
 -- 2. Augmenter les niveaux de mines (+2 niveaux à toutes les mines)
 UPDATE planet_buildings pb
@@ -78,7 +87,7 @@ SET level = level + 2
 FROM building_types bt
 WHERE pb.building_type_id = bt.id
   AND bt.building_key IN ('metal_mine', 'crystal_mine', 'deuterium_mine')
-  AND pb.planet_id IN (SELECT id FROM planet WHERE is_homeworld = true);
+  AND pb.planet_id IN (SELECT id FROM homeworld_planets);
 
 -- 3. Augmenter la centrale solaire (+5 niveaux)
 UPDATE planet_buildings pb
@@ -86,7 +95,7 @@ SET level = level + 5
 FROM building_types bt
 WHERE pb.building_type_id = bt.id
   AND bt.building_key = 'solar_plant'
-  AND pb.planet_id IN (SELECT id FROM planet WHERE is_homeworld = true);
+  AND pb.planet_id IN (SELECT id FROM homeworld_planets);
 
 -- 4. Ajuster la vitesse de construction à 300
 INSERT INTO server_config (config_key, config_value, updated_at)
@@ -100,7 +109,7 @@ SELECT '✓ Patch appliqué avec succès!' as message;
 SELECT
     COUNT(DISTINCT p.owner_id) as joueurs_affectés
 FROM planet p
-WHERE p.is_homeworld = true;
+WHERE p.id IN (SELECT id FROM homeworld_planets);
 
 -- Afficher quelques résultats
 SELECT
@@ -117,7 +126,7 @@ SELECT
      WHERE pb.planet_id = p.id AND bt.building_key = 'solar_plant' LIMIT 1) as solar_plant
 FROM planet p
 JOIN "user" u ON p.owner_id = u.id
-WHERE p.is_homeworld = true
+WHERE p.id IN (SELECT id FROM homeworld_planets)
 ORDER BY u.username
 LIMIT 10;
 
