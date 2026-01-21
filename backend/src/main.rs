@@ -39,7 +39,7 @@ use sea_orm_migration::MigratorTrait;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -1891,10 +1891,25 @@ async fn attack_handler(
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // BEGINNER PROTECTION - Validate attack is allowed
     // ═══════════════════════════════════════════════════════════════════════════
     let attacker_owner_id = att_planet.owner_id;
     let defender_owner_id = target_planet.owner_id;
+
+    let config_clone = state.config.read().unwrap().clone();
+    if let Err(error_msg) = protection::validate_attack(
+        &state.db,
+        attacker_owner_id,
+        defender_owner_id,
+        payload.target_planet_id,
+        &config_clone,
+    ).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": error_msg}))).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // ═══════════════════════════════════════════════════════════════════════════
 
     let mut used_casus_belli = false;
     if let Ok(has_cb) = sabotage::has_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {
@@ -2019,10 +2034,25 @@ async fn attack_v2_handler(
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // BEGINNER PROTECTION - Validate attack is allowed
     // ═══════════════════════════════════════════════════════════════════════════
     let attacker_owner_id = att_planet.owner_id;
     let defender_owner_id = target_planet.owner_id;
+
+    let config_clone = state.config.read().unwrap().clone();
+    if let Err(error_msg) = protection::validate_attack(
+        &state.db,
+        attacker_owner_id,
+        defender_owner_id,
+        payload.target_planet_id,
+        &config_clone,
+    ).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": error_msg}))).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // ═══════════════════════════════════════════════════════════════════════════
 
     let mut used_casus_belli = false;
     if let Ok(has_cb) = sabotage::has_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {

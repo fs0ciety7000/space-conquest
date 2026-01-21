@@ -19,6 +19,7 @@ pub mod sabotage;
 pub mod tech_tree;
 pub mod tick_system;
 pub mod maintenance;
+pub mod protection;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::ServerConfig, server_config};

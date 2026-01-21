@@ -14,6 +14,8 @@ pub struct Model {
     pub created_at: chrono::NaiveDateTime,
     #[sea_orm(default_value = "user")]
     pub role: String, // "user" ou "admin"
+    pub protection_until: Option<chrono::NaiveDateTime>, // Beginner protection expiry date
+    pub total_points: i64, // Total points for attack restrictions
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
