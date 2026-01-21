@@ -1,7 +1,7 @@
 // backend/src/tech_tree.rs
 // Tech Tree System - Dynamic relational database queries
 
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySelect};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySelect, ActiveModelTrait, Set};
 use crate::entities::{prelude::*, technology, planet_technology, ship_type, planet_ship, technology_requirement, ship_requirement, building_type, building_requirement, planet_building, defense_type, defense_requirement, planet_defense};
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
@@ -777,4 +777,104 @@ pub fn calculate_building_cost(base_cost: i32, multiplier: f64, current_level: i
 /// Calculate time for a building at a specific level
 pub fn calculate_building_time(base_time: i32, multiplier: f64, current_level: i32) -> i32 {
     (base_time as f64 * multiplier.powi(current_level)).ceil() as i32
+}
+
+// ========== SHIP MANIPULATION HELPERS ==========
+
+/// Add ships to a planet
+pub async fn add_ships_to_planet(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    ship_key: &str,
+    quantity: i32,
+) -> Result<(), sea_orm::DbErr> {
+    let ship = ShipType::find()
+        .filter(ship_type::Column::ShipKey.eq(ship_key))
+        .one(db)
+        .await?;
+
+    let ship_type_id = match ship {
+        Some(s) => s.id,
+        None => return Err(sea_orm::DbErr::Custom("Ship type not found".to_string())),
+    };
+
+    let existing = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .filter(planet_ship::Column::ShipTypeId.eq(ship_type_id))
+        .one(db)
+        .await?;
+
+    if let Some(existing_ship) = existing {
+        let mut ship_active: planet_ship::ActiveModel = existing_ship.into();
+        ship_active.count = Set(ship_active.count.unwrap() + quantity);
+        ship_active.update(db).await?;
+    } else {
+        let new_ship = planet_ship::ActiveModel {
+            planet_id: Set(planet_id),
+            ship_type_id: Set(ship_type_id),
+            count: Set(quantity),
+            building_count: Set(None),
+            build_end_time: Set(None),
+        };
+        new_ship.insert(db).await?;
+    }
+
+    Ok(())
+}
+
+/// Remove ships from a planet (returns error if not enough ships)
+pub async fn remove_ships_from_planet(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    ship_key: &str,
+    quantity: i32,
+) -> Result<(), sea_orm::DbErr> {
+    let current_count = get_planet_ship_count(db, planet_id, ship_key).await?;
+
+    if current_count < quantity {
+        return Err(sea_orm::DbErr::Custom("Not enough ships".to_string()));
+    }
+
+    let ship = ShipType::find()
+        .filter(ship_type::Column::ShipKey.eq(ship_key))
+        .one(db)
+        .await?;
+
+    let ship_type_id = match ship {
+        Some(s) => s.id,
+        None => return Err(sea_orm::DbErr::Custom("Ship type not found".to_string())),
+    };
+
+    let existing = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .filter(planet_ship::Column::ShipTypeId.eq(ship_type_id))
+        .one(db)
+        .await?;
+
+    if let Some(existing_ship) = existing {
+        let new_count = existing_ship.count - quantity;
+        if new_count <= 0 {
+            // Delete the entry if count reaches 0
+            PlanetShip::delete_by_id((planet_id, ship_type_id)).exec(db).await?;
+        } else {
+            let mut ship_active: planet_ship::ActiveModel = existing_ship.into();
+            ship_active.count = Set(new_count);
+            ship_active.update(db).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Get total fleet size for a planet (all ships)
+pub async fn get_total_fleet_size(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> Result<i32, sea_orm::DbErr> {
+    let planet_ships = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await?;
+
+    Ok(planet_ships.iter().map(|ps| ps.count).sum())
 }
