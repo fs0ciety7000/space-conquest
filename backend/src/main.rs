@@ -45,8 +45,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense
 };
 
 #[derive(Serialize, Clone)]
@@ -1037,8 +1037,47 @@ async fn get_planet_handler(
                 };
                 let _ = new_tech.insert(&state.db).await;
             }
-        } else {
-            // OLD SYSTEM - Update planet columns directly
+        } else if !is_ship_or_defense {
+            // Check if this is a building from the new system
+            let building = BuildingType::find()
+                .filter(building_type::Column::BuildingKey.eq(&item.building_type))
+                .one(&state.db)
+                .await
+                .ok()
+                .flatten();
+
+            if let Some(building_data) = building {
+                // NEW BUILDING SYSTEM - Update planet_buildings table
+                let existing = PlanetBuilding::find()
+                    .filter(planet_building::Column::PlanetId.eq(p.id))
+                    .filter(planet_building::Column::BuildingTypeId.eq(building_data.id))
+                    .one(&state.db)
+                    .await
+                    .ok()
+                    .flatten();
+
+                if let Some(existing_building) = existing {
+                    // Update existing building level
+                    let mut building_active: planet_building::ActiveModel = existing_building.into();
+                    building_active.level = Set(item.level);
+                    building_active.upgrading_to_level = Set(None);
+                    building_active.upgrade_end_time = Set(None);
+                    let _ = building_active.update(&state.db).await;
+                } else {
+                    // Insert new building level
+                    let new_building = planet_building::ActiveModel {
+                        planet_id: Set(p.id),
+                        building_type_id: Set(building_data.id),
+                        level: Set(item.level),
+                        upgrading_to_level: Set(None),
+                        upgrade_end_time: Set(None),
+                        updated_at: Set(Some(now)),
+                    };
+                    let _ = new_building.insert(&state.db).await;
+                }
+            }
+
+            // OLD SYSTEM - Update planet columns directly for backward compatibility
             match item.building_type.as_str() {
                 "metal" => active.metal_mine_level = Set(item.level),
                 "crystal" => active.crystal_mine_level = Set(item.level),
@@ -1052,6 +1091,85 @@ async fn get_planet_handler(
                 "laser" => active.laser_battery_level = Set(item.level),
                 "espionage" => active.espionage_tech_level = Set(item.level),
                 "armour" => active.armour_tech_level = Set(item.level),
+                _ => {}
+            }
+        } else {
+            // Ships and Defenses - NEW SYSTEM
+            // Check if it's a ship
+            let ship = ShipType::find()
+                .filter(ship_type::Column::ShipKey.eq(&item.building_type))
+                .one(&state.db)
+                .await
+                .ok()
+                .flatten();
+
+            if let Some(ship_data) = ship {
+                // NEW SHIP SYSTEM - Update planet_ships table
+                let existing = PlanetShip::find()
+                    .filter(planet_ship::Column::PlanetId.eq(p.id))
+                    .filter(planet_ship::Column::ShipTypeId.eq(ship_data.id))
+                    .one(&state.db)
+                    .await
+                    .ok()
+                    .flatten();
+
+                if let Some(existing_ship) = existing {
+                    // Update existing ship count
+                    let mut ship_active: planet_ship::ActiveModel = existing_ship.into();
+                    ship_active.count = Set(ship_active.count.unwrap() + item.level);
+                    let _ = ship_active.update(&state.db).await;
+                } else {
+                    // Insert new ship entry
+                    let new_ship = planet_ship::ActiveModel {
+                        planet_id: Set(p.id),
+                        ship_type_id: Set(ship_data.id),
+                        count: Set(item.level),
+                        building_count: Set(None),
+                        build_end_time: Set(None),
+                    };
+                    let _ = new_ship.insert(&state.db).await;
+                }
+            }
+
+            // Check if it's a defense
+            let defense = DefenseType::find()
+                .filter(defense_type::Column::DefenseKey.eq(&item.building_type))
+                .one(&state.db)
+                .await
+                .ok()
+                .flatten();
+
+            if let Some(defense_data) = defense {
+                // NEW DEFENSE SYSTEM - Update planet_defenses table
+                let existing = PlanetDefense::find()
+                    .filter(planet_defense::Column::PlanetId.eq(p.id))
+                    .filter(planet_defense::Column::DefenseTypeId.eq(defense_data.id))
+                    .one(&state.db)
+                    .await
+                    .ok()
+                    .flatten();
+
+                if let Some(existing_defense) = existing {
+                    // Update existing defense count
+                    let mut defense_active: planet_defense::ActiveModel = existing_defense.into();
+                    defense_active.count = Set(defense_active.count.unwrap() + item.level);
+                    let _ = defense_active.update(&state.db).await;
+                } else {
+                    // Insert new defense entry
+                    let new_defense = planet_defense::ActiveModel {
+                        planet_id: Set(p.id),
+                        defense_type_id: Set(defense_data.id),
+                        count: Set(item.level),
+                        building_count: Set(None),
+                        build_end_time: Set(None),
+                        updated_at: Set(Some(now)),
+                    };
+                    let _ = new_defense.insert(&state.db).await;
+                }
+            }
+
+            // OLD SYSTEM - Update planet columns for backward compatibility
+            match item.building_type.as_str() {
                 "light_hunter" => active.light_hunter_count = Set(active.light_hunter_count.unwrap() + item.level),
                 "cruiser" => active.cruiser_count = Set(active.cruiser_count.unwrap() + item.level),
                 "missile_launcher" => active.missile_launcher_count = Set(active.missile_launcher_count.unwrap() + item.level),
