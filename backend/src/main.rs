@@ -1455,8 +1455,45 @@ async fn upgrade_mine_handler(
 
         (current_level, cost, p.research_lab_level, true)
     } else {
-        // OLD SYSTEM (backward compatibility)
-        let base_level = match type_mine.as_str() {
+        // Check if this is a building from the new system
+        let building = BuildingType::find()
+            .filter(building_type::Column::BuildingKey.eq(&type_mine))
+            .one(&state.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        if let Some(building_data) = building {
+            // NEW BUILDING SYSTEM
+            let current_level = tech_tree::get_planet_building_level(&state.db, p.id, &type_mine)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            let target_level = current_level + (in_queue_count as i32) + 1;
+
+            // Check if requirements are met
+            let can_build = tech_tree::can_build_building(&state.db, p.id, &type_mine)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            if current_level == 0 && !can_build {
+                return Err(StatusCode::BAD_REQUEST); // Requirements not met
+            }
+
+            // Calculate cost for the target level
+            let metal = tech_tree::calculate_building_cost(building_data.base_cost_metal, building_data.cost_multiplier, current_level);
+            let crystal = tech_tree::calculate_building_cost(building_data.base_cost_crystal, building_data.cost_multiplier, current_level);
+            let deuterium = tech_tree::calculate_building_cost(building_data.base_cost_deuterium, building_data.cost_multiplier, current_level);
+
+            let cost = game_logic::Cost {
+                metal: metal as f64,
+                crystal: crystal as f64,
+                deuterium: deuterium as f64,
+            };
+
+            (current_level, cost, p.shipyard_level, false)
+        } else {
+            // OLD SYSTEM (backward compatibility)
+            let base_level = match type_mine.as_str() {
             "metal" => p.metal_mine_level,
             "crystal" => p.crystal_mine_level,
             "deuterium" => p.deuterium_mine_level,
@@ -1483,6 +1520,7 @@ async fn upgrade_mine_handler(
         let is_research = matches!(type_mine.as_str(), "research" | "energy_tech" | "laser" | "espionage" | "armour");
 
         (base_level, cost, facility_level, is_research)
+        }
     };
 
     let target_level = base_level + (in_queue_count as i32) + 1;
