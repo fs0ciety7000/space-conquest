@@ -47,12 +47,10 @@ impl MigrationTrait for Migration {
                     .columns([
                         ServerConfig::ConfigKey,
                         ServerConfig::ConfigValue,
-                        ServerConfig::Description,
                     ])
                     .values_panic([
                         "beginner_protection_days".into(),
                         "3".into(),
-                        "Nombre de jours de protection automatique pour les nouveaux joueurs".into(),
                     ])
                     .on_conflict(
                         OnConflict::column(ServerConfig::ConfigKey)
@@ -71,12 +69,10 @@ impl MigrationTrait for Migration {
                     .columns([
                         ServerConfig::ConfigKey,
                         ServerConfig::ConfigValue,
-                        ServerConfig::Description,
                     ])
                     .values_panic([
                         "beginner_zone_galaxy_max".into(),
                         "1".into(),
-                        "Galaxie maximum pour la zone débutant (ex: 1 = galaxie 1 réservée aux débutants)".into(),
                     ])
                     .on_conflict(
                         OnConflict::column(ServerConfig::ConfigKey)
@@ -95,12 +91,10 @@ impl MigrationTrait for Migration {
                     .columns([
                         ServerConfig::ConfigKey,
                         ServerConfig::ConfigValue,
-                        ServerConfig::Description,
                     ])
                     .values_panic([
                         "attack_min_points_ratio".into(),
                         "0.2".into(),
-                        "Ratio minimum de points pour attaquer (0.2 = ne peut pas attaquer quelqu'un avec moins de 20% de vos points)".into(),
                     ])
                     .on_conflict(
                         OnConflict::column(ServerConfig::ConfigKey)
@@ -119,12 +113,10 @@ impl MigrationTrait for Migration {
                     .columns([
                         ServerConfig::ConfigKey,
                         ServerConfig::ConfigValue,
-                        ServerConfig::Description,
                     ])
                     .values_panic([
                         "attack_max_points_ratio".into(),
                         "5.0".into(),
-                        "Ratio maximum de points pour attaquer (5.0 = ne peut pas attaquer quelqu'un avec plus de 5x vos points)".into(),
                     ])
                     .on_conflict(
                         OnConflict::column(ServerConfig::ConfigKey)
@@ -143,12 +135,10 @@ impl MigrationTrait for Migration {
                     .columns([
                         ServerConfig::ConfigKey,
                         ServerConfig::ConfigValue,
-                        ServerConfig::Description,
                     ])
                     .values_panic([
                         "beginner_protection_enabled".into(),
                         "true".into(),
-                        "Activer le système de protection des débutants".into(),
                     ])
                     .on_conflict(
                         OnConflict::column(ServerConfig::ConfigKey)
@@ -167,12 +157,10 @@ impl MigrationTrait for Migration {
                     .columns([
                         ServerConfig::ConfigKey,
                         ServerConfig::ConfigValue,
-                        ServerConfig::Description,
                     ])
                     .values_panic([
                         "beginner_zone_protection_enabled".into(),
                         "true".into(),
-                        "Protection dans la zone débutant (galaxie 1) - les joueurs en zone débutant ne peuvent pas être attaqués".into(),
                     ])
                     .on_conflict(
                         OnConflict::column(ServerConfig::ConfigKey)
@@ -239,5 +227,4 @@ enum ServerConfig {
     Table,
     ConfigKey,
     ConfigValue,
-    Description,
 }

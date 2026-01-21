@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
+import AdminContentManager from './AdminContentManager';
 
 interface PlanetInfo {
   id: string;
@@ -96,7 +97,7 @@ interface Announcement {
   updated_at: string;
 }
 
-type AdminTab = 'players' | 'stats' | 'users' | 'config' | 'announcements';
+type AdminTab = 'players' | 'stats' | 'users' | 'config' | 'announcements' | 'content';
 
 interface ConfigCategory {
   id: string;
@@ -688,6 +689,18 @@ export default function AdminPanel() {
         >
           <Radio size={16} />
           Annonces
+        </Button>
+        <Button
+          variant={activeTab === 'content' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('content')}
+          className={`flex items-center gap-2 transition-all duration-300 ${
+            activeTab === 'content'
+              ? 'bg-amber-600 hover:bg-amber-500 text-white card-depth shadow-lg'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <Package size={16} />
+          Contenu
         </Button>
       </div>
 
@@ -2055,6 +2068,11 @@ export default function AdminPanel() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* TAB CONTENT */}
+      {activeTab === 'content' && (
+        <AdminContentManager />
       )}
     </div>
   );
