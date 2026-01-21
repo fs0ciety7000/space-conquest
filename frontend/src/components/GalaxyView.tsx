@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/tooltip";
 import { apiUrl } from '@/config/api';
 import ColonizeModal from './ColonizeModal';
+import BeginnerProtectionBadge from './BeginnerProtectionBadge';
 // --- INTERFACES ---
 
 interface GalaxySlot {
@@ -28,6 +29,9 @@ interface GalaxySlot {
     debris_crystal: number;
     is_me: boolean;       // Planète active
     is_my_planet: boolean; // Une de mes colonies
+    protection_until: string | null;
+    total_points: number;
+    planet_galaxy: number;
 }
 
 interface GalaxyViewProps {
@@ -253,6 +257,19 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                     <h3 className="text-xl font-black uppercase tracking-widest text-white mb-1">
                                         {selectedSlot.planet_id ? selectedSlot.planet_name : "Espace Inconnu"}
                                     </h3>
+
+                                    {selectedSlot.planet_id && !selectedSlot.is_my_planet && (
+                                        <div className="mb-2">
+                                            <BeginnerProtectionBadge
+                                                protectionUntil={selectedSlot.protection_until}
+                                                galaxy={selectedSlot.planet_galaxy}
+                                                totalPoints={selectedSlot.total_points}
+                                                size="sm"
+                                                showPoints={true}
+                                            />
+                                        </div>
+                                    )}
+
                                     <p className="text-sm text-slate-400 font-mono mb-6">
                                         COORDONNÉES [{galaxy}:{system}:{selectedSlot.position}]
                                     </p>
@@ -400,7 +417,22 @@ function ListView({ slots, onNavigateAttack, onNavigateSpy, onNavigateTransport,
                                 </div>
                             ) : <span className="text-slate-600 italic text-xs">Vide</span>}
                         </td>
-                        <td className="p-4 text-slate-300">{slot.owner_name || "-"}</td>
+                        <td className="p-4 text-slate-300">
+                            {slot.planet_id && !slot.is_my_planet ? (
+                                <div className="flex flex-col gap-1">
+                                    <span>{slot.owner_name || "-"}</span>
+                                    <BeginnerProtectionBadge
+                                        protectionUntil={slot.protection_until}
+                                        galaxy={slot.planet_galaxy}
+                                        totalPoints={slot.total_points}
+                                        size="sm"
+                                        showPoints={false}
+                                    />
+                                </div>
+                            ) : (
+                                <span>{slot.owner_name || "-"}</span>
+                            )}
+                        </td>
                         <td className="p-4 text-center flex justify-center gap-2">
                             {/* Actions sur planètes ennemies */}
                             {slot.planet_id && !slot.is_my_planet && (

@@ -77,6 +77,8 @@ struct RankItem {
     owner_id: Uuid,
     planets: Vec<PlanetInfo>,
     rank_badge: String,
+    protection_until: Option<String>,
+    galaxy: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -155,11 +157,14 @@ struct GalaxySlot {
     planet_id: Option<Uuid>,
     planet_name: Option<String>,
     owner_name: Option<String>,
-    owner_id: Option<Uuid>, 
-    debris_metal: f64,    
-    debris_crystal: f64, 
+    owner_id: Option<Uuid>,
+    debris_metal: f64,
+    debris_crystal: f64,
     is_me: bool,
-    is_my_planet: bool
+    is_my_planet: bool,
+    protection_until: Option<String>,
+    total_points: i64,
+    planet_galaxy: i32,
 }
 
 #[derive(Serialize)]
@@ -972,6 +977,15 @@ async fn get_ranking_handler(
         let is_me = current_owner_id.map(|id| id == owner_id).unwrap_or(false);
         let rank_badge = game_logic::get_rank_badge(total_score);
 
+        // Get protection data and galaxy from user
+        let (protection_until, galaxy) = users.iter()
+            .find(|u| u.id == owner_id)
+            .map(|u| (
+                u.protection_until.map(|dt| dt.to_string()),
+                planets.first().map(|p| p.galaxy)
+            ))
+            .unwrap_or((None, None));
+
         ranked_users.push(RankItem {
             rank: 0,
             username,
@@ -982,6 +996,8 @@ async fn get_ranking_handler(
             owner_id,
             planets: planet_infos,
             rank_badge: rank_badge.to_string(),
+            protection_until,
+            galaxy,
         });
     }
 
@@ -3097,20 +3113,45 @@ async fn get_galaxy_handler(
 
     for pos in 1..=15 {
         if let Some(p) = planets.iter().find(|p| p.position == pos) {
+            // Fetch owner data for protection info
+            let (protection_until, total_points, actual_owner_name) = if let Ok(Some(owner)) = User::find_by_id(p.owner_id).one(&state.db).await {
+                (
+                    owner.protection_until.map(|dt| dt.to_string()),
+                    owner.total_points,
+                    owner.username.clone()
+                )
+            } else {
+                (None, 0, p.name.clone())
+            };
+
             slots.push(GalaxySlot {
                 position: pos,
                 planet_id: Some(p.id),
                 planet_name: Some(p.name.clone()),
-                owner_name: Some(p.name.clone()),
+                owner_name: Some(actual_owner_name),
                 owner_id: Some(p.owner_id),
-                debris_metal: p.debris_metal, 
+                debris_metal: p.debris_metal,
                 debris_crystal: p.debris_crystal,
                 is_me: p.id == current_id,
-                is_my_planet: p.owner_id == my_owner_id
+                is_my_planet: p.owner_id == my_owner_id,
+                protection_until,
+                total_points,
+                planet_galaxy: p.galaxy,
             });
         } else {
             slots.push(GalaxySlot {
-                position: pos, planet_id: None, planet_name: None, owner_name: None, owner_id: None, debris_metal: 0.0, debris_crystal: 0.0, is_me: false, is_my_planet: false
+                position: pos,
+                planet_id: None,
+                planet_name: None,
+                owner_name: None,
+                owner_id: None,
+                debris_metal: 0.0,
+                debris_crystal: 0.0,
+                is_me: false,
+                is_my_planet: false,
+                protection_until: None,
+                total_points: 0,
+                planet_galaxy: galaxy_id,
             });
         }
     }
@@ -3882,6 +3923,14 @@ async fn get_player_profile_handler(
         "created_at": if show_all { json!(created_at_utc) } else { json!(null) },
         "is_own_profile": is_own_profile,
         "espionage_level": espionage_level,
+
+        // Protection data
+        "protection_until": if show_all || show_basic {
+            user.protection_until.map(|dt| dt.to_string())
+        } else {
+            None
+        },
+        "galaxy": main_planet_with_points.map(|(p, _, _, _)| p.galaxy),
 
         // Points (selon niveau)
         "total_points": mask_number(total_points, show_points || show_all),
