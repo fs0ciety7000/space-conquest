@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "planet_defenses")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i32,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub planet_id: Uuid,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub defense_type_id: i32,
-    pub defense_count: i32,
-    pub building_count: i32,
+    pub count: i32,
+    pub building_count: Option<i32>,
     pub build_end_time: Option<DateTime>,
     pub updated_at: Option<DateTime>,
 }
