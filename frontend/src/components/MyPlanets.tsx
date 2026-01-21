@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
+import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 
 interface Planet {
   id: string;

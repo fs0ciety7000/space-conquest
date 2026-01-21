@@ -23,6 +23,7 @@ import { apiUrl } from '@/config/api';
 import { toast } from "sonner";
 import { GameImage } from '@/components/ui/game-image';
 import { getResourceImage } from '@/lib/images';
+import { getTechLevel } from '@/utils/techTreeCompat';
 
 interface ResourceSlot {
   id: number;

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 import { ConnectionStatus, getConnectionStatusColor, getConnectionStatusText } from '@/hooks/useWebSocket';
+import { getTechLevel } from '@/utils/techTreeCompat';
 import {
   Zap,
   Stone,

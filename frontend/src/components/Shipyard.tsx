@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { GameImage } from '@/components/ui/game-image';
 import { getShipImage } from '@/lib/images';
+import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 
 interface ShipRequirement {
   requirement_type: string;
