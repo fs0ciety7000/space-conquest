@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
+import { getTechLevel, getShipCount, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
 // --- Dictionnaire de noms ---
 const getLabel = (id: string | null) => {
     if (!id) return "Inconnu";
@@ -146,7 +147,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     let prod = baseFactor * level * Math.pow(growthFactor, level);
 
     // Bonus technologie énergie (configurable)
-    const techLevel = planet.energy_tech_level || 0;
+    const techLevel = getTechLevel(planet, 'energy_tech');
     const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
     prod *= techBonus;
 
@@ -177,24 +178,24 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const energyPercent = energyCons > 0 ? Math.min(100, (energyCons / energyProd) * 100) : 0;
 
   // --- CALCULS MILITAIRES AVANCÉS ---
-  const atkBonus = 1 + ((planet.laser_battery_level || 0) * 0.1);
-  const hullBonus = 1 + ((planet.armour_tech_level || 0) * 0.1);
+  const atkBonus = 1 + (getTechLevel(planet, 'laser_tech') * 0.1);
+  const hullBonus = 1 + (getTechLevel(planet, 'armour_tech') * 0.1);
 
   const totalAtk = (
-    (planet.light_hunter_count * 50) + 
-    (planet.cruiser_count * 400) + 
-    (planet.missile_launcher_count * 80) + 
-    (planet.plasma_turret_count * 3000)
+    (getShipCount(planet, 'light_hunter') * 50) +
+    (getShipCount(planet, 'cruiser') * 400) +
+    (getShipCount(planet, 'missile_launcher') * 80) +
+    (getShipCount(planet, 'plasma_turret') * 3000)
   ) * atkBonus;
 
   const totalHull = (
-    (planet.light_hunter_count * 400) + 
-    (planet.cruiser_count * 2700) + 
-    (planet.missile_launcher_count * 200) + 
-    (planet.plasma_turret_count * 10000)
+    (getShipCount(planet, 'light_hunter') * 400) +
+    (getShipCount(planet, 'cruiser') * 2700) +
+    (getShipCount(planet, 'missile_launcher') * 200) +
+    (getShipCount(planet, 'plasma_turret') * 10000)
   ) * hullBonus;
 
-  const totalFleet = (planet.light_hunter_count || 0) + (planet.cruiser_count || 0) + (planet.recycler_count || 0) + (planet.spy_probe_count || 0) + (planet.colony_ship_count || 0) + (planet.transporter_count || 0);
+  const totalFleet = getTotalFleetCount(planet);
   const hangarCap = 500 + ((planet.hangar_level || 0) * 500);
   const totalDefense = (planet.missile_launcher_count || 0) + (planet.plasma_turret_count || 0);
 
@@ -686,7 +687,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     </div>
                     <div className="text-center border-x border-white/5">
                         <span className="text-[8px] text-slate-600 uppercase block">Tech. Énergie</span>
-                        <span className="text-purple-400 font-mono text-xs font-bold">Niv.{planet.energy_tech_level || 0}</span>
+                        <span className="text-purple-400 font-mono text-xs font-bold">Niv.{getTechLevel(planet, 'energy_tech')}</span>
                     </div>
                     <div className="text-center">
                         <span className="text-[8px] text-slate-600 uppercase block">Rendement</span>
@@ -742,7 +743,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center mb-3">
                           <span className="flex items-center gap-1.5">
                               <Target size={12} className="text-red-400" />
-                              Armement Niv.{planet.laser_battery_level || 0}
+                              Armement Niv.{getTechLevel(planet, 'laser_tech')}
                           </span>
                           <span className="text-red-400 font-mono font-black px-2 py-1 bg-red-500/20 rounded-lg border border-red-500/40 shadow-[0_0_8px_rgba(239,68,68,0.3)] animate-pulse">+{Math.round((atkBonus-1)*100)}% DMG</span>
                       </div>
@@ -758,7 +759,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                           {/* Barre de remplissage */}
                           <div
                               className="absolute inset-0 bg-gradient-to-r from-red-700 via-red-500 to-orange-400 transition-all duration-700"
-                              style={{ width: `${Math.min(100, planet.laser_battery_level * 8)}%` }}
+                              style={{ width: `${Math.min(100, getTechLevel(planet, 'laser_tech') * 8)}%` }}
                           >
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
                               {/* Point lumineux au bout */}
@@ -772,13 +773,13 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       <div className="bg-black/30 rounded-lg p-2.5 border border-red-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Vaisseaux</span>
                           <span className="text-red-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]">
-                              {fmt((planet.light_hunter_count || 0) * 50 + (planet.cruiser_count || 0) * 400)}
+                              {fmt(getShipCount(planet, 'light_hunter') * 50 + getShipCount(planet, 'cruiser') * 400)}
                           </span>
                       </div>
                       <div className="bg-black/30 rounded-lg p-2.5 border border-red-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
                           <span className="text-red-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]">
-                              {fmt((planet.missile_launcher_count || 0) * 80 + (planet.plasma_turret_count || 0) * 3000)}
+                              {fmt(getShipCount(planet, 'missile_launcher') * 80 + getShipCount(planet, 'plasma_turret') * 3000)}
                           </span>
                       </div>
                   </div>
@@ -828,7 +829,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center mb-3">
                           <span className="flex items-center gap-1.5">
                               <Shield size={12} className="text-emerald-400" />
-                              Protection Niv.{planet.armour_tech_level || 0}
+                              Protection Niv.{getTechLevel(planet, 'armour_tech')}
                           </span>
                           <span className="text-emerald-400 font-mono font-black px-2 py-1 bg-emerald-500/20 rounded-lg border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.3)] animate-pulse">+{Math.round((hullBonus-1)*100)}% HULL</span>
                       </div>
@@ -844,7 +845,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                           {/* Barre de remplissage */}
                           <div
                               className="absolute inset-0 bg-gradient-to-r from-emerald-700 via-emerald-500 to-cyan-400 transition-all duration-700"
-                              style={{ width: `${Math.min(100, planet.armour_tech_level * 8)}%` }}
+                              style={{ width: `${Math.min(100, getTechLevel(planet, 'armour_tech') * 8)}%` }}
                           >
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
                               {/* Point lumineux au bout */}
@@ -858,13 +859,13 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       <div className="bg-black/30 rounded-lg p-2.5 border border-emerald-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Vaisseaux</span>
                           <span className="text-emerald-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]">
-                              {fmt((planet.light_hunter_count || 0) * 400 + (planet.cruiser_count || 0) * 2700)}
+                              {fmt(getShipCount(planet, 'light_hunter') * 400 + getShipCount(planet, 'cruiser') * 2700)}
                           </span>
                       </div>
                       <div className="bg-black/30 rounded-lg p-2.5 border border-emerald-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
                           <span className="text-emerald-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]">
-                              {fmt((planet.missile_launcher_count || 0) * 200 + (planet.plasma_turret_count || 0) * 10000)}
+                              {fmt(getShipCount(planet, 'missile_launcher') * 200 + getShipCount(planet, 'plasma_turret') * 10000)}
                           </span>
                       </div>
                   </div>
@@ -1172,12 +1173,12 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                             {[
-                                { label: "Chasseurs Légers", val: planet.light_hunter_count, Icon: Target, color: "text-red-400" },
-                                { label: "Croiseurs", val: planet.cruiser_count, Icon: Ship, color: "text-purple-400" },
-                                { label: "Recycleurs", val: planet.recycler_count, Icon: Recycle, color: "text-green-400" },
-                                { label: "Sondes", val: planet.spy_probe_count, Icon: Satellite, color: "text-cyan-400" },
-                                { label: "Vaisseaux Colons", val: planet.colony_ship_count, Icon: Globe, color: "text-emerald-400" },
-                                { label: "Transporteurs", val: planet.transporter_count, Icon: Truck, color: "text-amber-400" },
+                                { label: "Chasseurs Légers", val: getShipCount(planet, 'light_hunter'), Icon: Target, color: "text-red-400" },
+                                { label: "Croiseurs", val: getShipCount(planet, 'cruiser'), Icon: Ship, color: "text-purple-400" },
+                                { label: "Recycleurs", val: getShipCount(planet, 'recycler'), Icon: Recycle, color: "text-green-400" },
+                                { label: "Sondes", val: getShipCount(planet, 'spy_probe'), Icon: Satellite, color: "text-cyan-400" },
+                                { label: "Vaisseaux Colons", val: getShipCount(planet, 'colony_ship'), Icon: Globe, color: "text-emerald-400" },
+                                { label: "Transporteurs", val: getShipCount(planet, 'transporter'), Icon: Truck, color: "text-amber-400" },
                             ].map(item => (
                                 <div key={item.label} className="bg-slate-900/60 p-2.5 rounded-lg border border-white/5 flex items-center justify-between hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300 group card-depth">
                                     <div className="flex items-center gap-2">

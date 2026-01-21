@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery, Radio } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';

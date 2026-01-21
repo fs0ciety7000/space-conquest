@@ -832,18 +832,21 @@ async fn get_ranking_handler(
 
     // Créer les RankItems (un par joueur)
     let config = state.config.read().unwrap().clone();
-    let mut ranked_users: Vec<RankItem> = user_planets.into_iter().map(|(owner_id, planets)| {
+    let mut ranked_users: Vec<RankItem> = Vec::new();
+
+    for (owner_id, planets) in user_planets.into_iter() {
         let mut total_score = 0;
         let mut total_economy = 0;
         let mut total_military = 0;
+        let mut planet_infos: Vec<PlanetInfo> = Vec::new();
 
-        let planet_infos: Vec<PlanetInfo> = planets.iter().map(|p| {
-            let (total, economy, military) = game_logic::calculate_planet_points(p, &config);
+        for p in &planets {
+            let (total, economy, military) = game_logic::calculate_planet_points(p, &state.db, &config).await;
             total_score += total;
             total_economy += economy;
             total_military += military;
 
-            PlanetInfo {
+            planet_infos.push(PlanetInfo {
                 id: p.id,
                 name: p.name.clone(),
                 total_score: total,
@@ -852,14 +855,14 @@ async fn get_ranking_handler(
                 galaxy: p.galaxy,
                 system: p.system,
                 position: p.position,
-            }
-        }).collect();
+            });
+        }
 
         let username = user_map.get(&owner_id).cloned().unwrap_or("Inconnu".to_string());
         let is_me = current_owner_id.map(|id| id == owner_id).unwrap_or(false);
         let rank_badge = game_logic::get_rank_badge(total_score);
 
-        RankItem {
+        ranked_users.push(RankItem {
             rank: 0,
             username,
             total_score,
@@ -869,8 +872,8 @@ async fn get_ranking_handler(
             owner_id,
             planets: planet_infos,
             rank_badge: rank_badge.to_string(),
-        }
-    }).collect();
+        });
+    }
 
     // Tri selon le type demandé
     match sort_type {
@@ -1445,7 +1448,30 @@ async fn build_fleet_handler(
         }
     }
     
-    if game_logic::check_prerequisites(&p, &type_ship).is_err() { return Err(StatusCode::FORBIDDEN); }
+    // Check prerequisites using tech tree system if ship exists, otherwise use legacy system
+    let ship_type_exists = ShipType::find()
+        .filter(ship_type::Column::ShipKey.eq(&type_ship))
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .is_some();
+
+    if ship_type_exists {
+        // NEW SYSTEM: Use tech tree requirements
+        let can_build = tech_tree::can_build_ship(&state.db, p.id, &type_ship)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        if !can_build {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    } else {
+        // OLD SYSTEM: Use legacy check_prerequisites
+        if game_logic::check_prerequisites(&p, &type_ship).is_err() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
 
     let (cost_m, cost_c) = match type_ship.as_str() {
         "light_hunter" => game_logic::get_light_hunter_stats(&config),
@@ -2886,9 +2912,9 @@ async fn get_player_profile_handler(
     let mut total_points = 0;
     let mut total_economy = 0;
     let mut total_military = 0;
-    
+
     for p in &planets {
-        let (pts, eco, mil) = game_logic::calculate_planet_points(p, &config);
+        let (pts, eco, mil) = game_logic::calculate_planet_points(p, &state.db, &config).await;
         total_points += pts;
         total_economy += eco;
         total_military += mil;
@@ -2980,18 +3006,30 @@ async fn get_player_profile_handler(
     };
 
     // Planète principale (= la plus ancienne, planète mère)
-    let main_planet_with_points: Option<(&planet::Model, i32, i32, i32)> = planets.iter()
-        .map(|p| {
-            let (pts, eco, mil) = game_logic::calculate_planet_points(p, &config);
-            (p, pts, eco, mil)
-        })
-        .min_by_key(|(p, _, _, _)| p.created_at); // Planète la plus ancienne
+    let mut planet_points_list = Vec::new();
+    for p in &planets {
+        let (pts, eco, mil) = game_logic::calculate_planet_points(p, &state.db, &config).await;
+        planet_points_list.push((p, pts, eco, mil));
+    }
+    let main_planet_with_points: Option<(&planet::Model, i32, i32, i32)> =
+        planet_points_list.iter()
+            .min_by_key(|(p, _, _, _)| p.created_at)
+            .map(|(p, pts, eco, mil)| (*p, *pts, *eco, *mil));
     
     // Badge de rang
     let rank_badge = game_logic::get_rank_badge(total_points);
-    
+
     // ✅ Formater created_at en ISO 8601 avec Z pour UTC
     let created_at_utc = user.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+
+    // Préparer les données des planètes (déjà calculé dans planet_points_list)
+    let planets_json: Vec<serde_json::Value> = planet_points_list.iter().map(|(p, points, _, _)| {
+        json!({
+            "name": p.name,
+            "coords": format!("[{}:{}:{}]", p.galaxy, p.system, p.position),
+            "points": mask_number(*points, show_points || show_all),
+        })
+    }).collect();
 
     // ✅ Construire la réponse avec masquage progressif
     let response = json!({
@@ -3000,17 +3038,17 @@ async fn get_player_profile_handler(
         "created_at": if show_all { json!(created_at_utc) } else { json!(null) },
         "is_own_profile": is_own_profile,
         "espionage_level": espionage_level,
-        
+
         // Points (selon niveau)
         "total_points": mask_number(total_points, show_points || show_all),
         "economy_points": mask_number(total_economy, show_economy || show_all),
         "military_points": mask_number(total_military, show_military || show_all),
         "rank_badge": if show_points || show_all { json!(rank_badge) } else { json!("CLASSIFIÉ") },
-        
+
         // Statistiques de base
         "planet_count": planet_count,
         "total_fleet": mask_number(total_fleet, show_fleet || show_all),
-        "total_defenses": mask_number(total_defenses, show_defenses || show_all),
+        "total_defenses": mask_number(total_defenses, show_all),
         "completed_missions": mask_number(completed_missions, show_military || show_all),
 
         // Statistiques de combat (72h)
@@ -3038,7 +3076,7 @@ async fn get_player_profile_handler(
             "position": p.position,
             "points": mask_number(points, show_points || show_all),
         })),
-        
+
         // Bâtiments (niveau 15+)
         "top_buildings": if show_buildings || show_all {
             main_planet_with_points.map(|(p, _, _, _)| json!({
@@ -3055,7 +3093,7 @@ async fn get_player_profile_handler(
                 "research_lab": "███",
             }))
         },
-        
+
         // Technologies (niveau 18+)
         "top_techs": if show_techs || show_all {
             main_planet_with_points.map(|(p, _, _, _)| json!({
@@ -3072,16 +3110,9 @@ async fn get_player_profile_handler(
                 "armour": "███",
             }))
         },
-        
+
         // Liste des planètes
-        "planets": planets.iter().map(|p| {
-            let (points, _, _) = game_logic::calculate_planet_points(p, &config);
-            json!({
-                "name": p.name,
-                "coords": format!("[{}:{}:{}]", p.galaxy, p.system, p.position),
-                "points": mask_number(points, show_points || show_all),
-            })
-        }).collect::<Vec<_>>(),
+        "planets": planets_json,
         
         // ✅ Message d'information sur le niveau requis
         "access_info": if !show_all {

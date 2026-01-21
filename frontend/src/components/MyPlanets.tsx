@@ -90,15 +90,15 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
             shipyard_level: p.shipyard_level ?? 0,
             research_lab_level: p.research_lab_level ?? 0,
             hangar_level: p.hangar_level ?? 0,
-            light_hunter_count: p.light_hunter_count ?? 0,
-            cruiser_count: p.cruiser_count ?? 0,
-            recycler_count: p.recycler_count ?? 0,
-            spy_probe_count: p.spy_probe_count ?? 0,
-            colony_ship_count: p.colony_ship_count ?? 0,
+            light_hunter_count: getShipCount(p, 'light_hunter'),
+            cruiser_count: getShipCount(p, 'cruiser'),
+            recycler_count: getShipCount(p, 'recycler') ?? 0,
+            spy_probe_count: getShipCount(p, 'spy_probe') ?? 0,
+            colony_ship_count: getShipCount(p, 'colony_ship') ?? 0,
             transporter_count: p.transporter_count ?? 0,
             missile_launcher_count: p.missile_launcher_count ?? 0,
             plasma_turret_count: p.plasma_turret_count ?? 0,
-            energy_tech_level: p.energy_tech_level ?? 0,
+            energy_tech_level: getTechLevel(p, 'energy_tech'),
           }));
           // Trier: planète mère (1:1:1) en premier, puis le reste
           const sortedPlanets = planetsWithDefaults.sort((a: any, b: any) => {
@@ -128,9 +128,9 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
   const fmt = (n: number) => Math.floor(n).toLocaleString();
 
   const getTotalFleet = (p: Planet) => 
-    (p.light_hunter_count || 0) + (p.cruiser_count || 0) + 
-    (p.recycler_count || 0) + (p.spy_probe_count || 0) + 
-    (p.colony_ship_count || 0) + (p.transporter_count || 0);
+    (getShipCount(p, 'light_hunter') || 0) + (getShipCount(p, 'cruiser') || 0) + 
+    (getShipCount(p, 'recycler') || 0) + (getShipCount(p, 'spy_probe') || 0) + 
+    (getShipCount(p, 'colony_ship') || 0) + (p.transporter_count || 0);
 
   const getTotalDefense = (p: Planet) => 
     (p.missile_launcher_count || 0) + (p.plasma_turret_count || 0);
@@ -343,7 +343,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     { label: "Chantier", val: planet.shipyard_level },
                     { label: "Labo", val: planet.research_lab_level },
                     { label: "Hangar", val: planet.hangar_level },
-                    { label: "Tech E.", val: planet.energy_tech_level },
+                    { label: "Tech E.", val: getTechLevel(planet, 'energy_tech') },
                   ].map(b => (
                     <div key={b.label} className="bg-slate-900/60 p-1.5 rounded text-center border border-white/5">
                       <p className="text-[8px] uppercase text-slate-500 truncate">{b.label}</p>
@@ -383,12 +383,12 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { label: "Chasseurs", val: planet.light_hunter_count, Icon: Target, color: "text-red-400" },
-                        { label: "Croiseurs", val: planet.cruiser_count, Icon: Ship, color: "text-purple-400" },
-                        { label: "Recycleurs", val: planet.recycler_count, Icon: Recycle, color: "text-green-400" },
-                        { label: "Sondes", val: planet.spy_probe_count, Icon: Satellite, color: "text-cyan-400" },
-                        { label: "Colons", val: planet.colony_ship_count, Icon: Globe, color: "text-emerald-400" },
-                        { label: "Transport.", val: planet.transporter_count, Icon: Truck, color: "text-amber-400" },
+                        { label: "Chasseurs", val: getShipCount(planet, 'light_hunter'), Icon: Target, color: "text-red-400" },
+                        { label: "Croiseurs", val: getShipCount(planet, 'cruiser'), Icon: Ship, color: "text-purple-400" },
+                        { label: "Recycleurs", val: getShipCount(planet, 'recycler'), Icon: Recycle, color: "text-green-400" },
+                        { label: "Sondes", val: getShipCount(planet, 'spy_probe'), Icon: Satellite, color: "text-cyan-400" },
+                        { label: "Colons", val: getShipCount(planet, 'colony_ship'), Icon: Globe, color: "text-emerald-400" },
+                        { label: "Transport.", val: getShipCount(planet, 'transporter'), Icon: Truck, color: "text-amber-400" },
                       ].map(ship => (
                         <div key={ship.label} className="bg-slate-900/60 p-2 rounded-lg border border-white/5 flex items-center gap-2">
                           <ship.Icon size={12} className={ship.color} />
@@ -407,8 +407,8 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { label: "Lanceurs Missiles", val: planet.missile_launcher_count, color: "text-orange-400" },
-                        { label: "Tourelles Plasma", val: planet.plasma_turret_count, color: "text-red-400" },
+                        { label: "Lanceurs Missiles", val: getShipCount(planet, 'missile_launcher'), color: "text-orange-400" },
+                        { label: "Tourelles Plasma", val: getShipCount(planet, 'plasma_turret'), color: "text-red-400" },
                       ].map(def => (
                         <div key={def.label} className="bg-slate-900/60 p-2 rounded-lg border border-white/5 flex justify-between items-center">
                           <span className="text-[9px] text-slate-400 uppercase">{def.label}</span>

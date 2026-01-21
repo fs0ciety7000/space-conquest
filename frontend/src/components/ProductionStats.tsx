@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, Zap, Activity, Award, Rocket, Shield,
@@ -125,7 +126,7 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
     let prod = safeBaseFactor * level * Math.pow(safeGrowthFactor, level);
 
     // Bonus technologie énergie (configurable via config)
-    const techLevel = planet.energy_tech_level || 0;
+    const techLevel = getTechLevel(planet, 'energy_tech');
     const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
     prod *= techBonus;
 
@@ -499,7 +500,7 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
                   <span className="text-sm font-bold text-slate-400">Tech Énergie</span>
                 </div>
                 <div className="text-lg font-mono font-black text-indigo-400">
-                  Niv. {planet.energy_tech_level}
+                  Niv. {getTechLevel(planet, 'energy_tech')}
                 </div>
               </div>
 

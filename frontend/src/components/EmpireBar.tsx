@@ -157,7 +157,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     let prod = safeBaseFactor * level * Math.pow(safeGrowthFactor, level);
 
     // Bonus technologie énergie (configurable)
-    const techLevel = planet.energy_tech_level || 0;
+    const techLevel = getTechLevel(planet, 'energy_tech');
     const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
     prod *= techBonus;
 

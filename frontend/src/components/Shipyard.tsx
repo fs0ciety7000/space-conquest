@@ -86,11 +86,11 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   }, [planet.id]);
 
   // --- CALCULS TECHNOLOGIQUES ---
-  const bonusAtk = 1 + ((planet.laser_battery_level || 0) * 0.1);
-  const bonusShd = 1 + ((planet.energy_tech_level || 0) * 0.1);
-  const bonusHull = 1 + ((planet.armour_tech_level || 0) * 0.1);
+  const bonusAtk = 1 + ((getTechLevel(planet, 'laser_tech')) * 0.1);
+  const bonusShd = 1 + ((getTechLevel(planet, 'energy_tech')) * 0.1);
+  const bonusHull = 1 + ((getTechLevel(planet, 'armour_tech')) * 0.1);
 
-  const currentFleet = (planet.light_hunter_count||0) + (planet.cruiser_count||0) + (planet.transporter_count||0) + (planet.colony_ship_count||0) + (planet.recycler_count||0) + (planet.spy_probe_count||0);
+  const currentFleet = (getShipCount(planet, 'light_hunter')||0) + (getShipCount(planet, 'cruiser')||0) + (getShipCount(planet, 'transporter')||0) + (getShipCount(planet, 'colony_ship')||0) + (getShipCount(planet, 'recycler')||0) + (getShipCount(planet, 'spy_probe')||0);
   const maxFleet = 500 + ((planet.hangar_level || 0) * 500);
   const capacityPercent = Math.min(100, (currentFleet / maxFleet) * 100);
   const isFull = currentFleet >= maxFleet;

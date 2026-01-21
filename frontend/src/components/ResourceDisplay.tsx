@@ -202,7 +202,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   // --- FORMULES AVEC PRISE EN COMPTE DES SLOTS ---
   const calculateEnergyProd = (level: number) => {
     const baseProd = (config.energy_solar_base || 20) * level * Math.pow(config.energy_solar_growth || 1.1, level);
-    const techLevel = planet.energy_tech_level || 0;
+    const techLevel = getTechLevel(planet, 'energy_tech');
     return Math.floor(baseProd * (1 + (techLevel * (config.energy_tech_bonus || 0.10))));
   };
 
@@ -215,7 +215,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
       let prod = base * level * Math.pow(growthFactor, level);
 
       // Bonus technologie énergie (configurable)
-      const techLevel = planet.energy_tech_level || 0;
+      const techLevel = getTechLevel(planet, 'energy_tech');
       const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
       prod *= techBonus;
 
