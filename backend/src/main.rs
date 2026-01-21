@@ -975,6 +975,32 @@ async fn get_ranking_handler(
 }
 
 
+/// Helper function to get building level from planet_buildings table with fallback to legacy column
+async fn get_building_level(db: &DatabaseConnection, planet_id: Uuid, building_key: &str, legacy_level: i32) -> i32 {
+    // First, get the building_type_id for this building_key
+    let building_type = BuildingType::find()
+        .filter(building_type::Column::BuildingKey.eq(building_key))
+        .one(db)
+        .await;
+
+    let building_type_id = match building_type {
+        Ok(Some(bt)) => bt.id,
+        _ => return legacy_level, // If building type not found, use legacy
+    };
+
+    // Now query planet_buildings for this planet and building type
+    let planet_building = PlanetBuilding::find()
+        .filter(planet_building::Column::PlanetId.eq(planet_id))
+        .filter(planet_building::Column::BuildingTypeId.eq(building_type_id))
+        .one(db)
+        .await;
+
+    match planet_building {
+        Ok(Some(building)) => building.level,
+        _ => legacy_level, // Fallback to legacy column if not found in planet_buildings
+    }
+}
+
 async fn get_planet_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
@@ -1005,13 +1031,19 @@ async fn get_planet_handler(
     let config = state.config.read().unwrap().clone();
     let speed_factor = config.speed_factor;
 
+    // Get building levels from planet_buildings with fallback to legacy columns
+    let metal_mine_level = get_building_level(&state.db, id, "metal_mine", p.metal_mine_level).await;
+    let crystal_mine_level = get_building_level(&state.db, id, "crystal_mine", p.crystal_mine_level).await;
+    let deuterium_mine_level = get_building_level(&state.db, id, "deuterium_mine", p.deuterium_mine_level).await;
+    let solar_plant_level = get_building_level(&state.db, id, "solar_plant", p.solar_plant_level).await;
+
     // Calculate energy ratio
     let energy_ratio = game_logic::calculate_energy_ratio(
-        p.solar_plant_level,
+        solar_plant_level,
         p.energy_tech_level,
-        p.metal_mine_level,
-        p.crystal_mine_level,
-        p.deuterium_mine_level,
+        metal_mine_level,
+        crystal_mine_level,
+        deuterium_mine_level,
         &config
     );
 
@@ -1027,15 +1059,15 @@ async fn get_planet_handler(
         let plasma_tech_level = 0;
 
         let base_metal = game_logic::calculate_resources_with_slots(
-            game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update,
+            game_logic::ResourceType::Metal, metal_mine_level, p.metal_amount, p.last_update,
             p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_crystal = game_logic::calculate_resources_with_slots(
-            game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update,
+            game_logic::ResourceType::Crystal, crystal_mine_level, p.crystal_amount, p.last_update,
             p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_deuterium = game_logic::calculate_resources_with_slots(
-            game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
+            game_logic::ResourceType::Deuterium, deuterium_mine_level, p.deuterium_amount, p.last_update,
             p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
 
