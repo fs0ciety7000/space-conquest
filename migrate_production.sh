@@ -9,7 +9,7 @@
 # Prerequisites:
 # - lastbackup.sql must be in the current directory
 # - PostgreSQL 15+ must be installed
-# - Database credentials in .env file
+# - Database credentials in .env.migration file
 #
 # What this script does:
 # 1. Backs up existing data (users and planets)
@@ -23,14 +23,19 @@
 set -e  # Exit on any error
 
 # Load environment variables
-source .env
+if [ -f .env.migration ]; then
+    source .env.migration
+else
+    echo "ERROR: .env.migration file not found!"
+    exit 1
+fi
 
-# Database connection parameters
-DB_HOST="localhost"
-DB_PORT="5432"
-DB_NAME="space_db"
-DB_USER="user"
-DB_PASSWORD="password"
+# Database connection parameters (from .env.migration)
+DB_HOST="${TARGET_DB_HOST}"
+DB_PORT="${TARGET_DB_PORT}"
+DB_NAME="${TARGET_DB_NAME}"
+DB_USER="${TARGET_DB_USER}"
+DB_PASSWORD="${TARGET_DB_PASSWORD}"
 
 # Colors for output
 RED='\033[0;31m'

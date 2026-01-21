@@ -9,12 +9,23 @@
 
 set -e
 
-# Database connection parameters
-DB_HOST="${DB_HOST:-localhost}"
-DB_PORT="${DB_PORT:-5432}"
-DB_NAME="${DB_NAME:-space_db}"
-DB_USER="${DB_USER:-user}"
-DB_PASSWORD="${DB_PASSWORD:-password}"
+# Load environment variables
+if [ -f .env.migration ]; then
+    source .env.migration
+    # Use target DB (local) for backup
+    DB_HOST="${TARGET_DB_HOST}"
+    DB_PORT="${TARGET_DB_PORT}"
+    DB_NAME="${TARGET_DB_NAME}"
+    DB_USER="${TARGET_DB_USER}"
+    DB_PASSWORD="${TARGET_DB_PASSWORD}"
+else
+    # Fallback to defaults if .env.migration doesn't exist
+    DB_HOST="${DB_HOST:-localhost}"
+    DB_PORT="${DB_PORT:-5432}"
+    DB_NAME="${DB_NAME:-space_db}"
+    DB_USER="${DB_USER:-user}"
+    DB_PASSWORD="${DB_PASSWORD:-password}"
+fi
 
 # Backup filename with timestamp
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)

@@ -9,6 +9,14 @@
 
 set -e
 
+# Load environment variables
+if [ -f .env.migration ]; then
+    source .env.migration
+else
+    echo "ERROR: .env.migration file not found!"
+    exit 1
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -17,11 +25,11 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Database connection parameters
-DB_HOST="localhost"
-DB_PORT="5432"
-DB_USER="user"
-DB_PASSWORD="password"
+# Database connection parameters (from .env.migration)
+DB_HOST="${TARGET_DB_HOST}"
+DB_PORT="${TARGET_DB_PORT}"
+DB_USER="${TARGET_DB_USER}"
+DB_PASSWORD="${TARGET_DB_PASSWORD}"
 
 echo -e "${CYAN}============================================================================${NC}"
 echo -e "${CYAN}SPACE CONQUEST - BACKUP VERIFICATION${NC}"
