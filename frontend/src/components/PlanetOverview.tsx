@@ -503,20 +503,23 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                                     <Clock size={12} className={index === 0 ? "animate-spin-slow drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" : ""} />
                                                     <span className="font-black text-sm">{tl}s</span>
                                                 </div>
-                                                <div className="relative group/cancel">
-                                                    <button
-                                                        onClick={() => cancelOperation(item.id)}
-                                                        className="text-slate-600 hover:text-red-500 transition-all p-1.5 rounded-lg hover:bg-red-500/10 hover:shadow-[0_0_15px_rgba(239,68,68,0.3)] group-hover/cancel:scale-110"
-                                                    >
-                                                        <XCircle size={18} className="drop-shadow-[0_0_4px_currentColor]" />
-                                                    </button>
-                                                    <div className="absolute bottom-full right-0 mb-2 hidden group-hover/cancel:block z-50">
-                                                        <div className="bg-slate-950 border-2 border-red-500/50 text-white text-[10px] p-3 rounded-lg shadow-[0_0_30px_rgba(239,68,68,0.4)] whitespace-nowrap backdrop-blur-md">
-                                                            <span className="text-red-400 font-black uppercase tracking-wider border-b border-red-500/30 pb-1.5 mb-2 block drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]">⚠️ Annulation</span>
-                                                            <span className="text-slate-300 font-semibold">Remboursement: <span className="text-emerald-400 font-black">{refundPercent}%</span></span>
+                                                {/* Only show cancel button for building queue items (not ships/defenses) */}
+                                                {!item.is_ship && !item.is_defense && (
+                                                    <div className="relative group/cancel">
+                                                        <button
+                                                            onClick={() => cancelOperation(item.id)}
+                                                            className="text-slate-600 hover:text-red-500 transition-all p-1.5 rounded-lg hover:bg-red-500/10 hover:shadow-[0_0_15px_rgba(239,68,68,0.3)] group-hover/cancel:scale-110"
+                                                        >
+                                                            <XCircle size={18} className="drop-shadow-[0_0_4px_currentColor]" />
+                                                        </button>
+                                                        <div className="absolute bottom-full right-0 mb-2 hidden group-hover/cancel:block z-50">
+                                                            <div className="bg-slate-950 border-2 border-red-500/50 text-white text-[10px] p-3 rounded-lg shadow-[0_0_30px_rgba(239,68,68,0.4)] whitespace-nowrap backdrop-blur-md">
+                                                                <span className="text-red-400 font-black uppercase tracking-wider border-b border-red-500/30 pb-1.5 mb-2 block drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]">⚠️ Annulation</span>
+                                                                <span className="text-slate-300 font-semibold">Remboursement: <span className="text-emerald-400 font-black">{refundPercent}%</span></span>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
