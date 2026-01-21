@@ -1360,6 +1360,50 @@ async fn get_planet_handler(
         let active_queue = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).order_by_asc(construction_queue::Column::EndTime).all(&state.db).await.unwrap_or_default();
         obj.insert("constructions".into(), json!(active_queue));
 
+        // Get active ship builds from planet_ships table with ship type details
+        let active_ship_builds = PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(p.id))
+            .filter(planet_ship::Column::BuildingCount.is_not_null())
+            .filter(planet_ship::Column::BuildEndTime.is_not_null())
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+
+        let mut enriched_ship_builds = Vec::new();
+        for build in active_ship_builds {
+            if let Some(ship_type) = ShipType::find_by_id(build.ship_type_id).one(&state.db).await.unwrap_or(None) {
+                enriched_ship_builds.push(json!({
+                    "ship_key": ship_type.ship_key,
+                    "name": ship_type.display_name,
+                    "building_count": build.building_count,
+                    "build_end_time": build.build_end_time,
+                }));
+            }
+        }
+        obj.insert("ship_builds".into(), json!(enriched_ship_builds));
+
+        // Get active defense builds from planet_defenses table with defense type details
+        let active_defense_builds = PlanetDefense::find()
+            .filter(planet_defense::Column::PlanetId.eq(p.id))
+            .filter(planet_defense::Column::BuildingCount.is_not_null())
+            .filter(planet_defense::Column::BuildEndTime.is_not_null())
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+
+        let mut enriched_defense_builds = Vec::new();
+        for build in active_defense_builds {
+            if let Some(defense_type) = DefenseType::find_by_id(build.defense_type_id).one(&state.db).await.unwrap_or(None) {
+                enriched_defense_builds.push(json!({
+                    "defense_key": defense_type.defense_key,
+                    "name": defense_type.name,
+                    "building_count": build.building_count,
+                    "build_end_time": build.build_end_time,
+                }));
+            }
+        }
+        obj.insert("defense_builds".into(), json!(enriched_defense_builds));
+
         // Infos sur les slots de production
         obj.insert("next_slot_to_unlock".into(), json!(next_slot));
         if let Some(cost) = next_slot_cost {
