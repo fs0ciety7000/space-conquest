@@ -1,4 +1,5 @@
 // frontend/src/lib/gameRules.ts
+import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 
 export interface Requirement {
     label: string;
