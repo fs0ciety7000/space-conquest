@@ -8,16 +8,17 @@ use axum::{
     Router,
 };
 use sea_orm::{
-    ActiveModelTrait, 
+    ActiveModelTrait,
     DatabaseConnection,
     Database,
-    EntityTrait, 
-    Set, 
+    EntityTrait,
+    Set,
+    NotSet,
     IntoActiveModel,     // ✅ Ajoute celui-ci
-    QueryFilter, 
-    QueryOrder, 
+    QueryFilter,
+    QueryOrder,
     QuerySelect,         // ✅ Ajoute celui-ci
-    ColumnTrait, 
+    ColumnTrait,
     Condition,
     PaginatorTrait,      // ✅ Ajoute celui-ci
 };
@@ -237,6 +238,7 @@ async fn main() {
         .route("/planets/:id/defense-types", get(get_defense_types_handler))
         .route("/planets/:id/research/:tech_key", post(start_research_handler))
         .route("/planets/:id/build-ships/:ship_key/:quantity", post(build_ships_handler))
+        .route("/planets/:id/build-defenses/:defense_key/:quantity", post(build_defenses_handler))
         .route("/tech/:tech_key", get(get_tech_details_handler))
         .route("/ship/:ship_key", get(get_ship_details_handler))
         // Actions
@@ -4853,7 +4855,7 @@ async fn build_ships_handler(
 
     // Calculate build time
     let config = state.config.read().unwrap().clone();
-    let build_time_per_ship = ship.build_time_seconds as f64 * config.construction_speed;
+    let build_time_per_ship = ship.build_time_seconds as f64 / ((config.speed_factor / 100.0) * config.construction_speed);
     let additional_build_time = (build_time_per_ship * quantity as f64) as i64;
 
     // If already building, add to the existing queue
@@ -4940,6 +4942,165 @@ async fn build_ships_handler(
     Json(json!({
         "success": true,
         "ship_key": ship_key,
+        "quantity": quantity,
+        "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
+        "duration_seconds": additional_build_time
+    })).into_response()
+}
+
+/// POST /planets/:id/build-defenses/:defense_key/:quantity - Build defenses using relational system
+#[axum::debug_handler]
+async fn build_defenses_handler(
+    Path((planet_id, defense_key, quantity)): Path<(Uuid, String, i32)>,
+    State(state): State<AppState>,
+) -> Response {
+    use entities::{prelude::*, defense_type, planet_defense};
+    use sea_orm::ActiveModelTrait;
+
+    if quantity <= 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid quantity"}))).into_response();
+    }
+
+    // Get planet
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Get defense type
+    let defense = match DefenseType::find()
+        .filter(defense_type::Column::DefenseKey.eq(&defense_key))
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(d)) => d,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Defense type not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    // Check if player can build this defense (tech requirements met)
+    let can_build = match tech_tree::can_build_defense(&state.db, planet_id, &defense_key).await {
+        Ok(can) => can,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
+    };
+
+    if !can_build {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Defense requirements not met"}))).into_response();
+    }
+
+    // Calculate total cost
+    let total_cost_metal = defense.base_cost_metal * quantity;
+    let total_cost_crystal = defense.base_cost_crystal * quantity;
+    let total_cost_deuterium = defense.base_cost_deuterium * quantity;
+
+    // Check if planet has enough resources
+    if planet.metal_amount < total_cost_metal as f64
+        || planet.crystal_amount < total_cost_crystal as f64
+        || planet.deuterium_amount < total_cost_deuterium as f64
+    {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Insufficient resources"}))).into_response();
+    }
+
+    // Check if already building defenses
+    let existing_build = PlanetDefense::find()
+        .filter(planet_defense::Column::PlanetId.eq(planet_id))
+        .filter(planet_defense::Column::DefenseTypeId.eq(defense.id))
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    // Calculate build time
+    let config = state.config.read().unwrap().clone();
+    let build_time_per_defense = defense.build_time_seconds as f64 / ((config.speed_factor / 100.0) * config.construction_speed);
+    let additional_build_time = (build_time_per_defense * quantity as f64) as i64;
+
+    // If already building, add to the existing queue
+    if let Some(pd) = &existing_build {
+        if pd.building_count.is_some() && pd.building_count.unwrap() > 0 {
+            // Calculate remaining build time
+            let now = Utc::now().naive_utc();
+            if let Some(current_end_time) = pd.build_end_time {
+                let remaining_seconds = (current_end_time - now).num_seconds().max(0);
+
+                // New end time = remaining time + additional time
+                let new_end_time = now + Duration::seconds(remaining_seconds + additional_build_time);
+                let new_quantity = pd.building_count.unwrap() + quantity;
+
+                // Deduct resources
+                let mut active_planet: planet::ActiveModel = planet.clone().into();
+                active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
+                active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
+                active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
+
+                if let Err(_) = active_planet.update(&state.db).await {
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
+                }
+
+                // Update the build queue
+                let mut active_pd: planet_defense::ActiveModel = pd.clone().into();
+                active_pd.building_count = Set(Some(new_quantity));
+                active_pd.build_end_time = Set(Some(new_end_time));
+
+                if let Err(_) = active_pd.update(&state.db).await {
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update building queue"}))).into_response();
+                }
+
+                // Return success with updated info
+                return Json(json!({
+                    "success": true,
+                    "defense_key": defense_key,
+                    "quantity": new_quantity,
+                    "added": quantity,
+                    "end_time": new_end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    "total_duration_seconds": remaining_seconds + additional_build_time
+                })).into_response();
+            }
+        }
+    }
+
+    // Deduct resources for new build
+    let mut active_planet: planet::ActiveModel = planet.clone().into();
+    active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
+    active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
+    active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
+
+    if let Err(_) = active_planet.update(&state.db).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
+    }
+
+    let end_time = Utc::now().naive_utc() + Duration::seconds(additional_build_time);
+
+    // Start building
+    if let Some(pd) = existing_build {
+        // Update existing record
+        let mut active_pd: planet_defense::ActiveModel = pd.into();
+        active_pd.building_count = Set(Some(quantity));
+        active_pd.build_end_time = Set(Some(end_time));
+
+        if let Err(_) = active_pd.update(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
+        }
+    } else {
+        // Create new record
+        let new_pd = planet_defense::ActiveModel {
+            planet_id: Set(planet_id),
+            defense_type_id: Set(defense.id),
+            count: Set(0),
+            building_count: Set(Some(quantity)),
+            build_end_time: Set(Some(end_time)),
+            updated_at: NotSet,
+        };
+
+        if let Err(_) = new_pd.insert(&state.db).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
+        }
+    }
+
+    Json(json!({
+        "success": true,
+        "defense_key": defense_key,
         "quantity": quantity,
         "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
         "duration_seconds": additional_build_time
@@ -5303,6 +5464,9 @@ async fn tick_handler(
             Json(json!({
                 "success": true,
                 "research_completed": stats.research_completed,
+                "ships_completed": stats.ships_completed,
+                "defenses_completed": stats.defenses_completed,
+                "buildings_completed": stats.buildings_completed,
             })).into_response()
         }
         Err(e) => {

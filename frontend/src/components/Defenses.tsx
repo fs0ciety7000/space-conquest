@@ -113,7 +113,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
     if (!selectedDefense) return;
 
     try {
-      const res = await fetch(apiUrl(`/planets/${planet.id}/build-fleet/${selected}/${qty}`), {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/build-defenses/${selected}/${qty}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
