@@ -586,6 +586,12 @@ async fn resolve_attack_mission(
             "log": result.log,
             "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
             "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "attacker_initial": result.attacker_initial,
+            "attacker_remaining": result.attacker_remaining,
+            "attacker_losses": attacker_total_lost,
+            "defender_initial": result.defender_initial,
+            "defender_remaining": result.defender_remaining,
+            "defender_losses": defender_total_lost,
             "losses": { "total_ships": defender_total_lost, "ships": result.defender_remaining.clone() },
             "is_defense": true,
             "opponent_name": att_user.username,
@@ -598,6 +604,12 @@ async fn resolve_attack_mission(
             "log": result.log,
             "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
             "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "attacker_initial": result.attacker_initial,
+            "attacker_remaining": result.attacker_remaining,
+            "attacker_losses": attacker_total_lost,
+            "defender_initial": result.defender_initial,
+            "defender_remaining": result.defender_remaining,
+            "defender_losses": defender_total_lost,
             "losses": { "total_ships": defender_total_lost, "ships": result.defender_remaining.clone() },
             "is_defense": true,
             "opponent_name": att_user.username,
@@ -629,6 +641,12 @@ async fn resolve_attack_mission(
             "log": result.log,
             "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
             "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "attacker_initial": result.attacker_initial,
+            "attacker_remaining": result.attacker_remaining,
+            "attacker_losses": attacker_total_lost,
+            "defender_initial": result.defender_initial,
+            "defender_remaining": result.defender_remaining,
+            "defender_losses": defender_total_lost,
             "losses": { "total_ships": attacker_total_lost, "ships": result.attacker_remaining.clone() },
             "is_defense": false,
             "opponent_name": def_user.username,
@@ -643,6 +661,12 @@ async fn resolve_attack_mission(
             "log": result.log,
             "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
             "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "attacker_initial": result.attacker_initial,
+            "attacker_remaining": result.attacker_remaining,
+            "attacker_losses": attacker_total_lost,
+            "defender_initial": result.defender_initial,
+            "defender_remaining": result.defender_remaining,
+            "defender_losses": defender_total_lost,
             "losses": { "total_ships": attacker_total_lost, "ships": result.attacker_remaining.clone() },
             "is_defense": false,
             "opponent_name": def_user.username,
@@ -1478,6 +1502,42 @@ async fn get_planet_handler(
     Ok(Json(json_response))
 }
 
+/// Helper function to count ALL active builds (buildings, tech, ships, defenses)
+/// This ensures the 3-slot queue limit is respected across all build types
+async fn count_active_builds(db: &DatabaseConnection, planet_id: Uuid) -> Result<u64, sea_orm::DbErr> {
+    // Count items in construction_queue (buildings from old system)
+    let queue_count = ConstructionQueue::find()
+        .filter(construction_queue::Column::PlanetId.eq(planet_id))
+        .count(db)
+        .await?;
+
+    // Count active ship builds
+    let ship_builds = PlanetShip::find()
+        .filter(planet_ship::Column::PlanetId.eq(planet_id))
+        .filter(planet_ship::Column::BuildingCount.is_not_null())
+        .filter(planet_ship::Column::BuildEndTime.is_not_null())
+        .count(db)
+        .await?;
+
+    // Count active defense builds
+    let defense_builds = PlanetDefense::find()
+        .filter(planet_defense::Column::PlanetId.eq(planet_id))
+        .filter(planet_defense::Column::BuildingCount.is_not_null())
+        .filter(planet_defense::Column::BuildEndTime.is_not_null())
+        .count(db)
+        .await?;
+
+    // Count active research (technologies being researched)
+    let tech_research = PlanetTechnology::find()
+        .filter(planet_technology::Column::PlanetId.eq(planet_id))
+        .filter(planet_technology::Column::ResearchingToLevel.is_not_null())
+        .filter(planet_technology::Column::ResearchEndTime.is_not_null())
+        .count(db)
+        .await?;
+
+    Ok(queue_count + ship_builds + defense_builds + tech_research)
+}
+
 async fn clear_report_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
@@ -1499,13 +1559,12 @@ async fn upgrade_mine_handler(
     let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     let config = state.config.read().unwrap().clone();
 
-    let active_constructions = ConstructionQueue::find()
-        .filter(construction_queue::Column::PlanetId.eq(p.id))
-        .count(&state.db)
+    // Check queue limit across ALL build types (buildings, tech, ships, defenses)
+    let active_builds = count_active_builds(&state.db, p.id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    if active_constructions >= 3 {
+    if active_builds >= 3 {
         return Err(StatusCode::CONFLICT);
     }
 
@@ -4803,10 +4862,24 @@ async fn start_research_handler(
         .ok()
         .flatten();
 
-    if let Some(pt) = &existing_research {
-        if pt.researching_to_level.is_some() {
-            return (StatusCode::CONFLICT, Json(json!({"error": "Already researching this technology"}))).into_response();
-        }
+    // Check if already researching this technology
+    let is_already_researching = existing_research
+        .as_ref()
+        .and_then(|pt| pt.researching_to_level)
+        .is_some();
+
+    if is_already_researching {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Already researching this technology"}))).into_response();
+    }
+
+    // Check queue limit across ALL build types (only if not already researching)
+    let active_builds = match count_active_builds(&state.db, planet_id).await {
+        Ok(count) => count,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check queue"}))).into_response(),
+    };
+
+    if active_builds >= 3 {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Queue is full (3 slots max)"}))).into_response();
     }
 
     // Calculate cost for next level
@@ -4924,7 +4997,7 @@ async fn build_ships_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Insufficient resources"}))).into_response();
     }
 
-    // Check if already building ships
+    // Check if already building this ship type
     let existing_build = PlanetShip::find()
         .filter(planet_ship::Column::PlanetId.eq(planet_id))
         .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
@@ -4932,6 +5005,25 @@ async fn build_ships_handler(
         .await
         .ok()
         .flatten();
+
+    // If not already building this ship type, check queue limit
+    let is_already_building = existing_build
+        .as_ref()
+        .and_then(|ps| ps.building_count)
+        .map(|count| count > 0)
+        .unwrap_or(false);
+
+    if !is_already_building {
+        // Check queue limit across ALL build types
+        let active_builds = match count_active_builds(&state.db, planet_id).await {
+            Ok(count) => count,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check queue"}))).into_response(),
+        };
+
+        if active_builds >= 3 {
+            return (StatusCode::CONFLICT, Json(json!({"error": "Queue is full (3 slots max)"}))).into_response();
+        }
+    }
 
     // Calculate build time
     let config = state.config.read().unwrap().clone();
@@ -5082,7 +5174,7 @@ async fn build_defenses_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Insufficient resources"}))).into_response();
     }
 
-    // Check if already building defenses
+    // Check if already building this defense type
     let existing_build = PlanetDefense::find()
         .filter(planet_defense::Column::PlanetId.eq(planet_id))
         .filter(planet_defense::Column::DefenseTypeId.eq(defense.id))
@@ -5090,6 +5182,25 @@ async fn build_defenses_handler(
         .await
         .ok()
         .flatten();
+
+    // If not already building this defense type, check queue limit
+    let is_already_building = existing_build
+        .as_ref()
+        .and_then(|pd| pd.building_count)
+        .map(|count| count > 0)
+        .unwrap_or(false);
+
+    if !is_already_building {
+        // Check queue limit across ALL build types
+        let active_builds = match count_active_builds(&state.db, planet_id).await {
+            Ok(count) => count,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check queue"}))).into_response(),
+        };
+
+        if active_builds >= 3 {
+            return (StatusCode::CONFLICT, Json(json!({"error": "Queue is full (3 slots max)"}))).into_response();
+        }
+    }
 
     // Calculate build time
     let config = state.config.read().unwrap().clone();

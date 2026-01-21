@@ -99,7 +99,8 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const remainingSpace = Math.max(0, maxFleet - currentFleet);
 
   const queue = planet.constructions || [];
-  const isQueueFull = queue.length >= 3;
+  const shipBuilds = planet.ship_builds || [];
+  const isQueueFull = queue.length + shipBuilds.length >= 3;
 
   // Map ship_key to icon and type
   const getShipIcon = (ship_key: string) => {
@@ -157,7 +158,8 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if(res.ok) {
-            toast.success("Production lancée");
+            const shipInfo = shipTypes.find(s => s.ship_key === type);
+            toast.success(`Production lancée : ${shipInfo?.display_name || type}`);
             onUpdate();
             setQty({ ...qty, [type]: 0 });
         } else {
@@ -216,8 +218,8 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
         const theme = getShipTheme(shipCategory);
         const canAfford = planet.metal_amount >= ship.cost_metal && planet.crystal_amount >= ship.cost_crystal;
 
-        const activeItem = queue.find((q: any) => q.building_type === ship.ship_key);
-        const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
+        const activeItem = shipBuilds.find((sb: any) => sb.ship_key === ship.ship_key);
+        const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.build_end_time).getTime() - now) / 1000)) : null;
 
         const maxMetal = ship.cost_metal > 0 ? Math.floor(planet.metal_amount / ship.cost_metal) : Infinity;
         const maxCrystal = ship.cost_crystal > 0 ? Math.floor(planet.crystal_amount / ship.cost_crystal) : Infinity;

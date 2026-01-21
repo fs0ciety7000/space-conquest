@@ -455,20 +455,23 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
 
   if (loading) {
     return (
-      <div className="h-[calc(100vh-200px)] bg-slate-950 rounded-lg border border-white/10 overflow-hidden card-depth flex items-center justify-center">
+      <div className="h-screen bg-slate-950 overflow-hidden flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="h-[calc(100vh-200px)] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 rounded-lg border border-purple-500/20 overflow-hidden card-depth shadow-2xl relative">
+    <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={true}
         fitView
         minZoom={0.2}
         maxZoom={1.5}

@@ -414,7 +414,9 @@ pub async fn resolve_pvp_combat(
     Ok(PvpCombatReport {
         log: logs,
         winner: winner.to_string(),
+        attacker_initial: attacker_ships.clone(),
         attacker_remaining: attacker_fleet.get_all_ships().clone(),
+        defender_initial: defender_ships.clone(),
         defender_remaining: defender_fleet.get_all_ships().clone(),
         loot: (loot_metal, loot_crystal, loot_deuterium),
         debris: (debris_metal, debris_crystal),
@@ -425,7 +427,9 @@ pub async fn resolve_pvp_combat(
 pub struct PvpCombatReport {
     pub log: Vec<String>,
     pub winner: String,
+    pub attacker_initial: HashMap<String, i32>,
     pub attacker_remaining: HashMap<String, i32>,
+    pub defender_initial: HashMap<String, i32>,
     pub defender_remaining: HashMap<String, i32>,
     pub loot: (f64, f64, f64), // (metal, crystal, deuterium)
     pub debris: (f64, f64),    // (metal, crystal)

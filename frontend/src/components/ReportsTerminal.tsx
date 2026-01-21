@@ -37,12 +37,15 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
   const [selectedReport, setSelectedReport] = useState<any>(null);
 
   useEffect(() => {
-    fetch(apiUrl(`/planets/${planetId}/reports`))
+    const token = localStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}` };
+
+    fetch(apiUrl(`/planets/${planetId}/reports`), { headers })
       .then(res => res.json())
       .then(setCombatLogs)
       .catch(console.error);
 
-    fetch(apiUrl(`/planets/${planetId}/transport-logs`))
+    fetch(apiUrl(`/planets/${planetId}/transport-logs`), { headers })
       .then(res => res.json())
       .then(setTransportLogs)
       .catch(console.error);
@@ -56,7 +59,10 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
 
   const handleReportClick = async (reportId: string) => {
     try {
-      const res = await fetch(apiUrl(`/combat-reports/${reportId}/detail`));
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/combat-reports/${reportId}/detail`), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (res.ok) {
         const detailedReport = await res.json();
         setSelectedReport(detailedReport);

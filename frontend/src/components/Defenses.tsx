@@ -86,13 +86,14 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
   };
 
   useEffect(() => {
-    const defenseQueue = planet?.constructions?.find(
-      (c: any) => defenseTypes.some(d => d.defense_key === c.building_type)
+    const defenseBuilds = planet?.defense_builds || [];
+    const defenseQueue = defenseBuilds.find(
+      (db: any) => db.defense_key === selected
     );
 
     if (defenseQueue) {
       const interval = setInterval(() => {
-        const end = new Date(defenseQueue.end_time).getTime();
+        const end = new Date(defenseQueue.build_end_time).getTime();
         const now = Date.now();
         const diff = Math.max(0, Math.floor((end - now) / 1000));
 
@@ -106,7 +107,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
     } else {
       setTimeLeft(null);
     }
-  }, [planet?.constructions, onBuild, defenseTypes]);
+  }, [planet?.defense_builds, selected, onBuild, defenseTypes]);
 
   const startBuild = async () => {
     const selectedDefense = defenseTypes.find(d => d.defense_key === selected);
