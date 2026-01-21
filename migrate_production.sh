@@ -78,7 +78,7 @@ PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d space_db_old -t -A -F","
     password,
     COALESCE(created_at, NOW()),
     COALESCE(role, 'player')
-FROM "user"
+FROM \"user\"
 ORDER BY created_at ASC" > /tmp/users_backup.csv
 
 USER_COUNT=$(wc -l < /tmp/users_backup.csv)
@@ -125,7 +125,7 @@ echo -e "${YELLOW}Step 6: Importing user data...${NC}"
 while IFS=',' read -r id username email password created_at role
 do
     PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
-    "INSERT INTO "user" (id, username, email, password, created_at, role)
+    "INSERT INTO \"user\" (id, username, email, password, created_at, role)
      VALUES ('$id', '$username', '$email', '$password', '$created_at', '$role')
      ON CONFLICT (id) DO NOTHING" > /dev/null
 done < /tmp/users_backup.csv
@@ -204,7 +204,7 @@ echo ""
 
 # Step 10: Verification
 echo -e "${YELLOW}Step 10: Verifying migration...${NC}"
-FINAL_USER_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -t -A -c "SELECT COUNT(*) FROM "user"")
+FINAL_USER_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -t -A -c 'SELECT COUNT(*) FROM "user"')
 FINAL_PLANET_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -t -A -c "SELECT COUNT(*) FROM planet WHERE is_homeworld = true")
 TECH_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -t -A -c "SELECT COUNT(*) FROM technologies")
 SHIP_COUNT=$(PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -t -A -c "SELECT COUNT(*) FROM ship_types")
