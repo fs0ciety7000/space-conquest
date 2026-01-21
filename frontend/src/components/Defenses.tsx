@@ -93,7 +93,11 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
 
     if (defenseQueue) {
       const interval = setInterval(() => {
-        const end = new Date(defenseQueue.build_end_time).getTime();
+        // Ensure build_end_time is treated as UTC
+        const buildEndTime = defenseQueue.build_end_time.endsWith('Z')
+          ? defenseQueue.build_end_time
+          : defenseQueue.build_end_time + 'Z';
+        const end = new Date(buildEndTime).getTime();
         const now = Date.now();
         const diff = Math.max(0, Math.floor((end - now) / 1000));
 
