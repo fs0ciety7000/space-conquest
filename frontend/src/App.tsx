@@ -250,7 +250,31 @@ export default function App() {
       const res = await fetch(apiUrl('/maintenance/status'));
       if (res.ok) {
         const data = await res.json();
-        setMaintenanceStatus(data);
+        // Map snake_case from API to camelCase for React
+        // Format startTime if it exists and is not empty
+        let formattedStartTime = 'Non défini';
+        if (data.start_time && data.start_time.trim() !== '') {
+          try {
+            const startDate = new Date(data.start_time);
+            // Format in Europe/Brussels timezone
+            formattedStartTime = startDate.toLocaleString('fr-FR', {
+              timeZone: 'Europe/Brussels',
+              dateStyle: 'short',
+              timeStyle: 'medium'
+            });
+          } catch {
+            formattedStartTime = data.start_time;
+          }
+        }
+
+        setMaintenanceStatus({
+          enabled: data.enabled,
+          title: data.title,
+          description: data.description,
+          estimatedDuration: data.estimated_duration || '15-30 minutes',
+          startTime: formattedStartTime,
+          autoDisableAt: data.auto_disable_at,
+        });
       }
     } catch (e) {
       console.error('Failed to fetch maintenance status:', e);
@@ -558,7 +582,8 @@ export default function App() {
   // Check maintenance status on mount and periodically
   useEffect(() => {
     fetchMaintenanceStatus();
-    const interval = setInterval(fetchMaintenanceStatus, 30000); // Check every 30 seconds
+    // Check every 5 seconds for quick response to maintenance mode changes
+    const interval = setInterval(fetchMaintenanceStatus, 5000);
     return () => clearInterval(interval);
   }, [fetchMaintenanceStatus]);
 
