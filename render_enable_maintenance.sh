@@ -94,14 +94,42 @@ echo ""
 # Activate maintenance
 echo -e "${YELLOW}Activation du mode maintenance...${NC}"
 PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" <<EOF
--- Activer la maintenance
-UPDATE server_config SET config_value = 'true', updated_at = NOW() WHERE config_key = 'maintenance_enabled';
+-- Fix sequence for server_config auto-increment (in case this is first insert)
+SELECT setval(pg_get_serial_sequence('server_config', 'id'),
+              COALESCE((SELECT MAX(id) FROM server_config), 0) + 1,
+              false);
+
+-- Activer la maintenance (INSERT if not exists, UPDATE if exists)
+INSERT INTO server_config (config_key, config_value, updated_at)
+VALUES ('maintenance_enabled', 'true', NOW())
+ON CONFLICT (config_key) DO UPDATE
+SET config_value = 'true', updated_at = NOW();
 
 -- Mettre à jour le message
-UPDATE server_config SET config_value = '$TITLE', updated_at = NOW() WHERE config_key = 'maintenance_message_title';
-UPDATE server_config SET config_value = '$DESC', updated_at = NOW() WHERE config_key = 'maintenance_message_description';
-UPDATE server_config SET config_value = '$DURATION', updated_at = NOW() WHERE config_key = 'maintenance_estimated_duration';
-UPDATE server_config SET config_value = NOW()::text, updated_at = NOW() WHERE config_key = 'maintenance_start_time';
+INSERT INTO server_config (config_key, config_value, updated_at)
+VALUES ('maintenance_message_title', '$TITLE', NOW())
+ON CONFLICT (config_key) DO UPDATE
+SET config_value = '$TITLE', updated_at = NOW();
+
+INSERT INTO server_config (config_key, config_value, updated_at)
+VALUES ('maintenance_message_description', '$DESC', NOW())
+ON CONFLICT (config_key) DO UPDATE
+SET config_value = '$DESC', updated_at = NOW();
+
+INSERT INTO server_config (config_key, config_value, updated_at)
+VALUES ('maintenance_estimated_duration', '$DURATION', NOW())
+ON CONFLICT (config_key) DO UPDATE
+SET config_value = '$DURATION', updated_at = NOW();
+
+INSERT INTO server_config (config_key, config_value, updated_at)
+VALUES ('maintenance_start_time', NOW()::text, NOW())
+ON CONFLICT (config_key) DO UPDATE
+SET config_value = NOW()::text, updated_at = NOW();
+
+-- Initialiser auto_disable_at vide si n'existe pas
+INSERT INTO server_config (config_key, config_value, updated_at)
+VALUES ('maintenance_auto_disable_at', '', NOW())
+ON CONFLICT (config_key) DO NOTHING;
 
 -- Vérifier
 SELECT config_key, config_value FROM server_config WHERE config_key LIKE 'maintenance_%' ORDER BY config_key;
