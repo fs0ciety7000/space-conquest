@@ -249,6 +249,19 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                     </div>
                 )}
 
+                {/* TEMPS DE CONSTRUCTION */}
+                {!locked && (
+                    <div className="mb-4 p-2 bg-black/30 rounded border border-white/5 flex items-center justify-between glass-card">
+                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
+                            <Timer size={12} className={`${theme.color}`} />
+                            <span>Temps Construction</span>
+                        </div>
+                        <div className="text-xs font-mono text-slate-300">
+                            {Math.floor(building.base_time_seconds / 60)}m {building.base_time_seconds % 60}s
+                        </div>
+                    </div>
+                )}
+
                 {/* PRÉREQUIS SI VERROUILLÉ */}
                 {locked && building.requirements.length > 0 && (
                   <div className="mb-4 p-3 bg-red-950/20 rounded border border-red-500/20 space-y-1">
