@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { GameImage } from '@/components/ui/game-image';
 import { getShipImage } from '@/lib/images';
-import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
+import { getTechLevel } from '@/utils/techTreeCompat';
 
 interface ShipRequirement {
   requirement_type: string;
@@ -91,7 +91,8 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const bonusShd = 1 + ((getTechLevel(planet, 'energy_tech')) * 0.1);
   const bonusHull = 1 + ((getTechLevel(planet, 'armour_tech')) * 0.1);
 
-  const currentFleet = (getShipCount(planet, 'light_hunter')||0) + (getShipCount(planet, 'cruiser')||0) + (getShipCount(planet, 'transporter')||0) + (getShipCount(planet, 'colony_ship')||0) + (getShipCount(planet, 'recycler')||0) + (getShipCount(planet, 'spy_probe')||0);
+  // Calculate current fleet from dynamic ship types data
+  const currentFleet = shipTypes.reduce((total, ship) => total + ship.current_count, 0);
   const maxFleet = 500 + ((planet.hangar_level || 0) * 500);
   const capacityPercent = Math.min(100, (currentFleet / maxFleet) * 100);
   const isFull = currentFleet >= maxFleet;
@@ -151,7 +152,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
     if (amount > remainingSpace) { toast.error("Capacité insuffisante !"); return; }
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(apiUrl(`/planets/${planet.id}/build-fleet/${type}/${amount}`), {
+        const res = await fetch(apiUrl(`/planets/${planet.id}/build-ships/${type}/${amount}`), {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });

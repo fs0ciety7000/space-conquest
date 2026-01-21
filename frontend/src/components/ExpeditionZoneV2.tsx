@@ -31,25 +31,42 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
   const [availableShips, setAvailableShips] = useState<PlanetShip[]>([]);
   const [combatReport, setCombatReport] = useState<any>(null);
 
-  // Load available ships from planet.ships
+  // Load available ships from ship-types endpoint
   useEffect(() => {
-    if (planet?.ships) {
-      const ships: PlanetShip[] = Object.entries(planet.ships).map(([key, value]: [string, any]) => ({
-        ship_key: key,
-        count: value.count || 0,
-        display_name: value.display_name || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-      })).filter((ship: PlanetShip) => ship.count > 0);
+    const fetchShipTypes = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const response = await fetch(`${API_URL}/planets/${planet.id}/ship-types`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const ships: PlanetShip[] = (data.ship_types || [])
+            .filter((ship: any) => ship.current_count > 0)
+            .map((ship: any) => ({
+              ship_key: ship.ship_key,
+              count: ship.current_count,
+              display_name: ship.display_name
+            }));
 
-      setAvailableShips(ships);
+          setAvailableShips(ships);
 
-      // Initialize selection to 0 for all ship types
-      const initialSelection: ShipSelection = {};
-      ships.forEach(ship => {
-        initialSelection[ship.ship_key] = 0;
-      });
-      setShipSelection(initialSelection);
+          // Initialize selection to 0 for all ship types
+          const initialSelection: ShipSelection = {};
+          ships.forEach(ship => {
+            initialSelection[ship.ship_key] = 0;
+          });
+          setShipSelection(initialSelection);
+        }
+      } catch (e) {
+        console.error("Failed to fetch ship types:", e);
+      }
+    };
+
+    if (planet?.id) {
+      fetchShipTypes();
     }
-  }, [planet?.ships]);
+  }, [planet?.id]);
 
   // Reset on planet change
   useEffect(() => {
