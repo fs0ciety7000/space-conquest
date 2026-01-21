@@ -19,6 +19,7 @@ pub mod sabotage;
 pub mod tech_tree;
 pub mod tick_system;
 pub mod maintenance;
+pub mod protection;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::ServerConfig, server_config};
@@ -110,3 +111,4 @@ pub async fn reload_server_config(state: &AppState) {
 
 // Admin doit être déclaré APRÈS AppState et ServerConfigCache
 pub mod admin;
+pub mod admin_content;

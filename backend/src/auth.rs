@@ -130,15 +130,18 @@ pub async fn register_handler(
     };
     
     let user_id = Uuid::new_v4();
+    let now = Utc::now().naive_utc();
 
-    // Créer l'utilisateur avec created_at = maintenant
+    // Créer l'utilisateur avec created_at = maintenant et protection de 3 jours
     let new_user = user::ActiveModel {
         id: Set(user_id),
         username: Set(payload.username.clone()),
         password: Set(hashed),
         email: Set(payload.email.clone()),
-        created_at: Set(Utc::now().naive_utc()),
+        created_at: Set(now),
         role: Set("user".to_string()),
+        protection_until: Set(Some(now + chrono::Duration::days(3))), // 3 day beginner protection
+        total_points: Set(0), // Start with 0 points
     };
 
     if new_user.insert(&state.db).await.is_err() {

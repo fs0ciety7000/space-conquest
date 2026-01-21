@@ -38,8 +38,8 @@ use sea_orm_migration::MigratorTrait;
 
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
-    auth, game_logic, combat, entities, config, admin,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, AppState
+    auth, game_logic, combat, entities, config, admin, admin_content,
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -50,8 +50,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member
 };
 
 #[derive(Serialize, Clone)]
@@ -307,6 +307,32 @@ async fn main() {
         .route("/admin/announcements", post(admin::create_announcement_handler))
         .route("/admin/announcements/:id", patch(admin::update_announcement_handler))
         .route("/admin/announcements/:id", delete(admin::delete_announcement_handler))
+        // Admin Content Management - Ships
+        .route("/admin/ships", get(admin_content::list_ship_types_handler))
+        .route("/admin/ships", post(admin_content::create_ship_type_handler))
+        .route("/admin/ships/:id", patch(admin_content::update_ship_type_handler))
+        .route("/admin/ships/:id", delete(admin_content::delete_ship_type_handler))
+        .route("/admin/ships/:ship_type_id/requirements", get(admin_content::list_ship_requirements_handler))
+        .route("/admin/ships/requirements", post(admin_content::create_ship_requirement_handler))
+        .route("/admin/ships/requirements/:id", delete(admin_content::delete_ship_requirement_handler))
+        // Admin Content Management - Buildings
+        .route("/admin/buildings", get(admin_content::list_building_types_handler))
+        .route("/admin/buildings", post(admin_content::create_building_type_handler))
+        .route("/admin/buildings/:id", patch(admin_content::update_building_type_handler))
+        .route("/admin/buildings/:id", delete(admin_content::delete_building_type_handler))
+        .route("/admin/buildings/:building_type_id/requirements", get(admin_content::list_building_requirements_handler))
+        .route("/admin/buildings/requirements", post(admin_content::create_building_requirement_handler))
+        .route("/admin/buildings/requirements/:id", delete(admin_content::delete_building_requirement_handler))
+        // Admin Content Management - Defenses
+        .route("/admin/defenses", get(admin_content::list_defense_types_handler))
+        .route("/admin/defenses", post(admin_content::create_defense_type_handler))
+        .route("/admin/defenses/:id", patch(admin_content::update_defense_type_handler))
+        .route("/admin/defenses/:id", delete(admin_content::delete_defense_type_handler))
+        .route("/admin/defenses/:defense_type_id/requirements", get(admin_content::list_defense_requirements_handler))
+        .route("/admin/defenses/requirements", post(admin_content::create_defense_requirement_handler))
+        .route("/admin/defenses/requirements/:id", delete(admin_content::delete_defense_requirement_handler))
+        // Admin Content Management - Technologies (read-only for reference)
+        .route("/admin/technologies", get(admin_content::list_technologies_handler))
         // Game tick system
         .route("/tick", post(tick_handler))
         // Alliance system
@@ -975,6 +1001,32 @@ async fn get_ranking_handler(
 }
 
 
+/// Helper function to get building level from planet_buildings table with fallback to legacy column
+async fn get_building_level(db: &DatabaseConnection, planet_id: Uuid, building_key: &str, legacy_level: i32) -> i32 {
+    // First, get the building_type_id for this building_key
+    let building_type = BuildingType::find()
+        .filter(building_type::Column::BuildingKey.eq(building_key))
+        .one(db)
+        .await;
+
+    let building_type_id = match building_type {
+        Ok(Some(bt)) => bt.id,
+        _ => return legacy_level, // If building type not found, use legacy
+    };
+
+    // Now query planet_buildings for this planet and building type
+    let planet_building = PlanetBuilding::find()
+        .filter(planet_building::Column::PlanetId.eq(planet_id))
+        .filter(planet_building::Column::BuildingTypeId.eq(building_type_id))
+        .one(db)
+        .await;
+
+    match planet_building {
+        Ok(Some(building)) => building.level,
+        _ => legacy_level, // Fallback to legacy column if not found in planet_buildings
+    }
+}
+
 async fn get_planet_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
@@ -1005,13 +1057,19 @@ async fn get_planet_handler(
     let config = state.config.read().unwrap().clone();
     let speed_factor = config.speed_factor;
 
+    // Get building levels from planet_buildings with fallback to legacy columns
+    let metal_mine_level = get_building_level(&state.db, id, "metal_mine", p.metal_mine_level).await;
+    let crystal_mine_level = get_building_level(&state.db, id, "crystal_mine", p.crystal_mine_level).await;
+    let deuterium_mine_level = get_building_level(&state.db, id, "deuterium_mine", p.deuterium_mine_level).await;
+    let solar_plant_level = get_building_level(&state.db, id, "solar_plant", p.solar_plant_level).await;
+
     // Calculate energy ratio
     let energy_ratio = game_logic::calculate_energy_ratio(
-        p.solar_plant_level,
+        solar_plant_level,
         p.energy_tech_level,
-        p.metal_mine_level,
-        p.crystal_mine_level,
-        p.deuterium_mine_level,
+        metal_mine_level,
+        crystal_mine_level,
+        deuterium_mine_level,
         &config
     );
 
@@ -1027,15 +1085,15 @@ async fn get_planet_handler(
         let plasma_tech_level = 0;
 
         let base_metal = game_logic::calculate_resources_with_slots(
-            game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update,
+            game_logic::ResourceType::Metal, metal_mine_level, p.metal_amount, p.last_update,
             p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_crystal = game_logic::calculate_resources_with_slots(
-            game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update,
+            game_logic::ResourceType::Crystal, crystal_mine_level, p.crystal_amount, p.last_update,
             p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_deuterium = game_logic::calculate_resources_with_slots(
-            game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
+            game_logic::ResourceType::Deuterium, deuterium_mine_level, p.deuterium_amount, p.last_update,
             p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
 
@@ -1859,10 +1917,25 @@ async fn attack_handler(
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // BEGINNER PROTECTION - Validate attack is allowed
     // ═══════════════════════════════════════════════════════════════════════════
     let attacker_owner_id = att_planet.owner_id;
     let defender_owner_id = target_planet.owner_id;
+
+    let config_clone = state.config.read().unwrap().clone();
+    if let Err(error_msg) = protection::validate_attack(
+        &state.db,
+        attacker_owner_id,
+        defender_owner_id,
+        payload.target_planet_id,
+        &config_clone,
+    ).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": error_msg}))).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // ═══════════════════════════════════════════════════════════════════════════
 
     let mut used_casus_belli = false;
     if let Ok(has_cb) = sabotage::has_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {
@@ -1987,10 +2060,25 @@ async fn attack_v2_handler(
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // BEGINNER PROTECTION - Validate attack is allowed
     // ═══════════════════════════════════════════════════════════════════════════
     let attacker_owner_id = att_planet.owner_id;
     let defender_owner_id = target_planet.owner_id;
+
+    let config_clone = state.config.read().unwrap().clone();
+    if let Err(error_msg) = protection::validate_attack(
+        &state.db,
+        attacker_owner_id,
+        defender_owner_id,
+        payload.target_planet_id,
+        &config_clone,
+    ).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": error_msg}))).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // ═══════════════════════════════════════════════════════════════════════════
 
     let mut used_casus_belli = false;
     if let Ok(has_cb) = sabotage::has_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {
@@ -3296,13 +3384,13 @@ async fn transport_handler(
     // ═══════════════════════════════════════════════════════════════════════════
     if source_model.owner_id != target_model.owner_id {
         // Vérifier que les deux joueurs sont dans la même alliance
-        let source_member = alliance_member::Entity::find()
+        let source_member = AllianceMember::find()
             .filter(alliance_member::Column::UserId.eq(source_model.owner_id))
             .one(&state.db)
             .await
             .unwrap();
 
-        let target_member = alliance_member::Entity::find()
+        let target_member = AllianceMember::find()
             .filter(alliance_member::Column::UserId.eq(target_model.owner_id))
             .one(&state.db)
             .await
