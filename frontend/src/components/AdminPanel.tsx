@@ -121,6 +121,7 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     color: 'indigo',
     configs: [
       { key: 'speed_factor', label: 'Speed Factor Global', description: 'Multiplicateur général (x5 = 500)', defaultValue: '500.0' },
+      { key: 'flight_speed_multiplier', label: 'Vitesse de Vol', description: 'Multiplie la vitesse des flottes (5 = 5x, 10 = 10x, etc.)', defaultValue: '5.0' },
       { key: 'construction_speed_multiplier', label: 'Vitesse Construction', description: 'Multiplie les temps de construction', defaultValue: '1.0' },
       { key: 'mining_speed_multiplier', label: 'Vitesse Minage', description: 'Multiplie la production de ressources', defaultValue: '1.0' },
     ]
