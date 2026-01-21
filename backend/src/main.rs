@@ -203,8 +203,9 @@ async fn main() {
     let ws_state = WsState::new(db.clone(), config.clone());
     println!("🔌 WebSocket initialisé");
 
-    // Cloner la DB pour la tâche de nettoyage périodique avant de la déplacer dans AppState
+    // Cloner la DB pour les tâches en arrière-plan avant de la déplacer dans AppState
     let db_cleanup = db.clone();
+    let db_tick = db.clone();
 
     let state = AppState {
         db,
@@ -383,6 +384,26 @@ async fn main() {
         }
     });
     println!("🕒 Tâches périodiques de nettoyage démarrées (intervalle: 1h)");
+
+    // Start automatic tick processing loop
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            match tick_system::process_tick(&db_tick).await {
+                Ok(stats) => {
+                    if stats.research_completed > 0 || stats.ships_completed > 0 ||
+                       stats.defenses_completed > 0 || stats.buildings_completed > 0 {
+                        println!("✅ Tick: {} research, {} ships, {} defenses, {} buildings completed",
+                            stats.research_completed, stats.ships_completed,
+                            stats.defenses_completed, stats.buildings_completed);
+                    }
+                }
+                Err(e) => eprintln!("❌ Tick error: {:?}", e),
+            }
+        }
+    });
+    println!("⏱️  Automatic tick system started (interval: 5s)");
 
     println!("🚀 SPEED_GAME Backend opérationnel sur http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
