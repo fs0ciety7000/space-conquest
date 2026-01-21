@@ -15,24 +15,38 @@ import { getTechLevel, getBuildingLevel, getShipCount, calculateFleetAttack, cal
 const getLabel = (id: string | null) => {
     if (!id) return "Inconnu";
     const labels: Record<string, string> = {
+        // Old system keys
         metal: "Mine de Métal",
         crystal: "Mine de Cristal",
         deuterium: "Synth. Deutérium",
+        // New system keys
+        metal_mine: "Mine de Métal",
+        crystal_mine: "Mine de Cristal",
+        deuterium_mine: "Synth. Deutérium",
+        fusion_plant: "Centrale à Fusion",
+        // Common buildings
         solar_plant: "Centrale Solaire",
         shipyard: "Chantier Spatial",
         research: "Labo de Recherche",
+        research_lab: "Labo de Recherche",
         hangar: "Hangar à Vaisseaux",
         resource_storage: "Hangar à Ressources",
+        // Technologies
         energy_tech: "Tech. Énergie",
         laser: "Tech. Laser",
+        laser_tech: "Tech. Laser",
         armour: "Tech. Protection",
+        armour_tech: "Tech. Protection",
         espionage: "Tech. Espionnage",
+        espionage_tech: "Tech. Espionnage",
+        // Ships
         light_hunter: "Chasseur Léger",
         cruiser: "Croiseur",
         colony_ship: "Vaisseau Colon",
         transporter: "Transporteur",
         recycler: "Recycleur",
         spy_probe: "Sonde Espionnage",
+        // Defenses
         missile_launcher: "Lanceur Missiles",
         plasma_turret: "Tourelle Plasma"
     };

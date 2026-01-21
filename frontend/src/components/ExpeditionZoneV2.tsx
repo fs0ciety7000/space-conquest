@@ -137,7 +137,7 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
           // Toast based on result
           if (data.result === "victory") {
             toast.success("🎉 Expédition réussie !", {
-              description: `Butin: ${Math.floor(data.loot.metal)} métal, ${Math.floor(data.loot.crystal)} cristal`
+              description: `Butin: ${Math.floor(data.loot.metal)} métal, ${Math.floor(data.loot.crystal)} cristal, ${Math.floor(data.loot.deuterium || 0)} deutérium`
             });
           } else if (data.result === "defeat") {
             toast.error("💀 Défaite...", {
@@ -145,7 +145,7 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
             });
           } else if (data.result === "calm") {
             toast.success("🌌 Secteur calme", {
-              description: `Ressources collectées: ${Math.floor(data.loot.metal)} métal`
+              description: `Ressources collectées: ${Math.floor(data.loot.metal)} métal, ${Math.floor(data.loot.crystal || 0)} cristal, ${Math.floor(data.loot.deuterium || 0)} deutérium`
             });
           }
         }
