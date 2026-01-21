@@ -3083,6 +3083,39 @@ async fn colonize_handler(
     let ships = att_planet_data.colony_ship_count;
     if ships < 1 { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucun vaisseau de colonisation disponible"}))).into_response(); }
 
+    // Vérifier la limite de planètes basée sur astrophysique
+    let owner_id = att_planet_data.owner_id;
+
+    // Compter le nombre de planètes du joueur (sans la planète mère)
+    let planet_count = Planet::find()
+        .filter(planet::Column::OwnerId.eq(owner_id))
+        .filter(planet::Column::IsHomeworld.eq(false))
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
+    // Récupérer le niveau d'astrophysique
+    let astrophysics_level = match tech_tree::get_player_tech_level(&state.db, owner_id, "astrophysics").await {
+        Ok(level) => level,
+        Err(_) => 0
+    };
+
+    // Calculer la limite de planètes (1 par niveau d'astrophysique, max 10)
+    let max_colonies = std::cmp::min(astrophysics_level as u64, 10);
+
+    if planet_count >= max_colonies {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "error": format!(
+                    "Limite de planètes atteinte ({}/{}). Recherchez l'Astrophysique pour coloniser plus de planètes.",
+                    planet_count,
+                    max_colonies
+                )
+            }))
+        ).into_response();
+    }
+
     // Récupérer les ressources à transporter (optionnelles)
     let metal_to_transport = payload.metal.unwrap_or(0.0).max(0.0);
     let crystal_to_transport = payload.crystal.unwrap_or(0.0).max(0.0);
@@ -3126,6 +3159,7 @@ async fn colonize_handler(
         deuterium_amount: Set(deuterium_to_transport),
         last_update: Set(Utc::now().naive_utc()),
         created_at: Set(Utc::now().naive_utc()),
+        is_homeworld: Set(false), // Les colonies ne sont jamais des planètes mères
         ..Default::default()
     };
 
@@ -3186,7 +3220,14 @@ async fn get_my_planets_handler(
     let current = Planet::find_by_id(current_id).one(&state.db).await.unwrap();
     
     if let Some(p) = current {
-        let my_planets = Planet::find().filter(planet::Column::OwnerId.eq(p.owner_id)).all(&state.db).await.unwrap_or_default();
+        let owner_id = p.owner_id;
+        let my_planets = Planet::find().filter(planet::Column::OwnerId.eq(owner_id)).all(&state.db).await.unwrap_or_default();
+
+        // Récupérer le niveau d'astrophysique pour calculer la limite
+        let astrophysics_level = tech_tree::get_player_tech_level(&state.db, owner_id, "astrophysics").await.unwrap_or(0);
+        let max_colonies = std::cmp::min(astrophysics_level, 10);
+        let colony_count = my_planets.iter().filter(|p| !p.is_homeworld).count();
+
         let list: Vec<serde_json::Value> = my_planets.into_iter().map(|mp| json!({
             "id": mp.id,
             "name": mp.name,
@@ -3194,6 +3235,7 @@ async fn get_my_planets_handler(
             "system": mp.system,
             "position": mp.position,
             "is_current": mp.id == current_id,
+            "is_homeworld": mp.is_homeworld,
             // Ressources
             "metal_amount": mp.metal_amount,
             "crystal_amount": mp.crystal_amount,
@@ -3219,7 +3261,13 @@ async fn get_my_planets_handler(
             "missile_launcher_count": mp.missile_launcher_count,
             "plasma_turret_count": mp.plasma_turret_count
         })).collect();
-        return Json(list).into_response();
+
+        return Json(json!({
+            "planets": list,
+            "colony_count": colony_count,
+            "max_colonies": max_colonies,
+            "astrophysics_level": astrophysics_level
+        })).into_response();
     }
     (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète introuvable"}))).into_response()
 }
