@@ -113,6 +113,10 @@ pub struct Model {
 
     // Date de création (pour déterminer la planète mère)
     pub created_at: DateTime,
+
+    // Planète mère (première planète du joueur)
+    #[sea_orm(default_value = false)]
+    pub is_homeworld: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

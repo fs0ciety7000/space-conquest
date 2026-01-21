@@ -174,7 +174,7 @@ let (system, position) = {
         (system, position)
     };
 
-    // Créer la planète
+    // Créer la planète (première planète = planète mère)
     let planet_id = Uuid::new_v4();
     let new_planet = planet::ActiveModel {
         id: Set(planet_id),
@@ -194,6 +194,7 @@ let (system, position) = {
         deuterium_amount: Set(500.0),
         last_update: Set(Utc::now().naive_utc()),
         created_at: Set(Utc::now().naive_utc()),
+        is_homeworld: Set(true), // Première planète = planète mère
         ..Default::default()
     };
 

@@ -57,6 +57,7 @@ mod m20260125_200002_seed_complete_expansion_data;
 mod m20260125_200003_fix_missing_time_columns;
 mod m20260126_000001_add_fleet_data_column;
 mod m20260121_000001_add_flight_speed_config;
+mod m20260121_000002_add_homeworld_system;
 
 pub struct Migrator;
 
@@ -121,6 +122,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260125_200003_fix_missing_time_columns::Migration),
             Box::new(m20260126_000001_add_fleet_data_column::Migration),
             Box::new(m20260121_000001_add_flight_speed_config::Migration),
+            Box::new(m20260121_000002_add_homeworld_system::Migration),
         ]
     }
 }
