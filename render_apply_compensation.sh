@@ -32,6 +32,9 @@ echo "  ✅ +125,000 Cristal"
 echo "  ✅ +75,000 Deutérium"
 echo "  ✅ +2 niveaux à toutes les mines"
 echo "  ✅ +5 niveaux à la centrale solaire"
+echo "  ✅ +3 niveaux au hangar de ressources"
+echo "  ✅ +10 Chasseurs légers"
+echo "  ✅ +5 Croiseurs"
 echo "  ✅ Vitesse de construction x300"
 echo ""
 echo -e "${YELLOW}Base de données cible:${NC}"
@@ -110,7 +113,27 @@ UPDATE planet
 SET solar_plant_level = solar_plant_level + 5
 WHERE id IN (SELECT id FROM homeworld_planets);
 
--- 4. Ajuster la vitesse de construction à 300
+-- 4. Augmenter le hangar de ressources dans planet_buildings (+3 niveaux)
+UPDATE planet_buildings pb
+SET level = level + 3
+FROM building_types bt
+WHERE pb.building_type_id = bt.id
+  AND bt.building_key = 'resource_storage'
+  AND pb.planet_id IN (SELECT id FROM homeworld_planets);
+
+-- 4b. Augmenter le hangar de ressources dans les colonnes legacy de planet (+3 niveaux)
+UPDATE planet
+SET resource_storage_level = resource_storage_level + 3
+WHERE id IN (SELECT id FROM homeworld_planets);
+
+-- 5. Octroyer des vaisseaux (+10 chasseurs légers, +5 croiseurs)
+UPDATE planet
+SET
+    light_hunter_count = light_hunter_count + 10,
+    cruiser_count = cruiser_count + 5
+WHERE id IN (SELECT id FROM homeworld_planets);
+
+-- 6. Ajuster la vitesse de construction à 300
 INSERT INTO server_config (config_key, config_value, updated_at)
 VALUES ('construction_speed_multiplier', '300.0', NOW())
 ON CONFLICT (config_key) DO UPDATE
@@ -134,7 +157,10 @@ SELECT
     p.metal_mine_level,
     p.crystal_mine_level,
     p.deuterium_mine_level,
-    p.solar_plant_level
+    p.solar_plant_level,
+    p.resource_storage_level,
+    p.light_hunter_count,
+    p.cruiser_count
 FROM planet p
 JOIN "user" u ON p.owner_id = u.id
 WHERE p.id IN (SELECT id FROM homeworld_planets)
