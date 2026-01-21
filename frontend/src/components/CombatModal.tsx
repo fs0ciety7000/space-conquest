@@ -1,11 +1,34 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  X, Skull, Trophy, User, Swords, Box, Gem, Droplets, Zap, 
+import {
+  X, Skull, Trophy, User, Swords, Box, Gem, Droplets, Zap,
   Activity, Rocket, AlertCircle, Target, Shield, Crosshair,
-  TrendingUp, TrendingDown, Clock, MapPin
+  TrendingUp, TrendingDown, Clock, MapPin, Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import CombatReplay from './CombatReplay';
+
+// Mapping des clés de vaisseaux vers leurs noms d'affichage
+const getShipDisplayName = (shipKey: string): string => {
+  const shipNames: Record<string, string> = {
+    light_hunter: "Chasseur Léger",
+    cruiser: "Croiseur",
+    transporter: "Transporteur",
+    spy_probe: "Sonde d'Espionnage",
+    recycler: "Recycleur",
+    colony_ship: "Vaisseau de Colonisation",
+    battleship: "Cuirassé",
+    destroyer: "Destructeur",
+    death_star: "Étoile de la Mort",
+    // Défenses
+    missile_launcher: "Lanceur de Missiles",
+    plasma_turret: "Tourelle à Plasma",
+    laser_cannon: "Canon Laser",
+    ion_cannon: "Canon à Ions",
+    gauss_cannon: "Canon de Gauss",
+  };
+  return shipNames[shipKey] || shipKey;
+};
 
 interface CombatModalProps {
   report: any | null;
@@ -17,6 +40,7 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
   const [parsedReport, setParsedReport] = useState<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [showReplay, setShowReplay] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -271,6 +295,39 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
             </section>
           )}
 
+          {/* COMPOSITION DES FLOTTES */}
+          {(parsedReport.attacker_initial || parsedReport.defender_initial) && (
+            <section className="space-y-4">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-cyan-500/20">
+                  <Users size={14} className="text-cyan-400" />
+                </div>
+                Composition des flottes
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Flotte Attaquante */}
+                {parsedReport.attacker_initial && (
+                  <FleetComposition
+                    title="Flotte Attaquante"
+                    initialFleet={parsedReport.attacker_initial}
+                    remainingFleet={parsedReport.attacker_remaining || {}}
+                    color="red"
+                  />
+                )}
+
+                {/* Flotte Défensive */}
+                {parsedReport.defender_initial && (
+                  <FleetComposition
+                    title="Flotte Défensive"
+                    initialFleet={parsedReport.defender_initial}
+                    remainingFleet={parsedReport.defender_remaining || {}}
+                    color="blue"
+                  />
+                )}
+              </div>
+            </section>
+          )}
+
           {/* ANALYSE DES PERTES */}
           <section className="space-y-4">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
@@ -322,12 +379,20 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
 
           {/* JOURNAL DE COMBAT */}
           <section className="space-y-4">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-500/20">
-                <Activity size={14} className="text-indigo-400" />
-              </div>
-              Journal de combat
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-indigo-500/20">
+                  <Activity size={14} className="text-indigo-400" />
+                </div>
+                Journal de combat
+              </h3>
+              <Button
+                onClick={() => setShowReplay(true)}
+                className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-4 py-2 rounded-lg"
+              >
+                Voir le replay
+              </Button>
+            </div>
             <div className="bg-black/50 border border-white/10 rounded-2xl overflow-hidden">
               <div className="p-4 sm:p-5 space-y-2 max-h-[300px] overflow-y-auto scrollbar-thin">
                 {visibleLogs.map((log, i) => (
@@ -356,6 +421,11 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
       </div>
     </div>
   );
+
+  // Si le replay est demandé, afficher le CombatReplay à la place
+  if (showReplay && parsedReport) {
+    return <CombatReplay report={parsedReport} onClose={() => setShowReplay(false)} />;
+  }
 
   return createPortal(modalContent, document.body);
 }
@@ -441,6 +511,81 @@ function LogEntry({ log, index }: { log: string; index: number }) {
       <span className="shrink-0 text-[10px] font-mono text-slate-600 bg-black/30 px-2 py-1 rounded-md">
         {String(index + 1).padStart(2, '0')}
       </span>
+    </div>
+  );
+}
+
+// Composant pour afficher la composition d'une flotte
+function FleetComposition({ title, initialFleet, remainingFleet, color }: {
+  title: string;
+  initialFleet: Record<string, number>;
+  remainingFleet: Record<string, number>;
+  color: 'red' | 'blue';
+}) {
+  const colorClasses = {
+    red: {
+      bg: 'bg-red-500/10',
+      border: 'border-red-500/30',
+      title: 'text-red-400',
+      item: 'bg-red-500/20',
+      loss: 'text-red-400'
+    },
+    blue: {
+      bg: 'bg-blue-500/10',
+      border: 'border-blue-500/30',
+      title: 'text-blue-400',
+      item: 'bg-blue-500/20',
+      loss: 'text-orange-400'
+    },
+  };
+
+  const c = colorClasses[color];
+
+  // Filtrer les vaisseaux avec count > 0
+  const ships = Object.entries(initialFleet).filter(([_, count]) => count > 0);
+
+  if (ships.length === 0) return null;
+
+  return (
+    <div className={`${c.bg} border ${c.border} p-5 rounded-2xl relative overflow-hidden`}>
+      <div className="space-y-3">
+        <h4 className={`text-sm font-bold ${c.title} uppercase tracking-wide mb-3`}>{title}</h4>
+        <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-thin">
+          {ships.map(([shipKey, initialCount]) => {
+            const remainingCount = remainingFleet[shipKey] || 0;
+            const lostCount = initialCount - remainingCount;
+            const lossPercentage = Math.round((lostCount / initialCount) * 100);
+
+            return (
+              <div key={shipKey} className={`${c.item} p-3 rounded-lg flex items-center justify-between`}>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Rocket size={14} className="text-slate-400" />
+                    <span className="text-sm font-semibold text-white">{getShipDisplayName(shipKey)}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-slate-400">
+                      Initial: <span className="text-white font-mono">{initialCount.toLocaleString()}</span>
+                    </span>
+                    {lostCount > 0 && (
+                      <>
+                        <span className="text-slate-600">•</span>
+                        <span className={c.loss}>
+                          Pertes: <span className="font-mono font-bold">-{lostCount.toLocaleString()}</span> ({lossPercentage}%)
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-black font-mono text-white">{remainingCount.toLocaleString()}</div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider">Restants</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
