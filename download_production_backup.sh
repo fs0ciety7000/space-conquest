@@ -53,7 +53,7 @@ echo ""
 
 # Get database statistics
 echo -e "${YELLOW}Database statistics:${NC}"
-USER_COUNT=$(PGPASSWORD=$SOURCE_DB_PASSWORD psql -h $SOURCE_DB_HOST -U $SOURCE_DB_USER -d $SOURCE_DB_NAME -t -A -c "SELECT COUNT(*) FROM users" 2>/dev/null || echo "?")
+USER_COUNT=$(PGPASSWORD=$SOURCE_DB_PASSWORD psql -h $SOURCE_DB_HOST -U $SOURCE_DB_USER -d $SOURCE_DB_NAME -t -A -c "SELECT COUNT(*) FROM \"user\"" 2>/dev/null || echo "?")
 PLANET_COUNT=$(PGPASSWORD=$SOURCE_DB_PASSWORD psql -h $SOURCE_DB_HOST -U $SOURCE_DB_USER -d $SOURCE_DB_NAME -t -A -c "SELECT COUNT(*) FROM planet" 2>/dev/null || echo "?")
 echo "  Users: $USER_COUNT"
 echo "  Planets: $PLANET_COUNT"
