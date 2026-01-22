@@ -5258,13 +5258,24 @@ async fn start_research_handler(
     };
 
     // Check if player can research this tech (requirements met)
-    let can_research = match tech_tree::can_research_tech(&state.db, planet_id, &tech_key).await {
-        Ok(can) => can,
+    let requirements = match tech_tree::get_tech_requirements(&state.db, tech.id, planet_id).await {
+        Ok(reqs) => reqs,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
     };
 
-    if !can_research {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Tech requirements not met"}))).into_response();
+    // Find unmet requirements
+    let unmet: Vec<_> = requirements.iter().filter(|r| !r.met).collect();
+    if !unmet.is_empty() {
+        let missing_reqs: Vec<String> = unmet.iter().map(|req| {
+            format!("{} niveau {} (actuel: {})",
+                req.required_tech_name,
+                req.required_level,
+                req.current_level)
+        }).collect();
+
+        return (StatusCode::FORBIDDEN, Json(json!({
+            "error": format!("Requis: {}", missing_reqs.join(", "))
+        }))).into_response();
     }
 
     // Get current tech level
@@ -5395,13 +5406,31 @@ async fn build_ships_handler(
     };
 
     // Check if player can build this ship (tech requirements met)
-    let can_build = match tech_tree::can_build_ship(&state.db, planet_id, &ship_key).await {
-        Ok(can) => can,
+    let requirements = match tech_tree::get_ship_requirements(&state.db, ship.id, planet_id).await {
+        Ok(reqs) => reqs,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
     };
 
-    if !can_build {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Ship requirements not met"}))).into_response();
+    // Find unmet requirements
+    let unmet: Vec<_> = requirements.iter().filter(|r| !r.met).collect();
+    if !unmet.is_empty() {
+        let missing_reqs: Vec<String> = unmet.iter().map(|req| {
+            if req.requirement_type == "tech" {
+                format!("{} niveau {} (actuel: {})",
+                    req.tech_name.as_ref().unwrap_or(&"Technologie".to_string()),
+                    req.required_level,
+                    req.current_level)
+            } else {
+                format!("{} niveau {} (actuel: {})",
+                    req.building_name.as_ref().unwrap_or(&"Bâtiment".to_string()),
+                    req.required_level,
+                    req.current_level)
+            }
+        }).collect();
+
+        return (StatusCode::FORBIDDEN, Json(json!({
+            "error": format!("Requis: {}", missing_reqs.join(", "))
+        }))).into_response();
     }
 
     // Calculate total cost
@@ -5572,13 +5601,31 @@ async fn build_defenses_handler(
     };
 
     // Check if player can build this defense (tech requirements met)
-    let can_build = match tech_tree::can_build_defense(&state.db, planet_id, &defense_key).await {
-        Ok(can) => can,
+    let requirements = match tech_tree::get_defense_requirements(&state.db, defense.id, planet_id).await {
+        Ok(reqs) => reqs,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
     };
 
-    if !can_build {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Defense requirements not met"}))).into_response();
+    // Find unmet requirements
+    let unmet: Vec<_> = requirements.iter().filter(|r| !r.met).collect();
+    if !unmet.is_empty() {
+        let missing_reqs: Vec<String> = unmet.iter().map(|req| {
+            if req.requirement_type == "tech" {
+                format!("{} niveau {} (actuel: {})",
+                    req.tech_name.as_ref().unwrap_or(&"Technologie".to_string()),
+                    req.required_level,
+                    req.current_level)
+            } else {
+                format!("{} niveau {} (actuel: {})",
+                    req.building_name.as_ref().unwrap_or(&"Bâtiment".to_string()),
+                    req.required_level,
+                    req.current_level)
+            }
+        }).collect();
+
+        return (StatusCode::FORBIDDEN, Json(json!({
+            "error": format!("Requis: {}", missing_reqs.join(", "))
+        }))).into_response();
     }
 
     // Calculate total cost

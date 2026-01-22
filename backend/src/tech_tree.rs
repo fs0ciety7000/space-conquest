@@ -355,7 +355,7 @@ pub async fn get_tech_tree_for_planet(
 }
 
 /// Get requirements for a specific tech
-async fn get_tech_requirements(
+pub async fn get_tech_requirements(
     db: &DatabaseConnection,
     tech_id: i32,
     planet_id: Uuid,
@@ -563,7 +563,7 @@ pub async fn get_ship_types_for_planet(
 }
 
 /// Get requirements for a specific ship
-async fn get_ship_requirements(
+pub async fn get_ship_requirements(
     db: &DatabaseConnection,
     ship_type_id: i32,
     planet_id: Uuid,
@@ -881,7 +881,7 @@ pub async fn get_defense_types_for_planet(
 }
 
 /// Get requirements for a specific defense
-async fn get_defense_requirements(
+pub async fn get_defense_requirements(
     db: &DatabaseConnection,
     defense_type_id: i32,
     planet_id: Uuid,
