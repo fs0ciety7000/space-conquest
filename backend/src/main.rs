@@ -3475,6 +3475,33 @@ async fn get_my_planets_handler(
             let energy_cons = game_logic::calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level, &config);
             let energy_ratio_percent = (energy_ratio * 100.0) as i32;
 
+            // Calculate resource production per hour
+            let plasma_tech_level = tech_tree::get_planet_tech_level(&state.db, mp.id, "plasma_tech").await.unwrap_or(0);
+            let metal_production = game_logic::calculate_resource_production(
+                game_logic::ResourceType::Metal,
+                metal_mine_level,
+                energy_tech_level,
+                plasma_tech_level,
+                energy_ratio,
+                &config
+            );
+            let crystal_production = game_logic::calculate_resource_production(
+                game_logic::ResourceType::Crystal,
+                crystal_mine_level,
+                energy_tech_level,
+                plasma_tech_level,
+                energy_ratio,
+                &config
+            );
+            let deuterium_production = game_logic::calculate_resource_production(
+                game_logic::ResourceType::Deuterium,
+                deuterium_mine_level,
+                energy_tech_level,
+                plasma_tech_level,
+                energy_ratio,
+                &config
+            );
+
             // Get ship counts from planet_ships table
             let ships = tech_tree::get_all_planet_ship_details(&state.db, mp.id).await.unwrap_or_default();
 
@@ -3546,6 +3573,10 @@ async fn get_my_planets_handler(
                 "energy_production": energy_prod as i32,
                 "energy_consumption": energy_cons as i32,
                 "energy_ratio": energy_ratio_percent,
+                // Production de ressources par heure
+                "metal_production": metal_production as i32,
+                "crystal_production": crystal_production as i32,
+                "deuterium_production": deuterium_production as i32,
                 // Technologie
                 "energy_tech_level": energy_tech_level,
                 // Flotte (legacy columns for backward compatibility)

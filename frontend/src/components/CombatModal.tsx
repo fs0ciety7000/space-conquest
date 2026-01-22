@@ -466,12 +466,12 @@ function LogEntry({ log, index }: { log: string; index: number }) {
   // Détection du type de log
   const isRadar = log.includes("RADAR") || log.includes("⚠️");
   const isResult = log.includes("RESULTAT") || log.includes("RÉSULTAT");
-  const isPillage = log.includes("PILLAGE") || log.includes("DÉCOUVERTE") || log.includes("DECOUVERTE");
+  const isPillage = log.includes("PILLAGE") || log.includes("DÉCOUVERTE") || log.includes("DECOUVERTE") || log.includes("EPAVE");
   const isPertes = log.includes("PERTES");
   const isScan = log.includes("SCAN");
-  const isRound = log.includes("Round");
+  const isRound = log.includes("Round") || log.includes("TOUR");
   const isVictoire = log.includes("VICTOIRE") || log.includes("Victoire");
-  const isDefaite = log.includes("DÉFAITE") || log.includes("Défaite");
+  const isDefaite = log.includes("DÉFAITE") || log.includes("Défaite") || log.includes("DESTRUCTION MUTUELLE");
 
   // Nettoyage des emojis
   const cleanLog = log.replace(/[⚠️🎯💀🏆]/g, '').trim();
