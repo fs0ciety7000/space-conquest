@@ -238,26 +238,9 @@ export default function Tutorial({ run, onComplete }: TutorialProps) {
 // ✅ Hook pour gérer l'état du tutoriel avec versioning
 export function useTutorial() {
   const [showTutorial, setShowTutorial] = useState(false);
-  const [hasChecked, setHasChecked] = useState(() => {
-    // Vérifier immédiatement au premier render si le tutoriel est déjà complété
-    const completedVersion = localStorage.getItem('tutorial_completed');
-    return completedVersion === TUTORIAL_VERSION;
-  });
 
-  useEffect(() => {
-    // Si déjà vérifié et complété, ne rien faire
-    if (hasChecked) return;
-
-    // Marquer comme vérifié immédiatement pour éviter les re-runs
-    setHasChecked(true);
-
-    // Démarrer le tutoriel après un court délai
-    const timer = setTimeout(() => {
-      setShowTutorial(true);
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, []); // Exécuter une seule fois au montage
+  // Le tutoriel ne se lance JAMAIS automatiquement
+  // Il peut uniquement être démarré manuellement via startTutorial()
 
   const startTutorial = () => setShowTutorial(true);
 
