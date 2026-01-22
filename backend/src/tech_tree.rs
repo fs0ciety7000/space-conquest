@@ -6,6 +6,7 @@ use crate::entities::{prelude::*, technology, planet_technology, ship_type, plan
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
+use chrono::Utc;
 
 // ========== STRUCTURES ==========
 
@@ -970,4 +971,181 @@ pub fn calculate_building_cost(base_cost: i32, multiplier: f64, current_level: i
 /// Calculate time for a building at a specific level
 pub fn calculate_building_time(base_time: i32, multiplier: f64, current_level: i32) -> i32 {
     (base_time as f64 * multiplier.powi(current_level)).ceil() as i32
+}
+// ===============================================
+// SET FUNCTIONS FOR ADMIN PANEL
+// ===============================================
+// These functions allow direct setting of levels/counts
+// Used primarily by admin panel to update both old and new systems
+
+use crate::entities::*;
+
+/// Set building level directly (creates or updates)
+pub async fn set_planet_building_level(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    building_key: &str,
+    level: i32,
+) -> Result<(), sea_orm::DbErr> {
+    // Find the building type
+    let building_type = BuildingType::find()
+        .filter(building_type::Column::BuildingKey.eq(building_key))
+        .one(db)
+        .await?;
+
+    if let Some(bt) = building_type {
+        // Check if record exists
+        let existing = PlanetBuilding::find()
+            .filter(planet_building::Column::PlanetId.eq(planet_id))
+            .filter(planet_building::Column::BuildingTypeId.eq(bt.id))
+            .one(db)
+            .await?;
+
+        if let Some(existing_building) = existing {
+            // Update
+            let mut active: planet_building::ActiveModel = existing_building.into();
+            active.level = Set(level);
+            active.update(db).await?;
+        } else {
+            // Insert
+            let new_building = planet_building::ActiveModel {
+                planet_id: Set(planet_id),
+                building_type_id: Set(bt.id),
+                level: Set(level),
+                upgrading_to_level: Set(None),
+                upgrade_end_time: Set(None),
+                updated_at: Set(Some(Utc::now().naive_utc())),
+            };
+            new_building.insert(db).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Set technology level directly (creates or updates)
+pub async fn set_planet_tech_level(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    tech_key: &str,
+    level: i32,
+) -> Result<(), sea_orm::DbErr> {
+    // Find the technology
+    let tech = Technology::find()
+        .filter(technology::Column::TechKey.eq(tech_key))
+        .one(db)
+        .await?;
+
+    if let Some(t) = tech {
+        // Check if record exists
+        let existing = PlanetTechnology::find()
+            .filter(planet_technology::Column::PlanetId.eq(planet_id))
+            .filter(planet_technology::Column::TechId.eq(t.id))
+            .one(db)
+            .await?;
+
+        if let Some(existing_tech) = existing {
+            // Update
+            let mut active: planet_technology::ActiveModel = existing_tech.into();
+            active.current_level = Set(level);
+            active.update(db).await?;
+        } else {
+            // Insert
+            let new_tech = planet_technology::ActiveModel {
+                planet_id: Set(planet_id),
+                tech_id: Set(t.id),
+                current_level: Set(level),
+                researching_to_level: Set(None),
+                research_end_time: Set(None),
+            };
+            new_tech.insert(db).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Set ship count directly (creates or updates)
+pub async fn set_planet_ship_count(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    ship_key: &str,
+    count: i32,
+) -> Result<(), sea_orm::DbErr> {
+    // Find the ship type
+    let ship_type = ShipType::find()
+        .filter(ship_type::Column::ShipKey.eq(ship_key))
+        .one(db)
+        .await?;
+
+    if let Some(st) = ship_type {
+        // Check if record exists
+        let existing = PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(planet_id))
+            .filter(planet_ship::Column::ShipTypeId.eq(st.id))
+            .one(db)
+            .await?;
+
+        if let Some(existing_ship) = existing {
+            // Update
+            let mut active: planet_ship::ActiveModel = existing_ship.into();
+            active.count = Set(count);
+            active.update(db).await?;
+        } else {
+            // Insert
+            let new_ship = planet_ship::ActiveModel {
+                planet_id: Set(planet_id),
+                ship_type_id: Set(st.id),
+                count: Set(count),
+                building_count: Set(None),
+                build_end_time: Set(None),
+            };
+            new_ship.insert(db).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Set defense count directly (creates or updates)
+pub async fn set_planet_defense_count(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    defense_key: &str,
+    count: i32,
+) -> Result<(), sea_orm::DbErr> {
+    // Find the defense type
+    let defense_type = DefenseType::find()
+        .filter(defense_type::Column::DefenseKey.eq(defense_key))
+        .one(db)
+        .await?;
+
+    if let Some(dt) = defense_type {
+        // Check if record exists
+        let existing = PlanetDefense::find()
+            .filter(planet_defense::Column::PlanetId.eq(planet_id))
+            .filter(planet_defense::Column::DefenseTypeId.eq(dt.id))
+            .one(db)
+            .await?;
+
+        if let Some(existing_defense) = existing {
+            // Update
+            let mut active: planet_defense::ActiveModel = existing_defense.into();
+            active.count = Set(count);
+            active.update(db).await?;
+        } else {
+            // Insert
+            let new_defense = planet_defense::ActiveModel {
+                planet_id: Set(planet_id),
+                defense_type_id: Set(dt.id),
+                count: Set(count),
+                building_count: Set(None),
+                build_end_time: Set(None),
+                updated_at: Set(Some(Utc::now().naive_utc())),
+            };
+            new_defense.insert(db).await?;
+        }
+    }
+
+    Ok(())
 }

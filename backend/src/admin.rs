@@ -204,6 +204,7 @@ pub async fn update_planet_admin_handler(
     }
 
     // Application des autres modifications (mines, techs, flotte, etc.)
+    // OLD SYSTEM: Update planet columns for backward compatibility
     if let Some(v) = updates.metal_mine_level { active.metal_mine_level = Set(v); }
     if let Some(v) = updates.crystal_mine_level { active.crystal_mine_level = Set(v); }
     if let Some(v) = updates.deuterium_mine_level { active.deuterium_mine_level = Set(v); }
@@ -224,10 +225,79 @@ pub async fn update_planet_admin_handler(
     if let Some(v) = updates.missile_launcher_count { active.missile_launcher_count = Set(v); }
     if let Some(v) = updates.plasma_turret_count { active.plasma_turret_count = Set(v); }
 
+    // NEW SYSTEM: Also update relational tables (planet_buildings, planet_technologies, planet_ships, planet_defenses)
+    // This ensures consistency between old and new systems
+    use crate::tech_tree;
+
+    // Buildings
+    if let Some(level) = updates.metal_mine_level {
+        let _ = tech_tree::set_planet_building_level(&state.db, planet_id, "metal_mine", level).await;
+    }
+    if let Some(level) = updates.crystal_mine_level {
+        let _ = tech_tree::set_planet_building_level(&state.db, planet_id, "crystal_mine", level).await;
+    }
+    if let Some(level) = updates.deuterium_mine_level {
+        let _ = tech_tree::set_planet_building_level(&state.db, planet_id, "deuterium_mine", level).await;
+    }
+    if let Some(level) = updates.solar_plant_level {
+        let _ = tech_tree::set_planet_building_level(&state.db, planet_id, "solar_plant", level).await;
+    }
+    if let Some(level) = updates.shipyard_level {
+        let _ = tech_tree::set_planet_building_level(&state.db, planet_id, "shipyard", level).await;
+    }
+    if let Some(level) = updates.research_lab_level {
+        let _ = tech_tree::set_planet_building_level(&state.db, planet_id, "research_lab", level).await;
+    }
+    if let Some(level) = updates.hangar_level {
+        let _ = tech_tree::set_planet_building_level(&state.db, planet_id, "hangar", level).await;
+    }
+
+    // Technologies
+    if let Some(level) = updates.energy_tech_level {
+        let _ = tech_tree::set_planet_tech_level(&state.db, planet_id, "energy_tech", level).await;
+    }
+    if let Some(level) = updates.laser_battery_level {
+        let _ = tech_tree::set_planet_tech_level(&state.db, planet_id, "laser_tech", level).await;
+    }
+    if let Some(level) = updates.armour_tech_level {
+        let _ = tech_tree::set_planet_tech_level(&state.db, planet_id, "armour_tech", level).await;
+    }
+    if let Some(level) = updates.espionage_tech_level {
+        let _ = tech_tree::set_planet_tech_level(&state.db, planet_id, "espionage_tech", level).await;
+    }
+
+    // Ships
+    if let Some(count) = updates.light_hunter_count {
+        let _ = tech_tree::set_planet_ship_count(&state.db, planet_id, "light_hunter", count).await;
+    }
+    if let Some(count) = updates.cruiser_count {
+        let _ = tech_tree::set_planet_ship_count(&state.db, planet_id, "cruiser", count).await;
+    }
+    if let Some(count) = updates.recycler_count {
+        let _ = tech_tree::set_planet_ship_count(&state.db, planet_id, "recycler", count).await;
+    }
+    if let Some(count) = updates.spy_probe_count {
+        let _ = tech_tree::set_planet_ship_count(&state.db, planet_id, "spy_probe", count).await;
+    }
+    if let Some(count) = updates.colony_ship_count {
+        let _ = tech_tree::set_planet_ship_count(&state.db, planet_id, "colony_ship", count).await;
+    }
+    if let Some(count) = updates.transporter_count {
+        let _ = tech_tree::set_planet_ship_count(&state.db, planet_id, "transporter", count).await;
+    }
+
+    // Defenses
+    if let Some(count) = updates.missile_launcher_count {
+        let _ = tech_tree::set_planet_defense_count(&state.db, planet_id, "rocket_launcher", count).await;
+    }
+    if let Some(count) = updates.plasma_turret_count {
+        let _ = tech_tree::set_planet_defense_count(&state.db, planet_id, "plasma_turret", count).await;
+    }
+
     match active.update(&state.db).await {
         Ok(updated) => Json(json!({
             "success": true,
-            "message": "Planète mise à jour",
+            "message": "Planète mise à jour (anciennes colonnes + nouvelles tables)",
             "last_update": updated.last_update
         })).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"})))

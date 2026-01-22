@@ -246,18 +246,18 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
                 if let Some(p) = planet {
                     let mut active: planet::ActiveModel = p.into();
                     match building_type_str.as_str() {
-                        "metal" => active.metal_mine_level = Set(target_level),
-                        "crystal" => active.crystal_mine_level = Set(target_level),
-                        "deuterium" => active.deuterium_mine_level = Set(target_level),
+                        "metal" | "metal_mine" => active.metal_mine_level = Set(target_level),
+                        "crystal" | "crystal_mine" => active.crystal_mine_level = Set(target_level),
+                        "deuterium" | "deuterium_mine" => active.deuterium_mine_level = Set(target_level),
                         "solar_plant" => active.solar_plant_level = Set(target_level),
                         "shipyard" => active.shipyard_level = Set(target_level),
-                        "research" => active.research_lab_level = Set(target_level),
+                        "research" | "research_lab" => active.research_lab_level = Set(target_level),
                         "hangar" => active.hangar_level = Set(target_level),
                         "resource_storage" => active.resource_storage_level = Set(target_level),
-                        "energy_tech" => active.energy_tech_level = Set(target_level),
-                        "laser" => active.laser_battery_level = Set(target_level),
-                        "espionage" => active.espionage_tech_level = Set(target_level),
                         "armour" => active.armour_tech_level = Set(target_level),
+                        "energy_tech" => active.energy_tech_level = Set(target_level),
+                        "laser" | "laser_tech" => active.laser_battery_level = Set(target_level),
+                        "espionage" | "espionage_tech" => active.espionage_tech_level = Set(target_level),
                         _ => {}
                     }
                     active.update(db).await?;
