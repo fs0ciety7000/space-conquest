@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiUrl } from '@/config/api';
 import { toast } from "sonner";
+import BeginnerProtectionBadge from './BeginnerProtectionBadge';
 
 interface PlayerProfileProps {
   userId: string;
@@ -157,6 +158,19 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
                 {isClassified(profile.rank_badge) ? <Lock size={14} /> : <Award size={16} />}
                 {profile.rank_badge}
               </div>
+
+              {/* Protection Badge */}
+              {!profile.is_own_profile && (
+                <div className="mt-2">
+                  <BeginnerProtectionBadge
+                    protectionUntil={profile.protection_until}
+                    galaxy={profile.galaxy}
+                    totalPoints={typeof profile.total_points === 'number' ? profile.total_points : 0}
+                    size="md"
+                    showPoints={false}
+                  />
+                </div>
+              )}
             </div>
 
             {/* ✅ Points totaux (peut être masqué) */}

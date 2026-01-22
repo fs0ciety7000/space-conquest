@@ -6,12 +6,19 @@
  */
 export const getShipImage = (shipType: string): string => {
   const images: Record<string, string> = {
+    // Combat Ships
     light_hunter: '/images/ships/ship-light-hunter.webp',
+    heavy_hunter: '/images/ships/ship-heavy-hunter.webp',
     cruiser: '/images/ships/ship-cruiser.webp',
-    recycler: '/images/ships/ship-recycler.webp',
+    battleship: '/images/ships/ship-battleship.webp',
+    destroyer: '/images/ships/ship-destroyer.webp',
+    bomber: '/images/ships/ship-bomber.webp',
+    deathstar: '/images/ships/ship-deathstar.webp',
+    // Utility Ships
     spy_probe: '/images/ships/ship-spy-probe.webp',
-    colony_ship: '/images/ships/ship-colony-ship.webp',
     transporter: '/images/ships/ship-transporter.webp',
+    colony_ship: '/images/ships/ship-colony-ship.webp',
+    recycler: '/images/ships/ship-recycler.webp',
   };
 
   return images[shipType] || '/images/misc/placeholder.svg';
@@ -22,12 +29,20 @@ export const getShipImage = (shipType: string): string => {
  */
 export const getBuildingImage = (buildingType: string): string => {
   const images: Record<string, string> = {
+    // Resource Buildings
+    solar_plant: '/images/buildings/building-solar-plant.webp',
+    fusion_plant: '/images/buildings/building-fusion-plant.webp',
+    // Facilities
     shipyard: '/images/buildings/building-shipyard.webp',
     research: '/images/buildings/building-research-lab.webp',
     research_lab: '/images/buildings/building-research-lab.webp',
     hangar: '/images/buildings/building-hangar.webp',
     resource_storage: '/images/buildings/building-resource-storage.webp',
-    solar_plant: '/images/buildings/building-solar-plant.webp',
+    alliance_depot: '/images/buildings/building-alliance-depot.webp',
+    missile_silo: '/images/buildings/building-missile-silo.webp',
+    nanite_factory: '/images/buildings/building-nanite-factory.webp',
+    terraformer: '/images/buildings/building-terraformer.webp',
+    // Technologies
     armour: '/images/buildings/building-armour.webp',
   };
 

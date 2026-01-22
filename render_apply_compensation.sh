@@ -32,6 +32,9 @@ echo "  ✅ +125,000 Cristal"
 echo "  ✅ +75,000 Deutérium"
 echo "  ✅ +2 niveaux à toutes les mines"
 echo "  ✅ +5 niveaux à la centrale solaire"
+echo "  ✅ +3 niveaux au hangar de ressources"
+echo "  ✅ +10 Chasseurs légers"
+echo "  ✅ +5 Croiseurs"
 echo "  ✅ Vitesse de construction x300"
 echo ""
 echo -e "${YELLOW}Base de données cible:${NC}"
@@ -64,31 +67,73 @@ echo -e "${YELLOW}Application du patch...${NC}"
 PGPASSWORD=$SOURCE_DB_PASSWORD psql -h $SOURCE_DB_HOST -U $SOURCE_DB_USER -d $SOURCE_DB_NAME <<'EOF'
 BEGIN;
 
+-- Create a temporary view to identify homeworlds (oldest planet per player)
+CREATE TEMP VIEW homeworld_planets AS
+SELECT id, owner_id FROM (
+    SELECT id, owner_id,
+           ROW_NUMBER() OVER (PARTITION BY owner_id ORDER BY created_at ASC) as rn
+    FROM planet
+) as ranked
+WHERE rn = 1;
+
 -- 1. Ajouter des ressources à toutes les planètes homeworld
 UPDATE planet
 SET
     metal_amount = metal_amount + 250000,
     crystal_amount = crystal_amount + 125000,
     deuterium_amount = deuterium_amount + 75000
-WHERE is_homeworld = true;
+WHERE id IN (SELECT id FROM homeworld_planets);
 
--- 2. Augmenter les niveaux de mines (+2 niveaux à toutes les mines)
+-- 2. Augmenter les niveaux de mines dans planet_buildings (+2 niveaux)
 UPDATE planet_buildings pb
 SET level = level + 2
 FROM building_types bt
 WHERE pb.building_type_id = bt.id
   AND bt.building_key IN ('metal_mine', 'crystal_mine', 'deuterium_mine')
-  AND pb.planet_id IN (SELECT id FROM planet WHERE is_homeworld = true);
+  AND pb.planet_id IN (SELECT id FROM homeworld_planets);
 
--- 3. Augmenter la centrale solaire (+5 niveaux)
+-- 2b. Augmenter les niveaux de mines dans les colonnes legacy de planet (+2 niveaux)
+UPDATE planet
+SET
+    metal_mine_level = metal_mine_level + 2,
+    crystal_mine_level = crystal_mine_level + 2,
+    deuterium_mine_level = deuterium_mine_level + 2
+WHERE id IN (SELECT id FROM homeworld_planets);
+
+-- 3. Augmenter la centrale solaire dans planet_buildings (+5 niveaux)
 UPDATE planet_buildings pb
 SET level = level + 5
 FROM building_types bt
 WHERE pb.building_type_id = bt.id
   AND bt.building_key = 'solar_plant'
-  AND pb.planet_id IN (SELECT id FROM planet WHERE is_homeworld = true);
+  AND pb.planet_id IN (SELECT id FROM homeworld_planets);
 
--- 4. Ajuster la vitesse de construction à 300
+-- 3b. Augmenter la centrale solaire dans les colonnes legacy de planet (+5 niveaux)
+UPDATE planet
+SET solar_plant_level = solar_plant_level + 5
+WHERE id IN (SELECT id FROM homeworld_planets);
+
+-- 4. Augmenter le hangar de ressources dans planet_buildings (+3 niveaux)
+UPDATE planet_buildings pb
+SET level = level + 3
+FROM building_types bt
+WHERE pb.building_type_id = bt.id
+  AND bt.building_key = 'resource_storage'
+  AND pb.planet_id IN (SELECT id FROM homeworld_planets);
+
+-- 4b. Augmenter le hangar de ressources dans les colonnes legacy de planet (+3 niveaux)
+UPDATE planet
+SET resource_storage_level = resource_storage_level + 3
+WHERE id IN (SELECT id FROM homeworld_planets);
+
+-- 5. Octroyer des vaisseaux (+10 chasseurs légers, +5 croiseurs)
+UPDATE planet
+SET
+    light_hunter_count = light_hunter_count + 10,
+    cruiser_count = cruiser_count + 5
+WHERE id IN (SELECT id FROM homeworld_planets);
+
+-- 6. Ajuster la vitesse de construction à 300
 INSERT INTO server_config (config_key, config_value, updated_at)
 VALUES ('construction_speed_multiplier', '300.0', NOW())
 ON CONFLICT (config_key) DO UPDATE
@@ -100,24 +145,25 @@ SELECT '✓ Patch appliqué avec succès!' as message;
 SELECT
     COUNT(DISTINCT p.owner_id) as joueurs_affectés
 FROM planet p
-WHERE p.is_homeworld = true;
+WHERE p.id IN (SELECT id FROM homeworld_planets);
 
--- Afficher quelques résultats
+-- Afficher quelques résultats (niveaux depuis colonnes legacy)
 SELECT
     u.username,
     p.name,
     p.metal_amount,
     p.crystal_amount,
     p.deuterium_amount,
-    (SELECT level FROM planet_buildings pb
-     JOIN building_types bt ON pb.building_type_id = bt.id
-     WHERE pb.planet_id = p.id AND bt.building_key = 'metal_mine' LIMIT 1) as metal_mine,
-    (SELECT level FROM planet_buildings pb
-     JOIN building_types bt ON pb.building_type_id = bt.id
-     WHERE pb.planet_id = p.id AND bt.building_key = 'solar_plant' LIMIT 1) as solar_plant
+    p.metal_mine_level,
+    p.crystal_mine_level,
+    p.deuterium_mine_level,
+    p.solar_plant_level,
+    p.resource_storage_level,
+    p.light_hunter_count,
+    p.cruiser_count
 FROM planet p
 JOIN "user" u ON p.owner_id = u.id
-WHERE p.is_homeworld = true
+WHERE p.id IN (SELECT id FROM homeworld_planets)
 ORDER BY u.username
 LIMIT 10;
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
     ChevronLeft, ChevronRight, Search,
     Crosshair, Eye, Send, Recycle, MapPin,
-    Rocket, User, List, LayoutGrid, Sparkles, X, ShieldCheck, Crown, Flag, Truck
+    Rocket, User, List, LayoutGrid, Sparkles, X, ShieldCheck, Crown, Flag, Truck, Globe
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,9 @@ import {
 } from "@/components/ui/tooltip";
 import { apiUrl } from '@/config/api';
 import ColonizeModal from './ColonizeModal';
+import BeginnerProtectionBadge from './BeginnerProtectionBadge';
+import Galaxy3DView from './galaxy3d/Galaxy3DView';
+import { calculateDistance } from '@/utils/galaxyCalculations';
 // --- INTERFACES ---
 
 interface GalaxySlot {
@@ -28,6 +31,9 @@ interface GalaxySlot {
     debris_crystal: number;
     is_me: boolean;       // Planète active
     is_my_planet: boolean; // Une de mes colonies
+    protection_until: string | null;
+    total_points: number;
+    planet_galaxy: number;
 }
 
 interface GalaxyViewProps {
@@ -44,12 +50,17 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const [system, setSystem] = useState(planet.system);
     const [slots, setSlots] = useState<GalaxySlot[]>([]);
     const [loading, setLoading] = useState(false);
-    const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
+    const [viewMode, setViewMode] = useState<'list' | 'map' | '3d'>('map');
     const [selectedSlot, setSelectedSlot] = useState<GalaxySlot | null>(null);
     const [showColonizeModal, setShowColonizeModal] = useState(false);
-    const [colonizePosition, setColonizePosition] = useState<number>(0); 
+    const [colonizePosition, setColonizePosition] = useState<number>(0);
+    const [nearbyPlanets, setNearbyPlanets] = useState<any[]>([]);
+    const [playerPlanets, setPlayerPlanets] = useState<any[]>([]);
+    const [showNearby, setShowNearby] = useState(false);
+    const [showPlayerPlanets, setShowPlayerPlanets] = useState(true);
 
     useEffect(() => { fetchSystem(); setSelectedSlot(null); }, [galaxy, system]);
+    useEffect(() => { fetchPlayerPlanets(); }, []);
 
     const fetchSystem = async () => {
         setLoading(true);
@@ -62,6 +73,61 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const handleColonize = (position: number) => {
         setColonizePosition(position);
         setShowColonizeModal(true);
+    };
+
+    const fetchPlayerPlanets = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(apiUrl('/my-planets'), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const planets = await res.json();
+                setPlayerPlanets(planets);
+            }
+        } catch (e) {
+            console.error('Failed to fetch player planets');
+        }
+    };
+
+    const scanNearbyPlanets = async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(apiUrl('/galaxy/scan/nearby'), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    current_planet_id: planet.id,
+                    max_results: 20
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                // Calculate distances and sort
+                const planetsWithDistance = data.map((p: any) => ({
+                    ...p,
+                    distance: calculateDistance(
+                        { galaxy: planet.galaxy, system: planet.system, position: planet.position },
+                        { galaxy: p.galaxy, system: p.system, position: p.position }
+                    )
+                })).sort((a: any, b: any) => a.distance - b.distance);
+
+                setNearbyPlanets(planetsWithDistance);
+                setShowNearby(true);
+                toast.success(`${planetsWithDistance.length} planètes proches détectées`);
+            } else {
+                toast.error("Échec du scan");
+            }
+        } catch (e) {
+            toast.error("Erreur de scan");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleConfirmColonize = async (position: number, metal: number, crystal: number, deuterium: number) => {
@@ -174,23 +240,37 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                     <button onClick={() => setViewMode('map')} className={`px-4 py-2 rounded-md text-xs font-bold uppercase flex items-center gap-2 transition-all hover:scale-105 ${viewMode === 'map' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-white/5'}`}>
                         <LayoutGrid size={16} /> Carte
                     </button>
+                    <button onClick={() => setViewMode('3d')} className={`px-4 py-2 rounded-md text-xs font-bold uppercase flex items-center gap-2 transition-all hover:scale-105 ${viewMode === '3d' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-white/5'}`}>
+                        <Globe size={16} /> Galaxie 3D
+                    </button>
                 </div>
 
-                <Button onClick={fetchSystem} disabled={loading} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 shadow-lg shadow-indigo-500/20 card-depth hover:scale-105 hover:shadow-2xl transition-all duration-300">
+                <Button onClick={scanNearbyPlanets} disabled={loading} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 shadow-lg shadow-indigo-500/20 card-depth hover:scale-105 hover:shadow-2xl transition-all duration-300">
                     {loading ? <Sparkles className="animate-spin mr-2" size={16} /> : <Search className="mr-2" size={16} />} SCANNER
                 </Button>
             </div>
 
-            {viewMode === 'list' ? (
+            {viewMode === '3d' ? (
+                <Galaxy3DView
+                    galaxy={galaxy}
+                    system={system}
+                    currentPlanet={planet}
+                    onSystemSelect={(sys) => setSystem(sys)}
+                    onNavigateAttack={(id, name, g, s, p) => onNavigateAttack(id, name)}
+                    onNavigateSpy={(id, name, g, s, p) => onNavigateSpy(id)}
+                    onNavigateTransport={(id, name, g, s, p) => onNavigateTransport(id, name, g, s, p)}
+                    onColonizeClick={handleColonize}
+                />
+            ) : viewMode === 'list' ? (
                 <div className="rounded-xl border border-white/5 overflow-hidden bg-slate-950/50 shadow-2xl card-depth glass-card animate-slide-up hover:shadow-3xl transition-all duration-500">
-                    <ListView 
-                        slots={slots} 
-                        onNavigateAttack={onNavigateAttack} 
-                        onNavigateSpy={onNavigateSpy} 
-                        onNavigateTransport={(id: string, name: string, position: number) => onNavigateTransport(id, name, galaxy, system, position)} 
-                        handleColonize={handleColonize} 
-                        handleRecycle={handleRecycle} 
-                        getPlanetStyle={getPlanetStyle} 
+                    <ListView
+                        slots={slots}
+                        onNavigateAttack={onNavigateAttack}
+                        onNavigateSpy={onNavigateSpy}
+                        onNavigateTransport={(id: string, name: string, position: number) => onNavigateTransport(id, name, galaxy, system, position)}
+                        handleColonize={handleColonize}
+                        handleRecycle={handleRecycle}
+                        getPlanetStyle={getPlanetStyle}
                     />
                 </div>
             ) : (
@@ -253,6 +333,19 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                     <h3 className="text-xl font-black uppercase tracking-widest text-white mb-1">
                                         {selectedSlot.planet_id ? selectedSlot.planet_name : "Espace Inconnu"}
                                     </h3>
+
+                                    {selectedSlot.planet_id && !selectedSlot.is_my_planet && (
+                                        <div className="mb-2">
+                                            <BeginnerProtectionBadge
+                                                protectionUntil={selectedSlot.protection_until}
+                                                galaxy={selectedSlot.planet_galaxy}
+                                                totalPoints={selectedSlot.total_points}
+                                                size="sm"
+                                                showPoints={true}
+                                            />
+                                        </div>
+                                    )}
+
                                     <p className="text-sm text-slate-400 font-mono mb-6">
                                         COORDONNÉES [{galaxy}:{system}:{selectedSlot.position}]
                                     </p>
@@ -354,9 +447,145 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                         crystal: planet.crystal_amount || 0,
                         deuterium: planet.deuterium_amount || 0
                     }}
+                    currentPlanet={{
+                        galaxy: planet.galaxy,
+                        system: planet.system,
+                        position: planet.position,
+                        colony_ship_count: planet.colony_ship_count || 0
+                    }}
                     onConfirm={handleConfirmColonize}
                     onCancel={() => setShowColonizeModal(false)}
                 />
+            )}
+
+            {/* Sidebar: Mes Planètes */}
+            {showPlayerPlanets && playerPlanets.length > 0 && (
+                <div className="fixed top-20 right-4 z-40 w-64 max-h-[calc(100vh-120px)] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl card-depth">
+                    <div className="sticky top-0 bg-slate-900 p-4 border-b border-white/10 flex items-center justify-between">
+                        <h3 className="font-bold text-cyan-400 text-sm uppercase tracking-wider flex items-center gap-2">
+                            <MapPin size={16} /> Mes Planètes
+                        </h3>
+                        <button onClick={() => setShowPlayerPlanets(false)} className="text-slate-500 hover:text-white transition-colors">
+                            <X size={16} />
+                        </button>
+                    </div>
+                    <div className="p-2 space-y-1">
+                        {playerPlanets.map((p) => (
+                            <button
+                                key={p.id}
+                                onClick={() => {
+                                    setGalaxy(p.galaxy);
+                                    setSystem(p.system);
+                                }}
+                                className={`w-full text-left p-3 rounded-lg transition-all hover:bg-white/10 ${
+                                    p.id === planet.id ? 'bg-indigo-600/30 border border-indigo-500/50' : 'hover:border hover:border-white/20'
+                                }`}
+                            >
+                                <div className="font-bold text-white text-sm">{p.name}</div>
+                                <div className="text-xs text-slate-400 font-mono">[{p.galaxy}:{p.system}:{p.position}]</div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Bouton toggle sidebar si caché */}
+            {!showPlayerPlanets && (
+                <button
+                    onClick={() => setShowPlayerPlanets(true)}
+                    className="fixed top-20 right-4 z-40 p-3 bg-cyan-600 hover:bg-cyan-500 rounded-full shadow-lg transition-all hover:scale-110"
+                >
+                    <MapPin size={20} className="text-white" />
+                </button>
+            )}
+
+            {/* Panel: Planètes Proches */}
+            {showNearby && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowNearby(false)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden card-depth" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                            <h3 className="font-bold text-cyan-400 text-xl uppercase tracking-wider flex items-center gap-2">
+                                <Search size={24} /> Planètes Proches
+                            </h3>
+                            <button onClick={() => setShowNearby(false)} className="text-slate-500 hover:text-white transition-colors">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="overflow-y-auto max-h-[calc(80vh-100px)]">
+                            <table className="w-full">
+                                <thead className="bg-slate-950/80 sticky top-0 z-10">
+                                    <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-white/10">
+                                        <th className="p-4 text-left">Planète</th>
+                                        <th className="p-4 text-left">Joueur</th>
+                                        <th className="p-4 text-center">Coordonnées</th>
+                                        <th className="p-4 text-right">Distance</th>
+                                        <th className="p-4 text-right">Temps de Vol</th>
+                                        <th className="p-4 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {nearbyPlanets.map((p) => {
+                                        const travelTime = Math.round(p.distance / 100);
+                                        const hours = Math.floor(travelTime / 3600);
+                                        const minutes = Math.floor((travelTime % 3600) / 60);
+                                        const seconds = travelTime % 60;
+
+                                        return (
+                                            <tr key={p.id} className="hover:bg-white/5 transition-colors">
+                                                <td className="p-4">
+                                                    <div className="font-bold text-white">{p.name}</div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="text-slate-300">{p.owner_name || '-'}</div>
+                                                    {p.protection_until && new Date(p.protection_until) > new Date() && (
+                                                        <Badge variant="outline" className="text-[10px] mt-1">
+                                                            <ShieldCheck size={10} className="mr-1" /> Protégé
+                                                        </Badge>
+                                                    )}
+                                                </td>
+                                                <td className="p-4 text-center">
+                                                    <button
+                                                        onClick={() => {
+                                                            setGalaxy(p.galaxy);
+                                                            setSystem(p.system);
+                                                            setShowNearby(false);
+                                                        }}
+                                                        className="font-mono text-cyan-400 hover:text-cyan-300 transition-colors"
+                                                    >
+                                                        [{p.galaxy}:{p.system}:{p.position}]
+                                                    </button>
+                                                </td>
+                                                <td className="p-4 text-right text-slate-400 font-mono text-sm">
+                                                    {p.distance.toLocaleString()}
+                                                </td>
+                                                <td className="p-4 text-right text-slate-400 font-mono text-sm">
+                                                    {hours > 0 && `${hours}h `}{minutes}m {seconds}s
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex justify-center gap-2">
+                                                        {!p.is_my_planet && (
+                                                            <>
+                                                                <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-blue-500/20 hover:text-blue-400" onClick={() => onNavigateSpy(p.id)}>
+                                                                    <Eye size={14} />
+                                                                </Button>
+                                                                <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-red-500/20 hover:text-red-400" onClick={() => onNavigateAttack(p.id, p.name)}>
+                                                                    <Crosshair size={14} />
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-emerald-500/20 hover:text-emerald-400" onClick={() => onNavigateTransport(p.id, p.name, p.galaxy, p.system, p.position)}>
+                                                            <Truck size={14} />
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
@@ -400,7 +629,22 @@ function ListView({ slots, onNavigateAttack, onNavigateSpy, onNavigateTransport,
                                 </div>
                             ) : <span className="text-slate-600 italic text-xs">Vide</span>}
                         </td>
-                        <td className="p-4 text-slate-300">{slot.owner_name || "-"}</td>
+                        <td className="p-4 text-slate-300">
+                            {slot.planet_id && !slot.is_my_planet ? (
+                                <div className="flex flex-col gap-1">
+                                    <span>{slot.owner_name || "-"}</span>
+                                    <BeginnerProtectionBadge
+                                        protectionUntil={slot.protection_until}
+                                        galaxy={slot.planet_galaxy}
+                                        totalPoints={slot.total_points}
+                                        size="sm"
+                                        showPoints={false}
+                                    />
+                                </div>
+                            ) : (
+                                <span>{slot.owner_name || "-"}</span>
+                            )}
+                        </td>
                         <td className="p-4 text-center flex justify-center gap-2">
                             {/* Actions sur planètes ennemies */}
                             {slot.planet_id && !slot.is_my_planet && (
@@ -413,7 +657,7 @@ function ListView({ slots, onNavigateAttack, onNavigateSpy, onNavigateTransport,
                             
                             {/* Actions sur mes colonies (Transport uniquement) */}
                             {slot.is_my_planet && !slot.is_me && (
-                                 <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors" onClick={() => onNavigateTransport(slot.planet_id!, slot.planet_name!)}><Truck size={14}/></Button>
+                                 <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors" onClick={() => onNavigateTransport(slot.planet_id!, slot.planet_name!, slot.position)}><Truck size={14}/></Button>
                             )}
 
                             {/* Colonisation */}

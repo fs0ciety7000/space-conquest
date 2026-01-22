@@ -7,7 +7,8 @@
 
 use chrono::Utc;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait};
-use crate::entities::{prelude::*, planet_technology, planet_ship, planet_defense, construction_queue, building_type, technology, planet_building, planet};
+use crate::entities::{prelude::*, planet_technology, planet_ship, planet_defense, construction_queue, building_type, technology, planet_building, planet, user};
+use crate::protection;
 
 /// Process all completed research tasks
 ///
@@ -274,6 +275,27 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
     Ok(count)
 }
 
+/// Update all users' total points
+///
+/// This function recalculates and updates the total_points field for all users
+/// based on their resources, buildings, ships, and defenses.
+///
+/// Returns the number of users updated
+pub async fn update_all_user_points(db: &DatabaseConnection) -> Result<usize, sea_orm::DbErr> {
+    // Get all users
+    let users = User::find().all(db).await?;
+    let mut count = 0;
+
+    for user in users {
+        // Update points for this user
+        if let Ok(_) = protection::update_user_points(db, user.id).await {
+            count += 1;
+        }
+    }
+
+    Ok(count)
+}
+
 /// Process all tick-based game mechanics
 ///
 /// This is the main tick function that should be called periodically
@@ -286,11 +308,15 @@ pub async fn process_tick(db: &DatabaseConnection) -> Result<TickStats, sea_orm:
     let defenses_completed = process_defense_building_completion(db).await?;
     let buildings_completed = process_construction_queue_completion(db).await?;
 
+    // Update all user points after processing completions
+    let points_updated = update_all_user_points(db).await.unwrap_or(0);
+
     Ok(TickStats {
         research_completed,
         ships_completed,
         defenses_completed,
         buildings_completed,
+        points_updated,
     })
 }
 
@@ -300,6 +326,7 @@ pub struct TickStats {
     pub ships_completed: usize,
     pub defenses_completed: usize,
     pub buildings_completed: usize,
+    pub points_updated: usize,
 }
 
 #[cfg(test)]

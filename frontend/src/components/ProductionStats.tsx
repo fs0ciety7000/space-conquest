@@ -62,7 +62,8 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
     production_metal_growth: 1.1,
     production_crystal_growth: 1.1,
     production_deuterium_growth: 1.05,
-    energy_tech_bonus: 0.01
+    energy_tech_bonus: 0.10,
+    mining_speed_multiplier: 1.0
   });
 
   useEffect(() => {
@@ -160,12 +161,12 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
     const slotBonus = 1.0 + (activeSlots.length * 0.5);
     prod *= slotBonus;
 
-    // Speed factor
-    prod *= speedFactor;
+    // Speed factor ET mining speed multiplier
+    prod *= speedFactor * (config.mining_speed_multiplier || 1.0);
 
     return {
       total: Math.floor(prod),
-      base: Math.floor(baseFactor * level * Math.pow(growthFactor, level) * speedFactor),
+      base: Math.floor(baseFactor * level * Math.pow(growthFactor, level) * speedFactor * (config.mining_speed_multiplier || 1.0)),
       techBonus: techLevel,
       energyRatio: energyRatio,
       slotsCount: activeSlots.length,

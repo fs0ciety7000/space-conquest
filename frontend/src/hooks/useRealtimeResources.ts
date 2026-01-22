@@ -31,6 +31,7 @@ interface ServerConfig {
   production_crystal_growth: number;
   production_deuterium_growth: number;
   energy_tech_bonus: number;
+  mining_speed_multiplier?: number;
 }
 
 /**
@@ -57,7 +58,8 @@ export function useRealtimeResources(
     production_metal_growth: 1.1,
     production_crystal_growth: 1.1,
     production_deuterium_growth: 1.05,
-    energy_tech_bonus: 0.01
+    energy_tech_bonus: 0.10,
+    mining_speed_multiplier: 1.0
   };
 
   // Calculer la production par seconde
@@ -90,8 +92,8 @@ export function useRealtimeResources(
     // Bonus slots
     prod *= safeSlotBonus;
 
-    // Speed factor
-    prod *= speedFactor;
+    // Speed factor ET mining speed multiplier
+    prod *= speedFactor * (safeConfig.mining_speed_multiplier || 1.0);
 
     // Convertir en par seconde (base est par heure)
     return prod / 3600;

@@ -592,9 +592,9 @@ export default function App() {
       .catch(console.error);
     if (token && planetId) {
       fetchPlanet();
-      // Polling réduit si WebSocket connecté (fallback uniquement)
-      // WebSocket = 10s polling, pas de WebSocket = 2s polling
-      const pollingInterval = wsConnected ? 10000 : 2000;
+      // Polling pour mises à jour en temps réel des ressources
+      // WebSocket = 5s polling (fallback), pas de WebSocket = 1s polling (temps réel)
+      const pollingInterval = wsConnected ? 5000 : 1000;
       const interval = setInterval(fetchPlanet, pollingInterval);
       return () => clearInterval(interval);
     }
@@ -876,7 +876,7 @@ export default function App() {
                         {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} onNavigateTransport={handlePrepareTransport} />}
                         {activeTab === 'myplanets' && <MyPlanets currentPlanetId={planet.id} onSelectPlanet={(id) => { switchPlanet(id); setActiveTab('overview'); }} onNavigateTransport={handlePrepareTransport} />}
                         {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
-                        {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onSendMessage={handleOpenMessage} />}
+                        {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onTransport={handlePrepareTransport} onSendMessage={handleOpenMessage} />}
                         {activeTab === 'alliance' && <AllianceView userId={userId!} token={token!} onOpenMessage={handleOpenMessage} />}
                         {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
                         {activeTab === 'officers' && <Officers />}

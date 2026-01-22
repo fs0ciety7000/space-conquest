@@ -1,0 +1,39 @@
+LISTE DES IMAGES À CRÉER
+========================
+
+📁 BÂTIMENTS (frontend/public/images/buildings/)
+------------------------------------------------
+✅ building-research-lab.webp       → Laboratoire de Recherche
+✅ building-hangar.webp             → Hangar à Vaisseaux
+✅ building-resource-storage.webp   → Stockage de Ressources
+✅ building-alliance-depot.webp     → Dépôt d'Alliance
+✅ building-missile-silo.webp       → Silo à Missiles
+✅ building-nanite-factory.webp     → Usine de Nanites
+✅ building-terraformer.webp        → Terraformeur
+
+
+🚀 VAISSEAUX (frontend/public/images/ships/)
+---------------------------------------------
+✅ ship-heavy-hunter.webp           → Chasseur Lourd
+✅ ship-battleship.webp             → Vaisseau de Guerre
+✅ ship-destroyer.webp              → Destructeur
+✅ ship-bomber.webp                 → Bombardier
+✅ ship-deathstar.webp              → Étoile de la Mort
+
+
+RAPPEL : FORMAT DE NOMMAGE
+---------------------------
+Bâtiments : building-<key>.webp
+Vaisseaux : ship-<key>.webp
+
+Remplacer les underscores _ par des tirets -
+Exemple : heavy_hunter → ship-heavy-hunter.webp
+
+
+PROCESSUS RAPIDE
+-----------------
+1. Créer vos images (PNG/JPG) avec ces noms
+2. Les placer dans frontend/public/images/buildings/ ou ships/
+3. Lancer ./optimize_images.sh
+4. Vérifier que les .webp sont créés
+5. Tester dans le jeu !

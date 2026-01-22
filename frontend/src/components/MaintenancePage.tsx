@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Send, MessageCircle, X, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
 
 interface MaintenanceMessage {
   title: string;
@@ -12,10 +13,35 @@ interface MaintenancePageProps {
   message?: MaintenanceMessage;
 }
 
+interface ChatMessage {
+  id: string;
+  username: string;
+  message: string;
+  timestamp: string;
+  isSystem?: boolean;
+}
+
 const MaintenancePage: React.FC<MaintenancePageProps> = ({ message }) => {
   const [dots, setDots] = useState('');
   const [lines, setLines] = useState<string[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
+
+  // Chat state
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessage, setChatMessage] = useState('');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: '1',
+      username: 'Système',
+      message: 'Bienvenue sur le chat de maintenance ! Posez vos questions ici.',
+      timestamp: new Date().toLocaleTimeString('fr-FR'),
+      isSystem: true
+    }
+  ]);
+
+  // Changelog state
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [changelogContent, setChangelogContent] = useState<string>('');
 
   const defaultMessage: MaintenanceMessage = {
     title: 'MAINTENANCE PROGRAMMÉE',
@@ -36,6 +62,41 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({ message }) => {
   };
 
   const maintenanceData = message || defaultMessage;
+
+  // Load changelog
+  useEffect(() => {
+    fetch('/changelog.md')
+      .then(res => res.text())
+      .then(text => {
+        // Extract only the first version (most recent changes)
+        const firstVersion = text.split('## [')[1];
+        if (firstVersion) {
+          setChangelogContent('## [' + firstVersion.split('## [')[0]);
+        } else {
+          setChangelogContent(text);
+        }
+      })
+      .catch(() => {
+        setChangelogContent('Changelog non disponible pour le moment.');
+      });
+  }, []);
+
+  // Handle chat message send
+  const handleSendMessage = () => {
+    if (!chatMessage.trim()) return;
+
+    const newMessage: ChatMessage = {
+      id: Date.now().toString(),
+      username: localStorage.getItem('username') || 'Joueur',
+      message: chatMessage,
+      timestamp: new Date().toLocaleTimeString('fr-FR'),
+    };
+
+    setChatMessages(prev => [...prev, newMessage]);
+    setChatMessage('');
+
+    // TODO: Send message to server via WebSocket or API
+  };
 
   // Animation des points
   useEffect(() => {
@@ -204,9 +265,123 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({ message }) => {
             </div>
           </div>
 
+          {/* Action buttons */}
+          <div className="flex gap-4 justify-center mt-6">
+            <button
+              onClick={() => setShowChangelog(!showChangelog)}
+              className="flex items-center gap-2 px-6 py-3 bg-green-900/50 border-2 border-green-500 rounded-lg text-green-300 font-mono hover:bg-green-800/50 transition-all shadow-lg shadow-green-500/20"
+            >
+              <BookOpen size={20} />
+              Notes de Mise à Jour
+              {showChangelog ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            <button
+              onClick={() => setShowChat(!showChat)}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-900/50 border-2 border-blue-500 rounded-lg text-blue-300 font-mono hover:bg-blue-800/50 transition-all shadow-lg shadow-blue-500/20"
+            >
+              <MessageCircle size={20} />
+              Chat de Maintenance
+              {showChat ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          </div>
+
+          {/* Changelog Panel */}
+          {showChangelog && (
+            <div className="mt-6 bg-black/90 border-2 border-green-500 rounded-lg shadow-2xl shadow-green-500/50 overflow-hidden animate-in slide-in-from-top">
+              <div className="bg-green-900/30 border-b border-green-500 px-4 py-2 flex items-center justify-between">
+                <span className="text-green-400 font-mono font-bold">📋 NOTES DE MISE À JOUR</span>
+                <button
+                  onClick={() => setShowChangelog(false)}
+                  className="text-green-400 hover:text-green-300"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 max-h-96 overflow-y-auto text-green-300 font-mono text-sm space-y-2">
+                <div className="prose prose-invert prose-green max-w-none">
+                  {changelogContent.split('\n').map((line, idx) => {
+                    if (line.startsWith('## ')) {
+                      return <h2 key={idx} className="text-yellow-400 text-lg font-bold mt-4 mb-2">{line.replace('## ', '')}</h2>;
+                    } else if (line.startsWith('### ')) {
+                      return <h3 key={idx} className="text-green-400 text-base font-bold mt-3 mb-1">{line.replace('### ', '')}</h3>;
+                    } else if (line.startsWith('#### ')) {
+                      return <h4 key={idx} className="text-cyan-400 text-sm font-bold mt-2">{line.replace('#### ', '')}</h4>;
+                    } else if (line.startsWith('- ')) {
+                      return <li key={idx} className="ml-4 text-green-300">{line.replace('- ', '• ')}</li>;
+                    } else if (line.startsWith('**')) {
+                      return <p key={idx} className="text-green-200 font-semibold">{line.replace(/\*\*/g, '')}</p>;
+                    } else if (line.trim()) {
+                      return <p key={idx} className="text-green-300">{line}</p>;
+                    }
+                    return <br key={idx} />;
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Chat Panel */}
+          {showChat && (
+            <div className="mt-6 bg-black/90 border-2 border-blue-500 rounded-lg shadow-2xl shadow-blue-500/50 overflow-hidden animate-in slide-in-from-top">
+              <div className="bg-blue-900/30 border-b border-blue-500 px-4 py-2 flex items-center justify-between">
+                <span className="text-blue-400 font-mono font-bold">💬 CHAT DE MAINTENANCE</span>
+                <button
+                  onClick={() => setShowChat(false)}
+                  className="text-blue-400 hover:text-blue-300"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Messages */}
+              <div className="p-4 h-64 overflow-y-auto space-y-2 bg-black/40">
+                {chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`p-2 rounded ${
+                      msg.isSystem
+                        ? 'bg-yellow-900/20 border border-yellow-500/30'
+                        : 'bg-blue-900/20 border border-blue-500/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`font-mono text-xs font-bold ${
+                        msg.isSystem ? 'text-yellow-400' : 'text-blue-400'
+                      }`}>
+                        {msg.username}
+                      </span>
+                      <span className="text-green-600 text-[10px] font-mono">{msg.timestamp}</span>
+                    </div>
+                    <p className="text-green-300 text-sm font-mono">{msg.message}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Input */}
+              <div className="border-t border-blue-500 p-3 bg-black/60 flex gap-2">
+                <input
+                  type="text"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Tapez votre message..."
+                  className="flex-1 bg-blue-950/50 border border-blue-500 rounded px-3 py-2 text-green-300 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 border border-blue-400 rounded text-white font-mono transition-colors flex items-center gap-2"
+                >
+                  <Send size={16} />
+                  Envoyer
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="text-center mt-6 text-green-600 text-sm font-mono">
-            <p>Système de maintenance autonome v2.1.0</p>
+            <p>Système de maintenance autonome v2.3.0</p>
             <p className="mt-2 text-xs opacity-60">
               Cette page se fermera automatiquement à la fin de la maintenance
             </p>

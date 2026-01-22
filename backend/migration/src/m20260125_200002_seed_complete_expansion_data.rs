@@ -337,7 +337,8 @@ impl MigrationTrait for Migration {
             // Large Shield: Shield Tech 6
             ("large_shield", Some("shield_tech"), 6),
 
-            // Anti-Missile: Missile Silo building
+            // Anti-Missile: Missile Silo building level 1 + Shipyard level 2
+            ("anti_missile", Some("missile_silo"), 1),
             ("anti_missile", Some("shipyard"), 2),
 
             // Interplanetary Missile: Missile Silo + Impulse Drive 1

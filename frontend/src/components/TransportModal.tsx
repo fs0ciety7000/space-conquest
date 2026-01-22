@@ -7,6 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { getTransporterCapacity } from '@/lib/gameRules';
+import { getShipCount } from '@/utils/techTreeCompat';
 
 interface TransportModalProps {
   currentPlanet: any;
@@ -23,7 +24,7 @@ export default function TransportModal({ currentPlanet, targetPlanet, onClose, o
   const [isSending, setIsSending] = useState(false);
   const [flightTime, setFlightTime] = useState(0);
 
-  const maxShips = currentPlanet.transporter_count || 0;
+  const maxShips = getShipCount(currentPlanet, 'transporter');
   const capacity = transporters * getTransporterCapacity(currentPlanet.hangar_level || 0);
   const currentLoad = metal + crystal + deuterium;
 

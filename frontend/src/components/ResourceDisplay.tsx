@@ -69,12 +69,13 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
     production_metal_growth: 1.1,
     production_crystal_growth: 1.1,
     production_deuterium_growth: 1.05,
-    energy_tech_bonus: 0.01,
+    energy_tech_bonus: 0.10,
     energy_solar_base: 20,
     energy_solar_growth: 1.1,
     energy_mine_consumption_base: 10,
     energy_mine_consumption_growth: 1.1,
-    energy_deuterium_extra_consumption: 20
+    energy_deuterium_extra_consumption: 20,
+    mining_speed_multiplier: 1.0
   });
 
   useEffect(() => {
@@ -232,8 +233,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
         prod *= slotBonus;
       }
 
-      // Appliquer le speed factor
-      prod *= speedFactor;
+      // Appliquer le speed factor ET le mining speed multiplier
+      prod *= speedFactor * (config.mining_speed_multiplier || 1.0);
 
       return Math.floor(prod);
   };

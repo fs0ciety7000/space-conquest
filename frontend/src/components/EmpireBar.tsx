@@ -66,7 +66,16 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
-  const [config, setConfig] = useState<any>(null);
+  const [config, setConfig] = useState<any>({
+    production_metal_base: 30,
+    production_crystal_base: 20,
+    production_deuterium_base: 10,
+    production_metal_growth: 1.1,
+    production_crystal_growth: 1.1,
+    production_deuterium_growth: 1.05,
+    energy_tech_bonus: 0.10,
+    mining_speed_multiplier: 1.0
+  });
   const [configLoaded, setConfigLoaded] = useState(false);
 
   // Hook pour ressources en temps réel
@@ -92,7 +101,8 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
           production_metal_growth: 1.1,
           production_crystal_growth: 1.1,
           production_deuterium_growth: 1.05,
-          energy_tech_bonus: 0.01
+          energy_tech_bonus: 0.10,
+          mining_speed_multiplier: 1.0
         });
         setConfigLoaded(true);
       }
@@ -113,7 +123,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             });
             if (res.ok) {
                 const data = await res.json();
-                setMyPlanets(data);
+                // Le backend renvoie { planets: [...], colony_count: ..., ... }
+                const planetsData = data.planets || data;
+                setMyPlanets(planetsData);
             }
         } catch (e) {
             console.error("Erreur chargement planètes", e);
@@ -176,8 +188,8 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     const slotBonus = 1.0 + (activeSlots.length * 0.5);
     prod *= slotBonus;
 
-    // Speed factor
-    prod *= speedFactor;
+    // Speed factor ET mining speed multiplier
+    prod *= speedFactor * (config.mining_speed_multiplier || 1.0);
 
     return Math.floor(prod);
   };

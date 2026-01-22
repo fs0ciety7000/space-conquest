@@ -37,6 +37,14 @@ export interface Planet {
       speed?: number;
     };
   };
+  defenses?: {
+    [defenseKey: string]: {
+      count: number;
+      name: string;
+      attack?: number;
+      shield?: number;
+    };
+  };
 
   [key: string]: any;
 }
@@ -104,7 +112,8 @@ export function getBuildingLevel(planet: Planet | null | undefined, buildingKey:
 }
 
 /**
- * Get ship count with fallback to old system
+ * Get ship or defense count with fallback to old system
+ * This function handles both ships and defenses for backwards compatibility
  */
 export function getShipCount(planet: Planet | null | undefined, shipKey: string): number {
   if (!planet) return 0;
@@ -114,16 +123,36 @@ export function getShipCount(planet: Planet | null | undefined, shipKey: string)
     return planet.ships[shipKey].count;
   }
 
+  // NEW SYSTEM: Check defenses object for defense items
+  if (planet.defenses && (planet.defenses as any)[shipKey]) {
+    return (planet.defenses as any)[shipKey].count;
+  }
+
   // OLD SYSTEM: Fallback to old column names
   const oldColumnMap: { [key: string]: string } = {
     'light_hunter': 'light_hunter_count',
+    'heavy_hunter': 'heavy_hunter_count',
     'cruiser': 'cruiser_count',
+    'battleship': 'battleship_count',
+    'destroyer': 'destroyer_count',
+    'bomber': 'bomber_count',
+    'deathstar': 'deathstar_count',
     'spy_probe': 'spy_probe_count',
     'transporter': 'transporter_count',
     'colony_ship': 'colony_ship_count',
     'recycler': 'recycler_count',
-    'missile_launcher': 'missile_launcher_count',
+    // Defenses (note: rocket_launcher is the defense_key, missile_launcher_count is the legacy column)
+    'rocket_launcher': 'missile_launcher_count',
+    'missile_launcher': 'missile_launcher_count', // Deprecated, use rocket_launcher
+    'light_laser': 'light_laser_count',
+    'heavy_laser': 'heavy_laser_count',
+    'gauss_cannon': 'gauss_cannon_count',
+    'ion_cannon': 'ion_cannon_count',
     'plasma_turret': 'plasma_turret_count',
+    'small_shield': 'small_shield_count',
+    'large_shield': 'large_shield_count',
+    'antiballistic_missile': 'antiballistic_missile_count',
+    'interplanetary_missile': 'interplanetary_missile_count',
   };
 
   const oldColumn = oldColumnMap[shipKey];

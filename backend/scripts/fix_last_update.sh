@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ============================================================================
-# Désactiver le mode maintenance (LOCAL)
+# Corriger le champ last_update (LOCAL)
 # ============================================================================
 
 # Charger les variables d'environnement
@@ -35,24 +35,36 @@ else
     exit 1
 fi
 
-echo "✅ Désactivation du mode maintenance..."
+echo "🔧 Correction des timestamps last_update..."
 echo "   Base de données: $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME"
+echo ""
 
-PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" <<EOF
--- Fix sequence for server_config auto-increment (in case this is first insert)
-SELECT setval(pg_get_serial_sequence('server_config', 'id'),
-              COALESCE((SELECT MAX(id) FROM server_config), 0) + 1,
-              false);
+PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" <<'EOF'
+BEGIN;
 
--- Désactiver la maintenance (INSERT if not exists, UPDATE if exists)
-INSERT INTO server_config (config_key, config_value, updated_at)
-VALUES ('maintenance_enabled', 'false', NOW())
-ON CONFLICT (config_key) DO UPDATE
-SET config_value = 'false', updated_at = NOW();
+-- Vérifier les dates avant la correction
+SELECT
+    COUNT(*) as total_planets,
+    MIN(last_update) as oldest_update,
+    MAX(last_update) as newest_update,
+    AVG(EXTRACT(EPOCH FROM (NOW() - last_update))/3600) as avg_hours_since_update
+FROM planet;
 
--- Vérifier
-SELECT config_key, config_value FROM server_config WHERE config_key = 'maintenance_enabled';
+-- Mettre à jour tous les last_update à NOW()
+UPDATE planet
+SET last_update = NOW()
+WHERE last_update IS NOT NULL;
+
+-- Vérifier après la correction
+SELECT
+    COUNT(*) as planets_updated,
+    MIN(last_update) as oldest_update,
+    MAX(last_update) as newest_update
+FROM planet;
+
+COMMIT;
 EOF
 
-echo "✅ Mode maintenance désactivé!"
-echo "   Les joueurs peuvent maintenant accéder au jeu"
+echo ""
+echo "✅ Timestamps corrigés!"
+echo "   Tous les last_update ont été mis à jour à NOW()"

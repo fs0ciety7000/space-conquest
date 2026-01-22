@@ -31,15 +31,15 @@ use tower_http::{
     trace::TraceLayer,
 };
 use uuid::Uuid;
-use chrono::{Utc, Duration};
+use chrono::{Utc, Duration, DateTime};
 use rand::Rng;
 
 use sea_orm_migration::MigratorTrait;
 
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
-    auth, game_logic, combat, entities, config, admin,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, AppState
+    auth, game_logic, combat, entities, config, admin, admin_content,
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -50,8 +50,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member
 };
 
 #[derive(Serialize, Clone)]
@@ -77,6 +77,8 @@ struct RankItem {
     owner_id: Uuid,
     planets: Vec<PlanetInfo>,
     rank_badge: String,
+    protection_until: Option<String>,
+    galaxy: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -108,6 +110,12 @@ struct ExpeditionPayload {
 struct ExpeditionPayloadV2 {
     // Generic fleet composition using ship_key -> count mapping
     fleet: HashMap<String, i32>,
+}
+
+#[derive(Deserialize)]
+struct ScanNearbyPayload {
+    current_planet_id: Uuid,
+    max_results: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -155,11 +163,14 @@ struct GalaxySlot {
     planet_id: Option<Uuid>,
     planet_name: Option<String>,
     owner_name: Option<String>,
-    owner_id: Option<Uuid>, 
-    debris_metal: f64,    
-    debris_crystal: f64, 
+    owner_id: Option<Uuid>,
+    debris_metal: f64,
+    debris_crystal: f64,
     is_me: bool,
-    is_my_planet: bool
+    is_my_planet: bool,
+    protection_until: Option<String>,
+    total_points: i64,
+    planet_galaxy: i32,
 }
 
 #[derive(Serialize)]
@@ -265,6 +276,7 @@ async fn main() {
         .route("/ranking", get(get_ranking_handler))
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
         .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
+        .route("/galaxy/scan/nearby", post(scan_nearby_planets_handler))
         // Messagerie V2 (via module)
         // Dans la section des routes de messagerie
 .route("/conversations", get(messaging::get_conversations_handler))
@@ -307,6 +319,32 @@ async fn main() {
         .route("/admin/announcements", post(admin::create_announcement_handler))
         .route("/admin/announcements/:id", patch(admin::update_announcement_handler))
         .route("/admin/announcements/:id", delete(admin::delete_announcement_handler))
+        // Admin Content Management - Ships
+        .route("/admin/ships", get(admin_content::list_ship_types_handler))
+        .route("/admin/ships", post(admin_content::create_ship_type_handler))
+        .route("/admin/ships/:id", patch(admin_content::update_ship_type_handler))
+        .route("/admin/ships/:id", delete(admin_content::delete_ship_type_handler))
+        .route("/admin/ships/:ship_type_id/requirements", get(admin_content::list_ship_requirements_handler))
+        .route("/admin/ships/requirements", post(admin_content::create_ship_requirement_handler))
+        .route("/admin/ships/requirements/:id", delete(admin_content::delete_ship_requirement_handler))
+        // Admin Content Management - Buildings
+        .route("/admin/buildings", get(admin_content::list_building_types_handler))
+        .route("/admin/buildings", post(admin_content::create_building_type_handler))
+        .route("/admin/buildings/:id", patch(admin_content::update_building_type_handler))
+        .route("/admin/buildings/:id", delete(admin_content::delete_building_type_handler))
+        .route("/admin/buildings/:building_type_id/requirements", get(admin_content::list_building_requirements_handler))
+        .route("/admin/buildings/requirements", post(admin_content::create_building_requirement_handler))
+        .route("/admin/buildings/requirements/:id", delete(admin_content::delete_building_requirement_handler))
+        // Admin Content Management - Defenses
+        .route("/admin/defenses", get(admin_content::list_defense_types_handler))
+        .route("/admin/defenses", post(admin_content::create_defense_type_handler))
+        .route("/admin/defenses/:id", patch(admin_content::update_defense_type_handler))
+        .route("/admin/defenses/:id", delete(admin_content::delete_defense_type_handler))
+        .route("/admin/defenses/:defense_type_id/requirements", get(admin_content::list_defense_requirements_handler))
+        .route("/admin/defenses/requirements", post(admin_content::create_defense_requirement_handler))
+        .route("/admin/defenses/requirements/:id", delete(admin_content::delete_defense_requirement_handler))
+        // Admin Content Management - Technologies (read-only for reference)
+        .route("/admin/technologies", get(admin_content::list_technologies_handler))
         // Game tick system
         .route("/tick", post(tick_handler))
         // Alliance system
@@ -946,6 +984,15 @@ async fn get_ranking_handler(
         let is_me = current_owner_id.map(|id| id == owner_id).unwrap_or(false);
         let rank_badge = game_logic::get_rank_badge(total_score);
 
+        // Get protection data and galaxy from user
+        let (protection_until, galaxy) = users.iter()
+            .find(|u| u.id == owner_id)
+            .map(|u| (
+                u.protection_until.map(|dt| dt.to_string()),
+                planets.first().map(|p| p.galaxy)
+            ))
+            .unwrap_or((None, None));
+
         ranked_users.push(RankItem {
             rank: 0,
             username,
@@ -956,6 +1003,8 @@ async fn get_ranking_handler(
             owner_id,
             planets: planet_infos,
             rank_badge: rank_badge.to_string(),
+            protection_until,
+            galaxy,
         });
     }
 
@@ -974,6 +1023,32 @@ async fn get_ranking_handler(
     Json(ranked_users)
 }
 
+
+/// Helper function to get building level from planet_buildings table with fallback to legacy column
+async fn get_building_level(db: &DatabaseConnection, planet_id: Uuid, building_key: &str, legacy_level: i32) -> i32 {
+    // First, get the building_type_id for this building_key
+    let building_type = BuildingType::find()
+        .filter(building_type::Column::BuildingKey.eq(building_key))
+        .one(db)
+        .await;
+
+    let building_type_id = match building_type {
+        Ok(Some(bt)) => bt.id,
+        _ => return legacy_level, // If building type not found, use legacy
+    };
+
+    // Now query planet_buildings for this planet and building type
+    let planet_building = PlanetBuilding::find()
+        .filter(planet_building::Column::PlanetId.eq(planet_id))
+        .filter(planet_building::Column::BuildingTypeId.eq(building_type_id))
+        .one(db)
+        .await;
+
+    match planet_building {
+        Ok(Some(building)) => building.level,
+        _ => legacy_level, // Fallback to legacy column if not found in planet_buildings
+    }
+}
 
 async fn get_planet_handler(
     Path(id): Path<Uuid>,
@@ -1005,13 +1080,19 @@ async fn get_planet_handler(
     let config = state.config.read().unwrap().clone();
     let speed_factor = config.speed_factor;
 
+    // Get building levels from planet_buildings with fallback to legacy columns
+    let metal_mine_level = get_building_level(&state.db, id, "metal_mine", p.metal_mine_level).await;
+    let crystal_mine_level = get_building_level(&state.db, id, "crystal_mine", p.crystal_mine_level).await;
+    let deuterium_mine_level = get_building_level(&state.db, id, "deuterium_mine", p.deuterium_mine_level).await;
+    let solar_plant_level = get_building_level(&state.db, id, "solar_plant", p.solar_plant_level).await;
+
     // Calculate energy ratio
     let energy_ratio = game_logic::calculate_energy_ratio(
-        p.solar_plant_level,
+        solar_plant_level,
         p.energy_tech_level,
-        p.metal_mine_level,
-        p.crystal_mine_level,
-        p.deuterium_mine_level,
+        metal_mine_level,
+        crystal_mine_level,
+        deuterium_mine_level,
         &config
     );
 
@@ -1027,15 +1108,15 @@ async fn get_planet_handler(
         let plasma_tech_level = 0;
 
         let base_metal = game_logic::calculate_resources_with_slots(
-            game_logic::ResourceType::Metal, p.metal_mine_level, p.metal_amount, p.last_update,
+            game_logic::ResourceType::Metal, metal_mine_level, p.metal_amount, p.last_update,
             p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_crystal = game_logic::calculate_resources_with_slots(
-            game_logic::ResourceType::Crystal, p.crystal_mine_level, p.crystal_amount, p.last_update,
+            game_logic::ResourceType::Crystal, crystal_mine_level, p.crystal_amount, p.last_update,
             p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_deuterium = game_logic::calculate_resources_with_slots(
-            game_logic::ResourceType::Deuterium, p.deuterium_mine_level, p.deuterium_amount, p.last_update,
+            game_logic::ResourceType::Deuterium, deuterium_mine_level, p.deuterium_amount, p.last_update,
             p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
 
@@ -1512,6 +1593,11 @@ async fn get_planet_handler(
         if let Ok(ship_details) = tech_tree::get_all_planet_ship_details(&state.db, updated_model.id).await {
             obj.insert("ships".into(), json!(ship_details));
         }
+
+        // Use detailed defense info for frontend display (includes count, name, stats)
+        if let Ok(defense_details) = tech_tree::get_all_planet_defense_details(&state.db, updated_model.id).await {
+            obj.insert("defenses".into(), json!(defense_details));
+        }
     }
 
     Ok(Json(json_response))
@@ -1859,10 +1945,25 @@ async fn attack_handler(
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // BEGINNER PROTECTION - Validate attack is allowed
     // ═══════════════════════════════════════════════════════════════════════════
     let attacker_owner_id = att_planet.owner_id;
     let defender_owner_id = target_planet.owner_id;
+
+    let config_clone = state.config.read().unwrap().clone();
+    if let Err(error_msg) = protection::validate_attack(
+        &state.db,
+        attacker_owner_id,
+        defender_owner_id,
+        payload.target_planet_id,
+        &config_clone,
+    ).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": error_msg}))).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // ═══════════════════════════════════════════════════════════════════════════
 
     let mut used_casus_belli = false;
     if let Ok(has_cb) = sabotage::has_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {
@@ -1987,10 +2088,25 @@ async fn attack_v2_handler(
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // BEGINNER PROTECTION - Validate attack is allowed
     // ═══════════════════════════════════════════════════════════════════════════
     let attacker_owner_id = att_planet.owner_id;
     let defender_owner_id = target_planet.owner_id;
+
+    let config_clone = state.config.read().unwrap().clone();
+    if let Err(error_msg) = protection::validate_attack(
+        &state.db,
+        attacker_owner_id,
+        defender_owner_id,
+        payload.target_planet_id,
+        &config_clone,
+    ).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": error_msg}))).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
+    // ═══════════════════════════════════════════════════════════════════════════
 
     let mut used_casus_belli = false;
     if let Ok(has_cb) = sabotage::has_casus_belli(&state.db, attacker_owner_id, defender_owner_id).await {
@@ -3009,20 +3125,45 @@ async fn get_galaxy_handler(
 
     for pos in 1..=15 {
         if let Some(p) = planets.iter().find(|p| p.position == pos) {
+            // Fetch owner data for protection info
+            let (protection_until, total_points, actual_owner_name) = if let Ok(Some(owner)) = User::find_by_id(p.owner_id).one(&state.db).await {
+                (
+                    owner.protection_until.map(|dt| dt.to_string()),
+                    owner.total_points,
+                    owner.username.clone()
+                )
+            } else {
+                (None, 0, p.name.clone())
+            };
+
             slots.push(GalaxySlot {
                 position: pos,
                 planet_id: Some(p.id),
                 planet_name: Some(p.name.clone()),
-                owner_name: Some(p.name.clone()),
+                owner_name: Some(actual_owner_name),
                 owner_id: Some(p.owner_id),
-                debris_metal: p.debris_metal, 
+                debris_metal: p.debris_metal,
                 debris_crystal: p.debris_crystal,
                 is_me: p.id == current_id,
-                is_my_planet: p.owner_id == my_owner_id
+                is_my_planet: p.owner_id == my_owner_id,
+                protection_until,
+                total_points,
+                planet_galaxy: p.galaxy,
             });
         } else {
             slots.push(GalaxySlot {
-                position: pos, planet_id: None, planet_name: None, owner_name: None, owner_id: None, debris_metal: 0.0, debris_crystal: 0.0, is_me: false, is_my_planet: false
+                position: pos,
+                planet_id: None,
+                planet_name: None,
+                owner_name: None,
+                owner_id: None,
+                debris_metal: 0.0,
+                debris_crystal: 0.0,
+                is_me: false,
+                is_my_planet: false,
+                protection_until: None,
+                total_points: 0,
+                planet_galaxy: galaxy_id,
             });
         }
     }
@@ -3057,6 +3198,83 @@ async fn get_galaxy_scan_handler(
 
     let results: Vec<SystemSummary> = systems_map.into_values().collect();
     Json(results)
+}
+
+async fn scan_nearby_planets_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<ScanNearbyPayload>,
+) -> impl IntoResponse {
+    let current_planet = match Planet::find_by_id(payload.current_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Planet not found"}))).into_response(),
+    };
+
+    let max_results = payload.max_results.unwrap_or(20).min(50); // Cap at 50 for performance
+    let search_radius = 20; // Systems to search around current system
+
+    // Find all planets in nearby systems (same galaxy, systems within radius)
+    let min_system = (current_planet.system - search_radius).max(1);
+    let max_system = (current_planet.system + search_radius).min(499);
+
+    let nearby_planets = Planet::find()
+        .filter(planet::Column::Galaxy.eq(current_planet.galaxy))
+        .filter(planet::Column::System.between(min_system, max_system))
+        .filter(planet::Column::Id.ne(payload.current_planet_id))  // Exclude current planet
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    // Get owner information for planets
+    let mut owner_map: HashMap<Uuid, String> = HashMap::new();
+    let mut protection_map: HashMap<Uuid, Option<chrono::NaiveDateTime>> = HashMap::new();
+
+    for planet in &nearby_planets {
+        let owner_id = planet.owner_id;
+        if !owner_map.contains_key(&owner_id) {
+            if let Ok(Some(user)) = User::find_by_id(owner_id).one(&state.db).await {
+                owner_map.insert(owner_id, user.username.clone());
+                protection_map.insert(owner_id, user.protection_until);
+            }
+        }
+    }
+
+    // Calculate distances and prepare response
+    let mut planets_with_distance: Vec<serde_json::Value> = nearby_planets
+        .into_iter()
+        .map(|p| {
+            let distance = game_logic::calculate_distance(
+                (current_planet.galaxy, current_planet.system, current_planet.position),
+                (p.galaxy, p.system, p.position)
+            );
+
+            let owner_name = owner_map.get(&p.owner_id).cloned();
+            let protection_until = protection_map.get(&p.owner_id).cloned().flatten();
+            let is_my_planet = p.owner_id == current_planet.owner_id;
+
+            json!({
+                "id": p.id,
+                "name": p.name,
+                "galaxy": p.galaxy,
+                "system": p.system,
+                "position": p.position,
+                "owner_name": owner_name,
+                "is_my_planet": is_my_planet,
+                "protection_until": protection_until,
+                "distance": distance,
+            })
+        })
+        .collect();
+
+    // Sort by distance and limit results
+    planets_with_distance.sort_by(|a, b| {
+        let dist_a = a["distance"].as_f64().unwrap_or(f64::MAX);
+        let dist_b = b["distance"].as_f64().unwrap_or(f64::MAX);
+        dist_a.partial_cmp(&dist_b).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    planets_with_distance.truncate(max_results as usize);
+
+    Json(planets_with_distance).into_response()
 }
 
 fn generate_colony_name() -> String {
@@ -3217,10 +3435,12 @@ async fn get_my_planets_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
+    use entities::{prelude::*, resource_slot};
+
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
     let current = Planet::find_by_id(current_id).one(&state.db).await.unwrap();
-    
+
     if let Some(p) = current {
         let owner_id = p.owner_id;
         let my_planets = Planet::find().filter(planet::Column::OwnerId.eq(owner_id)).all(&state.db).await.unwrap_or_default();
@@ -3230,39 +3450,165 @@ async fn get_my_planets_handler(
         let max_colonies = std::cmp::min(astrophysics_level, 10);
         let colony_count = my_planets.iter().filter(|p| !p.is_homeworld).count();
 
-        let list: Vec<serde_json::Value> = my_planets.into_iter().map(|mp| json!({
-            "id": mp.id,
-            "name": mp.name,
-            "galaxy": mp.galaxy,
-            "system": mp.system,
-            "position": mp.position,
-            "is_current": mp.id == current_id,
-            "is_homeworld": mp.is_homeworld,
-            // Ressources
-            "metal_amount": mp.metal_amount,
-            "crystal_amount": mp.crystal_amount,
-            "deuterium_amount": mp.deuterium_amount,
-            // Bâtiments
-            "metal_mine_level": mp.metal_mine_level,
-            "crystal_mine_level": mp.crystal_mine_level,
-            "deuterium_mine_level": mp.deuterium_mine_level,
-            "solar_plant_level": mp.solar_plant_level,
-            "shipyard_level": mp.shipyard_level,
-            "research_lab_level": mp.research_lab_level,
-            "hangar_level": mp.hangar_level,
-            // Technologie
-            "energy_tech_level": mp.energy_tech_level,
-            // Flotte
-            "light_hunter_count": mp.light_hunter_count,
-            "cruiser_count": mp.cruiser_count,
-            "recycler_count": mp.recycler_count,
-            "spy_probe_count": mp.spy_probe_count,
-            "colony_ship_count": mp.colony_ship_count,
-            "transporter_count": mp.transporter_count,
-            // Défenses
-            "missile_launcher_count": mp.missile_launcher_count,
-            "plasma_turret_count": mp.plasma_turret_count
-        })).collect();
+        let config = state.config.read().unwrap().clone();
+        let mut list = Vec::new();
+
+        for mp in my_planets {
+            // Get building levels from planet_buildings with fallback to legacy columns
+            let metal_mine_level = get_building_level(&state.db, mp.id, "metal_mine", mp.metal_mine_level).await;
+            let crystal_mine_level = get_building_level(&state.db, mp.id, "crystal_mine", mp.crystal_mine_level).await;
+            let deuterium_mine_level = get_building_level(&state.db, mp.id, "deuterium_mine", mp.deuterium_mine_level).await;
+            let solar_plant_level = get_building_level(&state.db, mp.id, "solar_plant", mp.solar_plant_level).await;
+            let shipyard_level = get_building_level(&state.db, mp.id, "shipyard", mp.shipyard_level).await;
+            let research_lab_level = get_building_level(&state.db, mp.id, "research_lab", mp.research_lab_level).await;
+            let hangar_level = get_building_level(&state.db, mp.id, "hangar", mp.hangar_level).await;
+
+            // Get tech levels from planet_technologies
+            let energy_tech_level = tech_tree::get_planet_tech_level(&state.db, mp.id, "energy_tech").await.unwrap_or(mp.energy_tech_level);
+
+            // Calculate energy
+            let energy_ratio = game_logic::calculate_energy_ratio(
+                solar_plant_level,
+                energy_tech_level,
+                metal_mine_level,
+                crystal_mine_level,
+                deuterium_mine_level,
+                &config
+            );
+
+            let energy_prod = game_logic::calculate_energy_production(solar_plant_level, energy_tech_level, &config);
+            let energy_cons = game_logic::calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level, &config);
+            let energy_ratio_percent = (energy_ratio * 100.0) as i32;
+
+            // Calculate resource production per hour
+            let plasma_tech_level = tech_tree::get_planet_tech_level(&state.db, mp.id, "plasma_tech").await.unwrap_or(0);
+            let metal_production = game_logic::calculate_resource_production(
+                game_logic::ResourceType::Metal,
+                metal_mine_level,
+                energy_tech_level,
+                plasma_tech_level,
+                energy_ratio,
+                &config
+            );
+            let crystal_production = game_logic::calculate_resource_production(
+                game_logic::ResourceType::Crystal,
+                crystal_mine_level,
+                energy_tech_level,
+                plasma_tech_level,
+                energy_ratio,
+                &config
+            );
+            let deuterium_production = game_logic::calculate_resource_production(
+                game_logic::ResourceType::Deuterium,
+                deuterium_mine_level,
+                energy_tech_level,
+                plasma_tech_level,
+                energy_ratio,
+                &config
+            );
+
+            // Get ship counts from planet_ships table
+            let ships = tech_tree::get_all_planet_ship_details(&state.db, mp.id).await.unwrap_or_default();
+
+            // Get defense counts from planet_defenses table
+            let defenses = tech_tree::get_all_planet_defense_details(&state.db, mp.id).await.unwrap_or_default();
+
+            // Get all building levels
+            let buildings = tech_tree::get_all_planet_building_levels(&state.db, mp.id).await.unwrap_or_default();
+
+            // Get all tech levels
+            let technologies = tech_tree::get_all_planet_tech_levels(&state.db, mp.id).await.unwrap_or_default();
+
+            // Get construction queue
+            let construction_queue = ConstructionQueue::find()
+                .filter(construction_queue::Column::PlanetId.eq(mp.id))
+                .order_by_asc(construction_queue::Column::EndTime)
+                .all(&state.db)
+                .await
+                .unwrap_or_default();
+
+            // Get research queue (technologies being researched) - simplified version
+            let research_techs = PlanetTechnology::find()
+                .filter(planet_technology::Column::PlanetId.eq(mp.id))
+                .filter(planet_technology::Column::ResearchingToLevel.is_not_null())
+                .all(&state.db)
+                .await
+                .unwrap_or_default();
+
+            let mut research_queue_json = Vec::new();
+            for r in research_techs {
+                // Get tech key from Technology table
+                if let Ok(Some(tech)) = Technology::find_by_id(r.tech_id).one(&state.db).await {
+                    research_queue_json.push(json!({
+                        "tech_key": tech.tech_key,
+                        "target_level": r.researching_to_level
+                    }));
+                }
+            }
+
+            // Get resource slots
+            let resource_slots_data = ResourceSlot::find()
+                .filter(resource_slot::Column::PlanetId.eq(mp.id))
+                .all(&state.db)
+                .await
+                .unwrap_or_default();
+
+            list.push(json!({
+                "id": mp.id,
+                "name": mp.name,
+                "galaxy": mp.galaxy,
+                "system": mp.system,
+                "position": mp.position,
+                "is_current": mp.id == current_id,
+                "is_homeworld": mp.is_homeworld,
+                // Ressources
+                "metal_amount": mp.metal_amount,
+                "crystal_amount": mp.crystal_amount,
+                "deuterium_amount": mp.deuterium_amount,
+                // Bâtiments (from relational tables with fallback)
+                "metal_mine_level": metal_mine_level,
+                "crystal_mine_level": crystal_mine_level,
+                "deuterium_mine_level": deuterium_mine_level,
+                "solar_plant_level": solar_plant_level,
+                "shipyard_level": shipyard_level,
+                "research_lab_level": research_lab_level,
+                "hangar_level": hangar_level,
+                // Énergie
+                "energy": energy_prod as i32 - energy_cons as i32,
+                "energy_production": energy_prod as i32,
+                "energy_consumption": energy_cons as i32,
+                "energy_ratio": energy_ratio_percent,
+                // Production de ressources par heure
+                "metal_production": metal_production as i32,
+                "crystal_production": crystal_production as i32,
+                "deuterium_production": deuterium_production as i32,
+                // Technologie
+                "energy_tech_level": energy_tech_level,
+                // Flotte (legacy columns for backward compatibility)
+                "light_hunter_count": mp.light_hunter_count,
+                "cruiser_count": mp.cruiser_count,
+                "recycler_count": mp.recycler_count,
+                "spy_probe_count": mp.spy_probe_count,
+                "colony_ship_count": mp.colony_ship_count,
+                "transporter_count": mp.transporter_count,
+                // Défenses (legacy columns for backward compatibility)
+                "missile_launcher_count": mp.missile_launcher_count,
+                "plasma_turret_count": mp.plasma_turret_count,
+                // NEW: Relational data
+                "ships": ships,
+                "defenses": defenses,
+                "buildings": buildings,
+                "technologies": technologies,
+                // Débris
+                "debris_metal": mp.debris_metal,
+                "debris_crystal": mp.debris_crystal,
+                // Queues
+                "construction_queue": construction_queue,
+                "research_queue": research_queue_json,
+                // Resource slots
+                "resource_slots": resource_slots_data
+            }));
+        }
 
         return Json(json!({
             "planets": list,
@@ -3290,6 +3636,38 @@ async fn transport_handler(
 
     let source_user = User::find_by_id(source_model.owner_id).one(&state.db).await.unwrap().unwrap();
     let target_user = User::find_by_id(target_model.owner_id).one(&state.db).await.unwrap().unwrap();
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VÉRIFICATION ALLIANCE - Transfer vers autre joueur nécessite même alliance
+    // ═══════════════════════════════════════════════════════════════════════════
+    if source_model.owner_id != target_model.owner_id {
+        // Vérifier que les deux joueurs sont dans la même alliance
+        let source_member = AllianceMember::find()
+            .filter(alliance_member::Column::UserId.eq(source_model.owner_id))
+            .one(&state.db)
+            .await
+            .unwrap();
+
+        let target_member = AllianceMember::find()
+            .filter(alliance_member::Column::UserId.eq(target_model.owner_id))
+            .one(&state.db)
+            .await
+            .unwrap();
+
+        match (source_member, target_member) {
+            (Some(src), Some(tgt)) if src.alliance_id == tgt.alliance_id => {
+                // OK : même alliance
+            },
+            _ => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({
+                        "error": "Transfer impossible : Vous devez être dans la même alliance que le destinataire pour envoyer des ressources."
+                    }))
+                ).into_response();
+            }
+        }
+    }
 
     let source_name = source_model.name.clone();
     let source_id = source_model.id;
@@ -3762,6 +4140,14 @@ async fn get_player_profile_handler(
         "created_at": if show_all { json!(created_at_utc) } else { json!(null) },
         "is_own_profile": is_own_profile,
         "espionage_level": espionage_level,
+
+        // Protection data
+        "protection_until": if show_all || show_basic {
+            user.protection_until.map(|dt| dt.to_string())
+        } else {
+            None
+        },
+        "galaxy": main_planet_with_points.map(|(p, _, _, _)| p.galaxy),
 
         // Points (selon niveau)
         "total_points": mask_number(total_points, show_points || show_all),
@@ -4908,13 +5294,24 @@ async fn start_research_handler(
     };
 
     // Check if player can research this tech (requirements met)
-    let can_research = match tech_tree::can_research_tech(&state.db, planet_id, &tech_key).await {
-        Ok(can) => can,
+    let requirements = match tech_tree::get_tech_requirements(&state.db, tech.id, planet_id).await {
+        Ok(reqs) => reqs,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
     };
 
-    if !can_research {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Tech requirements not met"}))).into_response();
+    // Find unmet requirements
+    let unmet: Vec<_> = requirements.iter().filter(|r| !r.met).collect();
+    if !unmet.is_empty() {
+        let missing_reqs: Vec<String> = unmet.iter().map(|req| {
+            format!("{} niveau {} (actuel: {})",
+                req.required_tech_name,
+                req.required_level,
+                req.current_level)
+        }).collect();
+
+        return (StatusCode::FORBIDDEN, Json(json!({
+            "error": format!("Requis: {}", missing_reqs.join(", "))
+        }))).into_response();
     }
 
     // Get current tech level
@@ -5045,13 +5442,31 @@ async fn build_ships_handler(
     };
 
     // Check if player can build this ship (tech requirements met)
-    let can_build = match tech_tree::can_build_ship(&state.db, planet_id, &ship_key).await {
-        Ok(can) => can,
+    let requirements = match tech_tree::get_ship_requirements(&state.db, ship.id, planet_id).await {
+        Ok(reqs) => reqs,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
     };
 
-    if !can_build {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Ship requirements not met"}))).into_response();
+    // Find unmet requirements
+    let unmet: Vec<_> = requirements.iter().filter(|r| !r.met).collect();
+    if !unmet.is_empty() {
+        let missing_reqs: Vec<String> = unmet.iter().map(|req| {
+            if req.requirement_type == "tech" {
+                format!("{} niveau {} (actuel: {})",
+                    req.tech_name.as_ref().unwrap_or(&"Technologie".to_string()),
+                    req.required_level,
+                    req.current_level)
+            } else {
+                format!("{} niveau {} (actuel: {})",
+                    req.building_name.as_ref().unwrap_or(&"Bâtiment".to_string()),
+                    req.required_level,
+                    req.current_level)
+            }
+        }).collect();
+
+        return (StatusCode::FORBIDDEN, Json(json!({
+            "error": format!("Requis: {}", missing_reqs.join(", "))
+        }))).into_response();
     }
 
     // Calculate total cost
@@ -5222,13 +5637,31 @@ async fn build_defenses_handler(
     };
 
     // Check if player can build this defense (tech requirements met)
-    let can_build = match tech_tree::can_build_defense(&state.db, planet_id, &defense_key).await {
-        Ok(can) => can,
+    let requirements = match tech_tree::get_defense_requirements(&state.db, defense.id, planet_id).await {
+        Ok(reqs) => reqs,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check requirements"}))).into_response(),
     };
 
-    if !can_build {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Defense requirements not met"}))).into_response();
+    // Find unmet requirements
+    let unmet: Vec<_> = requirements.iter().filter(|r| !r.met).collect();
+    if !unmet.is_empty() {
+        let missing_reqs: Vec<String> = unmet.iter().map(|req| {
+            if req.requirement_type == "tech" {
+                format!("{} niveau {} (actuel: {})",
+                    req.tech_name.as_ref().unwrap_or(&"Technologie".to_string()),
+                    req.required_level,
+                    req.current_level)
+            } else {
+                format!("{} niveau {} (actuel: {})",
+                    req.building_name.as_ref().unwrap_or(&"Bâtiment".to_string()),
+                    req.required_level,
+                    req.current_level)
+            }
+        }).collect();
+
+        return (StatusCode::FORBIDDEN, Json(json!({
+            "error": format!("Requis: {}", missing_reqs.join(", "))
+        }))).into_response();
     }
 
     // Calculate total cost
@@ -5698,21 +6131,7 @@ async fn expedition_v2_handler(
         (metal, crystal, deuterium, "calm")
     };
 
-    // Update planet resources
-    let mut active: planet::ActiveModel = planet.clone().into();
-    active.metal_amount = Set(planet.metal_amount + final_metal);
-    active.crystal_amount = Set(planet.crystal_amount + final_crystal);
-    active.deuterium_amount = Set(planet.deuterium_amount + final_deuterium);
-
-    // Set expedition end time
-    let duration = std::cmp::max(1, (base_duration / speed_factor) as i64);
-    active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
-
-    if active.update(&state.db).await.is_err() {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update planet"}))).into_response();
-    }
-
-    // Create combat log for expedition report
+    // Create combat log for expedition report (before planet update so we can set unread_report)
     let expedition_report = json!({
         "winner": winner,
         "result": winner,  // For consistency with combat_log.result
@@ -5739,6 +6158,23 @@ async fn expedition_v2_handler(
         "defender_remaining": {},
         "defender_losses": 0
     });
+
+    // Update planet resources
+    let mut active: planet::ActiveModel = planet.clone().into();
+    active.metal_amount = Set(planet.metal_amount + final_metal);
+    active.crystal_amount = Set(planet.crystal_amount + final_crystal);
+    active.deuterium_amount = Set(planet.deuterium_amount + final_deuterium);
+
+    // Set expedition end time
+    let duration = std::cmp::max(1, (base_duration / speed_factor) as i64);
+    active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
+
+    // Set unread_report to trigger modal display
+    active.unread_report = Set(Some(serde_json::to_string(&expedition_report).unwrap()));
+
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update planet"}))).into_response();
+    }
 
     let _ = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),

@@ -23,7 +23,11 @@ export default function PlanetSelector({ currentPlanetId, onSwitch }: { currentP
   useEffect(() => {
     fetch(apiUrl(`/my-planets?current_planet_id=${currentPlanetId}`))
       .then(res => res.json())
-      .then(data => setPlanets(data))
+      .then(data => {
+        // Le backend renvoie { planets: [...], colony_count: ..., ... }
+        const planetsData = data.planets || data;
+        setPlanets(planetsData);
+      })
       .catch(console.error);
   }, [currentPlanetId]);
 
