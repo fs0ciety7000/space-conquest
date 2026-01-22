@@ -447,6 +447,12 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                         crystal: planet.crystal_amount || 0,
                         deuterium: planet.deuterium_amount || 0
                     }}
+                    currentPlanet={{
+                        galaxy: planet.galaxy,
+                        system: planet.system,
+                        position: planet.position,
+                        colony_ship_count: planet.colony_ship_count || 0
+                    }}
                     onConfirm={handleConfirmColonize}
                     onCancel={() => setShowColonizeModal(false)}
                 />

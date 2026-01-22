@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Globe, Rocket, Package, X, TrendingUp } from "lucide-react";
+import { Globe, Rocket, Package, X, TrendingUp, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { calculateDistance } from '@/utils/galaxyCalculations';
 
 interface ColonizeModalProps {
   position: number;
@@ -12,23 +13,47 @@ interface ColonizeModalProps {
     crystal: number;
     deuterium: number;
   };
+  currentPlanet?: {
+    galaxy: number;
+    system: number;
+    position: number;
+    colony_ship_count?: number;
+  };
   onConfirm: (position: number, metal: number, crystal: number, deuterium: number) => void;
   onCancel: () => void;
 }
 
-export default function ColonizeModal({ 
-  position, 
-  galaxy, 
-  system, 
-  availableResources, 
-  onConfirm, 
-  onCancel 
+export default function ColonizeModal({
+  position,
+  galaxy,
+  system,
+  availableResources,
+  currentPlanet,
+  onConfirm,
+  onCancel
 }: ColonizeModalProps) {
   const [metal, setMetal] = useState(0);
   const [crystal, setCrystal] = useState(0);
   const [deuterium, setDeuterium] = useState(0);
 
+  const colonyShips = currentPlanet?.colony_ship_count || 0;
+  const hasColonyShip = colonyShips > 0;
+
+  // Calculer distance et temps de vol
+  const distance = currentPlanet ? calculateDistance(
+    { galaxy: currentPlanet.galaxy, system: currentPlanet.system, position: currentPlanet.position },
+    { galaxy, system, position }
+  ) : 0;
+
+  const travelTime = Math.round(distance / 100); // Temps en secondes
+  const hours = Math.floor(travelTime / 3600);
+  const minutes = Math.floor((travelTime % 3600) / 60);
+  const seconds = travelTime % 60;
+
   const handleSubmit = () => {
+    if (!hasColonyShip) {
+      return; // Bloquer si pas de vaisseau
+    }
     onConfirm(position, metal, crystal, deuterium);
   };
 
@@ -54,15 +79,34 @@ export default function ColonizeModal({
 
         {/* Corps */}
         <div className="p-6 space-y-6">
-          
+
+          {/* Vérification vaisseau colon */}
+          {!hasColonyShip && (
+            <div className="bg-red-900/20 border border-red-500/50 p-4 rounded-xl glass-card">
+              <div className="flex items-center gap-2 text-red-400 text-xs font-bold uppercase mb-2">
+                <AlertTriangle size={14} /> Vaisseau de Colonisation Requis
+              </div>
+              <p className="text-slate-400 text-xs">
+                Vous devez construire au moins un vaisseau de colonisation au chantier spatial avant de pouvoir coloniser une nouvelle planète.
+              </p>
+            </div>
+          )}
+
           {/* Info */}
           <div className="bg-emerald-900/10 border border-emerald-500/30 p-4 rounded-xl glass-card">
             <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase mb-2">
-              <Rocket size={14} /> Vaisseau de Colonisation
+              <Rocket size={14} /> Vaisseau de Colonisation ({colonyShips} disponible{colonyShips > 1 ? 's' : ''})
             </div>
-            <p className="text-slate-400 text-xs">
+            <p className="text-slate-400 text-xs mb-3">
               Envoyez des ressources avec votre vaisseau pour démarrer votre nouvelle colonie avec plus de moyens.
             </p>
+            {currentPlanet && (
+              <div className="flex items-center gap-2 text-xs text-cyan-400 font-mono bg-black/30 p-2 rounded">
+                <Clock size={12} />
+                <span>Temps de vol: {hours > 0 && `${hours}h `}{minutes}m {seconds}s</span>
+                <span className="text-slate-500 ml-auto">Distance: {distance.toLocaleString()}</span>
+              </div>
+            )}
           </div>
 
           {/* Ressources de départ */}
@@ -202,9 +246,14 @@ export default function ColonizeModal({
             </Button>
             <Button
               onClick={handleSubmit}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-widest shadow-[0_0_20px_rgba(16,185,129,0.5)] card-depth hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 hover:scale-105"
+              disabled={!hasColonyShip}
+              className={`${
+                hasColonyShip
+                  ? 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)] hover:-translate-y-1 hover:shadow-2xl hover:scale-105'
+                  : 'bg-slate-700 cursor-not-allowed'
+              } text-white font-black uppercase tracking-widest card-depth transition-all duration-300`}
             >
-              Coloniser
+              {hasColonyShip ? 'Coloniser' : 'Vaisseau Requis'}
             </Button>
           </div>
         </div>

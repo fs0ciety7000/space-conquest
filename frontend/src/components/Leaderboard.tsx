@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe, UserCircle, Truck } from "lucide-react";
+import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe, UserCircle, Truck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
@@ -44,6 +44,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
     const [category, setCategory] = useState<'general' | 'economy' | 'military'>('general');
     const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
     const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+    const [selectedPlanet, setSelectedPlanet] = useState<PlanetInfo | null>(null);
 
     useEffect(() => {
         fetch(apiUrl(`/ranking?current_planet_id=${currentPlanetId}&type=${category}`))
@@ -216,7 +217,12 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                 <span className="text-slate-400 font-mono text-xs">↳ {planet.name}</span>
                                             </td>
                                             <td className="p-2 md:p-4 text-cyan-500 font-mono text-[10px] hidden sm:table-cell">
-                                                [{planet.galaxy}:{planet.system}:{planet.position}]
+                                                <button
+                                                    onClick={() => setSelectedPlanet(planet)}
+                                                    className="hover:text-cyan-300 hover:underline transition-colors"
+                                                >
+                                                    [{planet.galaxy}:{planet.system}:{planet.position}]
+                                                </button>
                                             </td>
                                             <td className="p-2 md:p-4 text-right">
                                                 <span className="font-mono text-xs text-slate-400">
@@ -281,10 +287,99 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
 
             {/* ✅ Modal Profil Joueur */}
             {selectedPlayer && (
-                <PlayerProfile 
-                    userId={selectedPlayer} 
-                    onClose={() => setSelectedPlayer(null)} 
+                <PlayerProfile
+                    userId={selectedPlayer}
+                    onClose={() => setSelectedPlayer(null)}
                 />
+            )}
+
+            {/* ✅ Modal Détails Planète */}
+            {selectedPlanet && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedPlanet(null)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-w-md w-full card-depth glass-card" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6 border-b border-white/10">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-bold text-white text-xl">{selectedPlanet.name}</h3>
+                                    <p className="text-sm text-slate-400 font-mono mt-1">
+                                        [{selectedPlanet.galaxy}:{selectedPlanet.system}:{selectedPlanet.position}]
+                                    </p>
+                                </div>
+                                <button onClick={() => setSelectedPlanet(null)} className="text-slate-500 hover:text-white transition-colors">
+                                    <X size={24} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="bg-slate-950/50 p-4 rounded-lg border border-white/5">
+                                <div className="grid grid-cols-3 gap-3 text-center">
+                                    <div>
+                                        <p className="text-xs text-slate-500 uppercase mb-1">Total</p>
+                                        <p className="text-lg font-bold text-yellow-400 font-mono">
+                                            {selectedPlanet.total_score.toLocaleString()}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-500 uppercase mb-1">Économie</p>
+                                        <p className="text-lg font-bold text-emerald-400 font-mono">
+                                            {selectedPlanet.economy_score.toLocaleString()}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-500 uppercase mb-1">Militaire</p>
+                                        <p className="text-lg font-bold text-red-400 font-mono">
+                                            {selectedPlanet.military_score.toLocaleString()}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                {ranking.find(p => p.planets.some(pl => pl.id === selectedPlanet.id))?.is_me ? (
+                                    <Button
+                                        onClick={() => {
+                                            onTransport(selectedPlanet.id, selectedPlanet.name, selectedPlanet.galaxy, selectedPlanet.system, selectedPlanet.position);
+                                            setSelectedPlanet(null);
+                                        }}
+                                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                                    >
+                                        <Truck className="mr-2" size={16} /> Ravitailler
+                                    </Button>
+                                ) : (
+                                    <>
+                                        <Button
+                                            onClick={() => {
+                                                onSpy(selectedPlanet.id);
+                                                setSelectedPlanet(null);
+                                            }}
+                                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold"
+                                        >
+                                            <Eye className="mr-2" size={16} /> Espionner
+                                        </Button>
+                                        <Button
+                                            onClick={() => {
+                                                onAttack(selectedPlanet.id, selectedPlanet.name);
+                                                setSelectedPlanet(null);
+                                            }}
+                                            className="w-full bg-red-600 hover:bg-red-500 text-white font-bold"
+                                        >
+                                            <Crosshair className="mr-2" size={16} /> Attaquer
+                                        </Button>
+                                        <Button
+                                            onClick={() => {
+                                                onTransport(selectedPlanet.id, selectedPlanet.name, selectedPlanet.galaxy, selectedPlanet.system, selectedPlanet.position);
+                                                setSelectedPlanet(null);
+                                            }}
+                                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                                        >
+                                            <Truck className="mr-2" size={16} /> Ravitailler
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );
