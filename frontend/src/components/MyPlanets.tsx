@@ -3,11 +3,12 @@ import {
   Globe, MapPin, Stone, Gem, Droplets, Zap, Rocket, Shield,
   ChevronRight, Star, Crown, TrendingUp, Activity, Clock,
   Warehouse, Target, Ship, Recycle, Satellite, Truck, RefreshCw,
-  AlertCircle, Wrench, Factory, Beaker
+  AlertCircle, Wrench, Factory, Beaker, ArrowUp, Plus, X
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
@@ -62,6 +63,9 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
   const [planets, setPlanets] = useState<Planet[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanet, setSelectedPlanet] = useState<Planet | null>(null);
+  const [shipProductionModal, setShipProductionModal] = useState<Planet | null>(null);
+  const [defenseProductionModal, setDefenseProductionModal] = useState<Planet | null>(null);
+  const [upgradingMine, setUpgradingMine] = useState<{planetId: string, type: string} | null>(null);
   const [config, setConfig] = useState<any>({
     production_metal_base: 30,
     production_crystal_base: 20,
@@ -254,6 +258,72 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
     });
   };
 
+  const handleUpgradeMine = async (planetId: string, mineType: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setUpgradingMine({planetId, type: mineType});
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/planets/${planetId}/upgrade/${mineType}`), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success(`Amélioration de ${mineType} lancée`);
+        await fetchPlanets();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Erreur lors de l\'amélioration');
+      }
+    } catch (error) {
+      console.error('Erreur upgrade:', error);
+      toast.error('Erreur de connexion');
+    } finally {
+      setUpgradingMine(null);
+    }
+  };
+
+  const handleBuildShips = async (planetId: string, shipKey: string, quantity: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/planets/${planetId}/build-ships/${shipKey}/${quantity}`), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success(`Production de ${quantity} ${shipKey} lancée`);
+        await fetchPlanets();
+        setShipProductionModal(null);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Erreur lors de la production');
+      }
+    } catch (error) {
+      console.error('Erreur production vaisseaux:', error);
+      toast.error('Erreur de connexion');
+    }
+  };
+
+  const handleBuildDefenses = async (planetId: string, defenseKey: string, quantity: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/planets/${planetId}/build-defenses/${defenseKey}/${quantity}`), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success(`Production de ${quantity} ${defenseKey} lancée`);
+        await fetchPlanets();
+        setDefenseProductionModal(null);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Erreur lors de la production');
+      }
+    } catch (error) {
+      console.error('Erreur production défenses:', error);
+      toast.error('Erreur de connexion');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 animate-pulse">
@@ -428,10 +498,18 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                 {/* Mines et Production */}
                 <div className="grid grid-cols-2 gap-2">
                   {/* Mine Métal */}
-                  <div className="bg-orange-900/20 border border-orange-500/30 p-2 rounded-lg">
+                  <div className="bg-orange-900/20 border border-orange-500/30 p-2 rounded-lg relative group">
                     <div className="flex items-center gap-2 mb-1">
                       <Stone size={12} className="text-orange-400 drop-shadow-[0_0_4px_currentColor]" />
                       <span className="text-[9px] uppercase text-slate-400 font-bold truncate">Mine Métal</span>
+                      <button
+                        onClick={(e) => handleUpgradeMine(planet.id, 'metal_mine', e)}
+                        disabled={upgradingMine?.planetId === planet.id && upgradingMine?.type === 'metal_mine'}
+                        className="ml-auto p-1 rounded bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-400 hover:text-orange-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Améliorer"
+                      >
+                        <ArrowUp size={10} />
+                      </button>
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm font-mono font-bold text-orange-400">{fmt(planet.metal_amount)}</span>
@@ -443,10 +521,18 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                   </div>
 
                   {/* Mine Cristal */}
-                  <div className="bg-cyan-900/20 border border-cyan-500/30 p-2 rounded-lg">
+                  <div className="bg-cyan-900/20 border border-cyan-500/30 p-2 rounded-lg relative group">
                     <div className="flex items-center gap-2 mb-1">
                       <Gem size={12} className="text-cyan-400 drop-shadow-[0_0_4px_currentColor]" />
                       <span className="text-[9px] uppercase text-slate-400 font-bold truncate">Mine Cristal</span>
+                      <button
+                        onClick={(e) => handleUpgradeMine(planet.id, 'crystal_mine', e)}
+                        disabled={upgradingMine?.planetId === planet.id && upgradingMine?.type === 'crystal_mine'}
+                        className="ml-auto p-1 rounded bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-400 hover:text-cyan-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Améliorer"
+                      >
+                        <ArrowUp size={10} />
+                      </button>
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm font-mono font-bold text-cyan-400">{fmt(planet.crystal_amount)}</span>
@@ -458,10 +544,18 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                   </div>
 
                   {/* Synth. Deutérium */}
-                  <div className="bg-green-900/20 border border-green-500/30 p-2 rounded-lg">
+                  <div className="bg-green-900/20 border border-green-500/30 p-2 rounded-lg relative group">
                     <div className="flex items-center gap-2 mb-1">
                       <Droplets size={12} className="text-green-400 drop-shadow-[0_0_4px_currentColor]" />
                       <span className="text-[9px] uppercase text-slate-400 font-bold truncate">Synth. Deutérium</span>
+                      <button
+                        onClick={(e) => handleUpgradeMine(planet.id, 'deuterium_mine', e)}
+                        disabled={upgradingMine?.planetId === planet.id && upgradingMine?.type === 'deuterium_mine'}
+                        className="ml-auto p-1 rounded bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-400 hover:text-green-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Améliorer"
+                      >
+                        <ArrowUp size={10} />
+                      </button>
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm font-mono font-bold text-green-400">{fmt(planet.deuterium_amount)}</span>
@@ -473,10 +567,18 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                   </div>
 
                   {/* Centrale Solaire */}
-                  <div className="bg-yellow-900/20 border border-yellow-500/30 p-2 rounded-lg">
+                  <div className="bg-yellow-900/20 border border-yellow-500/30 p-2 rounded-lg relative group">
                     <div className="flex items-center gap-2 mb-1">
                       <Zap size={12} className="text-yellow-400 drop-shadow-[0_0_4px_currentColor]" />
                       <span className="text-[9px] uppercase text-slate-400 font-bold truncate">Centrale Solaire</span>
+                      <button
+                        onClick={(e) => handleUpgradeMine(planet.id, 'solar_plant', e)}
+                        disabled={upgradingMine?.planetId === planet.id && upgradingMine?.type === 'solar_plant'}
+                        className="ml-auto p-1 rounded bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 hover:text-yellow-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Améliorer"
+                      >
+                        <ArrowUp size={10} />
+                      </button>
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm font-mono font-bold text-yellow-400">{fmt(planet.energy || 0)}</span>
@@ -541,10 +643,26 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                       </span>
                     </div>
                   </div>
-                  <Progress 
-                    value={(totalFleet / hangarCap) * 100} 
+                  <Progress
+                    value={(totalFleet / hangarCap) * 100}
                     className="w-24 h-2"
                   />
+                </div>
+
+                {/* Boutons de production rapide */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={(e) => { e.stopPropagation(); setShipProductionModal(planet); }}
+                    className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/50 text-blue-400 hover:text-blue-300 font-bold uppercase text-xs transition-all"
+                  >
+                    <Rocket size={12} className="mr-1" /> Produire Vaisseaux
+                  </Button>
+                  <Button
+                    onClick={(e) => { e.stopPropagation(); setDefenseProductionModal(planet); }}
+                    className="bg-red-600/20 hover:bg-red-600/30 border border-red-500/50 text-red-400 hover:text-red-300 font-bold uppercase text-xs transition-all"
+                  >
+                    <Shield size={12} className="mr-1" /> Produire Défenses
+                  </Button>
                 </div>
 
                 {/* Détails étendus */}
@@ -656,6 +774,264 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
           <p className="text-slate-500 text-sm mt-1">Commencez par coloniser une nouvelle planète</p>
         </Card>
       )}
+
+      {/* Modal Production de Vaisseaux */}
+      {shipProductionModal && (
+        <ShipProductionModal
+          planet={shipProductionModal}
+          onClose={() => setShipProductionModal(null)}
+          onBuild={handleBuildShips}
+        />
+      )}
+
+      {/* Modal Production de Défenses */}
+      {defenseProductionModal && (
+        <DefenseProductionModal
+          planet={defenseProductionModal}
+          onClose={() => setDefenseProductionModal(null)}
+          onBuild={handleBuildDefenses}
+        />
+      )}
+    </div>
+  );
+}
+
+// Modal de production de vaisseaux
+function ShipProductionModal({ planet, onClose, onBuild }: { planet: Planet; onClose: () => void; onBuild: (planetId: string, shipKey: string, quantity: number) => void }) {
+  const [selectedShip, setSelectedShip] = useState('');
+  const [quantity, setQuantity] = useState(1);
+
+  const ships = [
+    { label: "Chasseur Léger", key: 'light_hunter', Icon: Target, color: "text-red-400" },
+    { label: "Chasseur Lourd", key: 'heavy_hunter', Icon: Target, color: "text-red-500" },
+    { label: "Croiseur", key: 'cruiser', Icon: Ship, color: "text-purple-400" },
+    { label: "Vaisseau de Guerre", key: 'battleship', Icon: Ship, color: "text-purple-500" },
+    { label: "Destructeur", key: 'destroyer', Icon: Rocket, color: "text-red-600" },
+    { label: "Bombardier", key: 'bomber', Icon: Rocket, color: "text-orange-500" },
+    { label: "Étoile de la Mort", key: 'deathstar', Icon: Star, color: "text-slate-200" },
+    { label: "Recycleur", key: 'recycler', Icon: Recycle, color: "text-green-400" },
+    { label: "Sonde d'Espionnage", key: 'spy_probe', Icon: Satellite, color: "text-cyan-400" },
+    { label: "Vaisseau de Colonisation", key: 'colony_ship', Icon: Globe, color: "text-emerald-400" },
+    { label: "Transporteur", key: 'transporter', Icon: Truck, color: "text-amber-400" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl bg-slate-950 border-2 border-blue-500/40 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(59,130,246,0.3)] card-depth glass-card animate-slide-up max-h-[90vh] overflow-y-auto">
+
+        {/* Header */}
+        <div className="bg-blue-950/50 p-6 border-b border-blue-500/20 flex justify-between items-center sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-600 rounded-lg animate-pulse">
+              <Rocket className="text-white" size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black uppercase text-white tracking-widest">Production de Vaisseaux</h2>
+              <p className="text-xs text-blue-400 font-mono">{planet.name} - [{planet.galaxy}:{planet.system}:{planet.position}]</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-blue-400 hover:text-white transition-all duration-300 hover:scale-110 card-depth hover:shadow-lg hover:-translate-y-0.5">
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* Corps */}
+        <div className="p-6 space-y-4">
+          {/* Sélection du vaisseau */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {ships.map(ship => {
+              const ShipIcon = ship.Icon;
+              const count = getShipCount(planet, ship.key);
+              return (
+                <button
+                  key={ship.key}
+                  onClick={() => setSelectedShip(ship.key)}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    selectedShip === ship.key
+                      ? 'border-blue-500 bg-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+                      : 'border-white/10 bg-slate-900/50 hover:border-blue-500/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <ShipIcon size={16} className={ship.color} />
+                    <span className="text-xs font-bold text-white truncate">{ship.label}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">Possédés: <span className="text-white font-mono">{count || 0}</span></p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quantité */}
+          {selectedShip && (
+            <div className="bg-slate-900/50 border border-white/10 p-4 rounded-xl space-y-3 animate-in slide-in-from-top duration-200">
+              <div className="flex justify-between text-sm uppercase font-bold text-slate-400">
+                <span>Quantité à produire</span>
+                <span className="text-white">{quantity}</span>
+              </div>
+              <div className="flex gap-4 items-center">
+                <Input
+                  type="range"
+                  min="1"
+                  max="100"
+                  value={quantity}
+                  onChange={(e) => setQuantity(parseInt(e.target.value))}
+                  className="flex-1 h-2 bg-slate-800 accent-blue-500 cursor-pointer"
+                />
+                <Input
+                  type="number"
+                  min="1"
+                  max="10000"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-24 bg-black border-blue-900/50 text-white text-right font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="grid grid-cols-2 gap-4 pt-4">
+            <Button
+              onClick={onClose}
+              className="bg-transparent border border-white/10 hover:bg-white/5 text-slate-400 font-bold uppercase card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={() => selectedShip && onBuild(planet.id, selectedShip, quantity)}
+              disabled={!selectedShip}
+              className={`${
+                selectedShip
+                  ? 'bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)] hover:-translate-y-1 hover:shadow-2xl hover:scale-105'
+                  : 'bg-slate-700 cursor-not-allowed'
+              } text-white font-black uppercase tracking-widest card-depth transition-all duration-300`}
+            >
+              <Rocket size={16} className="mr-2" />
+              {selectedShip ? 'Lancer Production' : 'Sélectionner Vaisseau'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal de production de défenses
+function DefenseProductionModal({ planet, onClose, onBuild }: { planet: Planet; onClose: () => void; onBuild: (planetId: string, defenseKey: string, quantity: number) => void }) {
+  const [selectedDefense, setSelectedDefense] = useState('');
+  const [quantity, setQuantity] = useState(1);
+
+  const defenses = [
+    { label: "Lance-roquettes", key: 'missile_launcher', color: "text-orange-400" },
+    { label: "Laser Léger", key: 'light_laser', color: "text-blue-400" },
+    { label: "Laser Lourd", key: 'heavy_laser', color: "text-blue-500" },
+    { label: "Canon de Gauss", key: 'gauss_cannon', color: "text-indigo-400" },
+    { label: "Canon à Ions", key: 'ion_cannon', color: "text-purple-400" },
+    { label: "Tourelle à Plasma", key: 'plasma_turret', color: "text-red-400" },
+    { label: "Petit Bouclier", key: 'small_shield', color: "text-cyan-400" },
+    { label: "Grand Bouclier", key: 'large_shield', color: "text-cyan-500" },
+    { label: "Missile Anti-Balistique", key: 'antiballistic_missile', color: "text-yellow-400" },
+    { label: "Missile Interplanétaire", key: 'interplanetary_missile', color: "text-red-500" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl bg-slate-950 border-2 border-red-500/40 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.3)] card-depth glass-card animate-slide-up max-h-[90vh] overflow-y-auto">
+
+        {/* Header */}
+        <div className="bg-red-950/50 p-6 border-b border-red-500/20 flex justify-between items-center sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-600 rounded-lg animate-pulse">
+              <Shield className="text-white" size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black uppercase text-white tracking-widest">Production de Défenses</h2>
+              <p className="text-xs text-red-400 font-mono">{planet.name} - [{planet.galaxy}:{planet.system}:{planet.position}]</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-red-400 hover:text-white transition-all duration-300 hover:scale-110 card-depth hover:shadow-lg hover:-translate-y-0.5">
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* Corps */}
+        <div className="p-6 space-y-4">
+          {/* Sélection de la défense */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {defenses.map(defense => {
+              const count = getShipCount(planet, defense.key);
+              return (
+                <button
+                  key={defense.key}
+                  onClick={() => setSelectedDefense(defense.key)}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    selectedDefense === defense.key
+                      ? 'border-red-500 bg-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                      : 'border-white/10 bg-slate-900/50 hover:border-red-500/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield size={16} className={defense.color} />
+                    <span className="text-xs font-bold text-white truncate">{defense.label}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">Installées: <span className="text-white font-mono">{count || 0}</span></p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quantité */}
+          {selectedDefense && (
+            <div className="bg-slate-900/50 border border-white/10 p-4 rounded-xl space-y-3 animate-in slide-in-from-top duration-200">
+              <div className="flex justify-between text-sm uppercase font-bold text-slate-400">
+                <span>Quantité à produire</span>
+                <span className="text-white">{quantity}</span>
+              </div>
+              <div className="flex gap-4 items-center">
+                <Input
+                  type="range"
+                  min="1"
+                  max="100"
+                  value={quantity}
+                  onChange={(e) => setQuantity(parseInt(e.target.value))}
+                  className="flex-1 h-2 bg-slate-800 accent-red-500 cursor-pointer"
+                />
+                <Input
+                  type="number"
+                  min="1"
+                  max="10000"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-24 bg-black border-red-900/50 text-white text-right font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="grid grid-cols-2 gap-4 pt-4">
+            <Button
+              onClick={onClose}
+              className="bg-transparent border border-white/10 hover:bg-white/5 text-slate-400 font-bold uppercase card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={() => selectedDefense && onBuild(planet.id, selectedDefense, quantity)}
+              disabled={!selectedDefense}
+              className={`${
+                selectedDefense
+                  ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] hover:-translate-y-1 hover:shadow-2xl hover:scale-105'
+                  : 'bg-slate-700 cursor-not-allowed'
+              } text-white font-black uppercase tracking-widest card-depth transition-all duration-300`}
+            >
+              <Shield size={16} className="mr-2" />
+              {selectedDefense ? 'Lancer Production' : 'Sélectionner Défense'}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
