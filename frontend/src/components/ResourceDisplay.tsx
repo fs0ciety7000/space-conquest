@@ -426,15 +426,15 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
               {/* BOUTON D'ACTION (Logique Multi-files + Design Riche Swipe) */}
               <div className="mt-auto">
-                <Button 
+                <Button
                   onClick={() => handleUpgrade(build.id)}
-                  disabled={(isQueueFull && !activeItem) || !canAfford}
+                  disabled={!!activeItem || isQueueFull || !canAfford}
                   className={`w-full h-10 font-black uppercase text-[10px] tracking-[0.2em] transition-all rounded-lg relative overflow-hidden group/btn ${
                     activeItem
-                      ? 'bg-slate-900 text-slate-300 border border-indigo-500/50' 
-                      : isQueueFull 
-                        ? 'bg-slate-900 text-slate-500 border border-white/5' 
-                        : !canAfford 
+                      ? 'bg-slate-900 text-slate-300 border border-indigo-500/50'
+                      : isQueueFull
+                        ? 'bg-slate-900 text-slate-500 border border-white/5'
+                        : !canAfford
                             ? 'bg-red-950/20 text-red-500 border border-red-900/30 cursor-not-allowed'
                             : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow}`
                   }`}

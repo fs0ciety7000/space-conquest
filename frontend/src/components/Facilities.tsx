@@ -311,7 +311,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
 
               <Button
                 onClick={() => handleUpgrade(building.building_key)}
-                disabled={locked || (isQueueFull && !activeItem) || !canAfford}
+                disabled={locked || !!activeItem || isQueueFull || !canAfford}
                 className={`w-full font-black uppercase tracking-widest transition-all duration-500 ${
                     activeItem
                         ? 'bg-indigo-900/50 border border-indigo-500 text-indigo-300 animate-pulse'
