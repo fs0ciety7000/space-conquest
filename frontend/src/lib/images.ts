@@ -58,8 +58,20 @@ export const getResourceImage = (resourceType: string): string => {
  */
 export const getDefenseImage = (defenseType: string): string => {
   const images: Record<string, string> = {
-    missile_launcher: '/images/defenses/defense-missile-launcher.webp',
+    // Weapons
+    rocket_launcher: '/images/defenses/defense-missile-launcher.webp', // Database uses rocket_launcher
+    missile_launcher: '/images/defenses/defense-missile-launcher.webp', // Legacy compatibility
+    light_laser: '/images/defenses/defense-light-laser.webp',
+    heavy_laser: '/images/defenses/defense-heavy-laser.webp',
+    gauss_cannon: '/images/defenses/defense-gauss-cannon.webp',
+    ion_cannon: '/images/defenses/defense-ion-cannon.webp',
     plasma_turret: '/images/defenses/defense-plasma-turret.webp',
+    // Shields
+    small_shield: '/images/defenses/defense-small-shield.webp',
+    large_shield: '/images/defenses/defense-large-shield.webp',
+    // Missiles
+    antiballistic_missile: '/images/defenses/defense-antiballistic-missile.webp',
+    interplanetary_missile: '/images/defenses/defense-interplanetary-missile.webp',
   };
 
   return images[defenseType] || '/images/misc/placeholder.svg';
