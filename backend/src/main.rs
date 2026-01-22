@@ -1593,6 +1593,11 @@ async fn get_planet_handler(
         if let Ok(ship_details) = tech_tree::get_all_planet_ship_details(&state.db, updated_model.id).await {
             obj.insert("ships".into(), json!(ship_details));
         }
+
+        // Use detailed defense info for frontend display (includes count, name, stats)
+        if let Ok(defense_details) = tech_tree::get_all_planet_defense_details(&state.db, updated_model.id).await {
+            obj.insert("defenses".into(), json!(defense_details));
+        }
     }
 
     Ok(Json(json_response))
