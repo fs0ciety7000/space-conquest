@@ -355,7 +355,7 @@ pub async fn get_tech_tree_for_planet(
 }
 
 /// Get requirements for a specific tech
-async fn get_tech_requirements(
+pub async fn get_tech_requirements(
     db: &DatabaseConnection,
     tech_id: i32,
     planet_id: Uuid,
@@ -490,6 +490,36 @@ pub async fn get_all_planet_ship_details(
     Ok(result)
 }
 
+/// Get all defenses for a planet with detailed information
+pub async fn get_all_planet_defense_details(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> Result<HashMap<String, serde_json::Value>, sea_orm::DbErr> {
+    let planet_defenses = PlanetDefense::find()
+        .filter(planet_defense::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await?;
+
+    let mut result = HashMap::new();
+
+    for pd in planet_defenses {
+        // Get defense_key and display_name from defense_type_id
+        if let Some(defense_type) = DefenseType::find_by_id(pd.defense_type_id).one(db).await? {
+            result.insert(
+                defense_type.defense_key.clone(),
+                serde_json::json!({
+                    "count": pd.count,
+                    "name": defense_type.name,
+                    "attack": defense_type.attack,
+                    "shield": defense_type.shield
+                })
+            );
+        }
+    }
+
+    Ok(result)
+}
+
 /// Get all ship types with their requirements for a planet
 pub async fn get_ship_types_for_planet(
     db: &DatabaseConnection,
@@ -533,7 +563,7 @@ pub async fn get_ship_types_for_planet(
 }
 
 /// Get requirements for a specific ship
-async fn get_ship_requirements(
+pub async fn get_ship_requirements(
     db: &DatabaseConnection,
     ship_type_id: i32,
     planet_id: Uuid,
@@ -851,7 +881,7 @@ pub async fn get_defense_types_for_planet(
 }
 
 /// Get requirements for a specific defense
-async fn get_defense_requirements(
+pub async fn get_defense_requirements(
     db: &DatabaseConnection,
     defense_type_id: i32,
     planet_id: Uuid,
