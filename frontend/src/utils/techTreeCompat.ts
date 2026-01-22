@@ -141,7 +141,9 @@ export function getShipCount(planet: Planet | null | undefined, shipKey: string)
     'transporter': 'transporter_count',
     'colony_ship': 'colony_ship_count',
     'recycler': 'recycler_count',
-    'missile_launcher': 'missile_launcher_count',
+    // Defenses (note: rocket_launcher is the defense_key, missile_launcher_count is the legacy column)
+    'rocket_launcher': 'missile_launcher_count',
+    'missile_launcher': 'missile_launcher_count', // Deprecated, use rocket_launcher
     'light_laser': 'light_laser_count',
     'heavy_laser': 'heavy_laser_count',
     'gauss_cannon': 'gauss_cannon_count',

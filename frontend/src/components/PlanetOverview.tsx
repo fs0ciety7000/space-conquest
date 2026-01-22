@@ -60,7 +60,7 @@ const getLabel = (id: string | null) => {
         destroyer: "Destructeur",
         death_star: "Étoile de la Mort",
         // Defenses
-        missile_launcher: "Lanceur Missiles",
+        rocket_launcher: "Lanceur Missiles",
         plasma_turret: "Tourelle Plasma",
         laser_cannon: "Canon Laser",
         ion_cannon: "Canon à Ions",
@@ -71,7 +71,7 @@ const getLabel = (id: string | null) => {
 
 const getItemType = (id: string) => {
     if (['light_hunter', 'cruiser', 'colony_ship', 'transporter', 'recycler', 'spy_probe', 'battleship', 'destroyer', 'death_star'].includes(id)) return 'fleet';
-    if (['missile_launcher', 'light_laser', 'heavy_laser', 'gauss_cannon', 'ion_cannon', 'plasma_turret', 'small_shield', 'large_shield', 'antiballistic_missile', 'interplanetary_missile'].includes(id)) return 'defense';
+    if (['rocket_launcher', 'light_laser', 'heavy_laser', 'gauss_cannon', 'ion_cannon', 'plasma_turret', 'small_shield', 'large_shield', 'antiballistic_missile', 'interplanetary_missile'].includes(id)) return 'defense';
     if (['research', 'energy_tech', 'laser', 'espionage', 'armour', 'laser_tech', 'armour_tech', 'espionage_tech', 'ion_tech', 'plasma_tech', 'shield_tech', 'weapons_tech', 'computer_tech', 'astrophysics', 'combustion_drive', 'impulse_drive', 'hyperspace_drive'].includes(id)) return 'tech';
     return 'building';
 };
@@ -264,21 +264,21 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const totalAtk = (
     (getShipCount(planet, 'light_hunter') * 50) +
     (getShipCount(planet, 'cruiser') * 400) +
-    (getShipCount(planet, 'missile_launcher') * 80) +
+    (getShipCount(planet, 'rocket_launcher') * 80) +
     (getShipCount(planet, 'plasma_turret') * 3000)
   ) * atkBonus;
 
   const totalHull = (
     (getShipCount(planet, 'light_hunter') * 400) +
     (getShipCount(planet, 'cruiser') * 2700) +
-    (getShipCount(planet, 'missile_launcher') * 200) +
+    (getShipCount(planet, 'rocket_launcher') * 200) +
     (getShipCount(planet, 'plasma_turret') * 10000)
   ) * hullBonus;
 
   const totalFleet = getTotalFleetCount(planet);
   const hangarCap = 500 + ((planet.hangar_level || 0) * 500);
   const totalDefense =
-    (getShipCount(planet, 'missile_launcher') || 0) +
+    (getShipCount(planet, 'rocket_launcher') || 0) +
     (getShipCount(planet, 'light_laser') || 0) +
     (getShipCount(planet, 'heavy_laser') || 0) +
     (getShipCount(planet, 'gauss_cannon') || 0) +
@@ -906,7 +906,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       <div className="bg-black/30 rounded-lg p-2.5 border border-red-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
                           <span className="text-red-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]">
-                              {fmt(getShipCount(planet, 'missile_launcher') * 80 + getShipCount(planet, 'plasma_turret') * 3000)}
+                              {fmt(getShipCount(planet, 'rocket_launcher') * 80 + getShipCount(planet, 'plasma_turret') * 3000)}
                           </span>
                       </div>
                   </div>
@@ -992,7 +992,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       <div className="bg-black/30 rounded-lg p-2.5 border border-emerald-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
                           <span className="text-emerald-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]">
-                              {fmt(getShipCount(planet, 'missile_launcher') * 200 + getShipCount(planet, 'plasma_turret') * 10000)}
+                              {fmt(getShipCount(planet, 'rocket_launcher') * 200 + getShipCount(planet, 'plasma_turret') * 10000)}
                           </span>
                       </div>
                   </div>
@@ -1363,10 +1363,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             {/* Lance-Roquettes */}
-                            {getShipCount(planet, 'missile_launcher') > 0 && (
+                            {getShipCount(planet, 'rocket_launcher') > 0 && (
                                 <div className="bg-slate-900/50 rounded-lg p-2 border border-orange-500/20">
                                     <div className="text-[8px] text-orange-400 uppercase font-bold mb-1">🚀 Lance-Roquettes</div>
-                                    <div className="text-lg font-mono font-black text-orange-400">{fmt(getShipCount(planet, 'missile_launcher'))}</div>
+                                    <div className="text-lg font-mono font-black text-orange-400">{fmt(getShipCount(planet, 'rocket_launcher'))}</div>
                                 </div>
                             )}
 
@@ -1463,7 +1463,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             <span className="text-[8px] text-slate-600 uppercase block">Dégâts/Round</span>
                             <span className="text-red-400 font-mono text-xs font-bold">
                                 {fmt(
-                                    (getShipCount(planet, 'missile_launcher') || 0) * 80 +
+                                    (getShipCount(planet, 'rocket_launcher') || 0) * 80 +
                                     (getShipCount(planet, 'light_laser') || 0) * 100 +
                                     (getShipCount(planet, 'heavy_laser') || 0) * 250 +
                                     (getShipCount(planet, 'gauss_cannon') || 0) * 1100 +
@@ -1480,7 +1480,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             <span className="text-[8px] text-slate-600 uppercase block">Boucliers</span>
                             <span className="text-cyan-400 font-mono text-xs font-bold">
                                 {fmt(
-                                    (getShipCount(planet, 'missile_launcher') || 0) * 20 +
+                                    (getShipCount(planet, 'rocket_launcher') || 0) * 20 +
                                     (getShipCount(planet, 'light_laser') || 0) * 25 +
                                     (getShipCount(planet, 'heavy_laser') || 0) * 100 +
                                     (getShipCount(planet, 'gauss_cannon') || 0) * 200 +
@@ -1497,7 +1497,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             <span className="text-[8px] text-slate-600 uppercase block">Points Coque</span>
                             <span className="text-emerald-400 font-mono text-xs font-bold">
                                 {fmt(
-                                    (getShipCount(planet, 'missile_launcher') || 0) * 200 +
+                                    (getShipCount(planet, 'rocket_launcher') || 0) * 200 +
                                     (getShipCount(planet, 'light_laser') || 0) * 100 +
                                     (getShipCount(planet, 'heavy_laser') || 0) * 800 +
                                     (getShipCount(planet, 'gauss_cannon') || 0) * 3500 +

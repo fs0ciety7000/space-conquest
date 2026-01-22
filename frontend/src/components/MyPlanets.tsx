@@ -35,7 +35,7 @@ interface Planet {
   spy_probe_count: number;
   colony_ship_count: number;
   transporter_count: number;
-  missile_launcher_count: number;
+  rocket_launcher_count: number;
   plasma_turret_count: number;
   energy_tech_level: number;
   is_current?: boolean;
@@ -131,7 +131,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
             spy_probe_count: getShipCount(p, 'spy_probe') ?? 0,
             colony_ship_count: getShipCount(p, 'colony_ship'),
             transporter_count: getShipCount(p, 'transporter'),
-            missile_launcher_count: getShipCount(p, 'missile_launcher'),
+            rocket_launcher_count: getShipCount(p, 'rocket_launcher'),
             plasma_turret_count: getShipCount(p, 'plasma_turret'),
             energy_tech_level: getTechLevel(p, 'energy_tech'),
           }));
@@ -249,7 +249,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
     (getShipCount(p, 'colony_ship') || 0) + (getShipCount(p, 'transporter') || 0);
 
   const getTotalDefense = (p: Planet) =>
-    (getShipCount(p, 'missile_launcher') || 0) + (getShipCount(p, 'plasma_turret') || 0) +
+    (getShipCount(p, 'rocket_launcher') || 0) + (getShipCount(p, 'plasma_turret') || 0) +
     (getShipCount(p, 'light_laser') || 0) + (getShipCount(p, 'heavy_laser') || 0) +
     (getShipCount(p, 'gauss_cannon') || 0) + (getShipCount(p, 'ion_cannon') || 0) +
     (getShipCount(p, 'small_shield') || 0) + (getShipCount(p, 'large_shield') || 0);
@@ -723,7 +723,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { label: "Lance-roquettes", key: 'missile_launcher', color: "text-orange-400" },
+                        { label: "Lance-roquettes", key: 'rocket_launcher', color: "text-orange-400" },
                         { label: "Laser Léger", key: 'light_laser', color: "text-blue-400" },
                         { label: "Laser Lourd", key: 'heavy_laser', color: "text-blue-500" },
                         { label: "Canon Gauss", key: 'gauss_cannon', color: "text-indigo-400" },
@@ -941,7 +941,7 @@ function DefenseProductionModal({ planet, onClose, onBuild }: { planet: Planet; 
   const [quantity, setQuantity] = useState(1);
 
   const defenses = [
-    { label: "Lance-roquettes", key: 'missile_launcher', color: "text-orange-400" },
+    { label: "Lance-roquettes", key: 'rocket_launcher', color: "text-orange-400" },
     { label: "Laser Léger", key: 'light_laser', color: "text-blue-400" },
     { label: "Laser Lourd", key: 'heavy_laser', color: "text-blue-500" },
     { label: "Canon de Gauss", key: 'gauss_cannon', color: "text-indigo-400" },
