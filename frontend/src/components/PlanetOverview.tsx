@@ -71,7 +71,7 @@ const getLabel = (id: string | null) => {
 
 const getItemType = (id: string) => {
     if (['light_hunter', 'cruiser', 'colony_ship', 'transporter', 'recycler', 'spy_probe', 'battleship', 'destroyer', 'death_star'].includes(id)) return 'fleet';
-    if (['missile_launcher', 'plasma_turret', 'laser_cannon', 'ion_cannon', 'gauss_cannon'].includes(id)) return 'defense';
+    if (['missile_launcher', 'light_laser', 'heavy_laser', 'gauss_cannon', 'ion_cannon', 'plasma_turret', 'small_shield', 'large_shield', 'antiballistic_missile', 'interplanetary_missile'].includes(id)) return 'defense';
     if (['research', 'energy_tech', 'laser', 'espionage', 'armour', 'laser_tech', 'armour_tech', 'espionage_tech', 'ion_tech', 'plasma_tech', 'shield_tech', 'weapons_tech', 'computer_tech', 'astrophysics', 'combustion_drive', 'impulse_drive', 'hyperspace_drive'].includes(id)) return 'tech';
     return 'building';
 };
@@ -277,7 +277,17 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
   const totalFleet = getTotalFleetCount(planet);
   const hangarCap = 500 + ((planet.hangar_level || 0) * 500);
-  const totalDefense = (planet.missile_launcher_count || 0) + (planet.plasma_turret_count || 0);
+  const totalDefense =
+    (getShipCount(planet, 'missile_launcher') || 0) +
+    (getShipCount(planet, 'light_laser') || 0) +
+    (getShipCount(planet, 'heavy_laser') || 0) +
+    (getShipCount(planet, 'gauss_cannon') || 0) +
+    (getShipCount(planet, 'ion_cannon') || 0) +
+    (getShipCount(planet, 'plasma_turret') || 0) +
+    (getShipCount(planet, 'small_shield') || 0) +
+    (getShipCount(planet, 'large_shield') || 0) +
+    (getShipCount(planet, 'antiballistic_missile') || 0) +
+    (getShipCount(planet, 'interplanetary_missile') || 0);
 
   const fmt = (n: number) => Math.floor(n).toLocaleString();
 
@@ -1346,65 +1356,91 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Systèmes de Défense Actifs</div>
                     </div>
 
-                    {/* Barres comparatives style voltmètre */}
+                    {/* Grille des systèmes de défense */}
                     <div className="bg-black/40 rounded-xl p-4 border border-white/10">
                         <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold flex items-center gap-2">
-                            <Activity size={10} className="text-red-400" /> Puissance Défensive
+                            <Activity size={10} className="text-red-400" /> Arsenal Défensif
                         </div>
-                        <div className="flex items-end justify-center gap-8 h-24">
-                            {/* Barre Missiles */}
-                            <div className="flex flex-col items-center gap-2">
-                                <div className="relative w-10 h-20 bg-slate-900 rounded-lg border border-white/10 overflow-hidden">
-                                    <div className="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-30">
-                                        {[...Array(5)].map((_, i) => (
-                                            <div key={i} className="h-px bg-white/50 w-full"></div>
-                                        ))}
-                                    </div>
-                                    <div
-                                        className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-orange-600 via-orange-400 to-yellow-400 transition-all duration-700 rounded-b-md"
-                                        style={{ height: `${Math.min(100, (planet.missile_launcher_count || 0) * 2)}%` }}
-                                    >
-                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                                    </div>
-                                    <div className="absolute -inset-1 bg-orange-500/20 blur-md -z-10 rounded-lg"></div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {/* Lance-Roquettes */}
+                            {getShipCount(planet, 'missile_launcher') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-orange-500/20">
+                                    <div className="text-[8px] text-orange-400 uppercase font-bold mb-1">🚀 Lance-Roquettes</div>
+                                    <div className="text-lg font-mono font-black text-orange-400">{fmt(getShipCount(planet, 'missile_launcher'))}</div>
                                 </div>
-                                <div className="text-center">
-                                    <span className="text-2xl mb-0.5">🚀</span>
-                                    <span className="text-orange-400 font-mono text-sm font-bold block">{fmt(planet.missile_launcher_count || 0)}</span>
-                                    <span className="text-[8px] text-slate-600 uppercase">Missiles</span>
-                                </div>
-                            </div>
+                            )}
 
-                            {/* Indicateur central */}
-                            <div className="flex flex-col items-center justify-center h-20">
-                                <div className={`text-3xl ${totalDefense > 0 ? 'animate-pulse' : ''}`}>🛡️</div>
-                                <div className="text-xs font-mono font-bold text-slate-400 mt-1">
-                                    DEF
+                            {/* Laser Léger */}
+                            {getShipCount(planet, 'light_laser') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-blue-500/20">
+                                    <div className="text-[8px] text-blue-400 uppercase font-bold mb-1">💠 Laser Léger</div>
+                                    <div className="text-lg font-mono font-black text-blue-400">{fmt(getShipCount(planet, 'light_laser'))}</div>
                                 </div>
-                            </div>
+                            )}
 
-                            {/* Barre Plasma */}
-                            <div className="flex flex-col items-center gap-2">
-                                <div className="relative w-10 h-20 bg-slate-900 rounded-lg border border-white/10 overflow-hidden">
-                                    <div className="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-30">
-                                        {[...Array(5)].map((_, i) => (
-                                            <div key={i} className="h-px bg-white/50 w-full"></div>
-                                        ))}
-                                    </div>
-                                    <div
-                                        className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-purple-600 via-purple-400 to-pink-400 transition-all duration-700 rounded-b-md"
-                                        style={{ height: `${Math.min(100, (planet.plasma_turret_count || 0) * 5)}%` }}
-                                    >
-                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                                    </div>
-                                    <div className="absolute -inset-1 bg-purple-500/20 blur-md -z-10 rounded-lg"></div>
+                            {/* Laser Lourd */}
+                            {getShipCount(planet, 'heavy_laser') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-blue-600/20">
+                                    <div className="text-[8px] text-blue-500 uppercase font-bold mb-1">⚡ Laser Lourd</div>
+                                    <div className="text-lg font-mono font-black text-blue-500">{fmt(getShipCount(planet, 'heavy_laser'))}</div>
                                 </div>
-                                <div className="text-center">
-                                    <span className="text-2xl mb-0.5">⚡</span>
-                                    <span className="text-purple-400 font-mono text-sm font-bold block">{fmt(planet.plasma_turret_count || 0)}</span>
-                                    <span className="text-[8px] text-slate-600 uppercase">Plasma</span>
+                            )}
+
+                            {/* Canon de Gauss */}
+                            {getShipCount(planet, 'gauss_cannon') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-indigo-500/20">
+                                    <div className="text-[8px] text-indigo-400 uppercase font-bold mb-1">🔫 Canon Gauss</div>
+                                    <div className="text-lg font-mono font-black text-indigo-400">{fmt(getShipCount(planet, 'gauss_cannon'))}</div>
                                 </div>
-                            </div>
+                            )}
+
+                            {/* Canon à Ions */}
+                            {getShipCount(planet, 'ion_cannon') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-purple-500/20">
+                                    <div className="text-[8px] text-purple-400 uppercase font-bold mb-1">⚛️ Canon Ions</div>
+                                    <div className="text-lg font-mono font-black text-purple-400">{fmt(getShipCount(planet, 'ion_cannon'))}</div>
+                                </div>
+                            )}
+
+                            {/* Tourelle Plasma */}
+                            {getShipCount(planet, 'plasma_turret') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-pink-500/20">
+                                    <div className="text-[8px] text-pink-400 uppercase font-bold mb-1">🌟 Tourelle Plasma</div>
+                                    <div className="text-lg font-mono font-black text-pink-400">{fmt(getShipCount(planet, 'plasma_turret'))}</div>
+                                </div>
+                            )}
+
+                            {/* Petit Bouclier */}
+                            {getShipCount(planet, 'small_shield') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-cyan-500/20">
+                                    <div className="text-[8px] text-cyan-400 uppercase font-bold mb-1">🛡️ Petit Bouclier</div>
+                                    <div className="text-lg font-mono font-black text-cyan-400">{fmt(getShipCount(planet, 'small_shield'))}</div>
+                                </div>
+                            )}
+
+                            {/* Grand Bouclier */}
+                            {getShipCount(planet, 'large_shield') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-cyan-600/20">
+                                    <div className="text-[8px] text-cyan-500 uppercase font-bold mb-1">🛡️ Grand Bouclier</div>
+                                    <div className="text-lg font-mono font-black text-cyan-500">{fmt(getShipCount(planet, 'large_shield'))}</div>
+                                </div>
+                            )}
+
+                            {/* Missile Anti-Balistique */}
+                            {getShipCount(planet, 'antiballistic_missile') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-yellow-500/20">
+                                    <div className="text-[8px] text-yellow-400 uppercase font-bold mb-1">🎯 Anti-Missile</div>
+                                    <div className="text-lg font-mono font-black text-yellow-400">{fmt(getShipCount(planet, 'antiballistic_missile'))}</div>
+                                </div>
+                            )}
+
+                            {/* Missile Interplanétaire */}
+                            {getShipCount(planet, 'interplanetary_missile') > 0 && (
+                                <div className="bg-slate-900/50 rounded-lg p-2 border border-red-500/20">
+                                    <div className="text-[8px] text-red-400 uppercase font-bold mb-1">🚀 Missile IP</div>
+                                    <div className="text-lg font-mono font-black text-red-400">{fmt(getShipCount(planet, 'interplanetary_missile'))}</div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -1422,17 +1458,56 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     )}
 
                     {/* Stats de puissance en bas */}
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5">
                         <div className="text-center bg-black/30 rounded-lg p-2">
                             <span className="text-[8px] text-slate-600 uppercase block">Dégâts/Round</span>
-                            <span className="text-red-400 font-mono text-sm font-bold">
-                                {fmt((planet.missile_launcher_count || 0) * 80 + (planet.plasma_turret_count || 0) * 3000)}
+                            <span className="text-red-400 font-mono text-xs font-bold">
+                                {fmt(
+                                    (getShipCount(planet, 'missile_launcher') || 0) * 80 +
+                                    (getShipCount(planet, 'light_laser') || 0) * 100 +
+                                    (getShipCount(planet, 'heavy_laser') || 0) * 250 +
+                                    (getShipCount(planet, 'gauss_cannon') || 0) * 1100 +
+                                    (getShipCount(planet, 'ion_cannon') || 0) * 150 +
+                                    (getShipCount(planet, 'plasma_turret') || 0) * 3000 +
+                                    (getShipCount(planet, 'small_shield') || 0) * 1 +
+                                    (getShipCount(planet, 'large_shield') || 0) * 1 +
+                                    (getShipCount(planet, 'antiballistic_missile') || 0) * 1 +
+                                    (getShipCount(planet, 'interplanetary_missile') || 0) * 12000
+                                )}
+                            </span>
+                        </div>
+                        <div className="text-center bg-black/30 rounded-lg p-2">
+                            <span className="text-[8px] text-slate-600 uppercase block">Boucliers</span>
+                            <span className="text-cyan-400 font-mono text-xs font-bold">
+                                {fmt(
+                                    (getShipCount(planet, 'missile_launcher') || 0) * 20 +
+                                    (getShipCount(planet, 'light_laser') || 0) * 25 +
+                                    (getShipCount(planet, 'heavy_laser') || 0) * 100 +
+                                    (getShipCount(planet, 'gauss_cannon') || 0) * 200 +
+                                    (getShipCount(planet, 'ion_cannon') || 0) * 500 +
+                                    (getShipCount(planet, 'plasma_turret') || 0) * 300 +
+                                    (getShipCount(planet, 'small_shield') || 0) * 2000 +
+                                    (getShipCount(planet, 'large_shield') || 0) * 10000 +
+                                    (getShipCount(planet, 'antiballistic_missile') || 0) * 1 +
+                                    (getShipCount(planet, 'interplanetary_missile') || 0) * 1
+                                )}
                             </span>
                         </div>
                         <div className="text-center bg-black/30 rounded-lg p-2">
                             <span className="text-[8px] text-slate-600 uppercase block">Points Coque</span>
-                            <span className="text-emerald-400 font-mono text-sm font-bold">
-                                {fmt((planet.missile_launcher_count || 0) * 200 + (planet.plasma_turret_count || 0) * 10000)}
+                            <span className="text-emerald-400 font-mono text-xs font-bold">
+                                {fmt(
+                                    (getShipCount(planet, 'missile_launcher') || 0) * 200 +
+                                    (getShipCount(planet, 'light_laser') || 0) * 100 +
+                                    (getShipCount(planet, 'heavy_laser') || 0) * 800 +
+                                    (getShipCount(planet, 'gauss_cannon') || 0) * 3500 +
+                                    (getShipCount(planet, 'ion_cannon') || 0) * 800 +
+                                    (getShipCount(planet, 'plasma_turret') || 0) * 10000 +
+                                    (getShipCount(planet, 'small_shield') || 0) * 20000 +
+                                    (getShipCount(planet, 'large_shield') || 0) * 100000 +
+                                    (getShipCount(planet, 'antiballistic_missile') || 0) * 800 +
+                                    (getShipCount(planet, 'interplanetary_missile') || 0) * 15000
+                                )}
                             </span>
                         </div>
                     </div>
