@@ -75,8 +75,12 @@ export const getDefenseImage = (defenseType: string): string => {
   const images: Record<string, string> = {
     // Weapons
 <<<<<<< HEAD
+<<<<<<< HEAD
     rocket_launcher: '/images/defenses/defense-missile-launcher.webp', // Database uses rocket_launcher
     missile_launcher: '/images/defenses/defense-missile-launcher.webp', // Legacy compatibility
+=======
+    missile_launcher: '/images/defenses/defense-rocket-launcher.webp',
+>>>>>>> d20576f (rebase images)
 =======
     missile_launcher: '/images/defenses/defense-rocket-launcher.webp',
 >>>>>>> d20576f (rebase images)
