@@ -3430,10 +3430,12 @@ async fn get_my_planets_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
+    use entities::{prelude::*, resource_slot};
+
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
     let current = Planet::find_by_id(current_id).one(&state.db).await.unwrap();
-    
+
     if let Some(p) = current {
         let owner_id = p.owner_id;
         let my_planets = Planet::find().filter(planet::Column::OwnerId.eq(owner_id)).all(&state.db).await.unwrap_or_default();
@@ -3443,39 +3445,134 @@ async fn get_my_planets_handler(
         let max_colonies = std::cmp::min(astrophysics_level, 10);
         let colony_count = my_planets.iter().filter(|p| !p.is_homeworld).count();
 
-        let list: Vec<serde_json::Value> = my_planets.into_iter().map(|mp| json!({
-            "id": mp.id,
-            "name": mp.name,
-            "galaxy": mp.galaxy,
-            "system": mp.system,
-            "position": mp.position,
-            "is_current": mp.id == current_id,
-            "is_homeworld": mp.is_homeworld,
-            // Ressources
-            "metal_amount": mp.metal_amount,
-            "crystal_amount": mp.crystal_amount,
-            "deuterium_amount": mp.deuterium_amount,
-            // Bâtiments
-            "metal_mine_level": mp.metal_mine_level,
-            "crystal_mine_level": mp.crystal_mine_level,
-            "deuterium_mine_level": mp.deuterium_mine_level,
-            "solar_plant_level": mp.solar_plant_level,
-            "shipyard_level": mp.shipyard_level,
-            "research_lab_level": mp.research_lab_level,
-            "hangar_level": mp.hangar_level,
-            // Technologie
-            "energy_tech_level": mp.energy_tech_level,
-            // Flotte
-            "light_hunter_count": mp.light_hunter_count,
-            "cruiser_count": mp.cruiser_count,
-            "recycler_count": mp.recycler_count,
-            "spy_probe_count": mp.spy_probe_count,
-            "colony_ship_count": mp.colony_ship_count,
-            "transporter_count": mp.transporter_count,
-            // Défenses
-            "missile_launcher_count": mp.missile_launcher_count,
-            "plasma_turret_count": mp.plasma_turret_count
-        })).collect();
+        let config = state.config.read().unwrap().clone();
+        let mut list = Vec::new();
+
+        for mp in my_planets {
+            // Get building levels from planet_buildings with fallback to legacy columns
+            let metal_mine_level = get_building_level(&state.db, mp.id, "metal_mine", mp.metal_mine_level).await;
+            let crystal_mine_level = get_building_level(&state.db, mp.id, "crystal_mine", mp.crystal_mine_level).await;
+            let deuterium_mine_level = get_building_level(&state.db, mp.id, "deuterium_mine", mp.deuterium_mine_level).await;
+            let solar_plant_level = get_building_level(&state.db, mp.id, "solar_plant", mp.solar_plant_level).await;
+            let shipyard_level = get_building_level(&state.db, mp.id, "shipyard", mp.shipyard_level).await;
+            let research_lab_level = get_building_level(&state.db, mp.id, "research_lab", mp.research_lab_level).await;
+            let hangar_level = get_building_level(&state.db, mp.id, "hangar", mp.hangar_level).await;
+
+            // Get tech levels from planet_technologies
+            let energy_tech_level = tech_tree::get_planet_tech_level(&state.db, mp.id, "energy_tech").await.unwrap_or(mp.energy_tech_level);
+
+            // Calculate energy
+            let energy_ratio = game_logic::calculate_energy_ratio(
+                solar_plant_level,
+                energy_tech_level,
+                metal_mine_level,
+                crystal_mine_level,
+                deuterium_mine_level,
+                &config
+            );
+
+            let energy_prod = game_logic::calculate_energy_production(solar_plant_level, energy_tech_level, &config);
+            let energy_cons = game_logic::calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level, &config);
+            let energy_ratio_percent = (energy_ratio * 100.0) as i32;
+
+            // Get ship counts from planet_ships table
+            let ships = tech_tree::get_all_planet_ship_details(&state.db, mp.id).await.unwrap_or_default();
+
+            // Get defense counts from planet_defenses table
+            let defenses = tech_tree::get_all_planet_defense_details(&state.db, mp.id).await.unwrap_or_default();
+
+            // Get all building levels
+            let buildings = tech_tree::get_all_planet_building_levels(&state.db, mp.id).await.unwrap_or_default();
+
+            // Get all tech levels
+            let technologies = tech_tree::get_all_planet_tech_levels(&state.db, mp.id).await.unwrap_or_default();
+
+            // Get construction queue
+            let construction_queue = ConstructionQueue::find()
+                .filter(construction_queue::Column::PlanetId.eq(mp.id))
+                .order_by_asc(construction_queue::Column::EndTime)
+                .all(&state.db)
+                .await
+                .unwrap_or_default();
+
+            // Get research queue (technologies being researched) - simplified version
+            let research_techs = PlanetTechnology::find()
+                .filter(planet_technology::Column::PlanetId.eq(mp.id))
+                .filter(planet_technology::Column::ResearchingToLevel.is_not_null())
+                .all(&state.db)
+                .await
+                .unwrap_or_default();
+
+            let mut research_queue_json = Vec::new();
+            for r in research_techs {
+                // Get tech key from Technology table
+                if let Ok(Some(tech)) = Technology::find_by_id(r.tech_id).one(&state.db).await {
+                    research_queue_json.push(json!({
+                        "tech_key": tech.tech_key,
+                        "target_level": r.researching_to_level
+                    }));
+                }
+            }
+
+            // Get resource slots
+            let resource_slots_data = ResourceSlot::find()
+                .filter(resource_slot::Column::PlanetId.eq(mp.id))
+                .all(&state.db)
+                .await
+                .unwrap_or_default();
+
+            list.push(json!({
+                "id": mp.id,
+                "name": mp.name,
+                "galaxy": mp.galaxy,
+                "system": mp.system,
+                "position": mp.position,
+                "is_current": mp.id == current_id,
+                "is_homeworld": mp.is_homeworld,
+                // Ressources
+                "metal_amount": mp.metal_amount,
+                "crystal_amount": mp.crystal_amount,
+                "deuterium_amount": mp.deuterium_amount,
+                // Bâtiments (from relational tables with fallback)
+                "metal_mine_level": metal_mine_level,
+                "crystal_mine_level": crystal_mine_level,
+                "deuterium_mine_level": deuterium_mine_level,
+                "solar_plant_level": solar_plant_level,
+                "shipyard_level": shipyard_level,
+                "research_lab_level": research_lab_level,
+                "hangar_level": hangar_level,
+                // Énergie
+                "energy": energy_prod as i32 - energy_cons as i32,
+                "energy_production": energy_prod as i32,
+                "energy_consumption": energy_cons as i32,
+                "energy_ratio": energy_ratio_percent,
+                // Technologie
+                "energy_tech_level": energy_tech_level,
+                // Flotte (legacy columns for backward compatibility)
+                "light_hunter_count": mp.light_hunter_count,
+                "cruiser_count": mp.cruiser_count,
+                "recycler_count": mp.recycler_count,
+                "spy_probe_count": mp.spy_probe_count,
+                "colony_ship_count": mp.colony_ship_count,
+                "transporter_count": mp.transporter_count,
+                // Défenses (legacy columns for backward compatibility)
+                "missile_launcher_count": mp.missile_launcher_count,
+                "plasma_turret_count": mp.plasma_turret_count,
+                // NEW: Relational data
+                "ships": ships,
+                "defenses": defenses,
+                "buildings": buildings,
+                "technologies": technologies,
+                // Débris
+                "debris_metal": mp.debris_metal,
+                "debris_crystal": mp.debris_crystal,
+                // Queues
+                "construction_queue": construction_queue,
+                "research_queue": research_queue_json,
+                // Resource slots
+                "resource_slots": resource_slots_data
+            }));
+        }
 
         return Json(json!({
             "planets": list,
