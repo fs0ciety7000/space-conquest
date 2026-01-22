@@ -38,7 +38,7 @@ const parseCombatLogs = (logs: string[]): CombatEvent[] => {
     timestamp += 500; // 500ms entre chaque événement
 
     // Détecter les rounds
-    if (log.includes('Round') || log.includes('Tour')) {
+    if (log.includes('Round') || log.includes('Tour') || log.includes('TOUR')) {
       const roundMatch = log.match(/(\d+)/);
       const round = roundMatch ? parseInt(roundMatch[1]) : index + 1;
       events.push({
@@ -82,7 +82,7 @@ const parseCombatLogs = (logs: string[]): CombatEvent[] => {
     }
 
     // Détecter la fin
-    else if (log.includes('victoire') || log.includes('défaite') || log.includes('victory') || log.includes('defeat')) {
+    else if (log.toLowerCase().includes('victoire') || log.toLowerCase().includes('défaite') || log.toLowerCase().includes('victory') || log.toLowerCase().includes('defeat') || log.includes('DESTRUCTION MUTUELLE')) {
       const isVictory = log.toLowerCase().includes('victoire') || log.toLowerCase().includes('victory');
       events.push({
         type: 'end',
