@@ -74,7 +74,7 @@ export const getResourceImage = (resourceType: string): string => {
 export const getDefenseImage = (defenseType: string): string => {
   const images: Record<string, string> = {
     // Weapons
-    missile_launcher: '/images/defenses/defense-missile-launcher.webp',
+    missile_launcher: '/images/defenses/defense-rocket-launcher.webp',
     light_laser: '/images/defenses/defense-light-laser.webp',
     heavy_laser: '/images/defenses/defense-heavy-laser.webp',
     gauss_cannon: '/images/defenses/defense-gauss-cannon.webp',
