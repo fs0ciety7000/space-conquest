@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import {
   Globe, MapPin, Stone, Gem, Droplets, Zap, Rocket, Shield,
   ChevronRight, Star, Crown, TrendingUp, Activity, Clock,
-  Warehouse, Target, Ship, Recycle, Satellite, Truck, RefreshCw
+  Warehouse, Target, Ship, Recycle, Satellite, Truck, RefreshCw,
+  AlertCircle, Wrench, Factory, Beaker
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,18 @@ interface Planet {
   plasma_turret_count: number;
   energy_tech_level: number;
   is_current?: boolean;
+  is_homeworld?: boolean;
+  energy?: number;
+  energy_production?: number;
+  energy_consumption?: number;
+  energy_ratio?: number;
+  ships?: any;
+  defenses?: any;
+  debris_metal?: number;
+  debris_crystal?: number;
+  research_queue?: any[];
+  construction_queue?: any[];
+  resource_slots?: any[];
 }
 
 interface MyPlanetsProps {
@@ -49,6 +62,17 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
   const [planets, setPlanets] = useState<Planet[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanet, setSelectedPlanet] = useState<Planet | null>(null);
+  const [config, setConfig] = useState<any>({
+    production_metal_base: 30,
+    production_crystal_base: 20,
+    production_deuterium_base: 10,
+    production_metal_growth: 1.1,
+    production_crystal_growth: 1.1,
+    production_deuterium_growth: 1.05,
+    energy_tech_bonus: 0.10,
+    mining_speed_multiplier: 1.0,
+    speed_factor: 1.0
+  });
 
   const fetchPlanets = async () => {
     setLoading(true);
@@ -127,7 +151,76 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
 
   useEffect(() => {
     fetchPlanets();
+    fetchConfig();
   }, [currentPlanetId]);
+
+  const fetchConfig = async () => {
+    try {
+      const res = await fetch(apiUrl('/config'));
+      if (res.ok) {
+        const data = await res.json();
+        setConfig({
+          production_metal_base: parseFloat(data.production_metal_base) || 30,
+          production_crystal_base: parseFloat(data.production_crystal_base) || 20,
+          production_deuterium_base: parseFloat(data.production_deuterium_base) || 10,
+          production_metal_growth: parseFloat(data.production_metal_growth) || 1.1,
+          production_crystal_growth: parseFloat(data.production_crystal_growth) || 1.1,
+          production_deuterium_growth: parseFloat(data.production_deuterium_growth) || 1.05,
+          energy_tech_bonus: parseFloat(data.energy_tech_bonus) || 0.10,
+          mining_speed_multiplier: parseFloat(data.mining_speed_multiplier) || 1.0,
+          speed_factor: parseFloat(data.speed_factor) / 100 || 1.0
+        });
+      }
+    } catch (error) {
+      console.error('Erreur chargement config:', error);
+    }
+  };
+
+  const calculateProduction = (planet: Planet, resourceType: 'metal' | 'crystal' | 'deuterium') => {
+    let level = 0;
+    let baseFactor = 0;
+    let growthFactor = 1;
+
+    if (resourceType === 'metal') {
+      level = planet.metal_mine_level || 0;
+      baseFactor = config.production_metal_base;
+      growthFactor = config.production_metal_growth;
+    } else if (resourceType === 'crystal') {
+      level = planet.crystal_mine_level || 0;
+      baseFactor = config.production_crystal_base;
+      growthFactor = config.production_crystal_growth;
+    } else {
+      level = planet.deuterium_mine_level || 0;
+      baseFactor = config.production_deuterium_base;
+      growthFactor = config.production_deuterium_growth;
+    }
+
+    if (level === 0) return 0;
+
+    // Production de base
+    let prod = baseFactor * level * Math.pow(growthFactor, level);
+
+    // Bonus technologie énergie
+    const techLevel = getTechLevel(planet, 'energy_tech');
+    const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.10));
+    prod *= techBonus;
+
+    // Ratio énergétique
+    const energyRatio = (planet.energy_ratio || 100) / 100;
+    prod *= energyRatio;
+
+    // Bonus slots (si disponibles)
+    const activeSlots = (planet.resource_slots || []).filter(
+      (s: any) => s.is_active && s.resource_type === resourceType
+    );
+    const slotBonus = 1.0 + (activeSlots.length * 0.5);
+    prod *= slotBonus;
+
+    // Speed factor et mining speed
+    prod *= config.speed_factor * (config.mining_speed_multiplier || 1.0);
+
+    return Math.floor(prod);
+  };
 
   const fmt = (n: number) => Math.floor(n).toLocaleString();
 
@@ -322,39 +415,114 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
               </CardHeader>
 
               <CardContent className="space-y-4 relative z-10">
-                {/* Ressources */}
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: "Métal", val: planet.metal_amount, Icon: Stone, color: "text-orange-400" },
-                    { label: "Cristal", val: planet.crystal_amount, Icon: Gem, color: "text-cyan-400" },
-                    { label: "Deutérium", val: planet.deuterium_amount, Icon: Droplets, color: "text-green-400" },
-                  ].map(res => (
-                    <div key={res.label} className="bg-black/30 p-2 rounded-lg border border-white/5 text-center">
-                      <res.Icon size={14} className={`${res.color} mx-auto mb-1 drop-shadow-[0_0_4px_currentColor]`} />
-                      <p className="text-xs font-mono font-bold text-white">{fmt(res.val)}</p>
-                      <p className="text-[8px] uppercase text-slate-500">{res.label}</p>
+                {/* Débris Warning */}
+                {(planet.debris_metal || 0) > 0 || (planet.debris_crystal || 0) > 0 ? (
+                  <div className="bg-green-900/20 border border-green-500/50 p-2 rounded-lg flex items-center gap-2 animate-pulse">
+                    <Recycle size={14} className="text-green-400" />
+                    <span className="text-xs text-green-400 font-bold">
+                      Débris disponibles: M:{fmt(planet.debris_metal || 0)} C:{fmt(planet.debris_crystal || 0)}
+                    </span>
+                  </div>
+                ) : null}
+
+                {/* Mines et Production */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Mine Métal */}
+                  <div className="bg-orange-900/20 border border-orange-500/30 p-2 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Stone size={12} className="text-orange-400 drop-shadow-[0_0_4px_currentColor]" />
+                      <span className="text-[9px] uppercase text-slate-400 font-bold truncate">Mine Métal</span>
                     </div>
-                  ))}
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-mono font-bold text-orange-400">{fmt(planet.metal_amount)}</span>
+                      <span className="text-[10px] text-slate-500">Nv.{planet.metal_mine_level || 0}</span>
+                    </div>
+                    <div className="text-[9px] text-orange-400 font-mono mt-0.5">
+                      +{fmt(calculateProduction(planet, 'metal'))}/h
+                    </div>
+                  </div>
+
+                  {/* Mine Cristal */}
+                  <div className="bg-cyan-900/20 border border-cyan-500/30 p-2 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Gem size={12} className="text-cyan-400 drop-shadow-[0_0_4px_currentColor]" />
+                      <span className="text-[9px] uppercase text-slate-400 font-bold truncate">Mine Cristal</span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-mono font-bold text-cyan-400">{fmt(planet.crystal_amount)}</span>
+                      <span className="text-[10px] text-slate-500">Nv.{planet.crystal_mine_level || 0}</span>
+                    </div>
+                    <div className="text-[9px] text-cyan-400 font-mono mt-0.5">
+                      +{fmt(calculateProduction(planet, 'crystal'))}/h
+                    </div>
+                  </div>
+
+                  {/* Synth. Deutérium */}
+                  <div className="bg-green-900/20 border border-green-500/30 p-2 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Droplets size={12} className="text-green-400 drop-shadow-[0_0_4px_currentColor]" />
+                      <span className="text-[9px] uppercase text-slate-400 font-bold truncate">Synth. Deutérium</span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-mono font-bold text-green-400">{fmt(planet.deuterium_amount)}</span>
+                      <span className="text-[10px] text-slate-500">Nv.{planet.deuterium_mine_level || 0}</span>
+                    </div>
+                    <div className="text-[9px] text-green-400 font-mono mt-0.5">
+                      +{fmt(calculateProduction(planet, 'deuterium'))}/h
+                    </div>
+                  </div>
+
+                  {/* Centrale Solaire */}
+                  <div className="bg-yellow-900/20 border border-yellow-500/30 p-2 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Zap size={12} className="text-yellow-400 drop-shadow-[0_0_4px_currentColor]" />
+                      <span className="text-[9px] uppercase text-slate-400 font-bold truncate">Centrale Solaire</span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-mono font-bold text-yellow-400">{fmt(planet.energy || 0)}</span>
+                      <span className="text-[10px] text-slate-500">Nv.{planet.solar_plant_level || 0}</span>
+                    </div>
+                    <div className="text-[9px] text-yellow-400 font-mono mt-0.5">
+                      +{fmt(planet.energy_production || 0)}/h
+                    </div>
+                  </div>
                 </div>
 
-                {/* Bâtiments */}
+                {/* Bâtiments & Recherche */}
                 <div className="grid grid-cols-4 gap-1">
                   {[
-                    { label: "Mine M", val: planet.metal_mine_level },
-                    { label: "Mine C", val: planet.crystal_mine_level },
-                    { label: "Synth. D", val: planet.deuterium_mine_level },
-                    { label: "Centrale", val: planet.solar_plant_level },
-                    { label: "Chantier", val: planet.shipyard_level },
-                    { label: "Labo", val: planet.research_lab_level },
-                    { label: "Hangar", val: planet.hangar_level },
-                    { label: "Tech E.", val: getTechLevel(planet, 'energy_tech') },
+                    { label: "Chantier", val: planet.shipyard_level, icon: Factory },
+                    { label: "Labo", val: planet.research_lab_level, icon: Beaker },
+                    { label: "Hangar", val: planet.hangar_level, icon: Warehouse },
+                    { label: "Tech E.", val: getTechLevel(planet, 'energy_tech'), icon: Zap },
                   ].map(b => (
                     <div key={b.label} className="bg-slate-900/60 p-1.5 rounded text-center border border-white/5">
+                      <b.icon size={10} className="mx-auto mb-0.5 text-slate-500" />
                       <p className="text-[8px] uppercase text-slate-500 truncate">{b.label}</p>
                       <p className="text-xs font-mono font-bold text-white">Nv.{b.val || 0}</p>
                     </div>
                   ))}
                 </div>
+
+                {/* Construction/Recherche en cours */}
+                {(planet.construction_queue && planet.construction_queue.length > 0) || (planet.research_queue && planet.research_queue.length > 0) ? (
+                  <div className="bg-blue-900/20 border border-blue-500/30 p-2 rounded-lg space-y-1">
+                    {planet.construction_queue && planet.construction_queue.map((item: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <Wrench size={10} className="text-blue-400" />
+                        <span className="text-blue-400 font-mono flex-1">Construction: {item.building_type} Nv.{item.target_level}</span>
+                        <Clock size={10} className="text-slate-500" />
+                      </div>
+                    ))}
+                    {planet.research_queue && planet.research_queue.map((item: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <Beaker size={10} className="text-purple-400" />
+                        <span className="text-purple-400 font-mono flex-1">Recherche: {item.tech_key} Nv.{item.target_level}</span>
+                        <Clock size={10} className="text-slate-500" />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
                 {/* Flotte et Défenses */}
                 <div className="flex justify-between items-center bg-black/30 p-3 rounded-lg border border-white/5">
@@ -387,23 +555,31 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { label: "Chasseurs", val: getShipCount(planet, 'light_hunter'), Icon: Target, color: "text-red-400" },
-                        { label: "Croiseurs", val: getShipCount(planet, 'cruiser'), Icon: Ship, color: "text-purple-400" },
-                        { label: "Recycleurs", val: getShipCount(planet, 'recycler'), Icon: Recycle, color: "text-green-400" },
-                        { label: "Sondes", val: getShipCount(planet, 'spy_probe'), Icon: Satellite, color: "text-cyan-400" },
-                        { label: "Colons", val: getShipCount(planet, 'colony_ship'), Icon: Globe, color: "text-emerald-400" },
-                        { label: "Transport.", val: getShipCount(planet, 'transporter'), Icon: Truck, color: "text-amber-400" },
-                      ].map(ship => (
-                        <div key={ship.label} className="bg-slate-900/60 p-2 rounded-lg border border-white/5 flex items-center gap-2">
-                          <ship.Icon size={12} className={ship.color} />
-                          <div>
-                            <p className="text-[8px] text-slate-500 uppercase">{ship.label}</p>
-                            <p className={`text-xs font-mono font-bold ${(ship.val || 0) > 0 ? 'text-white' : 'text-slate-600'}`}>
-                              {ship.val || 0}
-                            </p>
+                        { label: "Chasseur Léger", key: 'light_hunter', Icon: Target, color: "text-red-400" },
+                        { label: "Chasseur Lourd", key: 'heavy_hunter', Icon: Target, color: "text-red-500" },
+                        { label: "Croiseur", key: 'cruiser', Icon: Ship, color: "text-purple-400" },
+                        { label: "Vaisseau Guerre", key: 'battleship', Icon: Ship, color: "text-purple-500" },
+                        { label: "Destructeur", key: 'destroyer', Icon: Rocket, color: "text-red-600" },
+                        { label: "Bombardier", key: 'bomber', Icon: Rocket, color: "text-orange-500" },
+                        { label: "Étoile Mort", key: 'deathstar', Icon: Star, color: "text-slate-200" },
+                        { label: "Recycleur", key: 'recycler', Icon: Recycle, color: "text-green-400" },
+                        { label: "Sonde", key: 'spy_probe', Icon: Satellite, color: "text-cyan-400" },
+                        { label: "Colon", key: 'colony_ship', Icon: Globe, color: "text-emerald-400" },
+                        { label: "Transporteur", key: 'transporter', Icon: Truck, color: "text-amber-400" },
+                      ].map(ship => {
+                        const count = getShipCount(planet, ship.key);
+                        return (
+                          <div key={ship.key} className="bg-slate-900/60 p-2 rounded-lg border border-white/5 flex items-center gap-2">
+                            <ship.Icon size={12} className={ship.color} />
+                            <div>
+                              <p className="text-[8px] text-slate-500 uppercase truncate">{ship.label}</p>
+                              <p className={`text-xs font-mono font-bold ${(count || 0) > 0 ? 'text-white' : 'text-slate-600'}`}>
+                                {count || 0}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-2">
@@ -411,16 +587,27 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { label: "Lanceurs Missiles", val: getShipCount(planet, 'missile_launcher'), color: "text-orange-400" },
-                        { label: "Tourelles Plasma", val: getShipCount(planet, 'plasma_turret'), color: "text-red-400" },
-                      ].map(def => (
-                        <div key={def.label} className="bg-slate-900/60 p-2 rounded-lg border border-white/5 flex justify-between items-center">
-                          <span className="text-[9px] text-slate-400 uppercase">{def.label}</span>
-                          <span className={`font-mono font-bold text-sm ${(def.val || 0) > 0 ? def.color : 'text-slate-600'}`}>
-                            {def.val || 0}
-                          </span>
-                        </div>
-                      ))}
+                        { label: "Lance-roquettes", key: 'missile_launcher', color: "text-orange-400" },
+                        { label: "Laser Léger", key: 'light_laser', color: "text-blue-400" },
+                        { label: "Laser Lourd", key: 'heavy_laser', color: "text-blue-500" },
+                        { label: "Canon Gauss", key: 'gauss_cannon', color: "text-indigo-400" },
+                        { label: "Canon à Ions", key: 'ion_cannon', color: "text-purple-400" },
+                        { label: "Tourelle Plasma", key: 'plasma_turret', color: "text-red-400" },
+                        { label: "Petit Bouclier", key: 'small_shield', color: "text-cyan-400" },
+                        { label: "Grand Bouclier", key: 'large_shield', color: "text-cyan-500" },
+                        { label: "Missile Anti-B", key: 'antiballistic_missile', color: "text-yellow-400" },
+                        { label: "Missile Inter-P", key: 'interplanetary_missile', color: "text-red-500" },
+                      ].map(def => {
+                        const count = getShipCount(planet, def.key);
+                        return (
+                          <div key={def.key} className="bg-slate-900/60 p-2 rounded-lg border border-white/5 flex justify-between items-center">
+                            <span className="text-[9px] text-slate-400 uppercase">{def.label}</span>
+                            <span className={`font-mono font-bold text-sm ${(count || 0) > 0 ? def.color : 'text-slate-600'}`}>
+                              {count || 0}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
