@@ -4983,18 +4983,64 @@ async fn get_resource_slots_handler(
 ) -> impl IntoResponse {
     use entities::{prelude::ResourceSlot, resource_slot};
 
-    match ResourceSlot::find()
+    let slots = match ResourceSlot::find()
         .filter(resource_slot::Column::PlanetId.eq(planet_id))
         .order_by_asc(resource_slot::Column::SlotNumber)
         .all(&state.db)
         .await
     {
-        Ok(slots) => Json(slots).into_response(),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Erreur lors de la récupération des slots"})),
-        )
-            .into_response(),
+        Ok(s) => s,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Erreur lors de la récupération des slots"})),
+            )
+                .into_response();
+        }
+    };
+
+    // Si aucun slot n'existe, les créer automatiquement pour les planètes existantes
+    if slots.is_empty() {
+        let slots_init = vec![
+            (1, "metal", 1, true),
+            (2, "crystal", 1, true),
+            (3, "deuterium", 1, true),
+            (4, "energy", 0, true),
+            (5, "metal", 0, false),
+            (6, "metal", 0, false),
+            (7, "metal", 0, false),
+            (8, "metal", 0, false),
+        ];
+
+        for (slot_num, res_type, level, is_locked) in slots_init {
+            let slot = resource_slot::ActiveModel {
+                planet_id: Set(planet_id),
+                slot_number: Set(slot_num),
+                resource_type: Set(res_type.to_string()),
+                level: Set(level),
+                is_locked: Set(is_locked),
+                is_active: Set(is_locked), // Les slots locked sont actifs, les autres non
+                ..Default::default()
+            };
+            let _ = slot.insert(&state.db).await;
+        }
+
+        // Récupérer les slots nouvellement créés
+        match ResourceSlot::find()
+            .filter(resource_slot::Column::PlanetId.eq(planet_id))
+            .order_by_asc(resource_slot::Column::SlotNumber)
+            .all(&state.db)
+            .await
+        {
+            Ok(new_slots) => Json(new_slots).into_response(),
+            Err(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Erreur lors de la création des slots"})),
+            )
+                .into_response(),
+        }
+    } else {
+        Json(slots).into_response()
     }
 }
 
