@@ -40,6 +40,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [defenseTypes, setDefenseTypes] = useState<DefenseTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isBuilding, setIsBuilding] = useState(false);
 
   const fetchDefenseTypes = async () => {
     const token = localStorage.getItem('token');
@@ -119,8 +120,9 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
 
   const startBuild = async () => {
     const selectedDefense = defenseTypes.find(d => d.defense_key === selected);
-    if (!selectedDefense) return;
+    if (!selectedDefense || isBuilding) return;
 
+    setIsBuilding(true);
     try {
       const res = await fetch(apiUrl(`/planets/${planet.id}/build-defenses/${selected}/${qty}`), {
         method: 'POST',
@@ -144,6 +146,8 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
     } catch (e) {
       console.error(e);
       toast.error("Erreur de connexion");
+    } finally {
+      setIsBuilding(false);
     }
   };
 
@@ -167,7 +171,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
 
   // Check prerequisites
   const isLocked = selectedDefense.requirements.some(req => !req.met);
-  const canBuild = !isBusy && canAfford && !isLocked;
+  const canBuild = !isBusy && !isBuilding && canAfford && !isLocked;
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
