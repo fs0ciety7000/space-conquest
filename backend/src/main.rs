@@ -6048,21 +6048,7 @@ async fn expedition_v2_handler(
         (metal, crystal, deuterium, "calm")
     };
 
-    // Update planet resources
-    let mut active: planet::ActiveModel = planet.clone().into();
-    active.metal_amount = Set(planet.metal_amount + final_metal);
-    active.crystal_amount = Set(planet.crystal_amount + final_crystal);
-    active.deuterium_amount = Set(planet.deuterium_amount + final_deuterium);
-
-    // Set expedition end time
-    let duration = std::cmp::max(1, (base_duration / speed_factor) as i64);
-    active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
-
-    if active.update(&state.db).await.is_err() {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update planet"}))).into_response();
-    }
-
-    // Create combat log for expedition report
+    // Create combat log for expedition report (before planet update so we can set unread_report)
     let expedition_report = json!({
         "winner": winner,
         "result": winner,  // For consistency with combat_log.result
@@ -6089,6 +6075,23 @@ async fn expedition_v2_handler(
         "defender_remaining": {},
         "defender_losses": 0
     });
+
+    // Update planet resources
+    let mut active: planet::ActiveModel = planet.clone().into();
+    active.metal_amount = Set(planet.metal_amount + final_metal);
+    active.crystal_amount = Set(planet.crystal_amount + final_crystal);
+    active.deuterium_amount = Set(planet.deuterium_amount + final_deuterium);
+
+    // Set expedition end time
+    let duration = std::cmp::max(1, (base_duration / speed_factor) as i64);
+    active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
+
+    // Set unread_report to trigger modal display
+    active.unread_report = Set(Some(serde_json::to_string(&expedition_report).unwrap()));
+
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update planet"}))).into_response();
+    }
 
     let _ = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
