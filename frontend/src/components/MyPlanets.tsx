@@ -44,6 +44,9 @@ interface Planet {
   energy_production?: number;
   energy_consumption?: number;
   energy_ratio?: number;
+  metal_production?: number;
+  crystal_production?: number;
+  deuterium_production?: number;
   ships?: any;
   defenses?: any;
   debris_metal?: number;
@@ -126,10 +129,10 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
             cruiser_count: getShipCount(p, 'cruiser'),
             recycler_count: getShipCount(p, 'recycler') ?? 0,
             spy_probe_count: getShipCount(p, 'spy_probe') ?? 0,
-            colony_ship_count: getShipCount(p, 'colony_ship') ?? 0,
-            transporter_count: p.transporter_count ?? 0,
-            missile_launcher_count: p.missile_launcher_count ?? 0,
-            plasma_turret_count: p.plasma_turret_count ?? 0,
+            colony_ship_count: getShipCount(p, 'colony_ship'),
+            transporter_count: getShipCount(p, 'transporter'),
+            missile_launcher_count: getShipCount(p, 'missile_launcher'),
+            plasma_turret_count: getShipCount(p, 'plasma_turret'),
             energy_tech_level: getTechLevel(p, 'energy_tech'),
           }));
           // Trier: planète mère en premier (is_homeworld ou 1:1:1), puis le reste
@@ -181,6 +184,18 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
   };
 
   const calculateProduction = (planet: Planet, resourceType: 'metal' | 'crystal' | 'deuterium') => {
+    // Use pre-calculated values from backend if available
+    if (resourceType === 'metal' && planet.metal_production !== undefined) {
+      return planet.metal_production;
+    }
+    if (resourceType === 'crystal' && planet.crystal_production !== undefined) {
+      return planet.crystal_production;
+    }
+    if (resourceType === 'deuterium' && planet.deuterium_production !== undefined) {
+      return planet.deuterium_production;
+    }
+
+    // Fallback to local calculation for backwards compatibility
     let level = 0;
     let baseFactor = 0;
     let growthFactor = 1;
@@ -228,13 +243,16 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
 
   const fmt = (n: number) => Math.floor(n).toLocaleString();
 
-  const getTotalFleet = (p: Planet) => 
-    (getShipCount(p, 'light_hunter') || 0) + (getShipCount(p, 'cruiser') || 0) + 
-    (getShipCount(p, 'recycler') || 0) + (getShipCount(p, 'spy_probe') || 0) + 
-    (getShipCount(p, 'colony_ship') || 0) + (p.transporter_count || 0);
+  const getTotalFleet = (p: Planet) =>
+    (getShipCount(p, 'light_hunter') || 0) + (getShipCount(p, 'cruiser') || 0) +
+    (getShipCount(p, 'recycler') || 0) + (getShipCount(p, 'spy_probe') || 0) +
+    (getShipCount(p, 'colony_ship') || 0) + (getShipCount(p, 'transporter') || 0);
 
-  const getTotalDefense = (p: Planet) => 
-    (p.missile_launcher_count || 0) + (p.plasma_turret_count || 0);
+  const getTotalDefense = (p: Planet) =>
+    (getShipCount(p, 'missile_launcher') || 0) + (getShipCount(p, 'plasma_turret') || 0) +
+    (getShipCount(p, 'light_laser') || 0) + (getShipCount(p, 'heavy_laser') || 0) +
+    (getShipCount(p, 'gauss_cannon') || 0) + (getShipCount(p, 'ion_cannon') || 0) +
+    (getShipCount(p, 'small_shield') || 0) + (getShipCount(p, 'large_shield') || 0);
 
   const getHangarCap = (hangarLevel: number) => 500 + ((hangarLevel || 0) * 500);
 
