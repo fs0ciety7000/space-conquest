@@ -74,7 +74,8 @@ export const getResourceImage = (resourceType: string): string => {
 export const getDefenseImage = (defenseType: string): string => {
   const images: Record<string, string> = {
     // Weapons
-    missile_launcher: '/images/defenses/defense-missile-launcher.webp',
+    rocket_launcher: '/images/defenses/defense-missile-launcher.webp', // Database uses rocket_launcher
+    missile_launcher: '/images/defenses/defense-missile-launcher.webp', // Legacy compatibility
     light_laser: '/images/defenses/defense-light-laser.webp',
     heavy_laser: '/images/defenses/defense-heavy-laser.webp',
     gauss_cannon: '/images/defenses/defense-gauss-cannon.webp',
