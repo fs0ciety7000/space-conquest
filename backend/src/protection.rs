@@ -28,6 +28,27 @@ pub async fn is_user_protected(
     }
 }
 
+/// Check if a user account is older than a specified number of days
+/// Returns true if the account was created more than `days` ago
+pub async fn is_account_older_than_days(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+    days: i64,
+) -> Result<bool, sea_orm::DbErr> {
+    let user_model = User::find_by_id(user_id)
+        .one(db)
+        .await?;
+
+    match user_model {
+        Some(user) => {
+            let now = Utc::now().naive_utc();
+            let account_age = now - user.created_at;
+            Ok(account_age.num_days() >= days)
+        },
+        None => Ok(false),
+    }
+}
+
 /// Check if a planet is in the beginner zone
 /// A planet is in the beginner zone if its galaxy is <= beginner_zone_galaxy_max
 pub async fn is_planet_in_beginner_zone(
@@ -178,13 +199,18 @@ pub async fn validate_attack(
     }
 
     // Check if defender is in beginner zone
+    // Note: Beginner zone only protects accounts less than 7 days old
     let beginner_zone_enabled = config.get_config("beginner_zone_protection_enabled", 1.0) >= 1.0;
 
     if beginner_zone_enabled {
         let beginner_zone_galaxy_max = config.get_config("beginner_zone_galaxy_max", 1.0) as i32;
+        let beginner_zone_max_account_days = config.get_config("beginner_zone_max_account_days", 7.0) as i64;
 
-        if is_planet_in_beginner_zone(db, defender_planet_id, beginner_zone_galaxy_max).await.unwrap_or(false) {
-            return Err(format!("Cette planète est dans la zone débutant (galaxie ≤ {})", beginner_zone_galaxy_max));
+        // Only protect if the account is less than X days old
+        let defender_is_new_account = !is_account_older_than_days(db, defender_user_id, beginner_zone_max_account_days).await.unwrap_or(true);
+
+        if defender_is_new_account && is_planet_in_beginner_zone(db, defender_planet_id, beginner_zone_galaxy_max).await.unwrap_or(false) {
+            return Err(format!("Cette planète est dans la zone débutant (galaxie ≤ {}, compte < {} jours)", beginner_zone_galaxy_max, beginner_zone_max_account_days));
         }
     }
 
