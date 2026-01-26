@@ -375,6 +375,8 @@ async fn main() {
         .route("/officers/templates", get(officers::list_officer_templates_handler))
         .route("/users/:id/officers", get(officers::get_user_officers_handler))
         .route("/users/:id/officers/recruit", post(officers::recruit_officer_handler))
+        .route("/users/:id/officers/:officer_id/levelup", post(officers::levelup_officer_handler))
+        .route("/users/:id/officers/:officer_id/levelup-cost", get(officers::get_officer_levelup_cost_handler))
         // Sabotage
         .route("/sabotage", post(sabotage::attempt_sabotage))
         .route("/planets/:id/sabotages", get(sabotage::get_active_sabotages))
@@ -2855,6 +2857,7 @@ async fn spy_handler(
     let spy_report_details = json!({
         "type": "spy_report",
         "target_planet": def_planet.name,
+        "target_planet_id": def_planet.id.to_string(),
         "target_player": defender_username,
         "coordinates": format!("[{}:{}:{}]", def_planet.galaxy, def_planet.system, def_planet.position),
         "tech_difference": tech_diff,
@@ -3043,6 +3046,7 @@ async fn spy_v2_handler(
     let spy_report_details = json!({
         "type": "spy_report",
         "target_planet": def_planet.name,
+        "target_planet_id": def_planet.id.to_string(),
         "target_player": defender_username,
         "coordinates": format!("[{}:{}:{}]", def_planet.galaxy, def_planet.system, def_planet.position),
         "tech_difference": tech_diff,
@@ -4054,18 +4058,24 @@ async fn get_player_profile_handler(
     
     let is_own_profile = viewer_id.map(|v| v == user_id).unwrap_or(false);
     
-    // ✅ Calculer le niveau d'espionnage du viewer
+    // ✅ Calculer le niveau d'espionnage du viewer (utilise tech_tree system)
     let espionage_level = if !is_own_profile && viewer_id.is_some() {
         let viewer_planets = Planet::find()
             .filter(planet::Column::OwnerId.eq(viewer_id.unwrap()))
             .all(&state.db)
             .await
             .unwrap_or_default();
-        
-        viewer_planets.iter()
-            .map(|p| p.espionage_tech_level)
-            .max()
-            .unwrap_or(0)
+
+        let mut max_espionage = 0;
+        for planet in &viewer_planets {
+            let level = tech_tree::get_planet_tech_level(&state.db, planet.id, "espionage")
+                .await
+                .unwrap_or(0);
+            if level > max_espionage {
+                max_espionage = level;
+            }
+        }
+        max_espionage
     } else {
         999 // Niveau infini pour son propre profil
     };
@@ -4195,6 +4205,17 @@ async fn get_player_profile_handler(
     // Badge de rang
     let rank_badge = game_logic::get_rank_badge(total_points);
 
+    // ✅ Fetch main planet's tech levels using tech_tree system
+    let main_planet_techs = if let Some((main_planet, _, _, _)) = main_planet_with_points {
+        let energy = tech_tree::get_planet_tech_level(&state.db, main_planet.id, "energy_tech").await.unwrap_or(0);
+        let laser = tech_tree::get_planet_tech_level(&state.db, main_planet.id, "laser_tech").await.unwrap_or(0);
+        let espionage = tech_tree::get_planet_tech_level(&state.db, main_planet.id, "espionage").await.unwrap_or(0);
+        let armour = tech_tree::get_planet_tech_level(&state.db, main_planet.id, "armour_tech").await.unwrap_or(0);
+        Some((energy, laser, espionage, armour))
+    } else {
+        None
+    };
+
     // ✅ Formater created_at en ISO 8601 avec Z pour UTC
     let created_at_utc = user.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
 
@@ -4278,13 +4299,13 @@ async fn get_player_profile_handler(
             }))
         },
 
-        // Technologies (niveau 18+)
+        // Technologies (niveau 18+) - Uses tech_tree system
         "top_techs": if show_techs || show_all {
-            main_planet_with_points.map(|(p, _, _, _)| json!({
-                "energy": p.energy_tech_level,
-                "laser": p.laser_battery_level,
-                "espionage": p.espionage_tech_level,
-                "armour": p.armour_tech_level,
+            main_planet_techs.map(|(energy, laser, espionage, armour)| json!({
+                "energy": energy,
+                "laser": laser,
+                "espionage": espionage,
+                "armour": armour,
             }))
         } else {
             Some(json!({

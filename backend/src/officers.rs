@@ -49,6 +49,15 @@ pub struct RecruitOfficerRequest {
     pub officer_template_id: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct LevelUpCostResponse {
+    pub metal: f64,
+    pub crystal: f64,
+    pub deuterium: f64,
+    pub next_level: i32,
+    pub next_bonus: f64,
+}
+
 // ============================================================================
 // HANDLERS
 // ============================================================================
@@ -264,8 +273,183 @@ fn calculate_bonus(template: &crate::entities::officer_template::Model, level: i
     template.base_bonus_value + (template.bonus_per_level * (level - 1) as f64)
 }
 
-/// Calcule l'XP requis pour passer au niveau suivant
-pub fn _xp_required_for_next_level(current_level: i32) -> i32 {
-    // Formule exponentielle: 100 * level^2
-    100 * current_level * current_level
+/// Calcule le coût pour level up un officier
+/// Formule: coût_recrutement × niveau × 0.3
+fn calculate_levelup_cost(template: &crate::entities::officer_template::Model, current_level: i32) -> (f64, f64, f64) {
+    let multiplier = current_level as f64 * 0.3;
+    (
+        template.recruitment_cost_metal * multiplier,
+        template.recruitment_cost_crystal * multiplier,
+        template.recruitment_cost_deuterium * multiplier,
+    )
+}
+
+/// Récupère le coût de level up d'un officier
+pub async fn get_officer_levelup_cost_handler(
+    Path((user_id, officer_id)): Path<(String, String)>,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let user_uuid = Uuid::parse_str(&user_id)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid user ID".to_string()))?;
+    let officer_uuid = Uuid::parse_str(&officer_id)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid officer ID".to_string()))?;
+
+    // Récupérer l'officier avec son template
+    let officer = UserOfficer::find_by_id(officer_uuid)
+        .filter(crate::entities::user_officer::Column::UserId.eq(user_uuid))
+        .one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Officer not found".to_string()))?;
+
+    let template = OfficerTemplate::find_by_id(officer.officer_template_id)
+        .one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Officer template not found".to_string()))?;
+
+    // Vérifier que l'officier n'est pas au niveau max
+    if officer.level >= template.max_level {
+        return Err((StatusCode::BAD_REQUEST, "Officer is already at max level".to_string()));
+    }
+
+    // Calculer les coûts avec le speed factor
+    let speed_factor = if let Ok(config) = state.config.read() {
+        (config.speed_factor / 100.0).max(1.0)
+    } else {
+        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
+    };
+
+    let (base_metal, base_crystal, base_deuterium) = calculate_levelup_cost(&template, officer.level);
+    let next_level = officer.level + 1;
+    let next_bonus = calculate_bonus(&template, next_level);
+
+    Ok(Json(LevelUpCostResponse {
+        metal: base_metal / speed_factor,
+        crystal: base_crystal / speed_factor,
+        deuterium: base_deuterium / speed_factor,
+        next_level,
+        next_bonus,
+    }))
+}
+
+/// Level up un officier
+pub async fn levelup_officer_handler(
+    Path((user_id, officer_id)): Path<(String, String)>,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let user_uuid = Uuid::parse_str(&user_id)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid user ID".to_string()))?;
+    let officer_uuid = Uuid::parse_str(&officer_id)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid officer ID".to_string()))?;
+
+    // Récupérer l'officier
+    let officer = UserOfficer::find_by_id(officer_uuid)
+        .filter(crate::entities::user_officer::Column::UserId.eq(user_uuid))
+        .one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Officer not found".to_string()))?;
+
+    // Récupérer le template
+    let template = OfficerTemplate::find_by_id(officer.officer_template_id)
+        .one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Officer template not found".to_string()))?;
+
+    // Vérifier que l'officier n'est pas au niveau max
+    if officer.level >= template.max_level {
+        return Err((StatusCode::BAD_REQUEST, format!(
+            "L'officier {} est déjà au niveau maximum ({})",
+            template.name, template.max_level
+        )));
+    }
+
+    // Récupérer la planète principale du joueur
+    let planet = Planet::find()
+        .filter(crate::entities::planet::Column::OwnerId.eq(user_uuid))
+        .one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "No planet found for user".to_string()))?;
+
+    // Calculer les coûts avec le speed factor
+    let speed_factor = if let Ok(config) = state.config.read() {
+        (config.speed_factor / 100.0).max(1.0)
+    } else {
+        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
+    };
+
+    let (base_metal, base_crystal, base_deuterium) = calculate_levelup_cost(&template, officer.level);
+    let actual_cost_metal = base_metal / speed_factor;
+    let actual_cost_crystal = base_crystal / speed_factor;
+    let actual_cost_deuterium = base_deuterium / speed_factor;
+
+    // Vérifier les ressources
+    if planet.metal_amount < actual_cost_metal {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Pas assez de métal (requis: {:.0}, disponible: {:.0})",
+                actual_cost_metal, planet.metal_amount)
+        ));
+    }
+    if planet.crystal_amount < actual_cost_crystal {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Pas assez de cristal (requis: {:.0}, disponible: {:.0})",
+                actual_cost_crystal, planet.crystal_amount)
+        ));
+    }
+    if planet.deuterium_amount < actual_cost_deuterium {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Pas assez de deutérium (requis: {:.0}, disponible: {:.0})",
+                actual_cost_deuterium, planet.deuterium_amount)
+        ));
+    }
+
+    // Déduire les ressources
+    let mut planet_active: crate::entities::planet::ActiveModel = planet.clone().into();
+    planet_active.metal_amount = Set(planet.metal_amount - actual_cost_metal);
+    planet_active.crystal_amount = Set(planet.crystal_amount - actual_cost_crystal);
+    planet_active.deuterium_amount = Set(planet.deuterium_amount - actual_cost_deuterium);
+    planet_active.last_update = Set(chrono::Utc::now().naive_utc());
+    planet_active.update(&state.db).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Level up l'officier
+    let new_level = officer.level + 1;
+    let mut officer_active: crate::entities::user_officer::ActiveModel = officer.into();
+    officer_active.level = Set(new_level);
+    let updated_officer = officer_active.update(&state.db).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let current_bonus = calculate_bonus(&template, new_level);
+
+    let response = UserOfficerResponse {
+        id: updated_officer.id.to_string(),
+        template: OfficerTemplateResponse {
+            id: template.id.to_string(),
+            name: template.name,
+            description: template.description,
+            specialization: template.specialization,
+            rarity: template.rarity,
+            bonus_type: template.bonus_type,
+            base_bonus_value: template.base_bonus_value,
+            bonus_per_level: template.bonus_per_level,
+            max_level: template.max_level,
+            image_type: template.image_type,
+            recruitment_cost_metal: template.recruitment_cost_metal,
+            recruitment_cost_crystal: template.recruitment_cost_crystal,
+            recruitment_cost_deuterium: template.recruitment_cost_deuterium,
+        },
+        level: updated_officer.level,
+        experience: updated_officer.experience,
+        is_active: updated_officer.is_active,
+        recruited_at: updated_officer.recruited_at.to_string(),
+        current_bonus,
+    };
+
+    Ok((StatusCode::OK, Json(response)))
 }

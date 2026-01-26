@@ -3,6 +3,7 @@ import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert, Tr
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { apiUrl } from '@/config/api';
+import { toast } from 'sonner';
 import CombatModal from './CombatModal';
 
 interface CombatLog {
@@ -69,6 +70,47 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
       }
     } catch (error) {
       console.error("Erreur lors de la récupération du rapport détaillé:", error);
+    }
+  };
+
+  const handleSabotage = async (targetPlanetId: string, actionType: 'disable_mine' | 'steal_tech') => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl('/sabotage'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          target_planet_id: targetPlanetId,
+          action_type: actionType
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.detected) {
+        toast.error('🚨 SABOTAGE DÉTECTÉ !', {
+          description: 'Vous avez été repéré ! La cible a obtenu un Casus Belli contre vous.',
+          duration: 5000
+        });
+      } else if (data.success) {
+        const actionLabel = actionType === 'disable_mine' ? '⚙️ Infrastructure sabotée !' : '📖 Technologie volée !';
+        toast.success(actionLabel, {
+          description: 'Opération clandestine réussie sans détection.',
+          duration: 3000
+        });
+      } else {
+        toast.error('Échec du sabotage', {
+          description: data.error || 'Une erreur est survenue'
+        });
+      }
+
+      setSelectedReport(null);
+    } catch (error) {
+      console.error("Erreur lors du sabotage:", error);
+      toast.error("Erreur lors du sabotage");
     }
   };
 
@@ -368,6 +410,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
         <CombatModal
           report={selectedReport}
           onClose={() => setSelectedReport(null)}
+          onSabotage={handleSabotage}
         />
       )}
     </div>

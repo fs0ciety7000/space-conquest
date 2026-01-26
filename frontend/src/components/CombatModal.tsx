@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   X, Skull, Trophy, User, Swords, Box, Gem, Droplets, Zap,
   Activity, Rocket, AlertCircle, Target, Shield, Crosshair,
-  TrendingUp, TrendingDown, Clock, MapPin, Users
+  TrendingUp, TrendingDown, Clock, MapPin, Users, Lock, Loader2, Wrench, BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CombatReplay from './CombatReplay';
@@ -33,14 +33,16 @@ const getShipDisplayName = (shipKey: string): string => {
 interface CombatModalProps {
   report: any | null;
   onClose: () => void;
+  onSabotage?: (targetPlanetId: string, actionType: 'disable_mine' | 'steal_tech') => void;
 }
 
-export default function CombatModal({ report, onClose }: CombatModalProps) {
+export default function CombatModal({ report, onClose, onSabotage }: CombatModalProps) {
   const [visibleLogs, setVisibleLogs] = useState<string[]>([]);
   const [parsedReport, setParsedReport] = useState<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [showReplay, setShowReplay] = useState(false);
+  const [sabotageLoading, setSabotageLoading] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -312,6 +314,68 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
                   Depuis: {parsedReport.attacker_planet || 'planète inconnue'}
                 </p>
               </div>
+            )}
+
+            {/* OPÉRATIONS CLANDESTINES (only for spy_report with tech advantage) */}
+            {parsedReport.type === 'spy_report' && parsedReport.target_planet_id && onSabotage && (
+              <section className="space-y-4 mt-6">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-red-500/20">
+                    <Target size={14} className="text-red-400" />
+                  </div>
+                  Opérations Clandestines
+                </h3>
+
+                {parsedReport.tech_difference >= 1 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button
+                      onClick={() => {
+                        setSabotageLoading('disable_mine');
+                        onSabotage(parsedReport.target_planet_id, 'disable_mine');
+                      }}
+                      disabled={sabotageLoading !== null}
+                      className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold text-sm h-12 border border-orange-400/50 shadow-lg hover:shadow-orange-500/30 transition-all disabled:opacity-50"
+                    >
+                      {sabotageLoading === 'disable_mine' ? (
+                        <Loader2 size={16} className="animate-spin mr-2" />
+                      ) : (
+                        <Wrench size={16} className="mr-2" />
+                      )}
+                      Saboter Infrastructure
+                    </Button>
+
+                    <Button
+                      onClick={() => {
+                        setSabotageLoading('steal_tech');
+                        onSabotage(parsedReport.target_planet_id, 'steal_tech');
+                      }}
+                      disabled={sabotageLoading !== null}
+                      className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm h-12 border border-purple-400/50 shadow-lg hover:shadow-purple-500/30 transition-all disabled:opacity-50"
+                    >
+                      {sabotageLoading === 'steal_tech' ? (
+                        <Loader2 size={16} className="animate-spin mr-2" />
+                      ) : (
+                        <BookOpen size={16} className="mr-2" />
+                      )}
+                      Espionnage Industriel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="bg-slate-800/50 border border-white/10 p-4 rounded-xl text-center">
+                    <Lock size={24} className="text-slate-500 mx-auto mb-2" />
+                    <p className="text-xs text-slate-400">
+                      Avantage technologique insuffisant
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Nécessite: Niveau d'espionnage supérieur à la cible
+                    </p>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-slate-500 text-center italic">
+                  ⚠️ Risque de détection: {Math.max(5, 30 - ((parsedReport.tech_difference || 0) * 5))}%
+                </p>
+              </section>
             )}
           </div>
 
