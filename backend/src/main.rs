@@ -1645,6 +1645,26 @@ async fn get_planet_handler(
         }
         obj.insert("defense_builds".into(), json!(enriched_defense_builds));
 
+        // Get active research from planet_technologies table
+        let active_research = PlanetTechnology::find()
+            .filter(planet_technology::Column::PlanetId.eq(p.id))
+            .filter(planet_technology::Column::ResearchingToLevel.is_not_null())
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+
+        let mut research_queue = Vec::new();
+        for research in active_research {
+            if let Some(tech) = Technology::find_by_id(research.tech_id).one(&state.db).await.unwrap_or(None) {
+                research_queue.push(json!({
+                    "tech_key": tech.tech_key,
+                    "target_level": research.researching_to_level,
+                    "end_time": research.research_end_time.map(|t| t.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
+                }));
+            }
+        }
+        obj.insert("research_queue".into(), json!(research_queue));
+
         // Infos sur les slots de production
         obj.insert("next_slot_to_unlock".into(), json!(next_slot));
         if let Some(cost) = next_slot_cost {
