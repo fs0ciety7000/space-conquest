@@ -38,6 +38,14 @@ interface UserOfficer {
   current_bonus: number;
 }
 
+interface LevelUpCost {
+  metal: number;
+  crystal: number;
+  deuterium: number;
+  next_level: number;
+  next_bonus: number;
+}
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -116,13 +124,19 @@ const SPEC_CONFIG = {
 function OfficerCard({
   officer,
   onRecruit,
+  onLevelUp,
   isRecruited = false,
   userOfficer,
+  levelUpCost,
+  loadingLevelUp = false,
 }: {
   officer: OfficerTemplate;
   onRecruit?: (officer: OfficerTemplate) => void;
+  onLevelUp?: (userOfficer: UserOfficer) => void;
   isRecruited?: boolean;
   userOfficer?: UserOfficer;
+  levelUpCost?: LevelUpCost;
+  loadingLevelUp?: boolean;
 }) {
   const rarity = RARITY_CONFIG[officer.rarity];
   const spec = SPEC_CONFIG[officer.specialization];
@@ -202,7 +216,7 @@ function OfficerCard({
 
         {/* Level Progress (recruited officers) */}
         {isRecruited && userOfficer && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Niveau</span>
               <span className="text-sm font-black text-white font-mono">
@@ -217,6 +231,78 @@ function OfficerCard({
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
               </div>
             </div>
+
+            {/* Level Up Section */}
+            {userOfficer.level < officer.max_level && (
+              <div className="mt-3 space-y-3">
+                {levelUpCost && (
+                  <div className="bg-black/30 border border-white/5 rounded-xl p-3 space-y-2">
+                    <div className="text-[9px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1 mb-2">
+                      <TrendingUp size={10} className="text-cyan-400" />
+                      Coût Level Up → Niv. {levelUpCost.next_level}
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400 flex items-center gap-1 font-semibold">
+                        <Box size={10} className="text-orange-400" />
+                        Métal
+                      </span>
+                      <span className="font-mono font-bold text-orange-400">
+                        {Math.floor(levelUpCost.metal).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400 flex items-center gap-1 font-semibold">
+                        <Gem size={10} className="text-cyan-400" />
+                        Cristal
+                      </span>
+                      <span className="font-mono font-bold text-cyan-400">
+                        {Math.floor(levelUpCost.crystal).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400 flex items-center gap-1 font-semibold">
+                        <Droplets size={10} className="text-emerald-400" />
+                        Deutérium
+                      </span>
+                      <span className="font-mono font-bold text-emerald-400">
+                        {Math.floor(levelUpCost.deuterium).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-white/5 flex justify-between items-center text-xs">
+                      <span className="text-slate-400 font-semibold">Nouveau bonus</span>
+                      <span className={`font-mono font-bold ${rarity.color}`}>
+                        +{levelUpCost.next_bonus.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  onClick={() => onLevelUp && userOfficer && onLevelUp(userOfficer)}
+                  disabled={loadingLevelUp}
+                  className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black uppercase tracking-wider text-sm border border-cyan-400/50 shadow-lg hover:shadow-cyan-500/40 transition-all group/btn relative overflow-hidden h-10 disabled:opacity-50"
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    {loadingLevelUp ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <TrendingUp size={16} />
+                    )}
+                    {loadingLevelUp ? 'Amélioration...' : 'Level Up'}
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000"></div>
+                </Button>
+              </div>
+            )}
+
+            {userOfficer.level >= officer.max_level && (
+              <div className="mt-3 px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center">
+                <span className="text-xs font-black uppercase text-yellow-400 tracking-wider flex items-center justify-center gap-2">
+                  <Crown size={14} />
+                  Niveau Maximum Atteint
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -288,6 +374,8 @@ export default function Officers() {
   const [filter, setFilter] = useState<'all' | 'economy' | 'military' | 'research'>('all');
   const [rarityFilter, setRarityFilter] = useState<'all' | OfficerTemplate['rarity']>('all');
   const [view, setView] = useState<'available' | 'recruited'>('available');
+  const [levelUpCosts, setLevelUpCosts] = useState<Record<string, LevelUpCost>>({});
+  const [loadingLevelUp, setLoadingLevelUp] = useState<string | null>(null);
 
   const userId = localStorage.getItem('user_id');
   const token = localStorage.getItem('token');
@@ -319,6 +407,71 @@ export default function Officers() {
       toast.error('Erreur lors du chargement des officiers');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load level up costs for all recruited officers
+  const loadLevelUpCosts = async (officers: UserOfficer[]) => {
+    if (!userId || !token) return;
+
+    const costs: Record<string, LevelUpCost> = {};
+    for (const officer of officers) {
+      if (officer.level < officer.template.max_level) {
+        try {
+          const res = await fetch(
+            apiUrl(`/users/${userId}/officers/${officer.id}/levelup-cost`),
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (res.ok) {
+            costs[officer.id] = await res.json();
+          }
+        } catch (error) {
+          console.error('Erreur chargement coût level up:', error);
+        }
+      }
+    }
+    setLevelUpCosts(costs);
+  };
+
+  // Reload level up costs when officers change
+  useEffect(() => {
+    if (userOfficers.length > 0) {
+      loadLevelUpCosts(userOfficers);
+    }
+  }, [userOfficers]);
+
+  const handleLevelUp = async (userOfficer: UserOfficer) => {
+    if (!userId || !token) {
+      toast.error('Vous devez être connecté');
+      return;
+    }
+
+    setLoadingLevelUp(userOfficer.id);
+    try {
+      const res = await fetch(
+        apiUrl(`/users/${userId}/officers/${userOfficer.id}/levelup`),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (res.ok) {
+        const updatedOfficer = await res.json();
+        toast.success(`${userOfficer.template.name} est passé au niveau ${updatedOfficer.level} !`);
+        loadData();
+      } else {
+        const error = await res.text();
+        toast.error(`Échec de l'amélioration: ${error}`);
+      }
+    } catch (error) {
+      console.error('Erreur level up:', error);
+      toast.error("Erreur lors de l'amélioration");
+    } finally {
+      setLoadingLevelUp(null);
     }
   };
 
@@ -518,6 +671,9 @@ export default function Officers() {
                 officer={userOfficer.template}
                 isRecruited={true}
                 userOfficer={userOfficer}
+                onLevelUp={handleLevelUp}
+                levelUpCost={levelUpCosts[userOfficer.id]}
+                loadingLevelUp={loadingLevelUp === userOfficer.id}
               />
             ))
           )}

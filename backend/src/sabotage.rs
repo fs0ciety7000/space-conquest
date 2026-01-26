@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::entities::{prelude::*, planet, sabotage_effect};
 use crate::AppState;
+use crate::tech_tree;
 
 /// Helper: extraire user_id depuis le header Authorization
 fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<Uuid, StatusCode> {
@@ -91,9 +92,13 @@ pub async fn attempt_sabotage(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
     };
 
-    // Vérifier la différence de tech espionnage
-    let attacker_spy_level = attacker_planet.espionage_tech_level;
-    let defender_spy_level = target_planet.espionage_tech_level;
+    // Vérifier la différence de tech espionnage (utilise le système relational tech_tree)
+    let attacker_spy_level = tech_tree::get_planet_tech_level(&state.db, attacker_planet.id, "espionage")
+        .await
+        .unwrap_or(0);
+    let defender_spy_level = tech_tree::get_planet_tech_level(&state.db, target_planet.id, "espionage")
+        .await
+        .unwrap_or(0);
     let tech_difference = attacker_spy_level - defender_spy_level;
 
     if tech_difference < 1 {
