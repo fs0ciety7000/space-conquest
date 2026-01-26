@@ -292,7 +292,9 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   
   // LOGIQUE QUEUE MULTIPLE
   const queue = planet.constructions || [];
-  const isQueueFull = queue.length >= 3;
+  const shipBuilds = planet.ship_builds || [];
+  const defenseBuilds = planet.defense_builds || [];
+  const isQueueFull = queue.length + shipBuilds.length + defenseBuilds.length >= 3;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">

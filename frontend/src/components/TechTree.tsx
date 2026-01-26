@@ -132,7 +132,9 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
 
   // --- LOGIQUE FILE D'ATTENTE MULTIPLE ---
   const queue = planet.constructions || [];
-  const isQueueFull = queue.length >= 3;
+  const shipBuilds = planet.ship_builds || [];
+  const defenseBuilds = planet.defense_builds || [];
+  const isQueueFull = queue.length + shipBuilds.length + defenseBuilds.length >= 3;
 
   if (loading) {
     return (

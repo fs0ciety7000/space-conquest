@@ -60,6 +60,7 @@ mod m20260121_000001_add_flight_speed_config;
 mod m20260121_000002_add_homeworld_system;
 mod m20260121_000003_add_maintenance_system;
 mod m20260127_000001_create_beginner_protection;
+mod m20260127_000002_fix_graviton_costs;
 
 pub struct Migrator;
 
@@ -127,6 +128,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260121_000002_add_homeworld_system::Migration),
             Box::new(m20260121_000003_add_maintenance_system::Migration),
             Box::new(m20260127_000001_create_beginner_protection::Migration),
+            Box::new(m20260127_000002_fix_graviton_costs::Migration),
         ]
     }
 }
