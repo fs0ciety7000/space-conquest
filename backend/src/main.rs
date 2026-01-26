@@ -285,6 +285,9 @@ async fn main() {
 .route("/conversations/:id/archive", post(messaging::toggle_archive_conversation_handler)) // ✅ AJOUT
 .route("/conversations/:id", delete(messaging::delete_conversation_handler))
 .route("/send-message-v2", post(messaging::send_message_v2_handler))
+// Chat Galactique
+.route("/global-chat", get(messaging::get_global_chat_handler))
+.route("/global-chat", post(messaging::send_global_chat_handler))
 
 .route("/users/:id", get(get_user_handler))
 .route("/users/:id/username", patch(update_username_handler))

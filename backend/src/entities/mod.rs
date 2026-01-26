@@ -52,3 +52,6 @@ pub mod planet_building;
 pub mod defense_type;
 pub mod defense_requirement;
 pub mod planet_defense;
+
+// Global chat system
+pub mod global_chat_message;
