@@ -2845,11 +2845,43 @@ async fn spy_handler(
     }).to_string()));
     let _ = def_active.update(&state.db).await;
 
-    // Create a spy report in combat_log for the defender
+    // Create spy reports in combat_log for both attacker and defender
     let att_user = User::find_by_id(att_planet.owner_id).one(&state.db).await.unwrap();
+    let def_user = User::find_by_id(def_planet.owner_id).one(&state.db).await.unwrap();
     let attacker_username = att_user.map(|u| u.username.clone()).unwrap_or("Inconnu".to_string());
+    let defender_username = def_user.map(|u| u.username.clone()).unwrap_or("Inconnu".to_string());
 
-    let spy_log = combat_log::ActiveModel {
+    // Create detailed report JSON for the attacker's log
+    let spy_report_details = json!({
+        "type": "spy_report",
+        "target_planet": def_planet.name,
+        "target_player": defender_username,
+        "coordinates": format!("[{}:{}:{}]", def_planet.galaxy, def_planet.system, def_planet.position),
+        "tech_difference": tech_diff,
+        "detection_level": detection,
+        "resources": resources,
+        "fleet": fleet,
+        "defense": defense
+    });
+
+    // Create spy log for the ATTACKER (so they can review their spy reports)
+    let spy_log_attacker = combat_log::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(att_planet.id),
+        target_name: Set(def_planet.name.clone()),
+        opponent_username: Set(Some(defender_username.clone())),
+        mission_type: Set("spy_attack".to_string()),
+        result: Set("success".to_string()),
+        loot_metal: Set(0.0),
+        loot_crystal: Set(0.0),
+        ships_lost: Set(1), // 1 spy probe used
+        date: Set(Utc::now().naive_utc()),
+        detailed_report: Set(Some(spy_report_details)),
+    };
+    let _ = spy_log_attacker.insert(&state.db).await;
+
+    // Create spy log for the DEFENDER (alert notification)
+    let spy_log_defender = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(def_planet.id),
         target_name: Set(att_planet.name.clone()),
@@ -2860,9 +2892,14 @@ async fn spy_handler(
         loot_crystal: Set(0.0),
         ships_lost: Set(0),
         date: Set(Utc::now().naive_utc()),
-        detailed_report: Set(None), // Pas de détails de combat pour l'espionnage
+        detailed_report: Set(Some(json!({
+            "type": "spy_alert",
+            "attacker_planet": att_planet.name,
+            "attacker_player": attacker_username,
+            "coordinates": format!("[{}:{}:{}]", att_planet.galaxy, att_planet.system, att_planet.position)
+        }))),
     };
-    let _ = spy_log.insert(&state.db).await;
+    let _ = spy_log_defender.insert(&state.db).await;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // NOTIFICATION WEBSOCKET - Alerter le défenseur de l'espionnage
@@ -2996,11 +3033,43 @@ async fn spy_v2_handler(
     }).to_string()));
     let _ = def_active.update(&state.db).await;
 
-    // Create a spy report in combat_log for the defender
+    // Create spy reports in combat_log for both attacker and defender
     let att_user = User::find_by_id(att_planet.owner_id).one(&state.db).await.unwrap();
+    let def_user = User::find_by_id(def_planet.owner_id).one(&state.db).await.unwrap();
     let attacker_username = att_user.map(|u| u.username.clone()).unwrap_or("Inconnu".to_string());
+    let defender_username = def_user.map(|u| u.username.clone()).unwrap_or("Inconnu".to_string());
 
-    let spy_log = combat_log::ActiveModel {
+    // Create detailed report JSON for the attacker's log
+    let spy_report_details = json!({
+        "type": "spy_report",
+        "target_planet": def_planet.name,
+        "target_player": defender_username,
+        "coordinates": format!("[{}:{}:{}]", def_planet.galaxy, def_planet.system, def_planet.position),
+        "tech_difference": tech_diff,
+        "detection_level": detection,
+        "resources": resources,
+        "fleet": fleet,
+        "defense": defense
+    });
+
+    // Create spy log for the ATTACKER (so they can review their spy reports)
+    let spy_log_attacker = combat_log::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(att_planet.id),
+        target_name: Set(def_planet.name.clone()),
+        opponent_username: Set(Some(defender_username.clone())),
+        mission_type: Set("spy_attack".to_string()),
+        result: Set("success".to_string()),
+        loot_metal: Set(0.0),
+        loot_crystal: Set(0.0),
+        ships_lost: Set(1), // 1 spy probe used
+        date: Set(Utc::now().naive_utc()),
+        detailed_report: Set(Some(spy_report_details)),
+    };
+    let _ = spy_log_attacker.insert(&state.db).await;
+
+    // Create spy log for the DEFENDER (alert notification)
+    let spy_log_defender = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(def_planet.id),
         target_name: Set(att_planet.name.clone()),
@@ -3011,9 +3080,14 @@ async fn spy_v2_handler(
         loot_crystal: Set(0.0),
         ships_lost: Set(0),
         date: Set(Utc::now().naive_utc()),
-        detailed_report: Set(None), // Pas de détails de combat pour l'espionnage
+        detailed_report: Set(Some(json!({
+            "type": "spy_alert",
+            "attacker_planet": att_planet.name,
+            "attacker_player": attacker_username,
+            "coordinates": format!("[{}:{}:{}]", att_planet.galaxy, att_planet.system, att_planet.position)
+        }))),
     };
-    let _ = spy_log.insert(&state.db).await;
+    let _ = spy_log_defender.insert(&state.db).await;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // NOTIFICATION WEBSOCKET - Alerter le défenseur de l'espionnage

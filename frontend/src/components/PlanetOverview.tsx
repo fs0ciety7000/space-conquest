@@ -317,7 +317,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     }))
   ].sort((a, b) => new Date(a.end_time).getTime() - new Date(b.end_time).getTime());
 
-  const slotsUsed = buildingQueue.length; // Only buildings/tech count towards the 3-slot limit
+  const slotsUsed = constructionQueue.length; // All constructions (buildings, ships, defenses) count towards the 3-slot limit
   const maxSlots = 3;
 
   // --- MISSIONS (Backend enrichit l'objet planet avec ces listes) ---

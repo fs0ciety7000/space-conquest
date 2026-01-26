@@ -199,10 +199,14 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                         );
                     }
 
-                    // Rapport d'espionnage
+                    // Rapport d'espionnage détecté (défenseur)
                     if (isSpy) {
                         return (
-                            <div key={log.id} className="bg-purple-950/10 border border-purple-500/30 p-3 rounded-lg flex items-center justify-between group hover:bg-purple-950/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg animate-fade-in card-depth">
+                            <div
+                                key={log.id}
+                                onClick={() => handleReportClick(log.id)}
+                                className="bg-purple-950/10 border border-purple-500/30 p-3 rounded-lg flex items-center justify-between group hover:bg-purple-950/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer animate-fade-in card-depth"
+                            >
                                 <div className="flex items-center gap-4">
                                     <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
                                         <ShieldAlert size={16} />
@@ -210,7 +214,7 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-xs font-black uppercase text-purple-400">
-                                                ESPIONNAGE DÉTECTÉ
+                                                🔍 ESPIONNAGE DÉTECTÉ
                                             </span>
                                             <span className="text-[10px] text-slate-500 font-mono">
                                                 par {log.opponent_username || "Inconnu"}
@@ -224,6 +228,45 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                                 <div className="text-right">
                                     <div className="text-[10px] text-purple-300 font-mono">
                                         Source: {log.target_name}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
+
+                    // Rapport d'espionnage envoyé (attaquant)
+                    const isSpyAttack = log.mission_type === 'spy_attack';
+                    if (isSpyAttack) {
+                        return (
+                            <div
+                                key={log.id}
+                                onClick={() => handleReportClick(log.id)}
+                                className="bg-cyan-950/10 border border-cyan-500/30 p-3 rounded-lg flex items-center justify-between group hover:bg-cyan-950/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer animate-fade-in card-depth"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="p-2 rounded-lg bg-cyan-500/20 text-cyan-400">
+                                        <ArrowUpRight size={16} />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-black uppercase text-cyan-400">
+                                                🛰️ RAPPORT D'ESPIONNAGE
+                                            </span>
+                                            <span className="text-[10px] text-slate-500 font-mono">
+                                                sur {log.opponent_username || "Inconnu"}
+                                            </span>
+                                        </div>
+                                        <div className="text-[10px] text-cyan-300 mt-0.5">
+                                            Cible: {log.target_name}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 mt-0.5">
+                                            {formatDate(log.date)}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[10px] text-cyan-300 font-mono">
+                                        Cliquez pour voir les détails
                                     </div>
                                 </div>
                             </div>

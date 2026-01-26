@@ -181,7 +181,9 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
   };
 
   const queue = planet.constructions || [];
-  const isQueueFull = queue.length >= 3;
+  const shipBuilds = planet.ship_builds || [];
+  const defenseBuilds = planet.defense_builds || [];
+  const isQueueFull = queue.length + shipBuilds.length + defenseBuilds.length >= 3;
 
   if (loading) {
     return (

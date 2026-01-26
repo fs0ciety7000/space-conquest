@@ -136,6 +136,200 @@ export default function CombatModal({ report, onClose }: CombatModalProps) {
 
   if (!parsedReport) return null;
 
+  // --- CHECK FOR SPY REPORT ---
+  const isSpyReport = parsedReport.type === 'spy_report' || parsedReport.type === 'spy_alert';
+
+  if (isSpyReport) {
+    // Render spy report modal
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 sm:p-6 overflow-y-auto"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        {/* Effets de fond */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full blur-[150px] opacity-30 bg-cyan-500" />
+          <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full blur-[120px] opacity-20 bg-purple-500" />
+        </div>
+
+        <div
+          className="w-full max-w-2xl relative rounded-3xl border-2 border-cyan-500/50 bg-gradient-to-b from-cyan-900/30 via-slate-900 to-slate-950 shadow-[0_0_80px_rgba(6,182,212,0.3)] animate-in zoom-in-95 fade-in duration-300"
+          style={{ maxHeight: 'calc(100vh - 3rem)' }}
+        >
+          {/* HEADER */}
+          <div className="relative p-6 sm:p-8 border-b border-white/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/50 to-transparent" />
+
+            <div className="relative flex justify-between items-start gap-4">
+              <div className="flex items-center gap-4 sm:gap-6">
+                <div className="relative p-4 sm:p-5 rounded-2xl bg-black/60 border border-white/20 shadow-2xl text-cyan-400">
+                  <Target size={40} className="sm:w-12 sm:h-12 drop-shadow-[0_0_20px_currentColor]" />
+                </div>
+
+                <div>
+                  <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-cyan-400 drop-shadow-lg">
+                    {parsedReport.type === 'spy_report' ? 'RAPPORT D\'ESPIONNAGE' : 'ESPIONNAGE DÉTECTÉ'}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-3 mt-3">
+                    <span className="text-xs bg-white/10 px-3 py-1.5 rounded-full font-mono text-slate-300 border border-white/10 flex items-center gap-2">
+                      <MapPin size={12} />
+                      {parsedReport.coordinates || 'Coordonnées inconnues'}
+                    </span>
+                    <span className="text-sm font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
+                      <User size={16} className="text-slate-500"/>
+                      {parsedReport.type === 'spy_report' ? parsedReport.target_player : parsedReport.attacker_player || 'Inconnu'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={onClose}
+                className="text-white/50 hover:text-white hover:bg-white/10 transition-all p-3 rounded-xl shrink-0"
+              >
+                <X size={28} />
+              </button>
+            </div>
+          </div>
+
+          {/* CONTENU SCROLLABLE */}
+          <div
+            className="p-6 sm:p-8 space-y-6 overflow-y-auto"
+            style={{ maxHeight: 'calc(100vh - 20rem)' }}
+          >
+            {/* INFO TECHNIQUE */}
+            {parsedReport.type === 'spy_report' && (
+              <div className="bg-slate-800/50 border border-white/10 p-4 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400 uppercase">Niveau de détection</span>
+                  <span className={`text-sm font-bold uppercase px-3 py-1 rounded-full ${
+                    parsedReport.detection_level === 'full' ? 'bg-emerald-500/20 text-emerald-400' :
+                    parsedReport.detection_level === 'fleet' ? 'bg-yellow-500/20 text-yellow-400' :
+                    parsedReport.detection_level === 'resources' ? 'bg-orange-500/20 text-orange-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    {parsedReport.detection_level === 'full' ? '🔍 SCAN COMPLET' :
+                     parsedReport.detection_level === 'fleet' ? '🛸 FLOTTE DÉTECTÉE' :
+                     parsedReport.detection_level === 'resources' ? '📦 RESSOURCES SEULEMENT' :
+                     '❌ ÉCHEC'}
+                  </span>
+                </div>
+                {parsedReport.tech_difference !== undefined && (
+                  <div className="mt-3 text-xs text-slate-500">
+                    Différence technologique: <span className={`font-bold ${parsedReport.tech_difference >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {parsedReport.tech_difference >= 0 ? '+' : ''}{parsedReport.tech_difference}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* RESSOURCES DÉTECTÉES */}
+            {parsedReport.resources && (
+              <section className="space-y-4">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-yellow-500/20">
+                    <Box size={14} className="text-yellow-400" />
+                  </div>
+                  Ressources détectées
+                </h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl text-center">
+                    <Box size={20} className="text-orange-400 mx-auto mb-2" />
+                    <div className="text-xl font-mono font-black text-orange-400">
+                      {Math.floor(parsedReport.resources.metal || 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] font-bold uppercase text-slate-500">Métal</div>
+                  </div>
+                  <div className="bg-cyan-500/10 border border-cyan-500/30 p-4 rounded-xl text-center">
+                    <Gem size={20} className="text-cyan-400 mx-auto mb-2" />
+                    <div className="text-xl font-mono font-black text-cyan-400">
+                      {Math.floor(parsedReport.resources.crystal || 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] font-bold uppercase text-slate-500">Cristal</div>
+                  </div>
+                  <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-xl text-center">
+                    <Droplets size={20} className="text-green-400 mx-auto mb-2" />
+                    <div className="text-xl font-mono font-black text-green-400">
+                      {Math.floor(parsedReport.resources.deuterium || 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] font-bold uppercase text-slate-500">Deutérium</div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* FLOTTE DÉTECTÉE */}
+            {parsedReport.fleet && Object.keys(parsedReport.fleet).length > 0 && (
+              <section className="space-y-4">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-purple-500/20">
+                    <Rocket size={14} className="text-purple-400" />
+                  </div>
+                  Flotte détectée
+                </h3>
+                <div className="bg-slate-800/50 border border-white/10 rounded-xl p-4 space-y-2 max-h-60 overflow-y-auto">
+                  {Object.entries(parsedReport.fleet).filter(([_, count]) => (count as number) > 0).map(([shipKey, count]) => (
+                    <div key={shipKey} className="flex items-center justify-between p-2 bg-slate-700/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Rocket size={14} className="text-slate-400" />
+                        <span className="text-sm text-white">{getShipDisplayName(shipKey)}</span>
+                      </div>
+                      <span className="font-mono font-bold text-purple-400">{(count as number).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* DÉFENSES */}
+            {parsedReport.defense !== undefined && parsedReport.defense !== null && (
+              <section className="space-y-4">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-red-500/20">
+                    <Shield size={14} className="text-red-400" />
+                  </div>
+                  Défenses totales
+                </h3>
+                <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-xl text-center">
+                  <Shield size={24} className="text-red-400 mx-auto mb-2" />
+                  <div className="text-3xl font-mono font-black text-red-400">
+                    {parsedReport.defense.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] font-bold uppercase text-slate-500">Unités de défense</div>
+                </div>
+              </section>
+            )}
+
+            {/* ALERT INFO (for defender) */}
+            {parsedReport.type === 'spy_alert' && (
+              <div className="bg-purple-500/10 border border-purple-500/30 p-4 rounded-xl text-center">
+                <AlertCircle size={32} className="text-purple-400 mx-auto mb-3" />
+                <p className="text-sm text-slate-300">
+                  Votre planète a été espionnée par <span className="font-bold text-purple-400">{parsedReport.attacker_player || 'un joueur inconnu'}</span>
+                </p>
+                <p className="text-xs text-slate-500 mt-2">
+                  Depuis: {parsedReport.attacker_planet || 'planète inconnue'}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* FOOTER */}
+          <div className="p-6 sm:p-8 border-t border-white/10 bg-black/30">
+            <Button
+              onClick={onClose}
+              className="w-full h-14 text-lg font-black uppercase tracking-widest transition-all rounded-xl bg-gradient-to-r from-cyan-600 to-purple-500 hover:from-cyan-500 hover:to-purple-400 shadow-xl hover:scale-[1.02] hover:shadow-2xl"
+            >
+              Fermer le rapport
+            </Button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
   // --- NORMALISATION ---
   const missionType = parsedReport.mission_type || 'attack';
   const isExpedition = missionType === 'expedition';

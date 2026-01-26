@@ -251,7 +251,9 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   const [loading, setLoading] = useState(true);
 
   const queue = planet.constructions || [];
-  const isQueueFull = queue.length >= 3;
+  const shipBuilds = planet.ship_builds || [];
+  const defenseBuilds = planet.defense_builds || [];
+  const isQueueFull = queue.length + shipBuilds.length + defenseBuilds.length >= 3;
 
   const metal = planet.metal_amount ?? 0;
   const crystal = planet.crystal_amount ?? 0;
