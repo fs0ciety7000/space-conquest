@@ -172,9 +172,9 @@ pub async fn validate_attack(
         return Ok(()); // Protection disabled, all attacks allowed
     }
 
-    // Check if defender is under time-based protection (3 day shield)
+    // Check if defender is under time-based protection (7 day shield)
     if is_user_protected(db, defender_user_id).await.unwrap_or(false) {
-        return Err("Ce joueur est sous protection débutant (bouclier 3 jours)".to_string());
+        return Err("Ce joueur est sous protection débutant (bouclier 7 jours)".to_string());
     }
 
     // Check if defender is in beginner zone
