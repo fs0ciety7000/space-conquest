@@ -35,6 +35,20 @@ interface ResourceSlot {
   is_active: boolean;
 }
 
+interface BuildingTypeInfo {
+  id: number;
+  building_key: string;
+  name: string;
+  description: string | null;
+  base_cost_metal: number;
+  base_cost_crystal: number;
+  base_cost_deuterium: number;
+  base_time_seconds: number;
+  cost_multiplier: number;
+  current_level: number;
+  next_level_time_seconds?: number;
+}
+
 const RESOURCE_TYPES = {
   metal: { icon: Pickaxe, label: "Métal", color: "text-orange-400", border: "border-orange-500/50", bg: "bg-orange-500/10" },
   crystal: { icon: Gem, label: "Cristal", color: "text-cyan-400", border: "border-cyan-500/50", bg: "bg-cyan-500/10" },
@@ -61,6 +75,7 @@ const getResourceTheme = (type: string) => {
 export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }: ResourceDisplayProps) {
   const [now, setNow] = useState(new Date().getTime());
   const [extraSlots, setExtraSlots] = useState<ResourceSlot[]>([]);
+  const [buildingTypes, setBuildingTypes] = useState<BuildingTypeInfo[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; slotNumber: number; cost: any } | null>(null);
   const [config, setConfig] = useState<any>({
     production_metal_base: 30,
@@ -118,6 +133,25 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   // Charger les slots supplémentaires (5-8)
   useEffect(() => {
     if (planet?.id) reloadSlots();
+  }, [planet?.id]);
+
+  // Charger les types de bâtiments depuis l'API (pour les coûts)
+  useEffect(() => {
+    const fetchBuildingTypes = async () => {
+      try {
+        const res = await fetch(apiUrl(`/planets/${planet.id}/building-types`), {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setBuildingTypes(data.building_types || []);
+        }
+      } catch (error) {
+        console.error('Erreur chargement building types:', error);
+      }
+    };
+
+    if (planet?.id) fetchBuildingTypes();
   }, [planet?.id]);
 
   const handleChangeType = async (slotNumber: number, newType: string) => {
@@ -270,14 +304,25 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
     }
   }
   
-  const getNextCost = (type: string, currentLevel: number) => {
-    const next = currentLevel + 1;
-    const factor = Math.pow(1.5, next - 1); 
-    if (type === 'metal') return { m: 60 * factor, c: 15 * factor };
-    if (type === 'crystal') return { m: 48 * Math.pow(1.6, next - 1), c: 24 * Math.pow(1.6, next - 1) };
-    if (type === 'deuterium') return { m: 225 * factor, c: 75 * factor };
-    if (type === 'solar_plant') return { m: 75 * factor, c: 30 * factor };
-    return { m: 0, c: 0 };
+  // Calculer le coût depuis les données de l'API building_types
+  const getNextCost = (buildingKey: string, currentLevel: number) => {
+    const building = buildingTypes.find(b => b.building_key === buildingKey);
+    if (building) {
+      // Utiliser les données de la table building_types
+      const multiplier = building.cost_multiplier;
+      return {
+        m: Math.floor(building.base_cost_metal * Math.pow(multiplier, currentLevel)),
+        c: Math.floor(building.base_cost_crystal * Math.pow(multiplier, currentLevel)),
+        d: Math.floor(building.base_cost_deuterium * Math.pow(multiplier, currentLevel))
+      };
+    }
+    // Fallback aux valeurs par défaut si pas encore chargé
+    const factor = Math.pow(1.5, currentLevel);
+    if (buildingKey === 'metal_mine') return { m: Math.floor(60 * factor), c: Math.floor(15 * factor), d: 0 };
+    if (buildingKey === 'crystal_mine') return { m: Math.floor(48 * Math.pow(1.6, currentLevel)), c: Math.floor(24 * Math.pow(1.6, currentLevel)), d: 0 };
+    if (buildingKey === 'deuterium_mine') return { m: Math.floor(225 * factor), c: Math.floor(75 * factor), d: 0 };
+    if (buildingKey === 'solar_plant') return { m: Math.floor(75 * factor), c: Math.floor(30 * factor), d: 0 };
+    return { m: 0, c: 0, d: 0 };
   };
 
   const buildings = [
@@ -289,6 +334,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
   const metalNow = planet.metal_amount ?? 0;
   const crystalNow = planet.crystal_amount ?? 0;
+  const deuteriumNow = planet.deuterium_amount ?? 0;
   
   // LOGIQUE QUEUE MULTIPLE
   const queue = planet.constructions || [];
@@ -312,7 +358,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
         const diffEnergy = nextEnergy - currentEnergy;
 
         const cost = getNextCost(build.id, build.lv);
-        const canAfford = metalNow >= cost.m && crystalNow >= cost.c;
+        const canAfford = metalNow >= cost.m && crystalNow >= cost.c && deuteriumNow >= (cost.d || 0);
         
         const theme = getResourceTheme(build.id);
         const Icon = theme.icon;
@@ -423,6 +469,12 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                             <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2"><Gem size={10} /> Cristal</span>
                             <span className={`text-xs font-mono font-bold ${crystalNow >= cost.c ? 'text-slate-300' : 'text-red-500'}`}>{Math.floor(cost.c).toLocaleString()}</span>
                         </div>
+                        {(cost.d || 0) > 0 && (
+                            <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${deuteriumNow >= (cost.d || 0) ? 'border-white/5' : 'border-red-900/50'}`}>
+                                <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2"><Droplets size={10} /> Deutérium</span>
+                                <span className={`text-xs font-mono font-bold ${deuteriumNow >= (cost.d || 0) ? 'text-slate-300' : 'text-red-500'}`}>{Math.floor(cost.d || 0).toLocaleString()}</span>
+                            </div>
+                        )}
                     </div>
                 )}
               </div>

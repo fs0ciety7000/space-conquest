@@ -115,10 +115,32 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
   const [now, setNow] = useState(new Date().getTime());
   const [buildingTypes, setBuildingTypes] = useState<BuildingTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<any>({
+    hangar_capacity_base: 500,
+    hangar_capacity_per_level: 500,
+    storage_capacity_base: 600000,
+    storage_capacity_growth: 1.6,
+  });
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Charger la config serveur
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch(apiUrl('/config'));
+        if (res.ok) {
+          const data = await res.json();
+          setConfig(data);
+        }
+      } catch (e) {
+        console.error("Erreur chargement config", e);
+      }
+    };
+    fetchConfig();
   }, []);
 
   useEffect(() => {
@@ -144,6 +166,73 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     };
     fetchBuildingTypes();
   }, [planet.id]);
+
+  // Calculer les stats avec config serveur
+  const getConfiguredStats = (id: string, level: number) => {
+    const next = level + 1;
+    switch(id) {
+        case 'hangar': {
+            const base = config.hangar_capacity_base || 500;
+            const perLevel = config.hangar_capacity_per_level || 500;
+            const current = base + (level * perLevel);
+            const nextVal = base + (next * perLevel);
+            const gain = nextVal - current;
+            return {
+                label: "Capacité Flotte",
+                current: current.toLocaleString(),
+                next: nextVal.toLocaleString(),
+                gain: `+${gain.toLocaleString()} vaisseaux`
+            };
+        }
+        case 'shipyard': {
+            const currentReduction = level > 0 ? Math.round((1 - 1/(1 + level)) * 100) : 0;
+            const nextReduction = Math.round((1 - 1/(1 + next)) * 100);
+            const gain = nextReduction - currentReduction;
+            return {
+                label: "Réduction Temps",
+                current: `-${currentReduction}%`,
+                next: `-${nextReduction}%`,
+                gain: `+${gain}% plus rapide`
+            };
+        }
+        case 'research': {
+            const currentReduction = level > 0 ? Math.round((1 - 1/(1 + level)) * 100) : 0;
+            const nextReduction = Math.round((1 - 1/(1 + next)) * 100);
+            const gain = nextReduction - currentReduction;
+            return {
+                label: "Réduction Temps Recherche",
+                current: `-${currentReduction}%`,
+                next: `-${nextReduction}%`,
+                gain: `+${gain}% plus rapide`
+            };
+        }
+        case 'armour': {
+            const currentBonus = level * 10;
+            const nextBonus = next * 10;
+            return {
+                label: "Bonus Structure Flotte",
+                current: `+${currentBonus}%`,
+                next: `+${nextBonus}%`,
+                gain: `+10% structure`
+            };
+        }
+        case 'resource_storage': {
+            const base = config.storage_capacity_base || 600000;
+            const growth = config.storage_capacity_growth || 1.6;
+            const currentCap = level === 0 ? base : Math.floor(base * Math.pow(growth, level));
+            const nextCap = Math.floor(base * Math.pow(growth, next));
+            const gain = nextCap - currentCap;
+            return {
+                label: "Stockage Max",
+                current: (currentCap / 1000).toFixed(0) + "k",
+                next: (nextCap / 1000).toFixed(0) + "k",
+                gain: `+${(gain / 1000).toFixed(0)}k capacité`
+            };
+        }
+        default:
+            return { label: "Niveau", current: level.toString(), next: next.toString(), gain: "+1 niveau" };
+    }
+  };
 
   const handleUpgrade = async (building_key: string) => {
     const building = buildingTypes.find(b => b.building_key === building_key);
@@ -202,7 +291,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
         const activeItem = queue.find((q: any) => q.building_type === building.building_key);
         const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
         const cost = getCost(building);
-        const stats = getFacilityStats(building.building_key, building.current_level);
+        const stats = getConfiguredStats(building.building_key, building.current_level);
         const canAfford = (planet.metal_amount >= cost.m) && (planet.crystal_amount >= cost.c) && (planet.deuterium_amount >= cost.d);
         const theme = getFacilityTheme(building.building_key);
         const Icon = theme.icon;
@@ -243,15 +332,22 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
 
                 {/* STATS DYNAMIQUES */}
                 {!locked && (
-                    <div className="mb-4 p-2 bg-black/30 rounded border border-white/5 flex items-center justify-between glass-card">
-                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
-                            <TrendingUp size={12} className={`${theme.color} animate-bounce-subtle`} />
-                            <span>{stats.label}</span>
+                    <div className="mb-4 p-3 bg-black/30 rounded border border-white/5 glass-card">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
+                                <TrendingUp size={12} className={`${theme.color} animate-bounce-subtle`} />
+                                <span>{stats.label}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs font-mono">
+                                <span className="text-slate-300">{stats.current}</span>
+                                <ChevronRight size={12} className="text-slate-600" />
+                                <span className={`${theme.color} font-bold animate-scale-pulse`}>{stats.next}</span>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 text-xs font-mono">
-                            <span className="text-slate-300">{stats.current}</span>
-                            <ChevronRight size={12} className="text-slate-600" />
-                            <span className={`${theme.color} font-bold animate-scale-pulse`}>{stats.next}</span>
+                        {/* Gain de l'amélioration */}
+                        <div className="bg-green-950/30 border border-green-500/20 rounded px-2 py-1.5 flex items-center justify-between">
+                            <span className="text-[9px] uppercase font-bold text-green-400/70">Gain</span>
+                            <span className="text-xs font-mono font-bold text-green-400">{stats.gain}</span>
                         </div>
                     </div>
                 )}
