@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import {
   Zap, Target, Eye, Microscope, Lock, CheckCircle2,
   Clock, Box, Gem, Droplets, Shield, Cpu, Atom,
-  Rocket, Gauge, Orbit, Telescope, Loader2
+  Rocket, Gauge, Orbit, Telescope, Loader2, Timer
 } from "lucide-react";
 import { apiUrl } from '@/config/api';
 import { toast } from 'sonner';
@@ -85,6 +85,25 @@ const calculateNextLevelCost = (tech: TechInfo) => {
   };
 };
 
+// Fonction pour formater le temps restant
+const formatTimeRemaining = (endTimeStr: string, now: number): string => {
+  const endTime = new Date(endTimeStr).getTime();
+  const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+
+  if (remaining <= 0) return "Terminé";
+
+  const hours = Math.floor(remaining / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+  }
+  return `${seconds}s`;
+};
+
 // Composant personnalisé pour chaque noeud technologique
 const TechNode = ({ data }: { data: any }) => {
   const config = getTechConfig(data.tech_key);
@@ -92,6 +111,20 @@ const TechNode = ({ data }: { data: any }) => {
   const isLocked = !data.allRequirementsMet;
   const isResearching = data.isResearching;
   const canAfford = data.canAfford;
+
+  // State pour le temps restant avec mise à jour chaque seconde
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
+
+  useEffect(() => {
+    if (isResearching && data.researchEndTime) {
+      const updateTimer = () => {
+        setTimeRemaining(formatTimeRemaining(data.researchEndTime, Date.now()));
+      };
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isResearching, data.researchEndTime]);
 
   return (
     <Card className={`
@@ -146,11 +179,19 @@ const TechNode = ({ data }: { data: any }) => {
           </div>
         )}
 
-        {/* Statut */}
+        {/* Statut avec temps restant */}
         {isResearching && (
-          <div className="mb-3 bg-indigo-950/30 border border-indigo-500/30 rounded-lg p-2 flex items-center gap-2">
-            <Loader2 size={12} className="text-indigo-400 animate-spin" />
-            <span className="text-[10px] text-indigo-400 font-bold">Recherche en cours...</span>
+          <div className="mb-3 bg-indigo-950/30 border border-indigo-500/30 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Loader2 size={12} className="text-indigo-400 animate-spin" />
+              <span className="text-[10px] text-indigo-400 font-bold">Recherche en cours...</span>
+            </div>
+            {data.researchEndTime && (
+              <div className="flex items-center gap-2 bg-indigo-900/40 rounded px-2 py-1.5">
+                <Timer size={14} className="text-indigo-300" />
+                <span className="text-sm font-mono font-bold text-indigo-200">{timeRemaining}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -365,7 +406,9 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     const nodes: Node[] = [];
 
     techTree.forEach((tech) => {
-      const isResearching = queue.some((q: any) => q.building_type === tech.tech_key);
+      const researchingItem = queue.find((q: any) => q.building_type === tech.tech_key);
+      const isResearching = !!researchingItem;
+      const researchEndTime = researchingItem?.end_time || null;
       const cost = calculateNextLevelCost(tech);
       const canAfford = metal >= cost.metal && crystal >= cost.crystal && deuterium >= cost.deuterium;
       const allRequirementsMet = tech.requirements.every(r => r.met);
@@ -377,6 +420,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
         data: {
           ...tech,
           isResearching,
+          researchEndTime,
           canAfford,
           allRequirementsMet,
           cost,
