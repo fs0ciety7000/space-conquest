@@ -61,6 +61,7 @@ mod m20260121_000002_add_homeworld_system;
 mod m20260121_000003_add_maintenance_system;
 mod m20260127_000001_create_beginner_protection;
 mod m20260127_000002_fix_graviton_costs;
+mod m20260128_000001_create_global_chat;
 
 pub struct Migrator;
 
@@ -129,6 +130,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260121_000003_add_maintenance_system::Migration),
             Box::new(m20260127_000001_create_beginner_protection::Migration),
             Box::new(m20260127_000002_fix_graviton_costs::Migration),
+            Box::new(m20260128_000001_create_global_chat::Migration),
         ]
     }
 }

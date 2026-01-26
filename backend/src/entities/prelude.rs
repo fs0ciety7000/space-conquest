@@ -50,3 +50,6 @@ pub use super :: planet_building :: Entity as PlanetBuilding ;
 pub use super :: defense_type :: Entity as DefenseType ;
 pub use super :: defense_requirement :: Entity as DefenseRequirement ;
 pub use super :: planet_defense :: Entity as PlanetDefense ;
+
+// Global chat system
+pub use super :: global_chat_message :: Entity as GlobalChatMessage ;

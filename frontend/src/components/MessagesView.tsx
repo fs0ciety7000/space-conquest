@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Mail, Send, RotateCw, Plus, ArrowLeft, User, MessageCircle, Archive, ArchiveRestore, Inbox } from "lucide-react";
+import { useEffect, useState, useRef } from 'react';
+import { Mail, Send, RotateCw, Plus, ArrowLeft, User, MessageCircle, Archive, ArchiveRestore, Inbox, Globe, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,17 @@ interface ThreadMessage {
     is_mine: boolean;
 }
 
+interface GlobalChatMessage {
+    id: string;
+    sender_id: string;
+    sender_name: string;
+    content: string;
+    created_at: string;
+    is_mine: boolean;
+}
+
+type ViewMode = 'inbox' | 'archived' | 'galactic';
+
 interface MessagesViewProps {
     token: string;
     userId: string;
@@ -37,10 +48,17 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
     const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
     const [thread, setThread] = useState<ThreadMessage[]>([]);
     const [loading, setLoading] = useState(false);
-    
-    // ✅ AJOUT : Gestion vue archivées
-    const [showArchived, setShowArchived] = useState(false);
-    
+
+    // Gestion des vues
+    const [viewMode, setViewMode] = useState<ViewMode>('inbox');
+    const showArchived = viewMode === 'archived';
+
+    // Chat galactique
+    const [globalMessages, setGlobalMessages] = useState<GlobalChatMessage[]>([]);
+    const [globalChatInput, setGlobalChatInput] = useState("");
+    const [sendingGlobal, setSendingGlobal] = useState(false);
+    const globalChatRef = useRef<HTMLDivElement>(null);
+
     // Nouveau message
     const [isComposing, setIsComposing] = useState(false);
     const [newRecipient, setNewRecipient] = useState("");
@@ -194,9 +212,68 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
         }
     };
 
+    // Charger le chat galactique
+    const fetchGlobalChat = async () => {
+        try {
+            const res = await fetch(apiUrl(`/global-chat?user_id=${userId}`), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setGlobalMessages(data);
+                // Scroll vers le bas
+                setTimeout(() => {
+                    if (globalChatRef.current) {
+                        globalChatRef.current.scrollTop = globalChatRef.current.scrollHeight;
+                    }
+                }, 100);
+            }
+        } catch (e) {
+            console.error("Erreur chargement chat galactique", e);
+        }
+    };
+
+    // Envoyer un message au chat galactique
+    const handleSendGlobalChat = async () => {
+        if (!globalChatInput.trim() || sendingGlobal) return;
+
+        setSendingGlobal(true);
+        try {
+            const res = await fetch(apiUrl(`/global-chat?user_id=${userId}`), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ content: globalChatInput.trim() })
+            });
+
+            if (res.ok) {
+                setGlobalChatInput("");
+                fetchGlobalChat();
+            } else {
+                const err = await res.json();
+                toast.error(err.error || "Erreur d'envoi");
+            }
+        } catch (e) {
+            toast.error("Erreur réseau");
+        } finally {
+            setSendingGlobal(false);
+        }
+    };
+
     useEffect(() => {
-        if (userId && token) fetchConversations();
-    }, [userId, token, showArchived]); // ✅ Recharger quand on change de vue
+        if (userId && token) {
+            if (viewMode === 'galactic') {
+                fetchGlobalChat();
+                // Rafraîchir le chat toutes les 5 secondes
+                const interval = setInterval(fetchGlobalChat, 5000);
+                return () => clearInterval(interval);
+            } else {
+                fetchConversations();
+            }
+        }
+    }, [userId, token, viewMode]);
 
     // ✅ Séparer les conversations actives et archivées
     const activeConversations = conversations.filter(c => !c.is_archived);
@@ -224,12 +301,12 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                         </div>
                     </div>
                     
-                    {/* ✅ ONGLETS INBOX / ARCHIVÉES */}
+                    {/* ONGLETS INBOX / GALACTIQUE / ARCHIVÉES */}
                     <div className="flex gap-1 lg:gap-2">
                         <button
-                            onClick={() => setShowArchived(false)}
-                            className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
-                                !showArchived
+                            onClick={() => { setViewMode('inbox'); setSelectedConv(null); }}
+                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
+                                viewMode === 'inbox'
                                     ? 'bg-indigo-600 text-white'
                                     : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
                             }`}
@@ -243,15 +320,26 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             )}
                         </button>
                         <button
-                            onClick={() => setShowArchived(true)}
-                            className={`flex-1 flex items-center justify-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 lg:py-2 rounded-lg text-[10px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
-                                showArchived
+                            onClick={() => { setViewMode('galactic'); setSelectedConv(null); setIsComposing(false); }}
+                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
+                                viewMode === 'galactic'
+                                    ? 'bg-purple-600 text-white'
+                                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
+                            }`}
+                        >
+                            <Globe size={12} className="lg:w-3.5 lg:h-3.5"/>
+                            <span className="hidden sm:inline">Galactique</span>
+                        </button>
+                        <button
+                            onClick={() => { setViewMode('archived'); setSelectedConv(null); }}
+                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
+                                viewMode === 'archived'
                                     ? 'bg-indigo-600 text-white'
                                     : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
                             }`}
                         >
                             <Archive size={12} className="lg:w-3.5 lg:h-3.5"/>
-                            <span className="hidden sm:inline">Archivées</span>
+                            <span className="hidden sm:inline">Archives</span>
                             {archivedConversations.length > 0 && (
                                 <span className="bg-slate-600 text-white text-[9px] lg:text-[10px] px-1 lg:px-1.5 rounded-full">
                                     {archivedConversations.length}
@@ -262,7 +350,63 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                 </div>
 
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
-                    {displayedConversations.length === 0 ? (
+                    {viewMode === 'galactic' ? (
+                        // CHAT GALACTIQUE INLINE (pour mobile)
+                        <div className="flex flex-col h-full lg:hidden">
+                            <div
+                                ref={globalChatRef}
+                                className="flex-1 overflow-y-auto p-3 space-y-2"
+                            >
+                                {globalMessages.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                                        <Globe size={32} className="mb-2 opacity-30 animate-pulse"/>
+                                        <p className="text-xs font-mono">Aucun message</p>
+                                        <p className="text-[10px] text-slate-600 mt-1">Soyez le premier !</p>
+                                    </div>
+                                ) : (
+                                    globalMessages.map(msg => (
+                                        <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                                            <div className={`max-w-[80%] p-2 rounded-lg ${
+                                                msg.is_mine
+                                                    ? 'bg-purple-600 text-white'
+                                                    : 'bg-slate-800 text-slate-200'
+                                            }`}>
+                                                {!msg.is_mine && (
+                                                    <div className="text-[10px] font-bold text-purple-400 mb-1">{msg.sender_name}</div>
+                                                )}
+                                                <p className="text-xs whitespace-pre-wrap">{msg.content}</p>
+                                                <span className="text-[9px] opacity-50 block mt-1">
+                                                    {new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                            <div className="p-2 border-t border-white/10 flex gap-2">
+                                <Input
+                                    placeholder="Message galactique..."
+                                    value={globalChatInput}
+                                    onChange={e => setGlobalChatInput(e.target.value)}
+                                    className="flex-1 bg-slate-950 border-slate-800 text-sm"
+                                    maxLength={500}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSendGlobalChat();
+                                        }
+                                    }}
+                                />
+                                <Button
+                                    onClick={handleSendGlobalChat}
+                                    disabled={!globalChatInput.trim() || sendingGlobal}
+                                    className="bg-purple-600 hover:bg-purple-500 px-3"
+                                >
+                                    <Send size={14}/>
+                                </Button>
+                            </div>
+                        </div>
+                    ) : displayedConversations.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-slate-500 p-6 text-center">
                             {showArchived ? (
                                 <>
@@ -296,7 +440,6 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                                                     {conv.unread_count}
                                                 </span>
                                             )}
-                                            {/* ✅ BOUTON ARCHIVAGE */}
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -445,6 +588,88 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             </Button>
                         </div>
                     </>
+                ) : viewMode === 'galactic' ? (
+                    // VUE CHAT GALACTIQUE (Desktop)
+                    <div className="flex-1 flex flex-col">
+                        <div className="p-4 border-b border-white/10 bg-purple-950/30 flex items-center gap-3">
+                            <Globe size={20} className="text-purple-400 animate-pulse"/>
+                            <div>
+                                <h3 className="font-black uppercase text-sm tracking-widest text-purple-300">
+                                    Canal Galactique
+                                </h3>
+                                <p className="text-[10px] text-purple-400/60">Chat en temps réel • Tous les joueurs</p>
+                            </div>
+                            <div className="ml-auto flex items-center gap-2 text-[10px] text-purple-400/60">
+                                <Users size={12}/>
+                                <span>Public</span>
+                            </div>
+                        </div>
+
+                        <div
+                            ref={globalChatRef}
+                            className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-slate-800"
+                        >
+                            {globalMessages.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                                    <Globe size={48} className="mb-3 opacity-30 animate-pulse"/>
+                                    <p className="text-sm font-mono">Aucun message dans le chat galactique</p>
+                                    <p className="text-xs text-slate-600 mt-2">Soyez le premier à envoyer un message !</p>
+                                </div>
+                            ) : (
+                                globalMessages.map(msg => (
+                                    <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                                        <div className={`max-w-[70%] p-3 rounded-xl transition-all hover:shadow-lg ${
+                                            msg.is_mine
+                                                ? 'bg-purple-600 text-white'
+                                                : 'bg-slate-800 text-slate-200'
+                                        }`}>
+                                            {!msg.is_mine && (
+                                                <div className="text-[10px] font-bold text-purple-400 mb-1 flex items-center gap-1">
+                                                    <User size={10}/>
+                                                    {msg.sender_name}
+                                                </div>
+                                            )}
+                                            <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                            <span className="text-[10px] opacity-60 block mt-1">
+                                                {new Date(msg.created_at).toLocaleTimeString('fr-FR', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t border-white/10 bg-slate-950/50">
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="Envoyer un message à tous les joueurs..."
+                                    value={globalChatInput}
+                                    onChange={e => setGlobalChatInput(e.target.value)}
+                                    className="flex-1 bg-slate-900 border-purple-800/50 focus:border-purple-500"
+                                    maxLength={500}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSendGlobalChat();
+                                        }
+                                    }}
+                                />
+                                <Button
+                                    onClick={handleSendGlobalChat}
+                                    disabled={!globalChatInput.trim() || sendingGlobal}
+                                    className="bg-purple-600 hover:bg-purple-500 px-6 card-depth hover:scale-105 transition-all"
+                                >
+                                    <Send size={16}/>
+                                </Button>
+                            </div>
+                            <p className="text-[9px] text-slate-600 mt-2 text-center">
+                                {globalChatInput.length}/500 caractères • Appuyez sur Entrée pour envoyer
+                            </p>
+                        </div>
+                    </div>
                 ) : (
                     // VUE VIDE
                     <div className="flex-1 flex items-center justify-center text-slate-600">

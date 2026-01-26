@@ -14,8 +14,8 @@ use uuid::Uuid;
 use chrono::Utc;
 
 use crate::entities::{
-    prelude::{User, Message, Conversation},
-    user, message, conversation
+    prelude::{User, Message, Conversation, GlobalChatMessage},
+    user, message, conversation, global_chat_message
 };
 use crate::websocket::WsEvent;
 use crate::AppState;
@@ -381,9 +381,126 @@ pub async fn delete_conversation_handler(
         .filter(message::Column::ConversationId.eq(conv_id))
         .exec(&state.db)
         .await;
-    
+
     // Supprimer la conversation
     let _ = Conversation::delete_by_id(conv_id).exec(&state.db).await;
-    
+
     StatusCode::OK.into_response()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CANAL GALACTIQUE (Chat Global pour tous les joueurs)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Serialize)]
+pub struct GlobalChatMessageDisplay {
+    id: Uuid,
+    sender_id: Uuid,
+    sender_name: String,
+    content: String,
+    created_at: chrono::NaiveDateTime,
+    is_mine: bool,
+}
+
+#[derive(Deserialize)]
+pub struct SendGlobalMessagePayload {
+    content: String,
+}
+
+// HANDLER : Récupérer les messages du chat global (derniers 100)
+pub async fn get_global_chat_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
+    let user_id = Uuid::parse_str(&user_id_str).unwrap_or_default();
+
+    // Récupérer les 100 derniers messages
+    let messages = GlobalChatMessage::find()
+        .order_by_desc(global_chat_message::Column::CreatedAt)
+        .limit(100)
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    // Inverser pour avoir l'ordre chronologique
+    let messages: Vec<GlobalChatMessageDisplay> = messages.into_iter().rev().map(|m| {
+        GlobalChatMessageDisplay {
+            id: m.id,
+            sender_id: m.sender_id,
+            sender_name: m.sender_name,
+            content: m.content,
+            created_at: m.created_at,
+            is_mine: m.sender_id == user_id,
+        }
+    }).collect();
+
+    Json(messages).into_response()
+}
+
+// HANDLER : Envoyer un message dans le chat global
+pub async fn send_global_chat_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<SendGlobalMessagePayload>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").unwrap_or(&String::new()).to_string();
+    let sender_id = match Uuid::parse_str(&user_id_str) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid user"}))).into_response(),
+    };
+
+    // Limiter la longueur du message
+    if payload.content.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Message vide"}))).into_response();
+    }
+
+    if payload.content.len() > 500 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Message trop long (max 500 caractères)"}))).into_response();
+    }
+
+    // Récupérer le nom de l'expéditeur
+    let sender = User::find_by_id(sender_id)
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    let sender_name = match sender {
+        Some(u) => u.username,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "User not found"}))).into_response(),
+    };
+
+    // Créer le message
+    let new_message = global_chat_message::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        sender_id: Set(sender_id),
+        sender_name: Set(sender_name.clone()),
+        content: Set(payload.content.trim().to_string()),
+        created_at: Set(Utc::now().naive_utc()),
+    };
+
+    let inserted = new_message.insert(&state.db).await;
+
+    match inserted {
+        Ok(msg) => {
+            // Notifier tous les utilisateurs connectés via WebSocket
+            if let Some(ref ws) = state.ws {
+                let event = WsEvent::GlobalChatMessage {
+                    sender_id,
+                    sender_name,
+                    content: msg.content.clone(),
+                    created_at: msg.created_at.to_string(),
+                };
+                ws.broadcast_global(event).await;
+            }
+
+            (StatusCode::OK, Json(json!({
+                "id": msg.id,
+                "content": msg.content,
+                "created_at": msg.created_at
+            }))).into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to send message"}))).into_response(),
+    }
 }

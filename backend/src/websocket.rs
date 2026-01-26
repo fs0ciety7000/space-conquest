@@ -60,6 +60,13 @@ impl WsState {
             }
         }
     }
+
+    /// Envoie un événement à toutes les connexions actives (chat galactique)
+    pub async fn broadcast_global(&self, event: WsEvent) {
+        for entry in self.connections.iter() {
+            let _ = entry.value().send(event.clone());
+        }
+    }
 }
 
 /// Événements envoyés du serveur vers le client
@@ -166,6 +173,15 @@ pub enum WsEvent {
     #[serde(rename = "connected")]
     Connected {
         planet_id: String,
+    },
+
+    /// Message du chat galactique
+    #[serde(rename = "global_chat_message")]
+    GlobalChatMessage {
+        sender_id: Uuid,
+        sender_name: String,
+        content: String,
+        created_at: String,
     },
 }
 
