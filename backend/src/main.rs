@@ -3741,7 +3741,8 @@ async fn get_my_planets_handler(
                 if let Ok(Some(tech)) = Technology::find_by_id(r.tech_id).one(&state.db).await {
                     research_queue_json.push(json!({
                         "tech_key": tech.tech_key,
-                        "target_level": r.researching_to_level
+                        "target_level": r.researching_to_level,
+                        "end_time": r.research_end_time.map(|t| t.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
                     }));
                 }
             }
@@ -4262,16 +4263,16 @@ async fn get_player_profile_handler(
     let show_techs = espionage_level >= 18;
     let show_all = is_own_profile;
     
-    // Flotte totale
-    let total_fleet = planets.iter().fold(0, |acc, p| {
-        acc + p.light_hunter_count + p.cruiser_count + p.transporter_count 
-            + p.colony_ship_count + p.recycler_count + p.spy_probe_count
-    });
-    
-    // Défenses totales
-    let total_defenses = planets.iter().fold(0, |acc, p| {
-        acc + p.missile_launcher_count + p.plasma_turret_count
-    });
+    // Flotte totale (depuis tables relationnelles)
+    let mut total_fleet = 0;
+    let mut total_defenses = 0;
+    for p in &planets {
+        let ship_counts = tech_tree::get_all_planet_ship_counts(&state.db, p.id).await.unwrap_or_default();
+        total_fleet += ship_counts.values().sum::<i32>();
+
+        let defense_counts = tech_tree::get_all_planet_defense_counts(&state.db, p.id).await.unwrap_or_default();
+        total_defenses += defense_counts.values().sum::<i32>();
+    }
     
     // Compter missions accomplies
     let planet_ids: Vec<Uuid> = planets.iter().map(|p| p.id).collect();

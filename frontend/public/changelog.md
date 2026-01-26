@@ -1,5 +1,99 @@
 # Changelog - Space Conquest
 
+## [2.4.0] - 2026-01-26 - Amélioration des Tables Relationnelles & Missions de Colonisation
+
+### 🛠️ Corrections & Améliorations
+
+#### ⏱️ Timer de Recherche TechTree
+**Fix**: Le timer dans l'arbre technologique fonctionne maintenant correctement
+
+**Détails**:
+- Utilise maintenant `research_queue` au lieu de `construction_queue`
+- Ajout de `end_time` dans la réponse API `research_queue`
+- Affichage du temps restant en temps réel
+
+---
+
+#### 📊 Cohérence des Tables Relationnelles
+**Fix**: Tous les composants utilisent maintenant les helpers de tables relationnelles
+
+**Composants mis à jour**:
+- `PlanetOverview.tsx` - Utilise `getBuildingLevel()` pour tous les niveaux
+- `MyPlanets.tsx` - Points de planète depuis l'API backend
+- `EmpireBar.tsx` - Production calculée avec niveaux relationnels
+- `ProductionStats.tsx` - Statistiques cohérentes
+- `Shipyard.tsx` - Capacité hangar depuis `getBuildingLevel()`
+- Profil/Statistiques - Flotte et défenses depuis tables relationnelles
+
+**Helpers utilisés**:
+- `getBuildingLevel(planet, 'building_key')` - Niveau de bâtiment
+- `getShipCount(planet, 'ship_key')` - Comptage de vaisseaux
+- `getTechLevel(planet, 'tech_key')` - Niveau de technologie
+
+---
+
+#### 🚀 Système de Points Amélioré
+**Feature**: Calcul des points côté backend avec formule complète
+
+**Détails**:
+- Points économiques (bâtiments, production)
+- Points militaires (vaisseaux, défenses)
+- Points de recherche (technologies)
+- API `/my-planets` retourne `points`, `economy_points`, `military_points`
+
+---
+
+#### 🛸 Affichage Complet des Vaisseaux
+**Feature**: Tous les types de vaisseaux sont maintenant visibles
+
+**Nouveaux vaisseaux affichés**:
+- Chasseurs Lourds (`heavy_hunter`)
+- Vaisseaux de Guerre (`battleship`)
+- Destructeurs (`destroyer`)
+- Bombardiers (`bomber`)
+- Étoile de la Mort (`deathstar`)
+
+Les vaisseaux avancés s'affichent uniquement si le joueur en possède.
+
+---
+
+#### 🌍 Missions de Colonisation avec Temps de Trajet
+**Feature**: La colonisation est maintenant une mission avec temps de voyage
+
+**Détails**:
+- Calcul de la distance source → cible
+- Temps de trajet basé sur la distance (1.5x plus lent que vaisseaux normaux)
+- Création d'une `fleet_mission` de type "colonize"
+- La planète est créée à l'arrivée de la mission
+- Vérification de l'emplacement libre à l'arrivée
+- Affichage du temps d'arrivée estimé
+
+---
+
+#### 💬 Chat Galactique
+**Feature**: Canal de discussion pour tous les joueurs
+
+**Détails**:
+- Nouvel onglet "Galactique" dans la messagerie
+- Messages en temps réel via WebSocket
+- Historique des 100 derniers messages
+- Interface similaire à un chat (pas email)
+
+**Fichiers**:
+- `backend/src/entities/global_chat_message.rs` - Entité message
+- `backend/src/messaging.rs` - Handlers chat global
+- `frontend/src/components/MessagesView.tsx` - Interface UI
+
+---
+
+### 📝 Notes Techniques
+
+- Le temps de construction minimum est de 10 secondes (configurable via `construction_speed_multiplier`)
+- Les défenses utilisent `getShipCount()` qui vérifie aussi `planet.defenses`
+- Le chat galactique utilise `broadcast_global()` pour envoyer à tous les clients connectés
+
+---
+
 ## [2.3.0] - 2026-01-21 - Système de Protection Débutant & Panel Admin
 
 ### 🛡️ Nouvelles Fonctionnalités

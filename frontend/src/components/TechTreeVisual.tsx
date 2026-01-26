@@ -294,6 +294,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   const queue = planet.constructions || [];
   const shipBuilds = planet.ship_builds || [];
   const defenseBuilds = planet.defense_builds || [];
+  const researchQueue = planet.research_queue || [];
   const isQueueFull = queue.length + shipBuilds.length + defenseBuilds.length >= 3;
 
   const metal = planet.metal_amount ?? 0;
@@ -406,7 +407,8 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     const nodes: Node[] = [];
 
     techTree.forEach((tech) => {
-      const researchingItem = queue.find((q: any) => q.building_type === tech.tech_key);
+      // Check research_queue for ongoing research (has tech_key and end_time)
+      const researchingItem = researchQueue.find((r: any) => r.tech_key === tech.tech_key);
       const isResearching = !!researchingItem;
       const researchEndTime = researchingItem?.end_time || null;
       const cost = calculateNextLevelCost(tech);
@@ -434,7 +436,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     });
 
     return nodes;
-  }, [techTree, queue, metal, crystal, deuterium, isQueueFull]);
+  }, [techTree, researchQueue, metal, crystal, deuterium, isQueueFull]);
 
   // Créer les edges (dépendances) dynamiquement
   const initialEdges: Edge[] = useMemo(() => {
