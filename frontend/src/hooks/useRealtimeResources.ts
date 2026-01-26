@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
+import { getTechLevel, getShipCount, getBuildingLevel } from '@/utils/techTreeCompat';
 
 interface PlanetData {
   metal_amount: number;
@@ -132,7 +132,7 @@ export function useRealtimeResources(
 
     // Calculer les productions par seconde
     const metalProdPerSec = calculateProductionPerSecond(
-      planet.metal_mine_level || 0,
+      getBuildingLevel(planet, 'metal_mine'),
       safeConfig.production_metal_base,
       safeConfig.production_metal_growth,
       energyRatio,
@@ -141,7 +141,7 @@ export function useRealtimeResources(
     );
 
     const crystalProdPerSec = calculateProductionPerSecond(
-      planet.crystal_mine_level || 0,
+      getBuildingLevel(planet, 'crystal_mine'),
       safeConfig.production_crystal_base,
       safeConfig.production_crystal_growth,
       energyRatio,
@@ -150,7 +150,7 @@ export function useRealtimeResources(
     );
 
     const deutProdPerSec = calculateProductionPerSecond(
-      planet.deuterium_mine_level || 0,
+      getBuildingLevel(planet, 'deuterium_mine'),
       safeConfig.production_deuterium_base,
       safeConfig.production_deuterium_growth,
       energyRatio,

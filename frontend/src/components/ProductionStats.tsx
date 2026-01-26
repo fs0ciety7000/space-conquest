@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
+import { getTechLevel, getShipCount, getBuildingLevel } from '@/utils/techTreeCompat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, Zap, Activity, Award, Rocket, Shield,
@@ -174,9 +174,9 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
     };
   };
 
-  const prodMetal = calculateProduction('metal', planet.metal_mine_level || 0, config.production_metal_base || 30, config.production_metal_growth || 1.1);
-  const prodCrystal = calculateProduction('crystal', planet.crystal_mine_level || 0, config.production_crystal_base || 20, config.production_crystal_growth || 1.1);
-  const prodDeut = calculateProduction('deuterium', planet.deuterium_mine_level || 0, config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05);
+  const prodMetal = calculateProduction('metal', getBuildingLevel(planet, 'metal_mine'), config.production_metal_base || 30, config.production_metal_growth || 1.1);
+  const prodCrystal = calculateProduction('crystal', getBuildingLevel(planet, 'crystal_mine'), config.production_crystal_base || 20, config.production_crystal_growth || 1.1);
+  const prodDeut = calculateProduction('deuterium', getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05);
 
   // Statistiques de combat
   const totalCombats = combatLogs.length;
