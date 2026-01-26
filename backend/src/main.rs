@@ -1446,6 +1446,91 @@ async fn get_planet_handler(
             }
 
             let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
+        } else if m.mission_type == "colonize" {
+            // Traiter la mission de colonisation
+            if let Some(fleet_data_str) = &m.fleet_data {
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(fleet_data_str) {
+                    let target_galaxy = data["target_galaxy"].as_i64().unwrap_or(1) as i32;
+                    let target_system = data["target_system"].as_i64().unwrap_or(1) as i32;
+                    let target_position = data["target_position"].as_i64().unwrap_or(1) as i32;
+                    let metal = data["metal"].as_f64().unwrap_or(0.0);
+                    let crystal = data["crystal"].as_f64().unwrap_or(0.0);
+                    let deuterium = data["deuterium"].as_f64().unwrap_or(0.0);
+                    let owner_id_str = data["owner_id"].as_str().unwrap_or("");
+                    let password = data["password"].as_str().unwrap_or("").to_string();
+
+                    // Vérifier que l'emplacement n'est pas déjà occupé (quelqu'un d'autre aurait pu coloniser entre temps)
+                    let exists = Planet::find()
+                        .filter(planet::Column::Galaxy.eq(target_galaxy))
+                        .filter(planet::Column::System.eq(target_system))
+                        .filter(planet::Column::Position.eq(target_position))
+                        .one(&state.db)
+                        .await
+                        .unwrap();
+
+                    if exists.is_none() {
+                        // Créer la nouvelle planète
+                        let owner_id = Uuid::parse_str(owner_id_str).unwrap_or_default();
+                        let colony_name = generate_colony_name();
+                        let new_id = Uuid::new_v4();
+
+                        let new_planet = planet::ActiveModel {
+                            id: Set(new_id),
+                            owner_id: Set(owner_id),
+                            name: Set(colony_name.clone()),
+                            password: Set(password),
+                            galaxy: Set(target_galaxy),
+                            system: Set(target_system),
+                            position: Set(target_position),
+                            metal_mine_level: Set(1),
+                            crystal_mine_level: Set(1),
+                            deuterium_mine_level: Set(1),
+                            solar_plant_level: Set(3),
+                            metal_amount: Set(500.0 + metal),
+                            crystal_amount: Set(500.0 + crystal),
+                            deuterium_amount: Set(deuterium),
+                            last_update: Set(Utc::now().naive_utc()),
+                            created_at: Set(Utc::now().naive_utc()),
+                            is_homeworld: Set(false),
+                            ..Default::default()
+                        };
+                        let _ = new_planet.insert(&state.db).await;
+
+                        // Créer les 8 slots de ressources pour la nouvelle planète
+                        use entities::resource_slot;
+                        let slots_init = vec![
+                            (1, "metal", 1, true),
+                            (2, "crystal", 1, true),
+                            (3, "deuterium", 1, true),
+                            (4, "energy", 0, true),
+                            (5, "metal", 0, false),
+                            (6, "metal", 0, false),
+                            (7, "metal", 0, false),
+                            (8, "metal", 0, false),
+                        ];
+
+                        for (slot_num, res_type, level, is_locked) in slots_init {
+                            let slot = resource_slot::ActiveModel {
+                                planet_id: Set(new_id),
+                                slot_number: Set(slot_num),
+                                resource_type: Set(res_type.to_string()),
+                                level: Set(level),
+                                is_locked: Set(is_locked),
+                                is_active: Set(is_locked),
+                                ..Default::default()
+                            };
+                            let _ = slot.insert(&state.db).await;
+                        }
+
+                        println!("🌍 Colonisation réussie: {} en [{}:{}:{}]", colony_name, target_galaxy, target_system, target_position);
+                    } else {
+                        // L'emplacement est maintenant occupé - le vaisseau de colonisation est perdu
+                        println!("❌ Colonisation échouée: [{}:{}:{}] est maintenant occupé", target_galaxy, target_system, target_position);
+                    }
+                }
+            }
+
+            let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
         }
     }
 
@@ -3395,6 +3480,14 @@ async fn colonize_handler(
         .await
         .unwrap_or(0);
 
+    // Compter aussi les missions de colonisation en cours
+    let pending_colonies = FleetMission::find()
+        .filter(fleet_mission::Column::SourcePlanetId.eq(current_id))
+        .filter(fleet_mission::Column::MissionType.eq("colonize"))
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
     // Récupérer le niveau d'astrophysique depuis la planète actuelle
     let astrophysics_level = match tech_tree::get_planet_tech_level(&state.db, current_id, "astrophysics").await {
         Ok(level) => level,
@@ -3404,13 +3497,13 @@ async fn colonize_handler(
     // Calculer la limite de planètes (1 par niveau d'astrophysique, max 10)
     let max_colonies = std::cmp::min(astrophysics_level as u64, 10);
 
-    if planet_count >= max_colonies {
+    if (planet_count + pending_colonies) >= max_colonies {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({
                 "error": format!(
                     "Limite de planètes atteinte ({}/{}). Recherchez l'Astrophysique pour coloniser plus de planètes.",
-                    planet_count,
+                    planet_count + pending_colonies,
                     max_colonies
                 )
             }))
@@ -3433,8 +3526,7 @@ async fn colonize_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de deutérium"}))).into_response();
     }
 
-    let mut att_planet = att_planet_data.clone().into_active_model();
-
+    // Vérifier que l'emplacement n'est pas déjà occupé
     let exists = Planet::find()
         .filter(planet::Column::Galaxy.eq(payload.galaxy))
         .filter(planet::Column::System.eq(payload.system))
@@ -3445,70 +3537,94 @@ async fn colonize_handler(
 
     if exists.is_some() { return (StatusCode::CONFLICT, Json(json!({"error": "Cet emplacement est déjà occupé"}))).into_response(); }
 
-    let owner_id = att_planet.owner_id.clone().unwrap();
-    let password = att_planet.password.clone().unwrap();
-    let colony_name = generate_colony_name();
-    let new_id = Uuid::new_v4();
-    
-    // La nouvelle planète commence avec 500 métal/cristal de base + ressources transportées
-    let new_planet = planet::ActiveModel {
-        id: Set(new_id), owner_id: Set(owner_id), name: Set(colony_name), password: Set(password), galaxy: Set(payload.galaxy), system: Set(payload.system), position: Set(payload.position),
-        metal_mine_level: Set(1), crystal_mine_level: Set(1), deuterium_mine_level: Set(1),
-        solar_plant_level: Set(3), // Niveau 3 = ~240 énergie, garantit le minimum de 150
-        metal_amount: Set(500.0 + metal_to_transport),
-        crystal_amount: Set(500.0 + crystal_to_transport),
-        deuterium_amount: Set(deuterium_to_transport),
-        last_update: Set(Utc::now().naive_utc()),
-        created_at: Set(Utc::now().naive_utc()),
-        is_homeworld: Set(false), // Les colonies ne sont jamais des planètes mères
-        ..Default::default()
+    // Vérifier qu'il n'y a pas déjà une mission de colonisation vers cet emplacement
+    let existing_colonize = FleetMission::find()
+        .filter(fleet_mission::Column::MissionType.eq("colonize"))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    for m in &existing_colonize {
+        if let Some(fleet_data_str) = &m.fleet_data {
+            if let Ok(data) = serde_json::from_str::<serde_json::Value>(fleet_data_str) {
+                if data["target_galaxy"] == payload.galaxy &&
+                   data["target_system"] == payload.system &&
+                   data["target_position"] == payload.position {
+                    return (StatusCode::CONFLICT, Json(json!({"error": "Une mission de colonisation est déjà en cours vers cet emplacement"}))).into_response();
+                }
+            }
+        }
+    }
+
+    // Calculer la distance et le temps de vol
+    let dist = game_logic::calculate_distance(
+        (att_planet_data.galaxy, att_planet_data.system, att_planet_data.position),
+        (payload.galaxy, payload.system, payload.position)
+    );
+
+    let travel_time = {
+        let config = state.config.read().unwrap();
+        let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
+        // Vaisseau de colonisation est plus lent que les autres vaisseaux
+        (game_logic::calculate_flight_time(dist, flight_speed) as f64 * 1.5) as i64
     };
 
+    let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time);
+
+    // Préparer les données de la mission en JSON
+    let colonize_data = json!({
+        "target_galaxy": payload.galaxy,
+        "target_system": payload.system,
+        "target_position": payload.position,
+        "metal": metal_to_transport,
+        "crystal": crystal_to_transport,
+        "deuterium": deuterium_to_transport,
+        "owner_id": owner_id.to_string(),
+        "password": att_planet_data.password.clone()
+    });
+
+    // Créer la mission de colonisation
+    let mission = fleet_mission::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        source_planet_id: Set(current_id),
+        target_planet_id: Set(current_id), // On utilise la même planète comme placeholder
+        mission_type: Set("colonize".to_string()),
+        arrival_time: Set(arrival),
+        metal: Set(metal_to_transport),
+        crystal: Set(crystal_to_transport),
+        deuterium: Set(deuterium_to_transport),
+        ships_count: Set(1),
+        fleet_data: Set(Some(colonize_data.to_string())),
+    };
+    let _ = mission.insert(&state.db).await;
+
     // Déduire le vaisseau et les ressources de la planète source
+    let mut att_planet = att_planet_data.clone().into_active_model();
     att_planet.colony_ship_count = Set(ships - 1);
     att_planet.metal_amount = Set(att_planet_data.metal_amount - metal_to_transport);
     att_planet.crystal_amount = Set(att_planet_data.crystal_amount - crystal_to_transport);
     att_planet.deuterium_amount = Set(att_planet_data.deuterium_amount - deuterium_to_transport);
     let _ = att_planet.update(&state.db).await;
-    let _ = new_planet.insert(&state.db).await;
 
-    // Créer les 8 slots de ressources pour la nouvelle planète
-    use entities::{prelude::ResourceSlot, resource_slot};
-
-    // Slots 1-4 : verrouillés avec les ressources de base
-    let slots_init = vec![
-        (1, "metal", 1, true),
-        (2, "crystal", 1, true),
-        (3, "deuterium", 1, true),
-        (4, "energy", 0, true),
-        (5, "metal", 0, false),
-        (6, "metal", 0, false),
-        (7, "metal", 0, false),
-        (8, "metal", 0, false),
-    ];
-
-    for (slot_num, res_type, level, is_locked) in slots_init {
-        let slot = resource_slot::ActiveModel {
-            planet_id: Set(new_id),
-            slot_number: Set(slot_num),
-            resource_type: Set(res_type.to_string()),
-            level: Set(level),
-            is_locked: Set(is_locked),
-            is_active: Set(is_locked), // Les slots locked sont actifs, les autres non
-            ..Default::default()
-        };
-        let _ = slot.insert(&state.db).await;
-    }
-
-    let mut message = format!("Colonisation réussie en [{}:{}:{}]", payload.galaxy, payload.system, payload.position);
-    if metal_to_transport > 0.0 || crystal_to_transport > 0.0 || deuterium_to_transport > 0.0 {
-        message.push_str(&format!(" avec {:.0}M / {:.0}C / {:.0}D", metal_to_transport, crystal_to_transport, deuterium_to_transport));
-    }
+    // Formater le temps de vol pour l'affichage
+    let hours = travel_time / 3600;
+    let minutes = (travel_time % 3600) / 60;
+    let seconds = travel_time % 60;
+    let time_str = if hours > 0 {
+        format!("{}h {}min {}s", hours, minutes, seconds)
+    } else if minutes > 0 {
+        format!("{}min {}s", minutes, seconds)
+    } else {
+        format!("{}s", seconds)
+    };
 
     (StatusCode::OK, Json(json!({
         "status": "success",
-        "message": message,
-        "new_planet_id": new_id
+        "message": format!("Mission de colonisation lancée vers [{}:{}:{}]", payload.galaxy, payload.system, payload.position),
+        "arrival_time": arrival.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        "travel_time": travel_time,
+        "travel_time_display": time_str,
+        "distance": dist
     }))).into_response()
 }
 
@@ -3600,6 +3716,9 @@ async fn get_my_planets_handler(
             // Get all tech levels
             let technologies = tech_tree::get_all_planet_tech_levels(&state.db, mp.id).await.unwrap_or_default();
 
+            // Calculate planet points
+            let (total_points, economy_points, military_points) = game_logic::calculate_planet_points(&mp, &state.db, &config).await;
+
             // Get construction queue
             let construction_queue = ConstructionQueue::find()
                 .filter(construction_queue::Column::PlanetId.eq(mp.id))
@@ -3687,7 +3806,11 @@ async fn get_my_planets_handler(
                 "construction_queue": construction_queue,
                 "research_queue": research_queue_json,
                 // Resource slots
-                "resource_slots": resource_slots_data
+                "resource_slots": resource_slots_data,
+                // Points (economy, military, total)
+                "points": total_points,
+                "economy_points": economy_points,
+                "military_points": military_points
             }));
         }
 

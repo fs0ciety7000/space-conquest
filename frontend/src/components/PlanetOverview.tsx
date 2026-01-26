@@ -246,9 +246,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     return Math.floor(prod);
   };
 
-  const prodMetal = calculateProduction('metal', planet.metal_mine_level, config.production_metal_base, config.production_metal_growth);
-  const prodCrystal = calculateProduction('crystal', planet.crystal_mine_level, config.production_crystal_base, config.production_crystal_growth);
-  const prodDeut = calculateProduction('deuterium', planet.deuterium_mine_level, config.production_deuterium_base, config.production_deuterium_growth);
+  const prodMetal = calculateProduction('metal', getBuildingLevel(planet, 'metal_mine'), config.production_metal_base, config.production_metal_growth);
+  const prodCrystal = calculateProduction('crystal', getBuildingLevel(planet, 'crystal_mine'), config.production_crystal_base, config.production_crystal_growth);
+  const prodDeut = calculateProduction('deuterium', getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base, config.production_deuterium_growth);
 
   // Energy data from backend
   const energyProd = planet.energy_production || 0;
@@ -276,7 +276,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   ) * hullBonus;
 
   const totalFleet = getTotalFleetCount(planet);
-  const hangarCap = 500 + ((planet.hangar_level || 0) * 500);
+  const hangarCap = 500 + (getBuildingLevel(planet, 'hangar') * 500);
   const totalDefense =
     (getShipCount(planet, 'rocket_launcher') || 0) +
     (getShipCount(planet, 'light_laser') || 0) +
@@ -810,7 +810,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5">
                     <div className="text-center">
                         <span className="text-[8px] text-slate-600 uppercase block">Centrale</span>
-                        <span className="text-yellow-400 font-mono text-xs font-bold">Niv.{planet.solar_plant_level}</span>
+                        <span className="text-yellow-400 font-mono text-xs font-bold">Niv.{getBuildingLevel(planet, 'solar_plant')}</span>
                     </div>
                     <div className="text-center border-x border-white/5">
                         <span className="text-[8px] text-slate-600 uppercase block">Tech. Énergie</span>
@@ -1264,7 +1264,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         <div className={`text-4xl font-black font-mono tracking-tighter ${totalFleet >= hangarCap ? 'text-orange-400 animate-pulse' : 'text-blue-400'} drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]`}>
                             {fmt(totalFleet)} <span className="text-xl text-slate-500">/ {fmt(hangarCap)}</span>
                         </div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Capacité Hangar Niv.{planet.hangar_level || 0}</div>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Capacité Hangar Niv.{getBuildingLevel(planet, 'hangar')}</div>
                     </div>
 
                     {/* Jauge de capacité style électrique */}
@@ -1300,13 +1300,18 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                             {[
-                                { label: "Chasseurs Légers", val: getShipCount(planet, 'light_hunter'), Icon: Target, color: "text-red-400" },
-                                { label: "Croiseurs", val: getShipCount(planet, 'cruiser'), Icon: Ship, color: "text-purple-400" },
-                                { label: "Recycleurs", val: getShipCount(planet, 'recycler'), Icon: Recycle, color: "text-green-400" },
-                                { label: "Sondes", val: getShipCount(planet, 'spy_probe'), Icon: Satellite, color: "text-cyan-400" },
-                                { label: "Vaisseaux Colons", val: getShipCount(planet, 'colony_ship'), Icon: Globe, color: "text-emerald-400" },
-                                { label: "Transporteurs", val: getShipCount(planet, 'transporter'), Icon: Truck, color: "text-amber-400" },
-                            ].map(item => (
+                                { label: "Chasseurs Légers", key: "light_hunter", val: getShipCount(planet, 'light_hunter'), Icon: Target, color: "text-red-400", alwaysShow: true },
+                                { label: "Chasseurs Lourds", key: "heavy_hunter", val: getShipCount(planet, 'heavy_hunter'), Icon: Scan, color: "text-orange-400", alwaysShow: false },
+                                { label: "Croiseurs", key: "cruiser", val: getShipCount(planet, 'cruiser'), Icon: Ship, color: "text-purple-400", alwaysShow: true },
+                                { label: "Vaisseaux de Guerre", key: "battleship", val: getShipCount(planet, 'battleship'), Icon: Sword, color: "text-rose-400", alwaysShow: false },
+                                { label: "Destructeurs", key: "destroyer", val: getShipCount(planet, 'destroyer'), Icon: Rocket, color: "text-pink-400", alwaysShow: false },
+                                { label: "Bombardiers", key: "bomber", val: getShipCount(planet, 'bomber'), Icon: Zap, color: "text-yellow-400", alwaysShow: false },
+                                { label: "Recycleurs", key: "recycler", val: getShipCount(planet, 'recycler'), Icon: Recycle, color: "text-green-400", alwaysShow: true },
+                                { label: "Sondes", key: "spy_probe", val: getShipCount(planet, 'spy_probe'), Icon: Satellite, color: "text-cyan-400", alwaysShow: true },
+                                { label: "Vaisseaux Colons", key: "colony_ship", val: getShipCount(planet, 'colony_ship'), Icon: Globe, color: "text-emerald-400", alwaysShow: true },
+                                { label: "Transporteurs", key: "transporter", val: getShipCount(planet, 'transporter'), Icon: Truck, color: "text-amber-400", alwaysShow: true },
+                                { label: "Étoile de la Mort", key: "deathstar", val: getShipCount(planet, 'deathstar'), Icon: Sparkles, color: "text-fuchsia-400", alwaysShow: false },
+                            ].filter(item => item.alwaysShow || (item.val || 0) > 0).map(item => (
                                 <div key={item.label} className="bg-slate-900/60 p-2.5 rounded-lg border border-white/5 flex items-center justify-between hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300 group card-depth">
                                     <div className="flex items-center gap-2">
                                         <item.Icon size={16} className={`${item.color} group-hover:scale-110 transition-transform drop-shadow-[0_0_4px_currentColor]`} />

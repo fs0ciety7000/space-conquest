@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
-import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
+import { getTechLevel, getShipCount, getBuildingLevel } from '@/utils/techTreeCompat';
 
 interface Planet {
   id: string;
@@ -54,6 +54,10 @@ interface Planet {
   research_queue?: any[];
   construction_queue?: any[];
   resource_slots?: any[];
+  // Points from backend
+  points?: number;
+  economy_points?: number;
+  military_points?: number;
 }
 
 interface MyPlanetsProps {
@@ -201,15 +205,15 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
     let growthFactor = 1;
 
     if (resourceType === 'metal') {
-      level = planet.metal_mine_level || 0;
+      level = getBuildingLevel(planet, 'metal_mine');
       baseFactor = config.production_metal_base;
       growthFactor = config.production_metal_growth;
     } else if (resourceType === 'crystal') {
-      level = planet.crystal_mine_level || 0;
+      level = getBuildingLevel(planet, 'crystal_mine');
       baseFactor = config.production_crystal_base;
       growthFactor = config.production_crystal_growth;
     } else {
-      level = planet.deuterium_mine_level || 0;
+      level = getBuildingLevel(planet, 'deuterium_mine');
       baseFactor = config.production_deuterium_base;
       growthFactor = config.production_deuterium_growth;
     }
@@ -257,9 +261,14 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
   const getHangarCap = (hangarLevel: number) => 500 + ((hangarLevel || 0) * 500);
 
   const getPlanetScore = (p: Planet) => {
-    const buildings = (p.metal_mine_level || 0) + (p.crystal_mine_level || 0) + 
-                     (p.deuterium_mine_level || 0) + (p.solar_plant_level || 0) +
-                     (p.shipyard_level || 0) + (p.research_lab_level || 0) + (p.hangar_level || 0);
+    // Use API-provided points if available (calculated by backend with full formula)
+    if (p.points !== undefined) {
+      return p.points;
+    }
+    // Fallback to simple calculation
+    const buildings = getBuildingLevel(p, 'metal_mine') + getBuildingLevel(p, 'crystal_mine') +
+                     getBuildingLevel(p, 'deuterium_mine') + getBuildingLevel(p, 'solar_plant') +
+                     getBuildingLevel(p, 'shipyard') + getBuildingLevel(p, 'research_lab') + getBuildingLevel(p, 'hangar');
     const fleet = getTotalFleet(p);
     const defense = getTotalDefense(p);
     return buildings * 10 + fleet * 5 + defense * 8;
@@ -425,7 +434,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {planets.map((planet, index) => {
           const totalFleet = getTotalFleet(planet);
-          const hangarCap = getHangarCap(planet.hangar_level);
+          const hangarCap = getHangarCap(getBuildingLevel(planet, 'hangar'));
           const totalDefense = getTotalDefense(planet);
           const score = getPlanetScore(planet);
           const isCurrent = planet.id === currentPlanetId;
@@ -531,7 +540,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm font-mono font-bold text-orange-400">{fmt(planet.metal_amount)}</span>
-                      <span className="text-[10px] text-slate-500">Nv.{planet.metal_mine_level || 0}</span>
+                      <span className="text-[10px] text-slate-500">Nv.{getBuildingLevel(planet, 'metal_mine')}</span>
                     </div>
                     <div className="text-[9px] text-orange-400 font-mono mt-0.5">
                       +{fmt(calculateProduction(planet, 'metal'))}/h
@@ -554,7 +563,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm font-mono font-bold text-cyan-400">{fmt(planet.crystal_amount)}</span>
-                      <span className="text-[10px] text-slate-500">Nv.{planet.crystal_mine_level || 0}</span>
+                      <span className="text-[10px] text-slate-500">Nv.{getBuildingLevel(planet, 'crystal_mine')}</span>
                     </div>
                     <div className="text-[9px] text-cyan-400 font-mono mt-0.5">
                       +{fmt(calculateProduction(planet, 'crystal'))}/h
@@ -577,7 +586,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm font-mono font-bold text-green-400">{fmt(planet.deuterium_amount)}</span>
-                      <span className="text-[10px] text-slate-500">Nv.{planet.deuterium_mine_level || 0}</span>
+                      <span className="text-[10px] text-slate-500">Nv.{getBuildingLevel(planet, 'deuterium_mine')}</span>
                     </div>
                     <div className="text-[9px] text-green-400 font-mono mt-0.5">
                       +{fmt(calculateProduction(planet, 'deuterium'))}/h
@@ -600,7 +609,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm font-mono font-bold text-yellow-400">{fmt(planet.energy || 0)}</span>
-                      <span className="text-[10px] text-slate-500">Nv.{planet.solar_plant_level || 0}</span>
+                      <span className="text-[10px] text-slate-500">Nv.{getBuildingLevel(planet, 'solar_plant')}</span>
                     </div>
                     <div className="text-[9px] text-yellow-400 font-mono mt-0.5">
                       +{fmt(planet.energy_production || 0)}/h
@@ -611,9 +620,9 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
                 {/* Bâtiments & Recherche */}
                 <div className="grid grid-cols-4 gap-1">
                   {[
-                    { label: "Chantier", val: planet.shipyard_level, icon: Factory },
-                    { label: "Labo", val: planet.research_lab_level, icon: Beaker },
-                    { label: "Hangar", val: planet.hangar_level, icon: Warehouse },
+                    { label: "Chantier", val: getBuildingLevel(planet, 'shipyard'), icon: Factory },
+                    { label: "Labo", val: getBuildingLevel(planet, 'research_lab'), icon: Beaker },
+                    { label: "Hangar", val: getBuildingLevel(planet, 'hangar'), icon: Warehouse },
                     { label: "Tech E.", val: getTechLevel(planet, 'energy_tech'), icon: Zap },
                   ].map(b => (
                     <div key={b.label} className="bg-slate-900/60 p-1.5 rounded text-center border border-white/5">

@@ -147,8 +147,11 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
             });
             const data = await res.json();
             if (res.ok) {
-                toast.success("Vaisseau de colonisation envoyé !", {
-                    description: data.message || `Colonie établie en [${galaxy}:${system}:${position}]`
+                const description = data.travel_time_display
+                    ? `${data.message} - Arrivée dans ${data.travel_time_display}`
+                    : data.message || `Colonie établie en [${galaxy}:${system}:${position}]`;
+                toast.success("🚀 Mission de colonisation lancée !", {
+                    description: description
                 });
                 setShowColonizeModal(false);
                 fetchSystem();

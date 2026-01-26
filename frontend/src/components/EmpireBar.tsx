@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 import { ConnectionStatus, getConnectionStatusColor, getConnectionStatusText } from '@/hooks/useWebSocket';
-import { getTechLevel } from '@/utils/techTreeCompat';
+import { getTechLevel, getBuildingLevel } from '@/utils/techTreeCompat';
 import {
   Zap,
   Stone,
@@ -194,13 +194,13 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     return Math.floor(prod);
   };
 
-  // Only calculate production if config is loaded
-  const prodMetal = configLoaded ? calculateProduction(planet.metal_mine_level || 0, config.production_metal_base || 30, config.production_metal_growth || 1.1, 'metal') : 0;
-  const prodCrystal = configLoaded ? calculateProduction(planet.crystal_mine_level || 0, config.production_crystal_base || 20, config.production_crystal_growth || 1.1, 'crystal') : 0;
-  const prodDeut = configLoaded ? calculateProduction(planet.deuterium_mine_level || 0, config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05, 'deuterium') : 0;
+  // Only calculate production if config is loaded (using relational tables)
+  const prodMetal = configLoaded ? calculateProduction(getBuildingLevel(planet, 'metal_mine'), config.production_metal_base || 30, config.production_metal_growth || 1.1, 'metal') : 0;
+  const prodCrystal = configLoaded ? calculateProduction(getBuildingLevel(planet, 'crystal_mine'), config.production_crystal_base || 20, config.production_crystal_growth || 1.1, 'crystal') : 0;
+  const prodDeut = configLoaded ? calculateProduction(getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05, 'deuterium') : 0;
 
   // Calcul de la capacité de stockage (600k base, x1.6 par niveau)
-  const storageLevel = planet.resource_storage_level || 0;
+  const storageLevel = getBuildingLevel(planet, 'resource_storage');
   const storageCapacity = storageLevel === 0 ? 600000 : Math.floor(600000 * Math.pow(1.6, storageLevel));
 
   return (

@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { GameImage } from '@/components/ui/game-image';
 import { getShipImage } from '@/lib/images';
-import { getTechLevel } from '@/utils/techTreeCompat';
+import { getTechLevel, getBuildingLevel } from '@/utils/techTreeCompat';
 
 interface ShipRequirement {
   requirement_type: string;
@@ -93,7 +93,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
 
   // Calculate current fleet from dynamic ship types data
   const currentFleet = shipTypes.reduce((total, ship) => total + ship.current_count, 0);
-  const maxFleet = 500 + ((planet.hangar_level || 0) * 500);
+  const maxFleet = 500 + (getBuildingLevel(planet, 'hangar') * 500);
   const capacityPercent = Math.min(100, (currentFleet / maxFleet) * 100);
   const isFull = currentFleet >= maxFleet;
   const remainingSpace = Math.max(0, maxFleet - currentFleet);
@@ -115,6 +115,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
       colony_ship: Rocket,
       recycler: Hammer,
       spy_probe: Info,
+      deathstar: ShieldCheck, // Use ShieldCheck for ultimate ship
     };
     return iconMap[ship_key] || Rocket;
   };
@@ -191,7 +192,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
                 </div>
                 <div>
                     <h3 className="text-sm font-black uppercase text-white tracking-widest">Capacité Hangar</h3>
-                    <p className="text-xs text-slate-400">Niveau {planet.hangar_level || 0} ({maxFleet} slots)</p>
+                    <p className="text-xs text-slate-400">Niveau {getBuildingLevel(planet, 'hangar')} ({maxFleet} slots)</p>
                 </div>
             </div>
             <div className="flex-1 mx-8">

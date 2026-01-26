@@ -4,8 +4,8 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    ActiveModelTrait, EntityTrait, Set, 
-    QueryFilter, QueryOrder, ColumnTrait, Condition,
+    ActiveModelTrait, EntityTrait, Set,
+    QueryFilter, QueryOrder, ColumnTrait, Condition, QuerySelect,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
