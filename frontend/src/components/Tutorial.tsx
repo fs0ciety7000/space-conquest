@@ -18,7 +18,7 @@ const tutorialSteps: Step[] = [
         <h2 className="text-xl font-black text-indigo-400">🚀 Bienvenue, Commandant !</h2>
         <p className="text-sm text-slate-300">
           Vous venez de prendre le commandement d'une nouvelle colonie spatiale. 
-          Ce tutoriel vous guidera à travers les fondamentaux de Space Conquest.
+          Ce tutoriel vous guidera à travers les fondamentaux de Space Conquest..
         </p>
         <p className="text-xs text-slate-500 italic">
           💡 Vous pouvez sauter le tutoriel à tout moment avec le bouton "Passer".
