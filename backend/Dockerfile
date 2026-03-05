@@ -1,4 +1,4 @@
-# Build stage - Rust stable 1.83
+# Build stage - context must be the repo root (docker-compose sets context: .)
 FROM rust:1.83-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
@@ -8,36 +8,30 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier le dossier migration depuis la racine
-COPY ../migration ./migration
+# Copy migration crate (relative to repo root)
+COPY migration ./migration
 
-# Build le binaire de migration (seulement downgrade home)
+# Build the migration binary
 WORKDIR /app/migration
 RUN cargo generate-lockfile && \
     cargo update -p home --precise 0.5.9 && \
     cargo build --release
 
-# Revenir à la racine pour le backend
+# Back to root for backend
 WORKDIR /app/backend
 
-# Copier le Cargo.toml du backend
-COPY Cargo.toml ./
+COPY backend/Cargo.toml ./
 
-# Créer un projet dummy
+# Dummy build to cache dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs
-
-# Générer Cargo.lock avec downgrade des crates problématiques
 RUN cargo generate-lockfile && \
     cargo update -p base64ct --precise 1.6.0 && \
     cargo update -p home --precise 0.5.9
-
-# Build les dépendances du backend
 RUN cargo build --release && rm -rf src target
 
-# Copier tout le code source du backend
-COPY src ./src
+# Copy full source
+COPY backend/src ./src
 
-# Build final du backend
 RUN cargo build --release
 
 # Runtime stage
@@ -46,17 +40,16 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copier les DEUX binaires
 COPY --from=builder /app/backend/target/release/backend /app/backend
 COPY --from=builder /app/migration/target/release/migration /app/migration
-
-# Copier le script d'entrée depuis la racine
-COPY ../run_migrations.sh /app/run_migrations.sh
+COPY run_migrations.sh /app/run_migrations.sh
 RUN chmod +x /app/run_migrations.sh
 
-# Point d'entrée pour lancer le script
+EXPOSE 8080
+
 ENTRYPOINT ["/app/run_migrations.sh"]

@@ -1,8 +1,4 @@
 :{$PORT} {
-  handle_path /api/* {
-    reverse_proxy https://space-conquest-production.up.railway.app
-  }
-
   root * /srv
   try_files {path} /index.html
   file_server

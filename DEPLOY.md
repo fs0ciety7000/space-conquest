@@ -1,206 +1,139 @@
-# 🚀 Guide de Déploiement Space Conquest
+# Deployment — Coolify + Cloudflare Tunnel
 
-## 💻 **Développement Local**
+## Architecture
 
-### 1. Backend (Rust + PostgreSQL)
+| Service   | Container port | Host port | Domaine                    |
+|-----------|---------------|-----------|----------------------------|
+| frontend  | 80            | 7001      | conquest.fs0ciety.org      |
+| backend   | 8080          | 7002      | backend.fs0ciety.org       |
+| postgres  | 5432          | 5433      | db2.fs0ciety.org (TCP)     |
+| pgadmin   | 80            | 5050      | manage.fs0ciety.org        |
+
+---
+
+## 1. Préparer le serveur
+
 ```bash
-cd backend
+git clone <repo> space-conquest
+cd space-conquest
 
-# PostgreSQL local (Docker)
-docker run -d -p 5432:5432 \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=spaceconquest \
-  postgres:16-alpine
-
-# Variables d'environnement
-cp ../.env.development .env
-# Éditer DATABASE_URL si nécessaire
-
-# Démarrage
-cargo run
-# API disponible sur http://localhost:8080
+cp .env.production .env
+# Editer .env : changer les mots de passe et JWT_SECRET
+nano .env
 ```
 
-### 2. Frontend (Vite + React)
+Générer un JWT_SECRET fort :
 ```bash
-cd frontend
-npm install
-npm run dev
-# App disponible sur http://localhost:5173
+openssl rand -hex 32
 ```
 
 ---
 
-## ☁️ **Production - Option 1: Render (Recommandé)**
+## 2. Importer le dump DB
 
-### 📦 **Backend sur Render**
-1. **render.com** → New → **Web Service**
-2. Connect GitHub repo `space-conquest`
-3. Configuration:
-   ```
-   Name: space-conquest-backend
-   Environment: Docker
-   Dockerfile path: Dockerfile
-   Plan: Free (512MB RAM)
-   
-   Environment Variables:
-   DATABASE_URL = postgres://user:pass@render-db/spaceconquest
-   BIND_ADDRESS = 0.0.0.0:$PORT
-   RUST_LOG = info
-   ```
-4. **Deploy** → Attendre 5-10min
-5. URL finale: `https://space-conquest-backend.onrender.com`
+Placer le dump dans `docker/init/` **avant** le premier démarrage :
 
-### 📦 **Base de données PostgreSQL**
-1. Render → New → **PostgreSQL**
-2. Plan: **Free** (90 jours) ou **Starter** ($7/mois)
-3. Copier l'URL `postgres://user:pass@region.render.com/dbname`
-4. Coller dans Backend → Environment Variables → `DATABASE_URL`
+```bash
+cp /chemin/vers/migration_dump_back.sql docker/init/01_dump.sql
+```
 
-### 🌐 **Frontend sur Netlify**
-1. **app.netlify.com** → **Add new site**
-2. Import from GitHub `space-conquest`
-3. Build settings:
-   ```
-   Base directory: frontend
-   Build command: npm run build
-   Publish directory: frontend/dist
-   
-   Environment Variables:
-   VITE_API_URL = https://space-conquest-backend.onrender.com
-   ```
-4. **Deploy** → 2min
-5. Custom domain (optionnel): Settings → Domain management
+> Postgres execute automatiquement tous les `.sql` de `/docker-entrypoint-initdb.d/` au premier
+> demarrage (data dir vide).
+>
+> **Important :** Si le dump inclut la table `seaql_migrations`, le backend ne re-appliquera pas
+> les migrations. Sinon les migrations Sea-ORM s'executeront sur un schema deja existant —
+> dans ce cas, supprimer le fichier et laisser le backend creer le schema depuis zero.
 
 ---
 
-## 🚂 **Production - Option 2: Railway (Tout-en-un)**
+## 3. Deployer avec Coolify
 
-### Backend + DB sur Railway
+### Option A — Docker Compose via Coolify UI (recommande)
+
+1. Dans Coolify, creer une nouvelle **Resource** → **Docker Compose**
+2. Pointer sur le repo Git (branche `main`)
+3. Dans **Environment Variables**, ajouter les variables de `.env.production` avec les vraies valeurs
+4. Coolify passera automatiquement les build args depuis les env vars (`VITE_API_URL`)
+5. Lancer le deploy
+
+### Option B — Commande directe sur le serveur
+
 ```bash
-# CLI (optionnel)
-npm install -g @railway/cli
-railway login
-
-# Web UI (plus simple)
-1. railway.app → New Project → Deploy from GitHub
-2. Sélectionner space-conquest
-3. Ajouter PostgreSQL: New → Database → Add PostgreSQL
-4. Variables auto-injectées (DATABASE_URL)
-5. Déploiement automatique sur chaque push
+docker compose --env-file .env up -d --build
 ```
-
-### Frontend sur Netlify (idem Option 1)
-- Changer `VITE_API_URL` vers Railway:
-  ```
-  VITE_API_URL = https://space-conquest-production.up.railway.app
-  ```
 
 ---
 
-## 🔄 **Workflow Git**
+## 4. Configurer Cloudflare Tunnel (HBD-tunnel)
 
-### Développement
+Dans le dashboard Zero Trust → Networks → Tunnels → HBD-tunnel → **Configure** → **Public Hostnames** :
+
+| Subdomain | Domain       | Type | URL                  |
+|-----------|--------------|------|----------------------|
+| conquest  | fs0ciety.org | HTTP | http://10.0.4.1:7001 |
+| backend   | fs0ciety.org | HTTP | http://10.0.4.1:7002 |
+| manage    | fs0ciety.org | HTTP | http://10.0.4.1:5050 |
+| db2       | fs0ciety.org | TCP  | tcp://10.0.4.1:5433  |
+
+> Pour `db2.fs0ciety.org` en TCP, activer Cloudflare Access avec une policy d'acces restreint.
+> L'acces a postgres via tunnel client-side necessite `cloudflared access tcp` cote client.
+> Pour la gestion quotidienne, utiliser pgAdmin (manage.fs0ciety.org) a la place.
+
+---
+
+## 5. Verification post-deploy
+
 ```bash
-git checkout -b feature/ma-feature
-# Code...
-git add .
-git commit -m "✨ Ajout feature X"
-git push origin feature/ma-feature
-# Pull Request sur GitHub
+# Logs en temps reel
+docker compose logs -f
+
+# Sante des services
+docker compose ps
+
+# Test backend
+curl https://backend.fs0ciety.org/health
+
+# Test frontend
+curl -I https://conquest.fs0ciety.org
 ```
 
-### Déploiement automatique
+---
+
+## 6. Mise a jour
+
 ```bash
-# Merge PR → main
-git checkout main
 git pull
-
-# Render/Railway/Netlify déploient automatiquement ! 🎉
+docker compose --env-file .env up -d --build
 ```
 
 ---
 
-## 🛠️ **Variables d'environnement**
+## Variables d'environnement requises
 
-### Backend (.env)
+| Variable          | Description                       | Exemple                       |
+|-------------------|-----------------------------------|-------------------------------|
+| POSTGRES_USER     | User PostgreSQL                   | spaceuser                     |
+| POSTGRES_PASSWORD | Mot de passe PostgreSQL           | (fort)                        |
+| POSTGRES_DB       | Nom de la base                    | space_db                      |
+| JWT_SECRET        | Secret JWT (32+ chars aleatoires) | `openssl rand -hex 32`        |
+| FRONTEND_URL      | URL publique du frontend          | https://conquest.fs0ciety.org |
+| VITE_API_URL      | URL publique du backend (build)   | https://backend.fs0ciety.org  |
+| PGADMIN_EMAIL     | Email admin pgAdmin               | admin@fs0ciety.org            |
+| PGADMIN_PASSWORD  | Mot de passe pgAdmin              | (fort)                        |
+| RUST_LOG          | Niveau de log backend             | info                          |
+
+---
+
+## Developpement local
+
 ```bash
-DATABASE_URL=postgres://user:pass@host:5432/dbname
-BIND_ADDRESS=0.0.0.0:8080
-RUST_LOG=info
+# Backend
+cp .env.production .env
+# Ajuster DATABASE_URL pour localhost si besoin
+docker compose up db redis -d
+cd backend && cargo run
+
+# Frontend
+cd frontend
+VITE_API_URL=http://localhost:8080 npm run dev
 ```
-
-### Frontend (.env)
-```bash
-# Dev local
-VITE_API_URL=http://localhost:8080
-
-# Prod (Netlify)
-VITE_API_URL=https://space-conquest-backend.onrender.com
-```
-
----
-
-## ✅ **Checklist Déploiement**
-
-- [ ] PostgreSQL créé (Render/Railway/Local)
-- [ ] Backend déployé (Render/Railway)
-- [ ] `DATABASE_URL` configurée
-- [ ] Migrations exécutées automatiquement
-- [ ] API accessible (test `/config`)
-- [ ] Frontend déployé (Netlify)
-- [ ] `VITE_API_URL` pointe vers backend prod
-- [ ] CORS configuré (`.permissive()` dans Rust)
-- [ ] Login/Register fonctionnels
-
----
-
-## 🐛 **Débogage**
-
-### Backend ne démarre pas
-```bash
-# Logs Render
-Dashboard → Logs → Chercher "error" ou "panic"
-
-# Logs Railway
-railway logs
-
-# Tester DATABASE_URL
-psql $DATABASE_URL
-```
-
-### Frontend ne connect pas
-```bash
-# Console navigateur (F12)
-# Chercher erreurs CORS ou 404
-
-# Vérifier VITE_API_URL
-Netlify → Site settings → Environment variables
-
-# Rebuild
-Netlify → Deploys → Trigger deploy
-```
-
----
-
-## 📊 **Coûts Mensuels**
-
-### Option Render + Netlify
-- Backend: **Gratuit** (sleep après inactivité) ou **$7/mois**
-- PostgreSQL: **$7/mois** (après 90j gratuits)
-- Frontend: **Gratuit** (100GB bande passante)
-**Total: $0-$14/mois**
-
-### Option Railway
-- Backend + DB: **$5/mois** (500h CPU incluses)
-- Frontend (Netlify): **Gratuit**
-**Total: $5/mois**
-
----
-
-## 🔗 **Liens Utiles**
-
-- [Render Docs](https://render.com/docs)
-- [Railway Docs](https://docs.railway.app)
-- [Netlify Docs](https://docs.netlify.com)
-- [Rust Dockerfile Best Practices](https://docs.docker.com/language/rust/)
