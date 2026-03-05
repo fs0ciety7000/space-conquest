@@ -1,0 +1,13 @@
+name: Deploy to Coolify
+on:
+  push:
+    branches:
+      - main  # Modifie si ta branche principale s'appelle 'master'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Coolify Deployment
+        run: |
+          curl -s -X GET "http://85.17.179.101:8000/api/v1/deploy?uuid=k4wo4scc0s88wskcsos8o888" \
+               -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
