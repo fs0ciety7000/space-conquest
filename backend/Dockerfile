@@ -1,5 +1,5 @@
 # Build stage - context must be the repo root (docker-compose sets context: .)
-FROM rust:1.83-bookworm AS builder
+FROM rust:1.85-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -8,31 +8,25 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy migration crate (relative to repo root)
+# Copy migration crate first (backend depends on it via path)
 COPY migration ./migration
 
-# Build the migration binary
+# Copy backend manifest and source
+COPY backend/Cargo.toml ./backend/Cargo.toml
+COPY backend/src ./backend/src
+
+# Build backend (generates lockfile and pins problematic crates)
+WORKDIR /app/backend
+RUN cargo generate-lockfile && \
+    cargo update -p base64ct --precise 1.6.0 && \
+    cargo update -p home --precise 0.5.9 && \
+    cargo build --release
+
+# Build migration binary separately
 WORKDIR /app/migration
 RUN cargo generate-lockfile && \
     cargo update -p home --precise 0.5.9 && \
     cargo build --release
-
-# Back to root for backend
-WORKDIR /app/backend
-
-COPY backend/Cargo.toml ./
-
-# Dummy build to cache dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo generate-lockfile && \
-    cargo update -p base64ct --precise 1.6.0 && \
-    cargo update -p home --precise 0.5.9
-RUN cargo build --release && rm -rf src target
-
-# Copy full source
-COPY backend/src ./src
-
-RUN cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim
