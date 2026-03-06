@@ -36,6 +36,7 @@ use chrono::{Utc, Duration, DateTime};
 use rand::Rng;
 
 use sea_orm_migration::MigratorTrait;
+use sea_orm::sea_query::extension::postgres::PgExpr;
 
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
