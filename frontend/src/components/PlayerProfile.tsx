@@ -211,6 +211,12 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
               <h1 className="text-4xl font-black text-white uppercase tracking-tight mb-2 flex items-center gap-3 justify-center md:justify-start">
                 {profile.username}
                 <Crown size={24} className="text-yellow-500" />
+                {profile.is_online && (
+                  <span className="flex items-center gap-1.5 text-sm font-normal text-emerald-400 normal-case tracking-normal">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    En ligne
+                  </span>
+                )}
               </h1>
               
               {/* ✅ Badge de rang (peut être masqué) */}

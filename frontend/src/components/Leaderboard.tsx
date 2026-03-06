@@ -29,6 +29,7 @@ interface RankItem {
     protection_until: string | null;
     galaxy: number | null;
     avatar_url?: string | null;
+    is_online?: boolean;
 }
 
 interface LeaderboardProps {
@@ -139,11 +140,16 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                         onClick={() => setSelectedPlayer(player.owner_id)}
                                                         className="flex items-center gap-2 group transition-all duration-300"
                                                     >
-                                                        <img
-                                                            src={player.avatar_url ? apiUrl(player.avatar_url) : `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${player.username}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
-                                                            alt=""
-                                                            className="w-7 h-7 rounded-lg object-cover shrink-0 opacity-90 group-hover:opacity-100"
-                                                        />
+                                                        <div className="relative shrink-0">
+                                                            <img
+                                                                src={player.avatar_url ? apiUrl(player.avatar_url) : `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${player.username}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
+                                                                alt=""
+                                                                className="w-7 h-7 rounded-lg object-cover opacity-90 group-hover:opacity-100"
+                                                            />
+                                                            {player.is_online && (
+                                                                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-1 ring-slate-900 animate-pulse" />
+                                                            )}
+                                                        </div>
                                                         <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2 group-hover:scale-105 transition-transform duration-300`}>
                                                             {player.username}
                                                         </span>

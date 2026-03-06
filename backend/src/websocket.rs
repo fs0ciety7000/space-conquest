@@ -25,6 +25,8 @@ use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait};
 pub struct WsState {
     /// Map des connexions actives: planet_id -> broadcast sender
     pub connections: Arc<DashMap<Uuid, broadcast::Sender<WsEvent>>>,
+    /// Map des utilisateurs connectés: user_id -> nb de connexions actives
+    pub user_connections: Arc<DashMap<Uuid, usize>>,
     /// Connexion à la base de données
     pub db: DatabaseConnection,
     /// Configuration serveur
@@ -35,9 +37,20 @@ impl WsState {
     pub fn new(db: DatabaseConnection, config: Arc<std::sync::RwLock<crate::ServerConfigCache>>) -> Self {
         Self {
             connections: Arc::new(DashMap::new()),
+            user_connections: Arc::new(DashMap::new()),
             db,
             config,
         }
+    }
+
+    /// Retourne true si l'utilisateur a au moins une connexion WS active
+    pub fn is_user_online(&self, user_id: Uuid) -> bool {
+        self.user_connections.get(&user_id).map(|v| *v > 0).unwrap_or(false)
+    }
+
+    /// Nombre total de joueurs connectés (connexions distinctes par user)
+    pub fn online_count(&self) -> usize {
+        self.user_connections.iter().filter(|v| *v.value() > 0).count()
     }
 
     /// Envoie un événement à tous les abonnés d'une planète
@@ -252,6 +265,18 @@ pub async fn websocket_handler(
 async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
     println!("🔌 WebSocket: Nouvelle connexion pour planet_id={}", planet_id);
 
+    // Récupérer l'owner_id pour tracker l'utilisateur en ligne
+    let owner_id: Option<Uuid> = match crate::entities::prelude::Planet::find_by_id(planet_id)
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(p)) => Some(p.owner_id),
+        _ => None,
+    };
+    if let Some(uid) = owner_id {
+        *state.user_connections.entry(uid).or_insert(0) += 1;
+    }
+
     let (mut sender, mut receiver) = socket.split();
 
     // Créer ou récupérer le canal broadcast pour cette planète
@@ -378,6 +403,18 @@ async fn handle_socket(socket: WebSocket, planet_id: Uuid, state: WsState) {
     // Supprimer la connexion si plus personne n'écoute
     if tx.receiver_count() == 0 {
         state.connections.remove(&planet_id);
+    }
+
+    // Décrémenter le compteur utilisateur
+    if let Some(uid) = owner_id {
+        let mut entry = state.user_connections.entry(uid).or_insert(0);
+        if *entry > 0 {
+            *entry -= 1;
+        }
+        if *entry == 0 {
+            drop(entry);
+            state.user_connections.remove(&uid);
+        }
     }
 }
 

@@ -1,5 +1,31 @@
 # Changelog - Space Conquest
 
+## [6.1.0] - 2026-03-06 - Présence en ligne, XP Vaisseau Amiral & Anti-flood
+
+### ✨ Nouveautés
+
+#### 🟢 Joueurs en ligne
+- **Pastille verte pulsante** sur l'avatar de chaque joueur connecté dans le classement.
+- Badge **"En ligne"** visible sur les profils joueurs.
+- **Compteur de joueurs connectés** affiché dans la barre d'empire (rafraîchi toutes les 30s).
+
+#### ⭐ XP Vaisseau Amiral
+- Le Vaisseau Amiral gagne désormais de l'expérience au fil des batailles.
+- **Combat PvP** : +20 XP en cas de victoire, +5 XP en cas de défaite.
+- **Expédition** : +10 XP en cas de succès ou secteur calme, +5 XP en cas de défaite.
+- **Level-up automatique** : plusieurs niveaux peuvent être franchis d'un coup si l'XP est suffisante.
+
+#### 🛡️ Anti-flood Attaques & Sabotages
+- Délai minimum entre deux attaques sur le même joueur (défaut : 2h), configurable depuis le panel admin.
+- Délai minimum entre deux sabotages sur la même planète (défaut : 2h), configurable depuis le panel admin.
+- **Exceptions** : délai levé si la cible vous contre-attaque, ou si victoire décisive (0 perte).
+- La vérification d'avantage technologique pour le sabotage est supprimée — seul le cooldown s'applique.
+
+### ⚙️ Panel Admin
+- Nouveau groupe **"Cooldowns & Anti-flood"** : `attack_cooldown_hours` et `sabotage_cooldown_hours`.
+
+---
+
 ## [6.0.0] - 2026-03-06 - Biomes, Tableau des Primes, Vaisseau Amiral & Réinitialisation de mot de passe
 
 ### ✨ Nouveautés

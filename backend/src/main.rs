@@ -82,6 +82,7 @@ struct RankItem {
     protection_until: Option<String>,
     galaxy: Option<i32>,
     avatar_url: Option<String>,
+    is_online: bool,
 }
 
 #[derive(Deserialize)]
@@ -305,6 +306,7 @@ async fn main() {
 .route("/users/:id/avatar", post(upload_avatar_handler).layer(DefaultBodyLimit::max(20 * 1024 * 1024)))
 .route("/users/:id/bio", put(update_bio_handler))
 .route("/players/search", get(search_players_handler))
+.route("/players/online-count", get(get_online_count_handler))
 .route("/players/:user_id/profile", get(get_player_profile_handler))
 // Friendships
 .route("/users/:id/friends", get(get_friends_handler))
@@ -1157,6 +1159,10 @@ async fn get_ranking_handler(
             ))
             .unwrap_or((None, None, None));
 
+        let is_online = state.ws.as_ref()
+            .map(|ws| ws.is_user_online(owner_id))
+            .unwrap_or(false);
+
         ranked_users.push(RankItem {
             rank: 0,
             username,
@@ -1170,6 +1176,7 @@ async fn get_ranking_handler(
             protection_until,
             galaxy,
             avatar_url,
+            is_online,
         });
     }
 
@@ -4403,6 +4410,11 @@ async fn search_players_handler(
     Json(results).into_response()
 }
 
+async fn get_online_count_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let count = state.ws.as_ref().map(|ws| ws.online_count()).unwrap_or(0);
+    Json(json!({ "count": count }))
+}
+
 async fn get_player_profile_handler(
     Path(user_id): Path<Uuid>,
     State(state): State<AppState>,
@@ -4599,10 +4611,15 @@ async fn get_player_profile_handler(
     }).collect();
 
     // ✅ Construire la réponse avec masquage progressif
+    let is_online = state.ws.as_ref()
+        .map(|ws| ws.is_user_online(user_id))
+        .unwrap_or(false);
+
     let response = json!({
         "user_id": user.id,
         "username": user.username,
         "is_admin": user.role == "admin",
+        "is_online": is_online,
         "avatar_url": user.avatar_url,
         "bio": if show_basic || show_all { json!(user.bio) } else { json!(null) },
         "last_login": if show_all { user.last_login.map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()) } else { None },

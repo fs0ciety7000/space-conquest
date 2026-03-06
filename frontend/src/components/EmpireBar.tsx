@@ -65,6 +65,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
 
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
   const [config, setConfig] = useState<any>({
     production_metal_base: 30,
@@ -80,6 +81,19 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
 
   // Hook pour ressources en temps réel
   const realtimeResources = useRealtimeResources(planet, speedFactor, config);
+
+  // Récupérer le nombre de joueurs en ligne (rafraîchi toutes les 30s)
+  useEffect(() => {
+    const fetchOnline = () => {
+      fetch(apiUrl('/players/online-count'))
+        .then(r => r.json())
+        .then(d => setOnlineCount(d.count))
+        .catch(() => {});
+    };
+    fetchOnline();
+    const interval = setInterval(fetchOnline, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Récupérer la configuration serveur
   useEffect(() => {
@@ -230,6 +244,12 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                 <h1 className="text-sm font-black text-white uppercase tracking-widest leading-none group-hover:text-indigo-300 transition-colors">Space Conquest</h1>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-indigo-400 font-mono tracking-wider">ONLINE</span>
+                  {onlineCount !== null && (
+                    <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      {onlineCount}
+                    </span>
+                  )}
                   {/* Indicateur WebSocket */}
                   <TooltipProvider>
                     <Tooltip>
