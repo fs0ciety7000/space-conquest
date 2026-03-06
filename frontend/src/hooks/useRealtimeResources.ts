@@ -111,7 +111,8 @@ export function useRealtimeResources(
     }
 
     // Reset anti-oscillation state when switching to a different planet
-    if (planet.id !== prevPlanetIdRef.current) {
+    const isNewPlanet = planet.id !== prevPlanetIdRef.current;
+    if (isNewPlanet) {
       prevServerRef.current = null;
       prevPlanetIdRef.current = planet.id;
     }
@@ -172,7 +173,8 @@ export function useRealtimeResources(
     //   (ex: déduction suite à une construction), on utilise directement la valeur serveur.
     // - Sinon (lag de polling normal), on garde la valeur affichée pour éviter les oscillations.
     const prevServer = prevServerRef.current;
-    const prevDisplayed = resources;
+    // Don't use stale resources from a different planet as the anti-oscillation baseline
+    const prevDisplayed = isNewPlanet ? null : resources;
     const serverNow = { metal: planet.metal_amount, crystal: planet.crystal_amount, deuterium: planet.deuterium_amount };
 
     const resolveBase = (serverVal: number, prevServerVal: number | undefined, displayedVal: number | undefined): number => {

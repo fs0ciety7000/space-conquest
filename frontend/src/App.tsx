@@ -135,15 +135,17 @@ export default function App() {
     enabled: !!token && !!planetId,
     onResourcesUpdate: (resources) => {
       // Mettre à jour les ressources de la planète en temps réel
-      if (planet) {
-        setPlanet((prev: any) => ({
+      // Guard: ignore updates from a stale WS connection (old planet)
+      setPlanet((prev: any) => {
+        if (!prev || prev.id !== currentPlanetIdRef.current) return prev;
+        return {
           ...prev,
           metal_amount: resources.metal,
           crystal_amount: resources.crystal,
           deuterium_amount: resources.deuterium,
           energy_ratio: resources.energy_ratio,
-        }));
-      }
+        };
+      });
     },
     onConstructionComplete: (data) => {
       playSound('build');
