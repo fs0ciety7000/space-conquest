@@ -54,35 +54,50 @@ pub struct PlanetUpdate {
     pub metal_amount: Option<f64>,
     pub crystal_amount: Option<f64>,
     pub deuterium_amount: Option<f64>,
-    
+
     // Mines
     pub metal_mine_level: Option<i32>,
     pub crystal_mine_level: Option<i32>,
     pub deuterium_mine_level: Option<i32>,
     pub solar_plant_level: Option<i32>,
-    
+
     // Installations
     pub shipyard_level: Option<i32>,
     pub research_lab_level: Option<i32>,
     pub hangar_level: Option<i32>,
-    
+
     // Technologies
     pub energy_tech_level: Option<i32>,
     pub laser_battery_level: Option<i32>,
     pub armour_tech_level: Option<i32>,
     pub espionage_tech_level: Option<i32>,
-    
+    pub weapons_tech_level: Option<i32>,
+    pub shield_tech_level: Option<i32>,
+
     // Flotte
     pub light_hunter_count: Option<i32>,
+    pub heavy_hunter_count: Option<i32>,
     pub cruiser_count: Option<i32>,
+    pub battleship_count: Option<i32>,
+    pub bomber_count: Option<i32>,
+    pub destroyer_count: Option<i32>,
     pub recycler_count: Option<i32>,
     pub spy_probe_count: Option<i32>,
     pub colony_ship_count: Option<i32>,
     pub transporter_count: Option<i32>,
-    
+    pub deathstar_count: Option<i32>,
+
     // Défenses
-    pub missile_launcher_count: Option<i32>,
+    pub rocket_launcher_count: Option<i32>,
+    pub light_laser_count: Option<i32>,
+    pub heavy_laser_count: Option<i32>,
+    pub gauss_cannon_count: Option<i32>,
+    pub ion_cannon_count: Option<i32>,
     pub plasma_turret_count: Option<i32>,
+    pub small_shield_count: Option<i32>,
+    pub large_shield_count: Option<i32>,
+    pub anti_missile_count: Option<i32>,
+    pub interplanetary_missile_count: Option<i32>,
 }
 
 // Vérification admin - vérifie le rôle dans la DB
@@ -167,25 +182,40 @@ pub async fn get_planet_admin_handler(
 
         let mut planet_json = serde_json::to_value(&p).unwrap();
         if let Some(obj) = planet_json.as_object_mut() {
-            obj.insert("metal_mine_level".to_string(), json!(building_levels.get("metal").copied().unwrap_or(0)));
-            obj.insert("crystal_mine_level".to_string(), json!(building_levels.get("crystal").copied().unwrap_or(0)));
-            obj.insert("deuterium_mine_level".to_string(), json!(building_levels.get("deuterium").copied().unwrap_or(0)));
+            obj.insert("metal_mine_level".to_string(), json!(building_levels.get("metal_mine").copied().unwrap_or(0)));
+            obj.insert("crystal_mine_level".to_string(), json!(building_levels.get("crystal_mine").copied().unwrap_or(0)));
+            obj.insert("deuterium_mine_level".to_string(), json!(building_levels.get("deuterium_mine").copied().unwrap_or(0)));
             obj.insert("solar_plant_level".to_string(), json!(building_levels.get("solar_plant").copied().unwrap_or(0)));
             obj.insert("shipyard_level".to_string(), json!(building_levels.get("shipyard").copied().unwrap_or(0)));
-            obj.insert("research_lab_level".to_string(), json!(building_levels.get("research").copied().unwrap_or(0)));
+            obj.insert("research_lab_level".to_string(), json!(building_levels.get("research_lab").copied().unwrap_or(0)));
             obj.insert("hangar_level".to_string(), json!(building_levels.get("hangar").copied().unwrap_or(0)));
             obj.insert("energy_tech_level".to_string(), json!(tech_levels.get("energy_tech").copied().unwrap_or(0)));
             obj.insert("laser_battery_level".to_string(), json!(tech_levels.get("laser_tech").copied().unwrap_or(0)));
             obj.insert("armour_tech_level".to_string(), json!(tech_levels.get("armour_tech").copied().unwrap_or(0)));
             obj.insert("espionage_tech_level".to_string(), json!(tech_levels.get("espionage").copied().unwrap_or(0)));
+            obj.insert("weapons_tech_level".to_string(), json!(tech_levels.get("weapons_tech").copied().unwrap_or(0)));
+            obj.insert("shield_tech_level".to_string(), json!(tech_levels.get("shield_tech").copied().unwrap_or(0)));
             obj.insert("light_hunter_count".to_string(), json!(ship_counts.get("light_hunter").copied().unwrap_or(0)));
+            obj.insert("heavy_hunter_count".to_string(), json!(ship_counts.get("heavy_hunter").copied().unwrap_or(0)));
             obj.insert("cruiser_count".to_string(), json!(ship_counts.get("cruiser").copied().unwrap_or(0)));
+            obj.insert("battleship_count".to_string(), json!(ship_counts.get("battleship").copied().unwrap_or(0)));
+            obj.insert("bomber_count".to_string(), json!(ship_counts.get("bomber").copied().unwrap_or(0)));
+            obj.insert("destroyer_count".to_string(), json!(ship_counts.get("destroyer").copied().unwrap_or(0)));
             obj.insert("recycler_count".to_string(), json!(ship_counts.get("recycler").copied().unwrap_or(0)));
             obj.insert("spy_probe_count".to_string(), json!(ship_counts.get("spy_probe").copied().unwrap_or(0)));
             obj.insert("colony_ship_count".to_string(), json!(ship_counts.get("colony_ship").copied().unwrap_or(0)));
             obj.insert("transporter_count".to_string(), json!(ship_counts.get("transporter").copied().unwrap_or(0)));
-            obj.insert("missile_launcher_count".to_string(), json!(defense_counts.get("missile_launcher").copied().unwrap_or(0)));
+            obj.insert("deathstar_count".to_string(), json!(ship_counts.get("deathstar").copied().unwrap_or(0)));
+            obj.insert("rocket_launcher_count".to_string(), json!(defense_counts.get("rocket_launcher").copied().unwrap_or(0)));
+            obj.insert("light_laser_count".to_string(), json!(defense_counts.get("light_laser").copied().unwrap_or(0)));
+            obj.insert("heavy_laser_count".to_string(), json!(defense_counts.get("heavy_laser").copied().unwrap_or(0)));
+            obj.insert("gauss_cannon_count".to_string(), json!(defense_counts.get("gauss_cannon").copied().unwrap_or(0)));
+            obj.insert("ion_cannon_count".to_string(), json!(defense_counts.get("ion_cannon").copied().unwrap_or(0)));
             obj.insert("plasma_turret_count".to_string(), json!(defense_counts.get("plasma_turret").copied().unwrap_or(0)));
+            obj.insert("small_shield_count".to_string(), json!(defense_counts.get("small_shield").copied().unwrap_or(0)));
+            obj.insert("large_shield_count".to_string(), json!(defense_counts.get("large_shield").copied().unwrap_or(0)));
+            obj.insert("anti_missile_count".to_string(), json!(defense_counts.get("anti_missile").copied().unwrap_or(0)));
+            obj.insert("interplanetary_missile_count".to_string(), json!(defense_counts.get("interplanetary_missile").copied().unwrap_or(0)));
         }
         Json(planet_json).into_response()
     } else {
@@ -242,12 +272,12 @@ pub async fn update_planet_admin_handler(
         Ok(updated) => {
             // Upsert buildings into planet_buildings
             let building_updates: &[(&str, Option<i32>)] = &[
-                ("metal", updates.metal_mine_level),
-                ("crystal", updates.crystal_mine_level),
-                ("deuterium", updates.deuterium_mine_level),
+                ("metal_mine", updates.metal_mine_level),
+                ("crystal_mine", updates.crystal_mine_level),
+                ("deuterium_mine", updates.deuterium_mine_level),
                 ("solar_plant", updates.solar_plant_level),
                 ("shipyard", updates.shipyard_level),
-                ("research", updates.research_lab_level),
+                ("research_lab", updates.research_lab_level),
                 ("hangar", updates.hangar_level),
             ];
             let now = Utc::now().naive_utc();
@@ -286,6 +316,8 @@ pub async fn update_planet_admin_handler(
                 ("laser_tech", updates.laser_battery_level),
                 ("armour_tech", updates.armour_tech_level),
                 ("espionage", updates.espionage_tech_level),
+                ("weapons_tech", updates.weapons_tech_level),
+                ("shield_tech", updates.shield_tech_level),
             ];
             for (key, level_opt) in tech_updates {
                 if let Some(level) = level_opt {
@@ -317,11 +349,16 @@ pub async fn update_planet_admin_handler(
             // Upsert ships into planet_ships
             let ship_updates: &[(&str, Option<i32>)] = &[
                 ("light_hunter", updates.light_hunter_count),
+                ("heavy_hunter", updates.heavy_hunter_count),
                 ("cruiser", updates.cruiser_count),
+                ("battleship", updates.battleship_count),
+                ("bomber", updates.bomber_count),
+                ("destroyer", updates.destroyer_count),
                 ("recycler", updates.recycler_count),
                 ("spy_probe", updates.spy_probe_count),
                 ("colony_ship", updates.colony_ship_count),
                 ("transporter", updates.transporter_count),
+                ("deathstar", updates.deathstar_count),
             ];
             for (key, count_opt) in ship_updates {
                 if let Some(count) = count_opt {
@@ -352,8 +389,16 @@ pub async fn update_planet_admin_handler(
 
             // Upsert defenses into planet_defenses
             let defense_updates: &[(&str, Option<i32>)] = &[
-                ("missile_launcher", updates.missile_launcher_count),
+                ("rocket_launcher", updates.rocket_launcher_count),
+                ("light_laser", updates.light_laser_count),
+                ("heavy_laser", updates.heavy_laser_count),
+                ("gauss_cannon", updates.gauss_cannon_count),
+                ("ion_cannon", updates.ion_cannon_count),
                 ("plasma_turret", updates.plasma_turret_count),
+                ("small_shield", updates.small_shield_count),
+                ("large_shield", updates.large_shield_count),
+                ("anti_missile", updates.anti_missile_count),
+                ("interplanetary_missile", updates.interplanetary_missile_count),
             ];
             for (key, count_opt) in defense_updates {
                 if let Some(count) = count_opt {

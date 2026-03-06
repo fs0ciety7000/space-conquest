@@ -476,6 +476,15 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                                 <span className={`text-xs font-mono font-bold ${deuteriumNow >= (cost.d || 0) ? 'text-slate-300' : 'text-red-500'}`}>{Math.floor(cost.d || 0).toLocaleString()}</span>
                             </div>
                         )}
+                        {(() => {
+                            const buildTime = buildingTypes.find(b => b.building_key === build.id)?.next_level_time_seconds;
+                            return buildTime ? (
+                                <div className="flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border border-indigo-500/20">
+                                    <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2"><Timer size={10}/> Durée</span>
+                                    <span className="text-xs font-mono font-bold text-indigo-300">{formatDuration(buildTime)}</span>
+                                </div>
+                            ) : null;
+                        })()}
                     </div>
                 )}
               </div>

@@ -54,18 +54,33 @@ interface PlanetData {
   laser_battery_level: number;
   armour_tech_level: number;
   espionage_tech_level: number;
+  weapons_tech_level: number;
+  shield_tech_level: number;
 
   // Flotte
   light_hunter_count: number;
+  heavy_hunter_count: number;
   cruiser_count: number;
+  battleship_count: number;
+  bomber_count: number;
+  destroyer_count: number;
   recycler_count: number;
   spy_probe_count: number;
   colony_ship_count: number;
   transporter_count: number;
+  deathstar_count: number;
 
   // Défenses
-  missile_launcher_count: number;
+  rocket_launcher_count: number;
+  light_laser_count: number;
+  heavy_laser_count: number;
+  gauss_cannon_count: number;
+  ion_cannon_count: number;
   plasma_turret_count: number;
+  small_shield_count: number;
+  large_shield_count: number;
+  anti_missile_count: number;
+  interplanetary_missile_count: number;
 }
 
 interface ServerStats {
@@ -1540,47 +1555,26 @@ export default function AdminPanel() {
                 {/* TECHNOLOGIES */}
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-widest text-green-400 mb-3">Technologies</h3>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div>
-                      <label className="text-xs text-slate-500 mb-1 block">Énergie</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={editedData.energy_tech_level ?? 0}
-                        onChange={(e) => setEditedData({...editedData, energy_tech_level: parseInt(e.target.value) || 0})}
-                        className="bg-black/40 border-white/10 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 mb-1 block">Laser</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={editedData.laser_battery_level ?? 0}
-                        onChange={(e) => setEditedData({...editedData, laser_battery_level: parseInt(e.target.value) || 0})}
-                        className="bg-black/40 border-white/10 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 mb-1 block">Blindage</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={editedData.armour_tech_level ?? 0}
-                        onChange={(e) => setEditedData({...editedData, armour_tech_level: parseInt(e.target.value) || 0})}
-                        className="bg-black/40 border-white/10 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 mb-1 block">Espionnage</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={editedData.espionage_tech_level ?? 0}
-                        onChange={(e) => setEditedData({...editedData, espionage_tech_level: parseInt(e.target.value) || 0})}
-                        className="bg-black/40 border-white/10 text-white font-mono"
-                      />
-                    </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { key: 'energy_tech_level', label: 'Énergie' },
+                      { key: 'laser_battery_level', label: 'Laser' },
+                      { key: 'armour_tech_level', label: 'Blindage' },
+                      { key: 'weapons_tech_level', label: 'Armes' },
+                      { key: 'shield_tech_level', label: 'Bouclier' },
+                      { key: 'espionage_tech_level', label: 'Espionnage' },
+                    ].map(item => (
+                      <div key={item.key}>
+                        <label className="text-xs text-slate-500 mb-1 block">{item.label}</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={(editedData as any)[item.key] ?? 0}
+                          onChange={(e) => setEditedData({...editedData, [item.key]: parseInt(e.target.value) || 0})}
+                          className="bg-black/40 border-white/10 text-white font-mono"
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -1589,12 +1583,17 @@ export default function AdminPanel() {
                   <h3 className="text-xs font-black uppercase tracking-widest text-cyan-400 mb-3">Flotte</h3>
                   <div className="grid grid-cols-3 gap-3">
                     {[
-                      { key: 'light_hunter_count', label: 'Chasseurs' },
+                      { key: 'light_hunter_count', label: 'Chasseurs Légers' },
+                      { key: 'heavy_hunter_count', label: 'Chasseurs Lourds' },
                       { key: 'cruiser_count', label: 'Croiseurs' },
+                      { key: 'battleship_count', label: 'Cuirassés' },
+                      { key: 'bomber_count', label: 'Bombardiers' },
+                      { key: 'destroyer_count', label: 'Destroyers' },
                       { key: 'recycler_count', label: 'Recycleurs' },
                       { key: 'spy_probe_count', label: 'Sondes' },
                       { key: 'colony_ship_count', label: 'Colons' },
                       { key: 'transporter_count', label: 'Transporteurs' },
+                      { key: 'deathstar_count', label: 'Étoile de la Mort' },
                     ].map(item => (
                       <div key={item.key}>
                         <label className="text-xs text-slate-500 mb-1 block">{item.label}</label>
@@ -1613,27 +1612,30 @@ export default function AdminPanel() {
                 {/* DÉFENSES */}
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-widest text-red-400 mb-3">Défenses</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-slate-500 mb-1 block">Missiles</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={editedData.missile_launcher_count ?? 0}
-                        onChange={(e) => setEditedData({...editedData, missile_launcher_count: parseInt(e.target.value) || 0})}
-                        className="bg-black/40 border-white/10 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 mb-1 block">Plasma</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={editedData.plasma_turret_count ?? 0}
-                        onChange={(e) => setEditedData({...editedData, plasma_turret_count: parseInt(e.target.value) || 0})}
-                        className="bg-black/40 border-white/10 text-white font-mono"
-                      />
-                    </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { key: 'rocket_launcher_count', label: 'Lance-Roquettes' },
+                      { key: 'light_laser_count', label: 'Laser Léger' },
+                      { key: 'heavy_laser_count', label: 'Laser Lourd' },
+                      { key: 'gauss_cannon_count', label: 'Canon Gauss' },
+                      { key: 'ion_cannon_count', label: 'Canon Ions' },
+                      { key: 'plasma_turret_count', label: 'Tourelle Plasma' },
+                      { key: 'small_shield_count', label: 'Petit Bouclier' },
+                      { key: 'large_shield_count', label: 'Grand Bouclier' },
+                      { key: 'anti_missile_count', label: 'Anti-Missile' },
+                      { key: 'interplanetary_missile_count', label: 'Missile IP' },
+                    ].map(item => (
+                      <div key={item.key}>
+                        <label className="text-xs text-slate-500 mb-1 block">{item.label}</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={(editedData as any)[item.key] ?? 0}
+                          onChange={(e) => setEditedData({...editedData, [item.key]: parseInt(e.target.value) || 0})}
+                          className="bg-black/40 border-white/10 text-white font-mono"
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
 
