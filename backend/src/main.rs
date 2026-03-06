@@ -6549,6 +6549,10 @@ async fn expedition_v2_handler(
         detailed_report: Set(Some(expedition_report.clone())),
     }.insert(&state.db).await;
 
+    // Mise à jour missions quotidiennes & achievements
+    missions::update_mission_progress(&state, planet.owner_id, "expedition", "any", 1).await;
+    missions::update_achievement_progress(&state, planet.owner_id, "expeditions", 1).await;
+
     // Build response
     Json(json!({
         "success": true,
