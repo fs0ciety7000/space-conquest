@@ -38,6 +38,15 @@
 - CRUD complet : créer, modifier (tous les bonus + coûts + slot + niveau requis), supprimer
 - Endpoints : `GET/POST /admin/flagship-modules`, `PATCH/DELETE /admin/flagship-modules/:id`
 
+#### 🔐 Réinitialisation de Mot de Passe
+- Lien "Mot de passe oublié" sur la page de connexion
+- Envoi d'un email de réinitialisation via SMTP (lettre 0.11, STARTTLS)
+- Token sécurisé 48 caractères alphanumériques, expiration 1h, usage unique
+- Détection automatique du token `?reset_token=` dans l'URL → affichage du formulaire de réinitialisation
+- Flux multi-vues animé (login → forgot → reset) sans rechargement de page
+- Migration `m20260306_000008_password_reset` — table `password_reset_token`
+- Variables d'environnement : `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `FRONTEND_URL`
+
 ---
 
 ## [2.5.0] - 2026-03-06 - Correctifs Système de Combat PvP
