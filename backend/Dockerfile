@@ -20,6 +20,7 @@ WORKDIR /app/backend
 RUN cargo generate-lockfile && \
     cargo update -p base64ct --precise 1.6.0 && \
     cargo update -p home --precise 0.5.9 && \
+    cargo update -p ar_archive_writer --precise 0.4.2 && \
     cargo build --release
 
 # Build migration binary separately
