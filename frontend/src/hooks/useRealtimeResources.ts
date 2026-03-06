@@ -158,12 +158,15 @@ export function useRealtimeResources(
       deutSlotBonus
     );
 
-    // Sauvegarder les ressources de base
+    // Sauvegarder les ressources de base — ne pas reculer en dessous de la valeur déjà affichée
+    const prevResources = baseResourcesRef.current;
+    const prevDisplayed = resources;
     baseResourcesRef.current = {
-      metal: planet.metal_amount,
-      crystal: planet.crystal_amount,
-      deuterium: planet.deuterium_amount,
+      metal: prevDisplayed ? Math.max(planet.metal_amount, prevDisplayed.metal) : planet.metal_amount,
+      crystal: prevDisplayed ? Math.max(planet.crystal_amount, prevDisplayed.crystal) : planet.crystal_amount,
+      deuterium: prevDisplayed ? Math.max(planet.deuterium_amount, prevDisplayed.deuterium) : planet.deuterium_amount,
     };
+    void prevResources;
 
     // Sauvegarder les productions pour le ticker
     const productionRef = { metalProdPerSec, crystalProdPerSec, deutProdPerSec };
