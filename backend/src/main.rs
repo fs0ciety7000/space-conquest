@@ -1858,7 +1858,7 @@ async fn upgrade_mine_handler(
             deuterium: deuterium as f64,
         };
 
-        let research_lab_level = tech_tree::get_planet_building_level(&state.db, p.id, "research").await.unwrap_or(0);
+        let research_lab_level = tech_tree::get_planet_building_level(&state.db, p.id, "research_lab").await.unwrap_or(0);
         (current_level, cost, research_lab_level, true)
     } else {
         // Check if this is a building from the new system

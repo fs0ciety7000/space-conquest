@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 import { getTechLevel, getBuildingLevel, getShipCount, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
+import { formatDuration } from '@/lib/utils';
 // --- Dictionnaire de noms ---
 const getLabel = (id: string | null) => {
     if (!id) return "Inconnu";
@@ -394,7 +395,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                       </div>
                                       <div className="text-right">
                                           <div className={`font-mono text-lg font-black ${isAttack ? 'text-red-400' : 'text-white'}`}>
-                                              {tl}s
+                                              {formatDuration(tl)}
                                           </div>
                                           <div className="text-[9px] font-mono text-slate-500">
                                               {m.ships_count} Unités
@@ -452,7 +453,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         </div>
                         <div className="text-right">
                             <span className="text-sm font-mono font-black text-white bg-black px-2 py-1 rounded border border-white/10 shadow-inner">
-                                {tl}s
+                                {formatDuration(tl)}
                             </span>
                         </div>
                     </div>
@@ -591,7 +592,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                             <div className="flex items-center gap-2.5">
                                                 <div className={`flex items-center gap-2 ${index === 0 ? 'text-cyan-300' : 'text-indigo-300'} font-mono bg-black/60 px-3 py-1.5 rounded-lg border-2 ${index === 0 ? 'border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'border-indigo-500/30'}`}>
                                                     <Clock size={12} className={index === 0 ? "animate-spin-slow drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" : ""} />
-                                                    <span className="font-black text-sm">{tl}s</span>
+                                                    <span className="font-black text-sm">{formatDuration(tl)}</span>
                                                 </div>
                                                 {/* Cancel button for all queue items */}
                                                 <div className="relative group/cancel">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Compass, Timer, Send, AlertTriangle, Database, Rocket, Map, Radar, ScanLine, Minus, Plus, Zap } from "lucide-react";
+import { formatDuration } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -372,7 +373,7 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
                    <span className="flex items-center gap-3 text-cyan-400">
                      <Timer size={20} className="animate-spin" /> MISSION EN COURS
                    </span>
-                   <span className="text-2xl font-mono text-white mt-1">{timeLeft}s</span>
+                   <span className="text-2xl font-mono text-white mt-1">{formatDuration(timeLeft)}</span>
                 </div>
               ) : !hasShips ? (
                 "VAISSEAU REQUIS POUR DÉCOLLAGE"

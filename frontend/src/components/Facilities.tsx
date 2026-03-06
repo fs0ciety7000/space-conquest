@@ -419,7 +419,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                 }`}
               >
                 {activeItem ? (
-                    <span className="flex items-center gap-2"><Timer size={16} className="animate-spin" /> En cours: {timeLeft}s</span>
+                    <span className="flex items-center gap-2"><Timer size={16} className="animate-spin" /> En cours: {formatDuration(timeLeft ?? 0)}</span>
                 ) : locked ? (
                     "Accès Refusé"
                 ) : isQueueFull ? (
