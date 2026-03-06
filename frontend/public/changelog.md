@@ -1,5 +1,23 @@
 # Changelog - Space Conquest
 
+## [3.2.0] - 2026-03-06 - Corrections Sécurité & Infrastructure
+
+### 🐛 Corrections
+
+#### ⚔️ Combat
+- Correction du test unitaire `test_simultaneous_damage_defender_fires_back` : valeur d'attaque du cache de test corrigée (200→100), le test valide maintenant correctement les dégâts simultanés
+
+#### 🔬 Recherche Technologique (Exploit Fix)
+- **Exploit bloqué** : il n'est plus possible de mettre en file d'attente plusieurs niveaux de la même technologie simultanément
+- Empêche le schéma : lancer niv 8 + niv 9, annuler niv 8, tech passe de 7 → 9 directement
+- Protection double : handler (`upgrade_mine_handler`) bloque le second ajout en queue + tick system ne peut avancer un niveau que de +1 à la fois
+
+#### 🗄️ Infrastructure Docker/Coolify
+- Volumes Docker avec noms explicites globaux (`space_conquest_pgdata`, `space_conquest_redisdata`, `space_conquest_pgadmin_data`)
+- Empêche la création de nouveaux volumes vides lors d'un redéploiement Coolify si le nom du projet Compose change
+
+---
+
 ## [3.1.0] - 2026-03-06 - Aperçu Coût/Temps/Gain avant Construction
 
 ### ✨ Nouvelles Fonctionnalités UI

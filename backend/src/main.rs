@@ -1871,6 +1871,12 @@ async fn upgrade_mine_handler(
         }
     };
 
+    // Block queuing the same technology multiple times — prevents the exploit where
+    // a player queues level N and N+1, then cancels N to jump directly to N+1.
+    if is_research && in_queue_count >= 1 {
+        return Err(StatusCode::CONFLICT);
+    }
+
     let target_level = base_level + (in_queue_count as i32) + 1;
 
     if p.metal_amount < cost.metal || p.crystal_amount < cost.crystal || p.deuterium_amount < cost.deuterium {

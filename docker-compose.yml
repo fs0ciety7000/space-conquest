@@ -82,5 +82,8 @@ services:
 
 volumes:
   pgdata:
+    name: space_conquest_pgdata
   redisdata:
+    name: space_conquest_redisdata
   pgadmin_data:
+    name: space_conquest_pgadmin_data

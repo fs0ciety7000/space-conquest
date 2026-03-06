@@ -587,11 +587,11 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn test_simultaneous_damage_defender_fires_back() {
-        // attacker: 10 ships × 200 atk = 2000 dmg  (annihile le défenseur en 1 round)
+        // attacker: 10 ships × 100 atk = 1000 dmg  (annihile le défenseur en 1 round)
         // defender: 5 ships  × 100 atk = 500 dmg   (devrait quand même toucher l'attaquant)
-        let c = cache(&[("ship", 200, 0, 100)]);
+        let c = cache(&[("ship", 100, 0, 100)]);
         // defender total HP = 5 * 100 = 500, attacker total HP = 10 * 100 = 1000
-        // att_dmg = 10*200 = 2000 → loss_ratio = min(2000/500, 1.0) = 1.0 → defender destroyed
+        // att_dmg = 10*100 = 1000 → loss_ratio = min(1000/500, 1.0) = 1.0 → defender destroyed
         // def_dmg = 5*100  = 500  → loss_ratio = 500/1000 = 0.5 → attacker loses 50%
 
         let mut att = fleet(&[("ship", 10)]);

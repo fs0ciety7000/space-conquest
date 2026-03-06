@@ -175,9 +175,13 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
                 .await?;
 
             if let Some(existing_tech) = existing {
-                // Update existing tech level
+                // Safety: only advance by exactly 1 level at a time.
+                // If a higher level was queued and a lower level was cancelled,
+                // this prevents skipping levels (exploit protection).
+                let safe_level = existing_tech.current_level + 1;
+                let apply_level = if target_level == safe_level { target_level } else { safe_level };
                 let mut tech_active: planet_technology::ActiveModel = existing_tech.into();
-                tech_active.current_level = Set(target_level);
+                tech_active.current_level = Set(apply_level);
                 tech_active.update(db).await?;
             } else {
                 // Insert new tech level
