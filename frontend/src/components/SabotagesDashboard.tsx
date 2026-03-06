@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Shield, Clock, Target, Eye, TrendingDown, Zap, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiUrl } from '@/config/api';
 
 interface Sabotage {
   id: string;
@@ -23,7 +24,6 @@ export function SabotagesDashboard({ token, onClose }: SabotagesDashboardProps) 
   const [sabotages, setSabotages] = useState<Sabotage[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const apiUrl = (path: string) => `http://localhost:8080${path}`;
 
   useEffect(() => {
     fetchSabotages();

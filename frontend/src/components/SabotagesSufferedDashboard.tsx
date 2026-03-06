@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { ShieldAlert, Clock, User, Eye, TrendingDown, Zap, X, AlertCircle, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiUrl } from '@/config/api';
 
 interface SabotageSuffered {
   id: string;
@@ -26,7 +27,6 @@ export function SabotagesSufferedDashboard({ token, onClose }: SabotagesSuffered
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'expired'>('active');
 
-  const apiUrl = (path: string) => `http://localhost:8080${path}`;
 
   useEffect(() => {
     fetchSabotages();

@@ -253,7 +253,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
       // Bonus technologie énergie (configurable)
       const techLevel = getTechLevel(planet, 'energy_tech');
-      const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
+      const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.10));
       prod *= techBonus;
 
       // Utiliser le ratio énergétique du backend (cohérent avec EmpireBar et ProductionStats)

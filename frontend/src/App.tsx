@@ -675,14 +675,13 @@ export default function App() {
   return (
     <div className="h-screen w-full bg-slate-950 text-white font-sans overflow-hidden flex flex-col relative">
        {/* Fond spatial animé */}
-       <SpaceBackground 
+       <SpaceBackground
          showStars={true}
          showNebulae={true}
-         showParticles={true}
+         showParticles={false}
          showScanLine={false}
          showGrid={true}
-         starCount={100}
-         particleCount={25}
+         starCount={60}
        />
 
       {/* Animations flottantes de ressources */}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Swords, Clock, User, Target, AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiUrl } from '@/config/api';
 
 interface CasusBelli {
   id: string;
@@ -22,7 +23,6 @@ export function CasusBelliList({ token, onClose }: CasusBelliListProps) {
   const [casusBelli, setCasusBelli] = useState<CasusBelli[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const apiUrl = (path: string) => `http://localhost:8080${path}`;
 
   useEffect(() => {
     fetchCasusBelli();

@@ -1,5 +1,26 @@
 # Changelog - Space Conquest
 
+## [4.1.0] - 2026-03-06 - Performances & corrections système
+
+### ⚡ Performances
+
+#### 🎨 Fond spatial — refonte animations CSS
+- Remplacement des 100+ `motion.div` Framer Motion (boucles JS, 60fps par élément) par des **animations CSS pures** (compositing GPU, zéro JavaScript).
+- Suppression du `boxShadow` sur les particules flottantes (opération de repaint coûteuse).
+- Nombre de particules réduit (25 → 0 dans App, 30 → 15 dans le composant).
+- Nombre d'étoiles réduit (100 → 60). La nébuleuse tertiaire est désormais statique.
+- Résultat : utilisation GPU fortement réduite.
+
+### 🐛 Corrections
+
+#### 🔗 Sabotages / Casus Belli — CORS et URL hardcodées
+- `SabotagesDashboard`, `SabotagesSufferedDashboard` et `CasusBelliList` utilisaient `http://localhost:8080` au lieu de l'import `apiUrl`. Corrigé.
+
+#### 🔢 ResourceDisplay — bonus énergie incohérent
+- Le fallback `energy_tech_bonus || 0.01` (1%/niveau) ne correspondait pas à la valeur par défaut `0.10` (10%/niveau). Corrigé en `|| 0.10`.
+
+---
+
 ## [4.0.0] - 2026-03-06 - Ressources par planète
 
 ### 🐛 Corrections
