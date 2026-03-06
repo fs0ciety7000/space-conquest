@@ -82,6 +82,7 @@ services:
 
 volumes:
   pgdata:
+    external: true
     name: space_conquest_pgdata
   redisdata:
     name: space_conquest_redisdata
