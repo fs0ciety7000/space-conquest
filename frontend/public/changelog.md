@@ -1,5 +1,41 @@
 # Changelog - Space Conquest
 
+## [6.0.0] - 2026-03-06 - Biomes, Tableau des Primes, Vaisseau Amiral & Réinitialisation de mot de passe
+
+### ✨ Nouveautés
+
+#### 🪐 Biomes Planétaires
+- Chaque planète (homeworld + colonies) reçoit un **biome aléatoire** à la création : tellurique, volcanique, glaciaire, désertique, océanique ou aride.
+- Les biomes appliquent des **multiplicateurs de production** sur métal, cristal et deutérium.
+- Badge coloré visible dans la vue de la planète avec description au survol.
+
+#### 🎯 Tableau des Primes
+- Les joueurs peuvent **placer une prime** sur un agresseur (ressources bloquées en escrow jusqu'à résolution).
+- Les mercenaires peuvent **accepter un contrat** et réclamer la prime après avoir attaqué la cible.
+- Annulation possible avec **remboursement automatique** sur le monde natal.
+- Trois statuts : ouvertes, en cours, complétées.
+- Nouveau composant **Tableau des Primes** accessible depuis le menu.
+
+#### ⭐ Vaisseau Amiral
+- Un seul **Vaisseau Amiral** par joueur, construction payante (5 000 000 métal / 2 000 000 cristal / 500 000 deutérium).
+- Système d'**XP et de niveaux** (100 × niveau² XP par palier).
+- Stats de base : 500 attaque / 300 bouclier / 2 000 coque / 5 000 cargo.
+- Système de **modules équipables** par slot : weapon×3, shield×3, engine×2, utility×2, special×1.
+- 12 modules disponibles : Laser Mk.II, Canon Plasma, Rayon Graviton, Déflecteur V2, Bouclier Plasma, Blindage Titane, Propulseur Ionique, Moteur Warp, Rayon Tracteur, Réseau Espion, Nano-réparation, Passerelle de Commandement.
+- Interface **fitting EVE-style** avec boutique de modules et barre de progression XP.
+
+#### 🔍 Recherche d'Amis Améliorée
+- L'ajout d'ami utilise désormais une **recherche autocomplete par préfixe** (debounced 300 ms).
+- Dropdown avec fermeture au clic extérieur et bouton × pour réinitialiser.
+
+#### 🔐 Réinitialisation de Mot de Passe
+- Lien **"Mot de passe oublié"** sur la page de connexion.
+- Envoi d'un **email de réinitialisation** sécurisé (token 48 caractères, expiration 1h, usage unique).
+- Détection automatique du lien de réinitialisation → affichage direct du formulaire.
+- Flux **multi-vues animé** (connexion → oubli → réinitialisation) sans rechargement de page.
+
+---
+
 ## [5.0.0] - 2026-03-06 - Système social & profils joueurs
 
 ### ✨ Nouveautés
