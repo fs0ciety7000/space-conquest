@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
-import { getTechLevel, getShipCount, getBuildingLevel } from '@/utils/techTreeCompat';
+import { getTechLevel, getShipCount, getBuildingLevel, getTotalFleetCount } from '@/utils/techTreeCompat';
 
 interface Planet {
   id: string;
@@ -231,10 +231,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
 
   const fmt = (n: number) => Math.floor(n).toLocaleString();
 
-  const getTotalFleet = (p: Planet) =>
-    (getShipCount(p, 'light_hunter') || 0) + (getShipCount(p, 'cruiser') || 0) +
-    (getShipCount(p, 'recycler') || 0) + (getShipCount(p, 'spy_probe') || 0) +
-    (getShipCount(p, 'colony_ship') || 0) + (getShipCount(p, 'transporter') || 0);
+  const getTotalFleet = (p: Planet) => getTotalFleetCount(p);
 
   const getTotalDefense = (p: Planet) =>
     (getShipCount(p, 'rocket_launcher') || 0) + (getShipCount(p, 'plasma_turret') || 0) +
