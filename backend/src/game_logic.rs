@@ -903,19 +903,19 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
     // Points économie (bâtiments)
     let get_bl = |key: &str| *building_levels.get(key).unwrap_or(&0);
     let buildings =
-        (get_bl("metal") * get_bl("metal") * 10) +
-        (get_bl("crystal") * get_bl("crystal") * 15) +
-        (get_bl("deuterium") * get_bl("deuterium") * 25) +
+        (get_bl("metal_mine") * get_bl("metal_mine") * 10) +
+        (get_bl("crystal_mine") * get_bl("crystal_mine") * 15) +
+        (get_bl("deuterium_mine") * get_bl("deuterium_mine") * 25) +
         (get_bl("solar_plant") * get_bl("solar_plant") * 5) +
         (get_bl("shipyard") * get_bl("shipyard") * 40) +
-        (get_bl("research") * get_bl("research") * 50) +
+        (get_bl("research_lab") * get_bl("research_lab") * 50) +
         (get_bl("hangar") * get_bl("hangar") * 35);
 
-    // Points recherche (technologies)
+    // Points recherche (technologies) — clés correspondant à la DB
     let tech_base_points: std::collections::HashMap<&str, i32> = [
         ("energy_tech", 50),
         ("laser_tech", 40),
-        ("espionage", 60),
+        ("espionage_tech", 60),
         ("armour_tech", 70),
         ("ion_tech", 80),
         ("plasma_tech", 100),
@@ -925,9 +925,11 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
         ("combustion_drive", 55),
         ("impulse_drive", 65),
         ("hyperspace_drive", 90),
+        ("hyperspace_tech", 90),
         ("astrophysics", 95),
         ("logistics_tech", 50),
         ("intergalactic_network", 100),
+        ("graviton_tech", 150),
     ].iter().copied().collect();
 
     let mut research = 0;
@@ -936,53 +938,44 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
         research += level * level * base;
     }
 
-    // Points militaire (flotte)
-    let ship_base_points: std::collections::HashMap<&str, i32> = [
-        ("light_hunter", 5),
-        ("cruiser", 30),
-        ("recycler", 20),
-        ("transporter", 10),
-        ("spy_probe", 1),
-        ("colony_ship", 40),
-        ("heavy_hunter", 15),
-        ("battleship", 80),
-        ("bomber", 100),
-        ("destroyer", 120),
-        ("death_star", 500),
-        ("solar_satellite", 2),
-    ].iter().copied().collect();
+    // Points militaire (flotte) — basé sur les stats réelles de combat
+    // Formule: (attack + shield/2 + hull/10) / 1000 par unité
+    use crate::entities::prelude::{ShipType, DefenseType};
+    use sea_orm::EntityTrait;
 
-    let mut fleet_points = 0;
+    let all_ship_types = ShipType::find().all(db).await.unwrap_or_default();
+    let ship_stats: std::collections::HashMap<String, (i32, i32, i32)> = all_ship_types
+        .iter()
+        .map(|s| (s.ship_key.clone(), (s.attack, s.shield, s.hull)))
+        .collect();
+
+    let mut fleet_points: i64 = 0;
     for (ship_key, count) in &ship_counts {
-        let base = ship_base_points.get(ship_key.as_str()).unwrap_or(&10);
-        fleet_points += count * base;
+        let (atk, shd, hul) = ship_stats.get(ship_key.as_str()).copied().unwrap_or((10, 5, 100));
+        let unit_value = (atk as i64) + (shd as i64 / 2) + (hul as i64 / 10);
+        fleet_points += (*count as i64) * unit_value / 1000;
     }
 
-    // Points défenses (toutes les défenses comptent, basé sur coût/1000)
-    let defense_base_points: std::collections::HashMap<&str, i32> = [
-        ("missile_launcher", 12),
-        ("light_laser", 2),
-        ("heavy_laser", 8),
-        ("gauss_cannon", 37),
-        ("ion_cannon", 8),
-        ("plasma_turret", 130),
-        ("small_shield", 20),
-        ("large_shield", 100),
-    ].iter().copied().collect();
+    let all_defense_types = DefenseType::find().all(db).await.unwrap_or_default();
+    let defense_stats: std::collections::HashMap<String, (i32, i32, i32)> = all_defense_types
+        .iter()
+        .map(|d| (d.defense_key.clone(), (d.attack, d.shield, d.hull)))
+        .collect();
 
-    let mut defense_points = 0;
+    let mut defense_points: i64 = 0;
     for (def_key, count) in &defense_counts {
-        let base = defense_base_points.get(def_key.as_str()).unwrap_or(&5);
-        defense_points += count * base;
+        let (atk, shd, hul) = defense_stats.get(def_key.as_str()).copied().unwrap_or((10, 5, 100));
+        let unit_value = (atk as i64) + (shd as i64 / 2) + (hul as i64 / 10);
+        defense_points += (*count as i64) * unit_value / 1000;
     }
-    let military = fleet_points + defense_points;
+    let military = (fleet_points + defense_points) as i32;
 
     // Points production (basé sur la production horaire)
     let energy_tech_level = *tech_levels.get("energy_tech").unwrap_or(&0);
     let plasma_tech_level = *tech_levels.get("plasma_tech").unwrap_or(&0);
-    let metal_level = get_bl("metal");
-    let crystal_level = get_bl("crystal");
-    let deuterium_level = get_bl("deuterium");
+    let metal_level = get_bl("metal_mine");
+    let crystal_level = get_bl("crystal_mine");
+    let deuterium_level = get_bl("deuterium_mine");
     let solar_level = get_bl("solar_plant");
 
     let energy_ratio = calculate_energy_ratio(
@@ -1028,7 +1021,14 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
         (prod_deuterium / 1000.0 * 2.0)
     ) as i32;
 
-    let economy = buildings + research + production_points;
+    // Points ressources stockées (1 pt par tranche de 50k — encourage à collecter)
+    let stored_points = (
+        (p.metal_amount / 50000.0) +
+        (p.crystal_amount / 50000.0 * 1.5) +
+        (p.deuterium_amount / 50000.0 * 2.0)
+    ) as i32;
+
+    let economy = buildings + research + production_points + stored_points;
     let total = economy + military;
 
     (total, economy, military)

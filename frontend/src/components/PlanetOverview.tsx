@@ -1367,85 +1367,27 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             <Activity size={10} className="text-red-400" /> Arsenal Défensif
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {/* Lance-Roquettes */}
-                            {getShipCount(planet, 'rocket_launcher') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-orange-500/20">
-                                    <div className="text-[8px] text-orange-400 uppercase font-bold mb-1">🚀 Lance-Roquettes</div>
-                                    <div className="text-lg font-mono font-black text-orange-400">{fmt(getShipCount(planet, 'rocket_launcher'))}</div>
-                                </div>
-                            )}
-
-                            {/* Laser Léger */}
-                            {getShipCount(planet, 'light_laser') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-blue-500/20">
-                                    <div className="text-[8px] text-blue-400 uppercase font-bold mb-1">💠 Laser Léger</div>
-                                    <div className="text-lg font-mono font-black text-blue-400">{fmt(getShipCount(planet, 'light_laser'))}</div>
-                                </div>
-                            )}
-
-                            {/* Laser Lourd */}
-                            {getShipCount(planet, 'heavy_laser') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-blue-600/20">
-                                    <div className="text-[8px] text-blue-500 uppercase font-bold mb-1">⚡ Laser Lourd</div>
-                                    <div className="text-lg font-mono font-black text-blue-500">{fmt(getShipCount(planet, 'heavy_laser'))}</div>
-                                </div>
-                            )}
-
-                            {/* Canon de Gauss */}
-                            {getShipCount(planet, 'gauss_cannon') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-indigo-500/20">
-                                    <div className="text-[8px] text-indigo-400 uppercase font-bold mb-1">🔫 Canon Gauss</div>
-                                    <div className="text-lg font-mono font-black text-indigo-400">{fmt(getShipCount(planet, 'gauss_cannon'))}</div>
-                                </div>
-                            )}
-
-                            {/* Canon à Ions */}
-                            {getShipCount(planet, 'ion_cannon') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-purple-500/20">
-                                    <div className="text-[8px] text-purple-400 uppercase font-bold mb-1">⚛️ Canon Ions</div>
-                                    <div className="text-lg font-mono font-black text-purple-400">{fmt(getShipCount(planet, 'ion_cannon'))}</div>
-                                </div>
-                            )}
-
-                            {/* Tourelle Plasma */}
-                            {getShipCount(planet, 'plasma_turret') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-pink-500/20">
-                                    <div className="text-[8px] text-pink-400 uppercase font-bold mb-1">🌟 Tourelle Plasma</div>
-                                    <div className="text-lg font-mono font-black text-pink-400">{fmt(getShipCount(planet, 'plasma_turret'))}</div>
-                                </div>
-                            )}
-
-                            {/* Petit Bouclier */}
-                            {getShipCount(planet, 'small_shield') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-cyan-500/20">
-                                    <div className="text-[8px] text-cyan-400 uppercase font-bold mb-1">🛡️ Petit Bouclier</div>
-                                    <div className="text-lg font-mono font-black text-cyan-400">{fmt(getShipCount(planet, 'small_shield'))}</div>
-                                </div>
-                            )}
-
-                            {/* Grand Bouclier */}
-                            {getShipCount(planet, 'large_shield') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-cyan-600/20">
-                                    <div className="text-[8px] text-cyan-500 uppercase font-bold mb-1">🛡️ Grand Bouclier</div>
-                                    <div className="text-lg font-mono font-black text-cyan-500">{fmt(getShipCount(planet, 'large_shield'))}</div>
-                                </div>
-                            )}
-
-                            {/* Missile Anti-Balistique */}
-                            {getShipCount(planet, 'antiballistic_missile') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-yellow-500/20">
-                                    <div className="text-[8px] text-yellow-400 uppercase font-bold mb-1">🎯 Anti-Missile</div>
-                                    <div className="text-lg font-mono font-black text-yellow-400">{fmt(getShipCount(planet, 'antiballistic_missile'))}</div>
-                                </div>
-                            )}
-
-                            {/* Missile Interplanétaire */}
-                            {getShipCount(planet, 'interplanetary_missile') > 0 && (
-                                <div className="bg-slate-900/50 rounded-lg p-2 border border-red-500/20">
-                                    <div className="text-[8px] text-red-400 uppercase font-bold mb-1">🚀 Missile IP</div>
-                                    <div className="text-lg font-mono font-black text-red-400">{fmt(getShipCount(planet, 'interplanetary_missile'))}</div>
-                                </div>
-                            )}
+                            {[
+                                { key: 'rocket_launcher', label: '🚀 Lance-Roquettes', color: 'orange' },
+                                { key: 'light_laser',     label: '💠 Laser Léger',     color: 'blue' },
+                                { key: 'heavy_laser',     label: '⚡ Laser Lourd',     color: 'blue' },
+                                { key: 'gauss_cannon',    label: '🔫 Canon Gauss',     color: 'indigo' },
+                                { key: 'ion_cannon',      label: '⚛️ Canon Ions',      color: 'purple' },
+                                { key: 'plasma_turret',   label: '🌟 Tourelle Plasma', color: 'pink' },
+                                { key: 'small_shield',    label: '🛡️ Petit Bouclier',  color: 'cyan' },
+                                { key: 'large_shield',    label: '🛡️ Grand Bouclier',  color: 'cyan' },
+                                { key: 'antiballistic_missile',    label: '🎯 Anti-Missile', color: 'yellow' },
+                                { key: 'interplanetary_missile',   label: '🚀 Missile IP',   color: 'red' },
+                            ].map(({ key, label, color }) => {
+                                const count = getShipCount(planet, key);
+                                const active = count > 0;
+                                return (
+                                    <div key={key} className={`rounded-lg p-2 border transition-opacity ${active ? 'bg-slate-900/50' : 'bg-slate-900/20 opacity-40'} border-${color}-500/20`}>
+                                        <div className={`text-[8px] text-${color}-400 uppercase font-bold mb-1`}>{label}</div>
+                                        <div className={`text-lg font-mono font-black ${active ? `text-${color}-400` : 'text-slate-600'}`}>{fmt(count)}</div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 

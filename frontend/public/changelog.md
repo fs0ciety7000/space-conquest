@@ -1,5 +1,29 @@
 # Changelog - Space Conquest
 
+## [3.6.0] - 2026-03-06 - Score, énergie & défenses
+
+### 🐛 Corrections
+
+#### ⚡ Énergie
+- **Bug critique** : la consommation énergétique des mines affichait toujours 0 — les clés de bâtiment `"metal"/"crystal"/"deuterium"` corrigées en `"metal_mine"/"crystal_mine"/"deuterium_mine"` dans les deux endpoints planet
+
+#### 📊 Classement — Score militaire entièrement revu
+- Ancien calcul : valeurs hardcodées (Death Star = 500 pts) — incohérent et sous-estimé
+- **Nouveau calcul** : basé sur les stats réelles de combat depuis la DB : `(attack + shield/2 + hull/10) / 1000` par unité
+- Toutes les technologies désormais reconnues (`espionage_tech`, `hyperspace_tech`, `graviton_tech`...)
+- Clés de mines corrigées dans le calcul de production (`metal_mine`, `crystal_mine`, `deuterium_mine`)
+- **Ressources stockées** désormais incluses dans le score économique (1 pt / 50k métal, /33k cristal, /25k deutérium)
+
+#### 🛡️ Bouclier Orbital (Vue Planète)
+- Tous les types de défenses s'affichent maintenant en permanence (même à 0)
+- Les défenses non construites apparaissent en grisé pour donner une vue complète de l'arsenal
+
+#### 🚀 Persistance base de données
+- Résolution définitive : `PGDATA=/var/lib/postgresql/data` forcé explicitement pour bypasser le chemin par défaut de postgres 18 (`/var/lib/postgresql/18/docker`)
+- Bind mount sur `/opt/space-conquest/pgdata` — hors de contrôle de Coolify
+
+---
+
 ## [3.5.0] - 2026-03-06 - Système de Tiers Missions & Succès
 
 ### ✨ Nouvelles Fonctionnalités

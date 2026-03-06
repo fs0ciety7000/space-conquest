@@ -1119,9 +1119,9 @@ async fn get_planet_handler(
     let speed_factor = config.speed_factor;
 
     // Get building levels from planet_buildings
-    let metal_mine_level = get_building_level(&state.db, id, "metal").await;
-    let crystal_mine_level = get_building_level(&state.db, id, "crystal").await;
-    let deuterium_mine_level = get_building_level(&state.db, id, "deuterium").await;
+    let metal_mine_level = get_building_level(&state.db, id, "metal_mine").await;
+    let crystal_mine_level = get_building_level(&state.db, id, "crystal_mine").await;
+    let deuterium_mine_level = get_building_level(&state.db, id, "deuterium_mine").await;
     let solar_plant_level = get_building_level(&state.db, id, "solar_plant").await;
     let resource_storage_level = get_building_level(&state.db, id, "resource_storage").await;
 
@@ -3688,9 +3688,9 @@ async fn get_my_planets_handler(
 
         for mp in my_planets {
             // Get building levels from planet_buildings
-            let metal_mine_level = get_building_level(&state.db, mp.id, "metal").await;
-            let crystal_mine_level = get_building_level(&state.db, mp.id, "crystal").await;
-            let deuterium_mine_level = get_building_level(&state.db, mp.id, "deuterium").await;
+            let metal_mine_level = get_building_level(&state.db, mp.id, "metal_mine").await;
+            let crystal_mine_level = get_building_level(&state.db, mp.id, "crystal_mine").await;
+            let deuterium_mine_level = get_building_level(&state.db, mp.id, "deuterium_mine").await;
             let solar_plant_level = get_building_level(&state.db, mp.id, "solar_plant").await;
             let shipyard_level = get_building_level(&state.db, mp.id, "shipyard").await;
             let research_lab_level = get_building_level(&state.db, mp.id, "research").await;
