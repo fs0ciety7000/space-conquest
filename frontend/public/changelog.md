@@ -1,5 +1,16 @@
 # Changelog - Space Conquest
 
+## [4.0.0] - 2026-03-06 - Ressources par planète
+
+### 🐛 Corrections
+
+#### 🪐 Ressources — partage entre planètes corrigé
+- **Race condition critique** : lors d'un changement de planète, une réponse en cours de route pour l'ancienne planète pouvait écraser les données de la nouvelle planète, affichant les ressources de l'ancienne.
+- Ajout d'un garde dans `fetchPlanet` : les réponses d'API dont l'`id` ne correspond pas à la planète active sont ignorées.
+- Réinitialisation du `prevServerRef` dans `useRealtimeResources` lors d'un changement d'identité de planète, évitant que la logique anti-oscillation utilise des valeurs de l'ancienne planète.
+
+---
+
 ## [3.9.0] - 2026-03-06 - Hangar & classement
 
 ### 🐛 Corrections

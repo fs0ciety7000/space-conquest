@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getTechLevel, getShipCount, getBuildingLevel } from '@/utils/techTreeCompat';
 
 interface PlanetData {
+  id?: string;
   metal_amount: number;
   crystal_amount: number;
   deuterium_amount: number;
@@ -50,6 +51,7 @@ export function useRealtimeResources(
   const lastUpdateRef = useRef<number>(Date.now());
   const baseResourcesRef = useRef<RealtimeResources | null>(null);
   const prevServerRef = useRef<RealtimeResources | null>(null);
+  const prevPlanetIdRef = useRef<string | undefined>(undefined);
 
   // Valeurs par défaut si config n'est pas fournie
   const safeConfig = config || {
@@ -106,6 +108,12 @@ export function useRealtimeResources(
       setResources(null);
       baseResourcesRef.current = null;
       return;
+    }
+
+    // Reset anti-oscillation state when switching to a different planet
+    if (planet.id !== prevPlanetIdRef.current) {
+      prevServerRef.current = null;
+      prevPlanetIdRef.current = planet.id;
     }
 
     // Calculer les bonus
