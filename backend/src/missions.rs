@@ -481,12 +481,12 @@ pub async fn update_achievement_progress(
             .ok()
             .flatten();
 
-        let (mut active, current) = if let Some(ua) = user_ach {
+        let (mut active, current, is_new) = if let Some(ua) = user_ach {
             if ua.unlocked {
                 continue; // Déjà débloqué, passer
             }
             let current = ua.current_progress;
-            (ua.into(), current)
+            (ua.into(), current, false)
         } else {
             let new_ua = user_achievement::ActiveModel {
                 id: Set(Uuid::new_v4()),
@@ -497,7 +497,7 @@ pub async fn update_achievement_progress(
                 unlocked_at: Set(None),
                 displayed: Set(false),
             };
-            (new_ua, 0)
+            (new_ua, 0, true)
         };
 
         let new_progress = match achievement.condition_type.as_str() {
@@ -515,10 +515,10 @@ pub async fn update_achievement_progress(
         }
 
         // Insérer ou mettre à jour
-        if active.id.is_set() {
-            let _ = active.update(&state.db).await;
-        } else {
+        if is_new {
             let _ = active.insert(&state.db).await;
+        } else {
+            let _ = active.update(&state.db).await;
         }
     }
 }
