@@ -69,3 +69,6 @@ pub mod bounty;
 pub mod flagship;
 pub mod flagship_module_type;
 pub mod flagship_module;
+
+// Auth system
+pub mod password_reset_token;

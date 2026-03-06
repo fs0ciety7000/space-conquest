@@ -237,6 +237,8 @@ async fn main() {
         // Auth
         .route("/register", post(auth::register_handler))
         .route("/login", post(auth::login_handler))
+        .route("/auth/forgot-password", post(auth::forgot_password_handler))
+        .route("/auth/reset-password", post(auth::reset_password_handler))
         .route("/config", get(get_game_config_handler))
         // Maintenance
         .route("/maintenance/status", get(maintenance::get_maintenance_status_handler))

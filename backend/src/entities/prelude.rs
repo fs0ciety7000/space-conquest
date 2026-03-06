@@ -67,3 +67,6 @@ pub use super :: bounty :: Entity as Bounty ;
 pub use super :: flagship :: Entity as Flagship ;
 pub use super :: flagship_module_type :: Entity as FlagshipModuleType ;
 pub use super :: flagship_module :: Entity as FlagshipModule ;
+
+// Auth system
+pub use super :: password_reset_token :: Entity as PasswordResetToken ;
