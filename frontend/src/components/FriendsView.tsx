@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Users, UserPlus, UserCheck, UserX, Trash2, Send, Search } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Users, UserPlus, UserCheck, UserX, Trash2, Send, Search, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,12 @@ interface Friend {
   created_at: string;
 }
 
+interface SearchResult {
+  user_id: string;
+  username: string;
+  avatar_url: string | null;
+}
+
 interface FriendsViewProps {
   userId: string;
   onSendMessage?: (username: string) => void;
@@ -24,17 +30,22 @@ interface FriendsViewProps {
 export default function FriendsView({ userId, onSendMessage }: FriendsViewProps) {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
   const [sending, setSending] = useState(false);
+
+  // Search
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selected, setSelected] = useState<SearchResult | null>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchFriends = async () => {
     setLoading(true);
     try {
       const res = await fetch(apiUrl(`/users/${userId}/friends`));
-      if (res.ok) {
-        const data = await res.json();
-        setFriends(data);
-      }
+      if (res.ok) setFriends(await res.json());
     } catch {
       toast.error("Erreur de chargement");
     } finally {
@@ -46,19 +57,70 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
     fetchFriends();
   }, [userId]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const doSearch = useCallback(async (q: string) => {
+    if (q.length < 2) { setResults([]); setShowDropdown(false); return; }
+    setSearching(true);
+    try {
+      const res = await fetch(apiUrl(`/players/search?q=${encodeURIComponent(q)}&exclude=${userId}`));
+      if (res.ok) {
+        const data: SearchResult[] = await res.json();
+        setResults(data);
+        setShowDropdown(data.length > 0);
+      }
+    } catch {
+      // silent
+    } finally {
+      setSearching(false);
+    }
+  }, [userId]);
+
+  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setQuery(val);
+    setSelected(null);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doSearch(val), 250);
+  };
+
+  const selectResult = (r: SearchResult) => {
+    setSelected(r);
+    setQuery(r.username);
+    setShowDropdown(false);
+    setResults([]);
+  };
+
+  const clearSearch = () => {
+    setQuery("");
+    setSelected(null);
+    setResults([]);
+    setShowDropdown(false);
+  };
+
   const handleSendRequest = async () => {
-    if (!searchQuery.trim()) return;
+    const targetUsername = selected?.username || query.trim();
+    if (!targetUsername) return;
     setSending(true);
     try {
       const res = await fetch(apiUrl("/friends/request"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sender_id: userId, receiver_username: searchQuery.trim() }),
+        body: JSON.stringify({ sender_id: userId, receiver_username: targetUsername }),
       });
       const data = await res.json();
       if (res.ok) {
         toast.success(`Demande envoyée à ${data.receiver_username} !`);
-        setSearchQuery("");
+        clearSearch();
         fetchFriends();
       } else {
         toast.error(data.error || "Erreur");
@@ -72,64 +134,37 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
 
   const handleAccept = async (friendshipId: string) => {
     try {
-      const res = await fetch(apiUrl(`/friends/${friendshipId}/accept?user_id=${userId}`), {
-        method: "POST",
-      });
-      if (res.ok) {
-        toast.success("Ami accepté !");
-        fetchFriends();
-      } else {
-        const d = await res.json();
-        toast.error(d.error || "Erreur");
-      }
-    } catch {
-      toast.error("Erreur de connexion");
-    }
+      const res = await fetch(apiUrl(`/friends/${friendshipId}/accept?user_id=${userId}`), { method: "POST" });
+      if (res.ok) { toast.success("Ami accepté !"); fetchFriends(); }
+      else { const d = await res.json(); toast.error(d.error || "Erreur"); }
+    } catch { toast.error("Erreur de connexion"); }
   };
 
   const handleDecline = async (friendshipId: string) => {
     try {
-      const res = await fetch(apiUrl(`/friends/${friendshipId}/decline?user_id=${userId}`), {
-        method: "POST",
-      });
-      if (res.ok) {
-        toast.success("Demande déclinée.");
-        fetchFriends();
-      } else {
-        const d = await res.json();
-        toast.error(d.error || "Erreur");
-      }
-    } catch {
-      toast.error("Erreur de connexion");
-    }
+      const res = await fetch(apiUrl(`/friends/${friendshipId}/decline?user_id=${userId}`), { method: "POST" });
+      if (res.ok) { toast.success("Demande déclinée."); fetchFriends(); }
+      else { const d = await res.json(); toast.error(d.error || "Erreur"); }
+    } catch { toast.error("Erreur de connexion"); }
   };
 
   const handleRemove = async (friendshipId: string, username: string) => {
     if (!confirm(`Retirer ${username} de vos amis ?`)) return;
     try {
-      const res = await fetch(apiUrl(`/friends/${friendshipId}?user_id=${userId}`), {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        toast.success("Ami retiré.");
-        fetchFriends();
-      } else {
-        const d = await res.json();
-        toast.error(d.error || "Erreur");
-      }
-    } catch {
-      toast.error("Erreur de connexion");
-    }
+      const res = await fetch(apiUrl(`/friends/${friendshipId}?user_id=${userId}`), { method: "DELETE" });
+      if (res.ok) { toast.success("Ami retiré."); fetchFriends(); }
+      else { const d = await res.json(); toast.error(d.error || "Erreur"); }
+    } catch { toast.error("Erreur de connexion"); }
   };
 
   const accepted = friends.filter((f) => f.status === "accepted");
   const pendingReceived = friends.filter((f) => f.status === "pending" && !f.is_sender);
   const pendingSent = friends.filter((f) => f.status === "pending" && f.is_sender);
 
-  const getAvatarSrc = (f: Friend) =>
-    f.avatar_url
-      ? apiUrl(f.avatar_url)
-      : `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${f.username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+  const getAvatarSrc = (username: string, avatar_url: string | null) =>
+    avatar_url
+      ? apiUrl(avatar_url)
+      : `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
@@ -139,28 +174,74 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
         <span className="text-sm text-slate-400">({accepted.length} ami{accepted.length !== 1 ? "s" : ""})</span>
       </div>
 
-      {/* Envoyer une demande */}
+      {/* Ajouter un ami — recherche live */}
       <Card className="bg-slate-900/50 border border-white/10">
         <CardContent className="p-5">
           <h3 className="text-xs font-black uppercase text-indigo-400 mb-3 flex items-center gap-2">
             <UserPlus size={14} /> Ajouter un ami
           </h3>
-          <div className="flex gap-2">
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSendRequest()}
-              placeholder="Nom d'utilisateur exact..."
-              className="bg-slate-950 border-slate-700 text-white"
-            />
-            <Button
-              onClick={handleSendRequest}
-              disabled={sending || !searchQuery.trim()}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white"
-            >
-              {sending ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Send size={16} />}
-            </Button>
+
+          <div ref={searchRef} className="relative">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <Input
+                  value={query}
+                  onChange={handleQueryChange}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { setShowDropdown(false); handleSendRequest(); }
+                    if (e.key === "Escape") clearSearch();
+                  }}
+                  onFocus={() => results.length > 0 && setShowDropdown(true)}
+                  placeholder="Tapez les premières lettres d'un pseudo..."
+                  className="bg-slate-950 border-slate-700 text-white pl-8 pr-8"
+                />
+                {query && (
+                  <button
+                    onClick={clearSearch}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <Button
+                onClick={handleSendRequest}
+                disabled={sending || !query.trim()}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white"
+              >
+                {sending
+                  ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  : <Send size={16} />
+                }
+              </Button>
+            </div>
+
+            {/* Dropdown */}
+            {showDropdown && (
+              <div className="absolute top-full left-0 right-10 mt-1 z-50 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
+                {searching ? (
+                  <div className="flex justify-center py-3">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500" />
+                  </div>
+                ) : results.map(r => (
+                  <button
+                    key={r.user_id}
+                    onMouseDown={() => selectResult(r)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800 transition-colors text-left"
+                  >
+                    <img
+                      src={getAvatarSrc(r.username, r.avatar_url)}
+                      alt=""
+                      className="w-7 h-7 rounded-lg"
+                    />
+                    <span className="text-sm font-bold text-white">{r.username}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+
           <p className="text-xs text-slate-500 mt-2">
             Les amis peuvent s'envoyer des ressources sans être dans la même alliance.
           </p>
@@ -177,7 +258,7 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
             <div className="space-y-3">
               {pendingReceived.map((f) => (
                 <div key={f.friendship_id} className="flex items-center gap-3 bg-black/30 p-3 rounded-lg">
-                  <img src={getAvatarSrc(f)} alt="" className="w-10 h-10 rounded-xl" />
+                  <img src={getAvatarSrc(f.username, f.avatar_url)} alt="" className="w-10 h-10 rounded-xl" />
                   <span className="flex-1 text-white font-bold">{f.username}</span>
                   <button
                     onClick={() => handleAccept(f.friendship_id)}
@@ -198,7 +279,7 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
         </Card>
       )}
 
-      {/* Demandes envoyées en attente */}
+      {/* Demandes envoyées */}
       {pendingSent.length > 0 && (
         <Card className="bg-slate-900/30 border border-white/10">
           <CardContent className="p-5">
@@ -208,7 +289,7 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
             <div className="space-y-3">
               {pendingSent.map((f) => (
                 <div key={f.friendship_id} className="flex items-center gap-3 bg-black/30 p-3 rounded-lg">
-                  <img src={getAvatarSrc(f)} alt="" className="w-10 h-10 rounded-xl" />
+                  <img src={getAvatarSrc(f.username, f.avatar_url)} alt="" className="w-10 h-10 rounded-xl" />
                   <span className="flex-1 text-white font-bold">{f.username}</span>
                   <span className="text-xs text-slate-500 italic">En attente...</span>
                   <button
@@ -242,7 +323,7 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
             <div className="space-y-2">
               {accepted.map((f) => (
                 <div key={f.friendship_id} className="flex items-center gap-3 bg-black/20 hover:bg-black/40 p-3 rounded-lg transition-colors group">
-                  <img src={getAvatarSrc(f)} alt="" className="w-10 h-10 rounded-xl" />
+                  <img src={getAvatarSrc(f.username, f.avatar_url)} alt="" className="w-10 h-10 rounded-xl" />
                   <div className="flex-1">
                     <div className="text-white font-bold">{f.username}</div>
                     <div className="text-[10px] text-slate-500">

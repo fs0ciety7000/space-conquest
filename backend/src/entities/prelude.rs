@@ -59,3 +59,11 @@ pub use super :: friendship :: Entity as Friendship ;
 
 // Fleet presets
 pub use super :: fleet_preset :: Entity as FleetPreset ;
+
+// Bounty board
+pub use super :: bounty :: Entity as Bounty ;
+
+// Flagship system
+pub use super :: flagship :: Entity as Flagship ;
+pub use super :: flagship_module_type :: Entity as FlagshipModuleType ;
+pub use super :: flagship_module :: Entity as FlagshipModule ;

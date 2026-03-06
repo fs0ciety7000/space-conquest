@@ -61,3 +61,11 @@ pub mod friendship;
 
 // Fleet presets
 pub mod fleet_preset;
+
+// Bounty board
+pub mod bounty;
+
+// Flagship system
+pub mod flagship;
+pub mod flagship_module_type;
+pub mod flagship_module;

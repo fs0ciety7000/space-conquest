@@ -44,6 +44,8 @@ pub struct Model {
 
     #[sea_orm(default_value = false)]
     pub is_homeworld: bool,
+
+    pub biome: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

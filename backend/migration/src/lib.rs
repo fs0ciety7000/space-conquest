@@ -66,6 +66,9 @@ mod m20260306_000001_drop_legacy_planet_columns;
 mod m20260306_000002_mission_tiers;
 mod m20260306_000003_user_profile_and_friends;
 mod m20260306_000004_fleet_presets;
+mod m20260306_000005_planetary_biomes;
+mod m20260306_000006_bounty_board;
+mod m20260306_000007_flagship;
 
 pub struct Migrator;
 
@@ -139,6 +142,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260306_000002_mission_tiers::Migration),
             Box::new(m20260306_000003_user_profile_and_friends::Migration),
             Box::new(m20260306_000004_fleet_presets::Migration),
+            Box::new(m20260306_000005_planetary_biomes::Migration),
+            Box::new(m20260306_000006_bounty_board::Migration),
+            Box::new(m20260306_000007_flagship::Migration),
         ]
     }
 }

@@ -183,6 +183,7 @@ let (system, position) = {
     // Créer la planète (première planète = planète mère)
     let planet_id = Uuid::new_v4();
     let now = Utc::now().naive_utc();
+    let homeworld_biome = crate::game_logic::random_biome();
     let new_planet = planet::ActiveModel {
         id: Set(planet_id),
         owner_id: Set(user_id),
@@ -197,6 +198,7 @@ let (system, position) = {
         last_update: Set(now),
         created_at: Set(now),
         is_homeworld: Set(true),
+        biome: Set(Some(homeworld_biome.to_string())),
         ..Default::default()
     };
 

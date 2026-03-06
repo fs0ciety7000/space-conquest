@@ -21,6 +21,8 @@ import Settings from './components/Settings';
 import MyProfile from './components/MyProfile';
 import FriendsView from './components/FriendsView';
 import FleetPresetsManager from './components/FleetPresetsManager';
+import BountyBoard from './components/BountyBoard';
+import FlagshipView from './components/FlagshipView';
 import MessagesView from './components/MessagesView';
 import AdminPanel from './components/AdminPanel';
 import Changelog from './components/Changelog';
@@ -49,7 +51,7 @@ import { Toaster, toast } from "sonner";
 import {
   LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap, Crosshair, Star
 } from "lucide-react";
 
 interface CombatReport {
@@ -62,7 +64,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -668,6 +670,8 @@ export default function App() {
     { id: 'stats', label: 'Statistiques', icon: Activity, category: 'DONNÉES' },
     { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
     { id: 'fleet-presets', label: 'Presets de Flotte', icon: Zap, category: 'MILITAIRE' },
+    { id: 'bounties', label: 'Tableau des Primes', icon: Crosshair, category: 'MILITAIRE' },
+    { id: 'flagship', label: 'Vaisseau Amiral', icon: Star, category: 'MILITAIRE' },
     { id: 'profile', label: 'Mon Profil', icon: UserCircle, category: 'SYSTÈME' },
     { id: 'changelog', label: 'Changelog', icon: FileText, category: 'SYSTÈME' },
     { id: 'settings', label: 'Paramètres', icon: SettingsIcon, category: 'SYSTÈME' },
@@ -886,6 +890,8 @@ export default function App() {
                         {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
                         {activeTab === 'friends' && <FriendsView userId={userId!} onSendMessage={(u) => { setMessageRecipient(u); setActiveTab('messages'); }} />}
                         {activeTab === 'fleet-presets' && <FleetPresetsManager userId={userId!} planetId={planetId!} />}
+                        {activeTab === 'bounties' && planet && <BountyBoard userId={userId!} planetId={planetId!} planet={planet} />}
+                        {activeTab === 'flagship' && planet && <FlagshipView userId={userId!} planetId={planetId!} planet={planet} />}
                         {activeTab === 'profile' && <MyProfile userId={userId!} username={username!} />}
                         {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onTransport={handlePrepareTransport} onSendMessage={handleOpenMessage} />}
                         {activeTab === 'alliance' && <AllianceView userId={userId!} token={token!} onOpenMessage={handleOpenMessage} />}

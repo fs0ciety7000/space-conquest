@@ -51,8 +51,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember, Friendship, FleetPreset},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member, friendship, fleet_preset
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember, Friendship, FleetPreset, Bounty, Flagship, FlagshipModuleType, FlagshipModule},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member, friendship, fleet_preset, bounty, flagship, flagship_module_type, flagship_module
 };
 
 #[derive(Serialize, Clone)]
@@ -301,6 +301,7 @@ async fn main() {
 .route("/users/:id/username", patch(update_username_handler))
 .route("/users/:id/avatar", post(upload_avatar_handler).layer(DefaultBodyLimit::max(20 * 1024 * 1024)))
 .route("/users/:id/bio", put(update_bio_handler))
+.route("/players/search", get(search_players_handler))
 .route("/players/:user_id/profile", get(get_player_profile_handler))
 // Friendships
 .route("/users/:id/friends", get(get_friends_handler))
@@ -313,6 +314,18 @@ async fn main() {
 .route("/users/:id/fleet-presets", post(create_fleet_preset_handler))
 .route("/users/:id/fleet-presets/:preset_id", put(update_fleet_preset_handler))
 .route("/users/:id/fleet-presets/:preset_id", delete(delete_fleet_preset_handler))
+// Bounty board
+.route("/bounties", get(get_bounties_handler))
+.route("/bounties", post(create_bounty_handler))
+.route("/bounties/:id/cancel", post(cancel_bounty_handler))
+.route("/bounties/:id/accept", post(accept_bounty_handler))
+// Flagship
+.route("/flagship/:user_id", get(get_flagship_handler))
+.route("/flagship/:user_id/create", post(create_flagship_handler))
+.route("/flagship/:user_id/rename", put(rename_flagship_handler))
+.route("/flagship/:user_id/equip", post(equip_module_handler))
+.route("/flagship/:user_id/unequip/:module_id", delete(unequip_module_handler))
+.route("/flagship-modules", get(get_flagship_module_types_handler))
         // Market
         .route("/market/listings", get(get_market_listings_handler))
         .route("/market/listings", post(create_market_listing_handler))
@@ -367,6 +380,11 @@ async fn main() {
         .route("/admin/defenses/:defense_type_id/requirements", get(admin_content::list_defense_requirements_handler))
         .route("/admin/defenses/requirements", post(admin_content::create_defense_requirement_handler))
         .route("/admin/defenses/requirements/:id", delete(admin_content::delete_defense_requirement_handler))
+        // Admin Content Management - Flagship Module Types
+        .route("/admin/flagship-modules", get(admin_content::list_flagship_module_types_handler))
+        .route("/admin/flagship-modules", post(admin_content::create_flagship_module_type_handler))
+        .route("/admin/flagship-modules/:id", patch(admin_content::update_flagship_module_type_handler))
+        .route("/admin/flagship-modules/:id", delete(admin_content::delete_flagship_module_type_handler))
         // Admin Content Management - Technologies (read-only for reference)
         .route("/admin/technologies", get(admin_content::list_technologies_handler))
         // Game tick system
@@ -1191,9 +1209,12 @@ async fn get_planet_handler(
         let production_crystal = base_crystal - p.crystal_amount;
         let production_deuterium = base_deuterium - p.deuterium_amount;
 
-        active.metal_amount = Set(p.metal_amount + (production_metal * production_multiplier));
-        active.crystal_amount = Set(p.crystal_amount + (production_crystal * production_multiplier));
-        active.deuterium_amount = Set(p.deuterium_amount + (production_deuterium * production_multiplier));
+        // Appliquer les bonus/malus de biome
+        let biome_mults = game_logic::get_biome_multipliers(p.biome.as_deref());
+
+        active.metal_amount = Set(p.metal_amount + (production_metal * production_multiplier * biome_mults.metal));
+        active.crystal_amount = Set(p.crystal_amount + (production_crystal * production_multiplier * biome_mults.crystal));
+        active.deuterium_amount = Set(p.deuterium_amount + (production_deuterium * production_multiplier * biome_mults.deuterium));
 
         // Appliquer les caps de stockage (SOFT CAP)
         // Si déjà au-dessus du cap, on arrête la production (garde ressources existantes)
@@ -1518,6 +1539,7 @@ async fn get_planet_handler(
                         let new_id = Uuid::new_v4();
 
                         let colony_now = Utc::now().naive_utc();
+                        let colony_biome = game_logic::random_biome();
                         let new_planet = planet::ActiveModel {
                             id: Set(new_id),
                             owner_id: Set(owner_id),
@@ -1532,6 +1554,7 @@ async fn get_planet_handler(
                             last_update: Set(colony_now),
                             created_at: Set(colony_now),
                             is_homeworld: Set(false),
+                            biome: Set(Some(colony_biome.to_string())),
                             ..Default::default()
                         };
                         let _ = new_planet.insert(&state.db).await;
@@ -1746,6 +1769,18 @@ async fn get_planet_handler(
             "crystal": format!("+{}%", crystal_slots * 50),
             "energy": format!("+{}%", energy_slots * 50),
             "deuterium": format!("+{}%", deuterium_slots * 50)
+        }));
+
+        // Biome
+        let biome_key = updated_model.biome.as_deref().unwrap_or("tellurique");
+        let biome_mults = game_logic::get_biome_multipliers(Some(biome_key));
+        obj.insert("biome".into(), json!({
+            "key": biome_key,
+            "name": game_logic::biome_display_name(biome_key),
+            "description": game_logic::biome_description(biome_key),
+            "metal_mult": biome_mults.metal,
+            "crystal_mult": biome_mults.crystal,
+            "deuterium_mult": biome_mults.deuterium,
         }));
 
         // ========== EXPANSION 2.0: Add relational tech tree and ship data ==========
@@ -4236,6 +4271,36 @@ async fn get_unit_costs_handler(State(state): State<AppState>) -> Result<Json<se
     }
     
     Ok(Json(json!(costs)))
+}
+
+async fn search_players_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let q = params.get("q").map(|s| s.trim().to_string()).unwrap_or_default();
+    if q.len() < 2 {
+        return Json(json!([])).into_response();
+    }
+    let exclude_id = params.get("exclude").and_then(|s| Uuid::parse_str(s).ok());
+    // Case-insensitive prefix search using ILIKE (PostgreSQL)
+    let users = User::find()
+        .filter(sea_orm::sea_query::Expr::col(user::Column::Username)
+            .ilike(format!("{}%", q)))
+        .limit(10)
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    let results: Vec<serde_json::Value> = users.into_iter()
+        .filter(|u| exclude_id.map(|ex| u.id != ex).unwrap_or(true))
+        .map(|u| json!({
+            "user_id": u.id,
+            "username": u.username,
+            "avatar_url": u.avatar_url,
+        }))
+        .collect();
+
+    Json(results).into_response()
 }
 
 async fn get_player_profile_handler(
@@ -7036,4 +7101,489 @@ async fn delete_fleet_preset_handler(
     }
 
     (StatusCode::OK, Json(json!({"success": true}))).into_response()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOUNTY BOARD
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+struct CreateBountyPayload {
+    poster_id: Uuid,
+    target_id: Uuid,
+    reward_metal: Option<f64>,
+    reward_crystal: Option<f64>,
+    reward_deuterium: Option<f64>,
+    reason: Option<String>,
+    planet_id: Uuid, // planet to deduct resources from
+}
+
+async fn get_bounties_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    // Expire old bounties first
+    let now = Utc::now().naive_utc();
+    let _ = sea_orm::Statement::from_string(
+        sea_orm::DatabaseBackend::Postgres,
+        format!("UPDATE bounty SET status = 'expired' WHERE status = 'open' AND expires_at < '{}'", now),
+    );
+
+    let status = params.get("status").map(|s| s.as_str()).unwrap_or("open");
+    let bounties = Bounty::find()
+        .filter(bounty::Column::Status.eq(status))
+        .order_by_desc(bounty::Column::CreatedAt)
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    // Enrich with usernames
+    let mut result = Vec::new();
+    for b in bounties {
+        let poster = User::find_by_id(b.poster_id).one(&state.db).await.unwrap_or(None);
+        let target = User::find_by_id(b.target_id).one(&state.db).await.unwrap_or(None);
+        let mercenary = if let Some(mid) = b.mercenary_id {
+            User::find_by_id(mid).one(&state.db).await.unwrap_or(None)
+        } else { None };
+
+        result.push(json!({
+            "id": b.id,
+            "poster_id": b.poster_id,
+            "poster_username": poster.map(|u| u.username).unwrap_or_default(),
+            "target_id": b.target_id,
+            "target_username": target.as_ref().map(|u| u.username.clone()).unwrap_or_default(),
+            "target_avatar_url": target.and_then(|u| u.avatar_url),
+            "mercenary_id": b.mercenary_id,
+            "mercenary_username": mercenary.map(|u| u.username),
+            "reward_metal": b.reward_metal,
+            "reward_crystal": b.reward_crystal,
+            "reward_deuterium": b.reward_deuterium,
+            "reason": b.reason,
+            "status": b.status,
+            "expires_at": b.expires_at.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            "created_at": b.created_at.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            "completed_at": b.completed_at.map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+        }));
+    }
+
+    Json(result).into_response()
+}
+
+async fn create_bounty_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateBountyPayload>,
+) -> impl IntoResponse {
+    if payload.poster_id == payload.target_id {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas vous cibler vous-même"}))).into_response();
+    }
+
+    let reward_metal = payload.reward_metal.unwrap_or(0.0).max(0.0);
+    let reward_crystal = payload.reward_crystal.unwrap_or(0.0).max(0.0);
+    let reward_deuterium = payload.reward_deuterium.unwrap_or(0.0).max(0.0);
+
+    if reward_metal + reward_crystal + reward_deuterium <= 0.0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "La prime doit inclure au moins une ressource"}))).into_response();
+    }
+
+    // Deduct resources from poster's planet
+    let planet = match Planet::find_by_id(payload.planet_id).one(&state.db).await.unwrap_or(None) {
+        Some(p) => p,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))).into_response(),
+    };
+
+    if planet.owner_id != payload.poster_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
+    }
+
+    if planet.metal_amount < reward_metal || planet.crystal_amount < reward_crystal || planet.deuterium_amount < reward_deuterium {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ressources insuffisantes"}))).into_response();
+    }
+
+    let mut active: planet::ActiveModel = planet.into();
+    active.metal_amount = Set(active.metal_amount.clone().unwrap() - reward_metal);
+    active.crystal_amount = Set(active.crystal_amount.clone().unwrap() - reward_crystal);
+    active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() - reward_deuterium);
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de déduction des ressources"}))).into_response();
+    }
+
+    let now = Utc::now().naive_utc();
+    let new_bounty = bounty::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        poster_id: Set(payload.poster_id),
+        target_id: Set(payload.target_id),
+        mercenary_id: Set(None),
+        reward_metal: Set(reward_metal),
+        reward_crystal: Set(reward_crystal),
+        reward_deuterium: Set(reward_deuterium),
+        reason: Set(payload.reason),
+        status: Set("open".to_string()),
+        expires_at: Set(now + chrono::Duration::days(7)),
+        created_at: Set(now),
+        completed_at: Set(None),
+    };
+
+    match new_bounty.insert(&state.db).await {
+        Ok(b) => (StatusCode::CREATED, Json(json!(b))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de création"}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct BountyActionPayload {
+    user_id: Uuid,
+}
+
+async fn cancel_bounty_handler(
+    Path(bounty_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<BountyActionPayload>,
+) -> impl IntoResponse {
+    let b = match Bounty::find_by_id(bounty_id).one(&state.db).await.unwrap_or(None) {
+        Some(b) => b,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Prime introuvable"}))).into_response(),
+    };
+
+    if b.poster_id != payload.user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Seul le donneur d'ordre peut annuler"}))).into_response();
+    }
+    if b.status != "open" {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Cette prime ne peut pas être annulée"}))).into_response();
+    }
+
+    // Refund resources to poster's main planet
+    if let Some(planet) = Planet::find()
+        .filter(planet::Column::OwnerId.eq(b.poster_id))
+        .filter(planet::Column::IsHomeworld.eq(true))
+        .one(&state.db).await.unwrap_or(None)
+    {
+        let mut active: planet::ActiveModel = planet.into();
+        active.metal_amount = Set(active.metal_amount.clone().unwrap() + b.reward_metal);
+        active.crystal_amount = Set(active.crystal_amount.clone().unwrap() + b.reward_crystal);
+        active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() + b.reward_deuterium);
+        let _ = active.update(&state.db).await;
+    }
+
+    let mut active: bounty::ActiveModel = b.into();
+    active.status = Set("cancelled".to_string());
+    match active.update(&state.db).await {
+        Ok(_) => (StatusCode::OK, Json(json!({"success": true}))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur"}))).into_response(),
+    }
+}
+
+async fn accept_bounty_handler(
+    Path(bounty_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<BountyActionPayload>,
+) -> impl IntoResponse {
+    let b = match Bounty::find_by_id(bounty_id).one(&state.db).await.unwrap_or(None) {
+        Some(b) => b,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Prime introuvable"}))).into_response(),
+    };
+
+    if b.status != "open" {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Cette prime n'est plus disponible"}))).into_response();
+    }
+    if b.target_id == payload.user_id || b.poster_id == payload.user_id {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas accepter cette prime"}))).into_response();
+    }
+
+    let mut active: bounty::ActiveModel = b.into();
+    active.mercenary_id = Set(Some(payload.user_id));
+    active.status = Set("accepted".to_string());
+    match active.update(&state.db).await {
+        Ok(updated) => Json(json!(updated)).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur"}))).into_response(),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FLAGSHIP SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+
+async fn get_flagship_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let flagship = Flagship::find()
+        .filter(flagship::Column::UserId.eq(user_id))
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    let Some(fs) = flagship else {
+        return Json(json!(null)).into_response();
+    };
+
+    // Get equipped modules with type info
+    let equipped = FlagshipModule::find()
+        .filter(flagship_module::Column::FlagshipId.eq(fs.id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    let mut modules_json = Vec::new();
+    let mut total_attack = fs.base_attack;
+    let mut total_shield = fs.base_shield;
+    let mut total_hull = fs.base_hull;
+    let mut total_cargo = fs.base_cargo;
+    let mut total_speed_pct = 0.0f64;
+
+    for m in &equipped {
+        if let Some(mtype) = FlagshipModuleType::find_by_id(m.module_type_id).one(&state.db).await.unwrap_or(None) {
+            total_attack += mtype.bonus_attack;
+            total_shield += mtype.bonus_shield;
+            total_hull += mtype.bonus_hull;
+            total_cargo += mtype.bonus_cargo;
+            total_speed_pct += mtype.bonus_speed_pct;
+            modules_json.push(json!({
+                "id": m.id,
+                "module_type_id": m.module_type_id,
+                "module_key": mtype.module_key,
+                "display_name": mtype.display_name,
+                "slot_type": mtype.slot_type,
+                "slot_index": m.slot_index,
+                "bonus_attack": mtype.bonus_attack,
+                "bonus_shield": mtype.bonus_shield,
+                "bonus_hull": mtype.bonus_hull,
+                "bonus_cargo": mtype.bonus_cargo,
+                "bonus_speed_pct": mtype.bonus_speed_pct,
+                "equipped_at": m.equipped_at.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            }));
+        }
+    }
+
+    Json(json!({
+        "id": fs.id,
+        "user_id": fs.user_id,
+        "name": fs.name,
+        "xp": fs.xp,
+        "level": fs.level,
+        "xp_next_level": flagship_xp_for_level(fs.level + 1),
+        "base_attack": fs.base_attack,
+        "base_shield": fs.base_shield,
+        "base_hull": fs.base_hull,
+        "base_cargo": fs.base_cargo,
+        "total_attack": total_attack,
+        "total_shield": total_shield,
+        "total_hull": total_hull,
+        "total_cargo": total_cargo,
+        "total_speed_bonus_pct": total_speed_pct,
+        "equipped_modules": modules_json,
+        "created_at": fs.created_at.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+    })).into_response()
+}
+
+fn flagship_xp_for_level(level: i32) -> i32 {
+    // XP requis pour atteindre ce niveau: 100 * level^2
+    100 * level * level
+}
+
+#[derive(Deserialize)]
+struct CreateFlagshipPayload {
+    name: Option<String>,
+    planet_id: Uuid,
+}
+
+async fn create_flagship_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<CreateFlagshipPayload>,
+) -> impl IntoResponse {
+    // Check not already exists
+    if Flagship::find().filter(flagship::Column::UserId.eq(user_id)).one(&state.db).await.unwrap_or(None).is_some() {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Vous avez déjà un Vaisseau Amiral"}))).into_response();
+    }
+
+    // Cost: 100k metal, 80k crystal, 50k deuterium
+    let planet = match Planet::find_by_id(payload.planet_id).one(&state.db).await.unwrap_or(None) {
+        Some(p) => p,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))).into_response(),
+    };
+    if planet.owner_id != user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
+    }
+    if planet.metal_amount < 5_000_000.0 || planet.crystal_amount < 2_000_000.0 || planet.deuterium_amount < 500_000.0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ressources insuffisantes (5 000 000 métal, 2 000 000 cristal, 500 000 deutérium)"}))).into_response();
+    }
+
+    let mut active: planet::ActiveModel = planet.into();
+    active.metal_amount = Set(active.metal_amount.clone().unwrap() - 5_000_000.0);
+    active.crystal_amount = Set(active.crystal_amount.clone().unwrap() - 2_000_000.0);
+    active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() - 500_000.0);
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de déduction"}))).into_response();
+    }
+
+    let now = Utc::now().naive_utc();
+    let name = payload.name.unwrap_or_else(|| "Vaisseau Amiral".to_string());
+    let fs = flagship::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        user_id: Set(user_id),
+        name: Set(name),
+        xp: Set(0),
+        level: Set(1),
+        base_attack: Set(500),
+        base_shield: Set(300),
+        base_hull: Set(2000),
+        base_cargo: Set(5000),
+        current_planet_id: Set(Some(payload.planet_id)),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    match fs.insert(&state.db).await {
+        Ok(created) => (StatusCode::CREATED, Json(json!(created))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de création"}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct RenameFlagshipPayload {
+    name: String,
+}
+
+async fn rename_flagship_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<RenameFlagshipPayload>,
+) -> impl IntoResponse {
+    let fs = match Flagship::find().filter(flagship::Column::UserId.eq(user_id)).one(&state.db).await.unwrap_or(None) {
+        Some(f) => f,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Vaisseau Amiral introuvable"}))).into_response(),
+    };
+    let name = payload.name.trim().to_string();
+    if name.is_empty() || name.len() > 64 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nom invalide (1-64 caractères)"}))).into_response();
+    }
+    let mut active: flagship::ActiveModel = fs.into();
+    active.name = Set(name);
+    active.updated_at = Set(Utc::now().naive_utc());
+    match active.update(&state.db).await {
+        Ok(updated) => Json(json!(updated)).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur"}))).into_response(),
+    }
+}
+
+async fn get_flagship_module_types_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let types = FlagshipModuleType::find()
+        .order_by_asc(flagship_module_type::Column::RequiredFlagshipLevel)
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+    Json(types).into_response()
+}
+
+#[derive(Deserialize)]
+struct EquipModulePayload {
+    module_key: String,
+    planet_id: Uuid,
+    slot_index: Option<i32>,
+}
+
+async fn equip_module_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<EquipModulePayload>,
+) -> impl IntoResponse {
+    let fs = match Flagship::find().filter(flagship::Column::UserId.eq(user_id)).one(&state.db).await.unwrap_or(None) {
+        Some(f) => f,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Vaisseau Amiral introuvable"}))).into_response(),
+    };
+
+    let mtype = match FlagshipModuleType::find()
+        .filter(flagship_module_type::Column::ModuleKey.eq(&payload.module_key))
+        .one(&state.db).await.unwrap_or(None)
+    {
+        Some(m) => m,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Module introuvable"}))).into_response(),
+    };
+
+    if fs.level < mtype.required_flagship_level {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Niveau {} requis pour ce module", mtype.required_flagship_level)}))).into_response();
+    }
+
+    // Check slot type limits (max 3 per slot type)
+    let existing_same_type = FlagshipModule::find()
+        .filter(flagship_module::Column::FlagshipId.eq(fs.id))
+        .all(&state.db).await.unwrap_or_default();
+
+    let same_type_count = {
+        let mut count = 0;
+        for em in &existing_same_type {
+            if let Some(emt) = FlagshipModuleType::find_by_id(em.module_type_id).one(&state.db).await.unwrap_or(None) {
+                if emt.slot_type == mtype.slot_type { count += 1; }
+            }
+        }
+        count
+    };
+    if same_type_count >= 3 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Maximum 3 modules de type '{}' autorisés", mtype.slot_type)}))).into_response();
+    }
+
+    // Check already equipped this exact module
+    let already_equipped = existing_same_type.iter().any(|em| em.module_type_id == mtype.id);
+    if already_equipped {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ce module est déjà équipé"}))).into_response();
+    }
+
+    // Deduct cost from planet
+    let planet = match Planet::find_by_id(payload.planet_id).one(&state.db).await.unwrap_or(None) {
+        Some(p) => p,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))).into_response(),
+    };
+    if planet.owner_id != user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
+    }
+    if planet.metal_amount < mtype.cost_metal || planet.crystal_amount < mtype.cost_crystal || planet.deuterium_amount < mtype.cost_deuterium {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ressources insuffisantes"}))).into_response();
+    }
+
+    let mut pactive: planet::ActiveModel = planet.into();
+    pactive.metal_amount = Set(pactive.metal_amount.clone().unwrap() - mtype.cost_metal);
+    pactive.crystal_amount = Set(pactive.crystal_amount.clone().unwrap() - mtype.cost_crystal);
+    pactive.deuterium_amount = Set(pactive.deuterium_amount.clone().unwrap() - mtype.cost_deuterium);
+    if pactive.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de déduction"}))).into_response();
+    }
+
+    let slot_index = payload.slot_index.unwrap_or(same_type_count as i32);
+    let new_module = flagship_module::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        flagship_id: Set(fs.id),
+        module_type_id: Set(mtype.id),
+        slot_index: Set(slot_index),
+        equipped_at: Set(Utc::now().naive_utc()),
+    };
+    match new_module.insert(&state.db).await {
+        Ok(m) => (StatusCode::CREATED, Json(json!(m))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur d'équipement"}))).into_response(),
+    }
+}
+
+async fn unequip_module_handler(
+    Path((user_id, module_id)): Path<(Uuid, Uuid)>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let fs = match Flagship::find().filter(flagship::Column::UserId.eq(user_id)).one(&state.db).await.unwrap_or(None) {
+        Some(f) => f,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Vaisseau Amiral introuvable"}))).into_response(),
+    };
+
+    let module = match FlagshipModule::find_by_id(module_id).one(&state.db).await.unwrap_or(None) {
+        Some(m) => m,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Module introuvable"}))).into_response(),
+    };
+
+    if module.flagship_id != fs.id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
+    }
+
+    use sea_orm::ModelTrait;
+    match module.delete(&state.db).await {
+        Ok(_) => (StatusCode::OK, Json(json!({"success": true}))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de déséquipement"}))).into_response(),
+    }
 }

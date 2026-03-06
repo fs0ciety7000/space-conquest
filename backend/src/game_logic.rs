@@ -3,6 +3,63 @@ use rand::Rng;
 use crate::entities::planet;
 use crate::ServerConfigCache;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PLANETARY BIOMES
+// ═══════════════════════════════════════════════════════════════════════════
+
+pub const BIOMES: &[&str] = &[
+    "tellurique",   // Équilibré
+    "volcanique",   // +30% metal, -10% crystal/deuterium
+    "glaciaire",    // +50% deuterium, -15% metal, -10% crystal
+    "desertique",   // +25% crystal, -20% deuterium
+    "oceanique",    // +20% crystal, +20% deuterium, -15% metal
+    "aride",        // +20% metal, +10% crystal, -20% deuterium
+];
+
+pub struct BiomeMultipliers {
+    pub metal: f64,
+    pub crystal: f64,
+    pub deuterium: f64,
+}
+
+pub fn get_biome_multipliers(biome: Option<&str>) -> BiomeMultipliers {
+    match biome.unwrap_or("tellurique") {
+        "volcanique" => BiomeMultipliers { metal: 1.30, crystal: 0.90, deuterium: 0.90 },
+        "glaciaire"  => BiomeMultipliers { metal: 0.85, crystal: 0.90, deuterium: 1.50 },
+        "desertique" => BiomeMultipliers { metal: 0.90, crystal: 1.25, deuterium: 0.80 },
+        "oceanique"  => BiomeMultipliers { metal: 0.85, crystal: 1.20, deuterium: 1.20 },
+        "aride"      => BiomeMultipliers { metal: 1.20, crystal: 1.10, deuterium: 0.80 },
+        _            => BiomeMultipliers { metal: 1.00, crystal: 1.00, deuterium: 1.00 },
+    }
+}
+
+pub fn biome_display_name(biome: &str) -> &'static str {
+    match biome {
+        "volcanique" => "Volcanique",
+        "glaciaire"  => "Glaciaire",
+        "desertique" => "Désertique",
+        "oceanique"  => "Océanique",
+        "aride"      => "Aride",
+        _            => "Tellurique",
+    }
+}
+
+pub fn biome_description(biome: &str) -> &'static str {
+    match biome {
+        "volcanique" => "Riche en métaux (+30%), mais les éruptions réduisent la production de cristal et deutérium (-10%).",
+        "glaciaire"  => "Réservoirs de glace massifs (+50% deutérium), mais extraction minérale difficile (-15% métal, -10% cristal).",
+        "desertique" => "Sous-sol cristallin abondant (+25% cristal), déshydratation sévère (-20% deutérium).",
+        "oceanique"  => "Océans riches en cristaux et deutérium (+20% chacun), mais forage métallique limité (-15% métal).",
+        "aride"      => "Plaines rocheuses riches (+20% métal, +10% cristal), mais manque d'eau (-20% deutérium).",
+        _            => "Planète équilibrée, pas de bonus ni malus particuliers.",
+    }
+}
+
+pub fn random_biome() -> &'static str {
+    let mut rng = rand::thread_rng();
+    BIOMES[rng.gen_range(0..BIOMES.len())]
+}
+
 // ⚡ VITESSE DU JEU (200 = x2, 500 = x5)
 pub const SPEED_FACTOR: f64 = 500.0;
 

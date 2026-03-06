@@ -1,5 +1,45 @@
 # Changelog - Space Conquest
 
+## [4.0.0] - 2026-03-06 - Biomes, Tableau des Primes, Vaisseau Amiral & Recherche d'Amis
+
+### ✨ Nouvelles Fonctionnalités
+
+#### 🪐 Biomes Planétaires
+- Chaque planète (homeworld + colonies) reçoit un biome aléatoire à la création parmi : tellurique, volcanique, glaciaire, désertique, océanique, aride
+- Les biomes appliquent des multiplicateurs de production sur métal, cristal et deutérium
+- Badge coloré visible dans PlanetOverview avec description au survol
+- Migration `m20260306_000005_planetary_biomes` — colonne `biome` ajoutée à la table `planet`
+
+#### 🎯 Tableau des Primes
+- Les joueurs peuvent placer des primes sur des agresseurs (ressources en escrow)
+- Les mercenaires peuvent accepter des contrats et réclamer la prime après avoir attaqué la cible
+- Annulation avec remboursement automatique sur le monde natal
+- Trois statuts : ouvertes, en cours, complétées
+- Migration `m20260306_000006_bounty_board` — nouvelle table `bounty`
+- Nouveau composant frontend `BountyBoard.tsx`
+
+#### ⭐ Vaisseau Amiral
+- Un seul vaisseau amiral par joueur, construction payante (5 000 000 métal / 2 000 000 cristal / 500 000 deutérium)
+- Système d'XP et de niveaux (100 × niveau² XP par palier)
+- Stats de base : 500 attaque / 300 bouclier / 2000 coque / 5000 cargo
+- Système de modules équipables par slot (weapon×3, shield×3, engine×2, utility×2, special×1)
+- 12 modules seedés en DB : Laser Mk.II, Canon Plasma, Rayon Graviton, Déflecteur V2, Bouclier Plasma, Blindage Titane, Propulseur Ionique, Moteur Warp, Rayon Tracteur, Réseau Espion, Nano-réparation, Passerelle de Commandement
+- Interface fitting EVE-style avec boutique de modules et barre de progression XP
+- Migration `m20260306_000007_flagship` — tables `flagship`, `flagship_module_type`, `flagship_module`
+- Nouveau composant frontend `FlagshipView.tsx`
+
+#### 🔍 Recherche d'Amis Améliorée
+- L'ajout d'ami utilise désormais une recherche autocomplete par préfixe (ILIKE, debounced 300 ms)
+- Dropdown avec fermeture au clic extérieur, bouton × pour réinitialiser
+- Endpoint `GET /players/search?q=&exclude=` ajouté au backend
+
+#### 🛠️ Admin — Gestion des Modules Vaisseau Amiral
+- Nouvel onglet "Modules Vaisseau Amiral" dans `AdminContentManager`
+- CRUD complet : créer, modifier (tous les bonus + coûts + slot + niveau requis), supprimer
+- Endpoints : `GET/POST /admin/flagship-modules`, `PATCH/DELETE /admin/flagship-modules/:id`
+
+---
+
 ## [2.5.0] - 2026-03-06 - Correctifs Système de Combat PvP
 
 ### 🐛 Corrections

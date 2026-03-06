@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Rocket, Building2, Shield, Plus, Edit, Trash2, Save, X, Link as LinkIcon } from 'lucide-react';
+import { Rocket, Building2, Shield, Star, Plus, Edit, Trash2, Save, X, Link as LinkIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
 import { formatDuration } from '@/lib/utils';
 
-type ContentType = 'ships' | 'buildings' | 'defenses';
+type ContentType = 'ships' | 'buildings' | 'defenses' | 'flagship_modules';
 
 interface ShipType {
   id: number;
@@ -56,6 +56,23 @@ interface DefenseType {
   description?: string;
 }
 
+interface FlagshipModuleType {
+  id: string;
+  module_key: string;
+  display_name: string;
+  description?: string;
+  slot_type: string;
+  bonus_attack: number;
+  bonus_shield: number;
+  bonus_hull: number;
+  bonus_cargo: number;
+  bonus_speed_pct: number;
+  cost_metal: number;
+  cost_crystal: number;
+  cost_deuterium: number;
+  required_flagship_level: number;
+}
+
 interface Technology {
   id: number;
   tech_key: string;
@@ -75,9 +92,10 @@ export default function AdminContentManager() {
   const [ships, setShips] = useState<ShipType[]>([]);
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [defenses, setDefenses] = useState<DefenseType[]>([]);
+  const [flagshipModules, setFlagshipModules] = useState<FlagshipModuleType[]>([]);
   const [technologies, setTechnologies] = useState<Technology[]>([]);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState<any>({});
 
@@ -90,14 +108,16 @@ export default function AdminContentManager() {
     try {
       const endpoint = activeTab === 'ships' ? '/admin/ships' :
                       activeTab === 'buildings' ? '/admin/buildings' :
-                      '/admin/defenses';
+                      activeTab === 'defenses' ? '/admin/defenses' :
+                      '/admin/flagship-modules';
 
       const res = await fetch(apiUrl(endpoint));
       const data = await res.json();
 
       if (activeTab === 'ships') setShips(data.ships || []);
       else if (activeTab === 'buildings') setBuildings(data.buildings || []);
-      else setDefenses(data.defenses || []);
+      else if (activeTab === 'defenses') setDefenses(data.defenses || []);
+      else setFlagshipModules(data.modules || []);
     } catch (error) {
       toast.error('Erreur de chargement');
     }
@@ -117,7 +137,8 @@ export default function AdminContentManager() {
     try {
       const endpoint = activeTab === 'ships' ? '/admin/ships' :
                       activeTab === 'buildings' ? '/admin/buildings' :
-                      '/admin/defenses';
+                      activeTab === 'defenses' ? '/admin/defenses' :
+                      '/admin/flagship-modules';
 
       const res = await fetch(apiUrl(endpoint), {
         method: 'POST',
@@ -138,11 +159,12 @@ export default function AdminContentManager() {
     }
   };
 
-  const handleUpdate = async (id: number) => {
+  const handleUpdate = async (id: number | string) => {
     try {
       const endpoint = `${activeTab === 'ships' ? '/admin/ships' :
                         activeTab === 'buildings' ? '/admin/buildings' :
-                        '/admin/defenses'}/${id}`;
+                        activeTab === 'defenses' ? '/admin/defenses' :
+                        '/admin/flagship-modules'}/${id}`;
 
       const res = await fetch(apiUrl(endpoint), {
         method: 'PATCH',
@@ -163,13 +185,14 @@ export default function AdminContentManager() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number | string) => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cet élément ?')) return;
 
     try {
       const endpoint = `${activeTab === 'ships' ? '/admin/ships' :
                         activeTab === 'buildings' ? '/admin/buildings' :
-                        '/admin/defenses'}/${id}`;
+                        activeTab === 'defenses' ? '/admin/defenses' :
+                        '/admin/flagship-modules'}/${id}`;
 
       const res = await fetch(apiUrl(endpoint), { method: 'DELETE' });
 
@@ -390,6 +413,79 @@ export default function AdminContentManager() {
     </div>
   );
 
+  const renderFlagshipModulesTable = () => (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="border-b border-amber-500/30">
+          <tr className="text-left">
+            <th className="p-2">Key</th>
+            <th className="p-2">Nom</th>
+            <th className="p-2">Slot</th>
+            <th className="p-2">Bonus (A/S/H/C)</th>
+            <th className="p-2">Vitesse %</th>
+            <th className="p-2">Coûts (M/C/D)</th>
+            <th className="p-2">Niv. requis</th>
+            <th className="p-2 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {flagshipModules.map((mod) => (
+            <tr key={mod.id} className="border-b border-gray-700 hover:bg-gray-800/50">
+              {editingId === mod.id ? (
+                <td colSpan={8} className="p-4">
+                  <FlagshipModuleForm
+                    data={formData}
+                    onChange={setFormData}
+                    onSave={() => handleUpdate(mod.id)}
+                    onCancel={() => { setEditingId(null); setFormData({}); }}
+                  />
+                </td>
+              ) : (
+                <>
+                  <td className="p-2 font-mono text-xs text-cyan-400">{mod.module_key}</td>
+                  <td className="p-2 font-medium">{mod.display_name}</td>
+                  <td className="p-2">
+                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                      mod.slot_type === 'weapon' ? 'bg-red-900/50 text-red-300' :
+                      mod.slot_type === 'shield' ? 'bg-cyan-900/50 text-cyan-300' :
+                      mod.slot_type === 'engine' ? 'bg-green-900/50 text-green-300' :
+                      mod.slot_type === 'utility' ? 'bg-yellow-900/50 text-yellow-300' :
+                      'bg-purple-900/50 text-purple-300'
+                    }`}>{mod.slot_type}</span>
+                  </td>
+                  <td className="p-2 text-xs">
+                    <span className="text-red-400">{mod.bonus_attack}</span>/
+                    <span className="text-cyan-400">{mod.bonus_shield}</span>/
+                    <span className="text-orange-400">{mod.bonus_hull}</span>/
+                    <span className="text-yellow-400">{mod.bonus_cargo}</span>
+                  </td>
+                  <td className="p-2 text-xs text-green-400">{mod.bonus_speed_pct > 0 ? `+${mod.bonus_speed_pct}%` : '—'}</td>
+                  <td className="p-2 text-xs">
+                    <span className="text-blue-400">{mod.cost_metal.toLocaleString()}</span>/
+                    <span className="text-purple-400">{mod.cost_crystal.toLocaleString()}</span>/
+                    <span className="text-green-400">{mod.cost_deuterium.toLocaleString()}</span>
+                  </td>
+                  <td className="p-2 text-xs">Niv. {mod.required_flagship_level}</td>
+                  <td className="p-2 text-right space-x-2">
+                    <Button size="sm" variant="outline" onClick={() => {
+                      setEditingId(mod.id);
+                      setFormData({ ...mod });
+                    }}>
+                      <Edit className="w-3 h-3" />
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleDelete(mod.id)}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Tabs */}
@@ -430,6 +526,18 @@ export default function AdminContentManager() {
           <Shield className="w-4 h-4 mr-2" />
           Défenses
         </Button>
+        <Button
+          variant={activeTab === 'flagship_modules' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('flagship_modules')}
+          className={
+            activeTab === 'flagship_modules'
+              ? 'bg-gradient-to-r from-yellow-600 to-amber-600'
+              : ''
+          }
+        >
+          <Star className="w-4 h-4 mr-2" />
+          Modules Vaisseau Amiral
+        </Button>
       </div>
 
       <Card className="border-amber-500/30 bg-gradient-to-br from-gray-900 to-gray-800">
@@ -438,7 +546,8 @@ export default function AdminContentManager() {
             <CardTitle className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
               {activeTab === 'ships' ? 'Gestion des Vaisseaux' :
                activeTab === 'buildings' ? 'Gestion des Bâtiments' :
-               'Gestion des Défenses'}
+               activeTab === 'defenses' ? 'Gestion des Défenses' :
+               'Modules Vaisseau Amiral'}
             </CardTitle>
             <Button onClick={() => setShowCreateForm(true)}>
               <Plus className="w-4 h-4 mr-2" />
@@ -473,12 +582,21 @@ export default function AdminContentManager() {
                   onCancel={() => { setShowCreateForm(false); setFormData({}); }}
                 />
               )}
+              {activeTab === 'flagship_modules' && (
+                <FlagshipModuleForm
+                  data={formData}
+                  onChange={setFormData}
+                  onSave={handleCreate}
+                  onCancel={() => { setShowCreateForm(false); setFormData({}); }}
+                />
+              )}
             </div>
           ) : null}
 
           {activeTab === 'ships' && renderShipsTable()}
           {activeTab === 'buildings' && renderBuildingsTable()}
           {activeTab === 'defenses' && renderDefensesTable()}
+          {activeTab === 'flagship_modules' && renderFlagshipModulesTable()}
         </CardContent>
       </Card>
     </div>
@@ -669,4 +787,77 @@ function DefenseCreateForm({ data, onChange, onSave, onCancel }: any) {
 
 function DefenseEditForm({ data, onChange, onSave, onCancel }: any) {
   return <DefenseCreateForm data={data} onChange={onChange} onSave={onSave} onCancel={onCancel} />;
+}
+
+function FlagshipModuleForm({ data, onChange, onSave, onCancel }: any) {
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <label className="text-sm">Module Key (unique)</label>
+        <Input value={data.module_key || ''} onChange={e => onChange({ ...data, module_key: e.target.value })} />
+      </div>
+      <div>
+        <label className="text-sm">Nom affiché</label>
+        <Input value={data.display_name || ''} onChange={e => onChange({ ...data, display_name: e.target.value })} />
+      </div>
+      <div>
+        <label className="text-sm">Type de slot</label>
+        <select
+          value={data.slot_type || 'weapon'}
+          onChange={e => onChange({ ...data, slot_type: e.target.value })}
+          className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+        >
+          <option value="weapon">weapon</option>
+          <option value="shield">shield</option>
+          <option value="engine">engine</option>
+          <option value="utility">utility</option>
+          <option value="special">special</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-sm">Niveau vaisseau requis</label>
+        <Input type="number" value={data.required_flagship_level ?? 1} onChange={e => onChange({ ...data, required_flagship_level: Number(e.target.value) })} />
+      </div>
+      <div>
+        <label className="text-sm">Bonus Attaque</label>
+        <Input type="number" value={data.bonus_attack ?? 0} onChange={e => onChange({ ...data, bonus_attack: Number(e.target.value) })} />
+      </div>
+      <div>
+        <label className="text-sm">Bonus Bouclier</label>
+        <Input type="number" value={data.bonus_shield ?? 0} onChange={e => onChange({ ...data, bonus_shield: Number(e.target.value) })} />
+      </div>
+      <div>
+        <label className="text-sm">Bonus Coque</label>
+        <Input type="number" value={data.bonus_hull ?? 0} onChange={e => onChange({ ...data, bonus_hull: Number(e.target.value) })} />
+      </div>
+      <div>
+        <label className="text-sm">Bonus Cargo</label>
+        <Input type="number" value={data.bonus_cargo ?? 0} onChange={e => onChange({ ...data, bonus_cargo: Number(e.target.value) })} />
+      </div>
+      <div>
+        <label className="text-sm">Bonus Vitesse (%)</label>
+        <Input type="number" step="0.1" value={data.bonus_speed_pct ?? 0} onChange={e => onChange({ ...data, bonus_speed_pct: Number(e.target.value) })} />
+      </div>
+      <div>
+        <label className="text-sm">Coût Métal</label>
+        <Input type="number" value={data.cost_metal ?? 0} onChange={e => onChange({ ...data, cost_metal: Number(e.target.value) })} />
+      </div>
+      <div>
+        <label className="text-sm">Coût Cristal</label>
+        <Input type="number" value={data.cost_crystal ?? 0} onChange={e => onChange({ ...data, cost_crystal: Number(e.target.value) })} />
+      </div>
+      <div>
+        <label className="text-sm">Coût Deutérium</label>
+        <Input type="number" value={data.cost_deuterium ?? 0} onChange={e => onChange({ ...data, cost_deuterium: Number(e.target.value) })} />
+      </div>
+      <div className="col-span-2">
+        <label className="text-sm">Description</label>
+        <Input value={data.description || ''} onChange={e => onChange({ ...data, description: e.target.value })} />
+      </div>
+      <div className="col-span-2 flex gap-2 justify-end">
+        <Button variant="outline" onClick={onCancel}><X className="w-4 h-4 mr-2" />Annuler</Button>
+        <Button onClick={onSave}><Save className="w-4 h-4 mr-2" />Sauvegarder</Button>
+      </div>
+    </div>
+  );
 }

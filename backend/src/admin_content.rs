@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::entities::{
     prelude::*,
     ship_type, building_type, defense_type, ship_requirement, building_requirement,
-    defense_requirement, technology, officer_template,
+    defense_requirement, technology, officer_template, flagship_module_type,
 };
 use crate::AppState;
 
@@ -482,6 +482,108 @@ pub async fn delete_defense_requirement_handler(
     Path(id): Path<i32>,
 ) -> Result<StatusCode, StatusCode> {
     DefenseRequirement::delete_by_id(id)
+        .exec(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ==================== FLAGSHIP MODULE TYPES ====================
+
+#[derive(Deserialize)]
+pub struct UpsertFlagshipModuleType {
+    pub module_key: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub slot_type: String,
+    pub bonus_attack: i32,
+    pub bonus_shield: i32,
+    pub bonus_hull: i32,
+    pub bonus_cargo: i32,
+    pub bonus_speed_pct: f64,
+    pub cost_metal: f64,
+    pub cost_crystal: f64,
+    pub cost_deuterium: f64,
+    pub required_flagship_level: i32,
+}
+
+pub async fn list_flagship_module_types_handler(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let modules = FlagshipModuleType::find()
+        .all(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(json!({ "modules": modules })))
+}
+
+pub async fn create_flagship_module_type_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<UpsertFlagshipModuleType>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let new_mod = flagship_module_type::ActiveModel {
+        id: Set(uuid::Uuid::new_v4()),
+        module_key: Set(payload.module_key),
+        display_name: Set(payload.display_name),
+        description: Set(payload.description),
+        slot_type: Set(payload.slot_type),
+        bonus_attack: Set(payload.bonus_attack),
+        bonus_shield: Set(payload.bonus_shield),
+        bonus_hull: Set(payload.bonus_hull),
+        bonus_cargo: Set(payload.bonus_cargo),
+        bonus_speed_pct: Set(payload.bonus_speed_pct),
+        cost_metal: Set(payload.cost_metal),
+        cost_crystal: Set(payload.cost_crystal),
+        cost_deuterium: Set(payload.cost_deuterium),
+        required_flagship_level: Set(payload.required_flagship_level),
+        ..Default::default()
+    };
+
+    let result = new_mod.insert(&state.db).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(json!({ "status": "success", "module": result })))
+}
+
+pub async fn update_flagship_module_type_handler(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+    Json(payload): Json<UpsertFlagshipModuleType>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let module = FlagshipModuleType::find_by_id(id)
+        .one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let mut active: flagship_module_type::ActiveModel = module.into();
+    active.module_key = Set(payload.module_key);
+    active.display_name = Set(payload.display_name);
+    active.description = Set(payload.description);
+    active.slot_type = Set(payload.slot_type);
+    active.bonus_attack = Set(payload.bonus_attack);
+    active.bonus_shield = Set(payload.bonus_shield);
+    active.bonus_hull = Set(payload.bonus_hull);
+    active.bonus_cargo = Set(payload.bonus_cargo);
+    active.bonus_speed_pct = Set(payload.bonus_speed_pct);
+    active.cost_metal = Set(payload.cost_metal);
+    active.cost_crystal = Set(payload.cost_crystal);
+    active.cost_deuterium = Set(payload.cost_deuterium);
+    active.required_flagship_level = Set(payload.required_flagship_level);
+
+    let result = active.update(&state.db).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(json!({ "status": "success", "module": result })))
+}
+
+pub async fn delete_flagship_module_type_handler(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    FlagshipModuleType::delete_by_id(id)
         .exec(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

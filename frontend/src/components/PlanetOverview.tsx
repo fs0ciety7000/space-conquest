@@ -13,6 +13,18 @@ import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 import { getTechLevel, getBuildingLevel, getShipCount, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
 import { formatDuration } from '@/lib/utils';
 // --- Dictionnaire de noms ---
+const getBiomeStyle = (key: string): string => {
+  const styles: Record<string, string> = {
+    volcanique: "bg-orange-500/20 border-orange-500/40 text-orange-400",
+    glaciaire:  "bg-cyan-500/20 border-cyan-500/40 text-cyan-300",
+    desertique: "bg-yellow-500/20 border-yellow-500/40 text-yellow-400",
+    oceanique:  "bg-blue-500/20 border-blue-500/40 text-blue-300",
+    aride:      "bg-amber-500/20 border-amber-500/40 text-amber-400",
+    tellurique: "bg-green-500/20 border-green-500/40 text-green-400",
+  };
+  return styles[key] || styles.tellurique;
+};
+
 const getLabel = (id: string | null) => {
     if (!id) return "Inconnu";
     const labels: Record<string, string> = {
@@ -500,6 +512,14 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     <div className="flex flex-wrap items-center gap-3 mb-1">
                         <h2 className="text-3xl font-black uppercase text-white tracking-widest drop-shadow-md">{planet.name}</h2>
                         <div className="px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-[10px] text-green-400 font-bold uppercase tracking-wider">Opérationnel</div>
+                        {planet.biome && (
+                          <div
+                            title={planet.biome.description}
+                            className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${getBiomeStyle(planet.biome.key)}`}
+                          >
+                            {planet.biome.name}
+                          </div>
+                        )}
                     </div>
                     <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5 font-mono text-xs text-slate-400">
                         <MapPin size={12} className="text-indigo-400" />
