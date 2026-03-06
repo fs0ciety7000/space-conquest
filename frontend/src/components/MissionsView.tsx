@@ -74,6 +74,9 @@ interface MissionsOverview {
   total_xp: number;
   missions_completed_today: number;
   speed_factor: number;
+  player_tier: number;
+  player_tier_name: string;
+  missions_to_next_tier: number | null;
 }
 
 type Tab = 'missions' | 'achievements';
@@ -237,6 +240,29 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
           <RefreshCw size={16} />
         </Button>
       </div>
+
+      {/* Tier Badge */}
+      {overview && (
+        <div className="flex items-center gap-4 px-4 py-3 rounded-xl bg-black/40 border border-white/5">
+          {/* Tier label */}
+          <div className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
+            overview.player_tier === 4 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' :
+            overview.player_tier === 3 ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
+            overview.player_tier === 2 ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
+                                         'bg-slate-500/20 text-slate-300 border-slate-500/40'
+          }`}>
+            {overview.player_tier === 4 ? '⭐' : overview.player_tier === 3 ? '💎' : overview.player_tier === 2 ? '🔵' : '⚪'} Tier {overview.player_tier} — {overview.player_tier_name}
+          </div>
+          {/* Progress to next tier */}
+          {overview.missions_to_next_tier !== null ? (
+            <p className="text-xs text-slate-400">
+              <span className="text-white font-bold">{overview.missions_to_next_tier}</span> missions à réclamer pour passer au tier suivant
+            </p>
+          ) : (
+            <p className="text-xs text-yellow-400 font-bold">Niveau maximum atteint</p>
+          )}
+        </div>
+      )}
 
       {/* Streak Card */}
       {overview?.streak && (

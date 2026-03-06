@@ -319,23 +319,23 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
         
         // 🏗️ INFRASTRUCTURES (multiplicateur 2.0)
         "shipyard" => Cost {
-            metal: 400.0 * 2.0f64.powi(level - 1),
-            crystal: 200.0 * 2.0f64.powi(level - 1),
-            deuterium: 100.0 * 2.0f64.powi(level - 1),
+            metal: 400.0 * 1.5f64.powi(level - 1),
+            crystal: 200.0 * 1.5f64.powi(level - 1),
+            deuterium: 100.0 * 1.5f64.powi(level - 1),
         },
         "research" => Cost {
-            metal: 200.0 * 2.0f64.powi(level - 1),
-            crystal: 400.0 * 2.0f64.powi(level - 1),
-            deuterium: 200.0 * 2.0f64.powi(level - 1),
+            metal: 200.0 * 1.5f64.powi(level - 1),
+            crystal: 400.0 * 1.5f64.powi(level - 1),
+            deuterium: 200.0 * 1.5f64.powi(level - 1),
         },
         "hangar" => Cost {
-            metal: 400.0 * 2.0f64.powi(level - 1),
-            crystal: 200.0 * 2.0f64.powi(level - 1),
-            deuterium: 100.0 * 2.0f64.powi(level - 1),
+            metal: 400.0 * 1.5f64.powi(level - 1),
+            crystal: 200.0 * 1.5f64.powi(level - 1),
+            deuterium: 100.0 * 1.5f64.powi(level - 1),
         },
         "resource_storage" => Cost {
-            metal: 1000.0 * 2.0f64.powi(level - 1),
-            crystal: 500.0 * 2.0f64.powi(level - 1),
+            metal: 1000.0 * 1.5f64.powi(level - 1),
+            crystal: 500.0 * 1.5f64.powi(level - 1),
             deuterium: 0.0,
         },
 
@@ -958,10 +958,23 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
         fleet_points += count * base;
     }
 
-    // Points défenses
-    let missile_count = *defense_counts.get("missile_launcher").unwrap_or(&0);
-    let plasma_count = *defense_counts.get("plasma_turret").unwrap_or(&0);
-    let defense_points = missile_count * 2 + plasma_count * 100;
+    // Points défenses (toutes les défenses comptent, basé sur coût/1000)
+    let defense_base_points: std::collections::HashMap<&str, i32> = [
+        ("missile_launcher", 12),
+        ("light_laser", 2),
+        ("heavy_laser", 8),
+        ("gauss_cannon", 37),
+        ("ion_cannon", 8),
+        ("plasma_turret", 130),
+        ("small_shield", 20),
+        ("large_shield", 100),
+    ].iter().copied().collect();
+
+    let mut defense_points = 0;
+    for (def_key, count) in &defense_counts {
+        let base = defense_base_points.get(def_key.as_str()).unwrap_or(&5);
+        defense_points += count * base;
+    }
     let military = fleet_points + defense_points;
 
     // Points production (basé sur la production horaire)

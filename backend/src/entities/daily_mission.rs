@@ -49,6 +49,10 @@ pub struct Model {
     /// Actif ou non
     #[sea_orm(default_value = true)]
     pub is_active: bool,
+
+    /// Niveau requis du joueur pour recevoir cette mission (1=Débutant, 2=Apprenti, 3=Vétéran, 4=Expert)
+    #[sea_orm(default_value = 1)]
+    pub tier: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

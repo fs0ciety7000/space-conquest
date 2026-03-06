@@ -63,6 +63,7 @@ mod m20260127_000001_create_beginner_protection;
 mod m20260127_000002_fix_graviton_costs;
 mod m20260128_000001_create_global_chat;
 mod m20260306_000001_drop_legacy_planet_columns;
+mod m20260306_000002_mission_tiers;
 
 pub struct Migrator;
 
@@ -133,6 +134,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260127_000002_fix_graviton_costs::Migration),
             Box::new(m20260128_000001_create_global_chat::Migration),
             Box::new(m20260306_000001_drop_legacy_planet_columns::Migration),
+            Box::new(m20260306_000002_mission_tiers::Migration),
         ]
     }
 }

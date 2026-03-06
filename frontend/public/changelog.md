@@ -1,5 +1,59 @@
 # Changelog - Space Conquest
 
+## [3.5.0] - 2026-03-06 - Système de Tiers Missions & Succès
+
+### ✨ Nouvelles Fonctionnalités
+
+#### 🎯 Missions — Système de Niveaux (Tiers)
+- Les missions quotidiennes s'adaptent automatiquement au niveau du joueur
+- **4 tiers** basés sur le nombre de missions réclamées historiquement :
+  - ⚪ **Tier 1 — Débutant** : 0–9 missions (objectifs de base)
+  - 🔵 **Tier 2 — Apprenti** : 10–39 missions (×5 exigences & récompenses)
+  - 💎 **Tier 3 — Vétéran** : 40–99 missions (×20 exigences & récompenses)
+  - ⭐ **Tier 4 — Expert** : 100+ missions (×80 exigences & récompenses)
+- 24 nouvelles missions seedées (3 tiers × 8 types)
+- Badge de tier visible dans l'interface avec progression vers le tier suivant
+
+#### 🏆 Succès — Variantes Silver & Gold
+- **6 succès Silver** ajoutés : Guerrier Aguerri (100 attaques), Battant (10 victoires), Champion (50 victoires), Explorateur Chevronné (100 expéditions), Grand Architecte (50 bâtiments), Espion d'Élite (50 missions espionnage)
+- **6 succès Gold** ajoutés : Seigneur de Guerre (250 attaques), Invincible Légendaire (100 victoires), Pionnier Légendaire (250 expéditions), Maître Bâtisseur (200 bâtiments), Grand Amiral (500 vaisseaux), Mineur Légendaire (1M cristal)
+
+---
+
+## [3.4.0] - 2026-03-06 - Missions & Succès opérationnels
+
+### 🐛 Corrections
+
+#### 🎯 Missions Quotidiennes
+- **Bug critique** : les vaisseaux d'expansion (`heavy_hunter`, `battleship`, `bomber`, `destroyer`) et toutes les défenses expansions (`light_laser`, `heavy_laser`, `gauss_cannon`, `ion_cannon`, `small_shield`, `large_shield`) ne déclenchaient aucune progression sur les missions de construction
+- Mission **"Mineur assidu"** (collecter 10 000 métal) : aucune progression ne s'accumulait — hook ajouté dans le tick de production
+
+#### 🏆 Succès / Achievements
+- Achievement **"Invincible"** (25 victoires) : les victoires en combat n'étaient jamais comptabilisées
+- Achievement **"Conquérant suprême"** (conquérir une planète) : jamais déclenché — désormais tracké à la résolution du combat
+- Achievement **"Amiral"** (100 vaisseaux simultanément) : jamais mis à jour — comptage réel de la flotte après chaque construction
+
+---
+
+## [3.3.0] - 2026-03-06 - Corrections Score & Construction
+
+### 🐛 Corrections
+
+#### 🏆 Classement / Score Militaire
+- **Bug corrigé** : les défenses (lasers, canons, tourelles, boucliers) ne contribuaient pas au score militaire — seuls `missile_launcher` et `plasma_turret` étaient comptés
+- Désormais toutes les défenses contribuent au score proportionnellement à leur coût de construction
+- 500 lasers lourds construits = +4 000 points militaires
+
+#### 🏗️ Temps de Construction Infrastructures
+- Réduit le multiplicateur de coût des bâtiments d'infrastructure (hangar, chantier spatial, laboratoire, silo) de `×2.0^niveau` à `×1.5^niveau`
+- Au niveau 25, les coûts sont divisés par ~541 — un hangar 25→26 passe de plusieurs millénaires à quelques jours
+
+#### 🚀 Capacité Hangar — Nouveaux Vaisseaux
+- Les vaisseaux d'expansion (`heavy_hunter`, `battleship`, `bomber`, `destroyer`) bypas­saient la limite de capacité du hangar
+- Ils sont maintenant correctement comptabilisés dans le check de capacité
+
+---
+
 ## [3.2.0] - 2026-03-06 - Corrections Sécurité & Infrastructure
 
 ### 🐛 Corrections

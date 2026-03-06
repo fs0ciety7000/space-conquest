@@ -88,6 +88,9 @@ pub struct MissionsOverview {
     pub total_xp: i32,
     pub missions_completed_today: i32,
     pub speed_factor: f64,
+    pub player_tier: i32,
+    pub player_tier_name: String,
+    pub missions_to_next_tier: Option<i32>,
 }
 
 // ============================================================================
@@ -115,9 +118,12 @@ pub async fn get_daily_missions_handler(
         .await
         .unwrap_or_default();
 
+    // Calculer le tier du joueur
+    let (player_tier, total_claimed) = get_player_tier(&state, user_id).await;
+
     // Si pas de missions, en générer
     if existing_missions.is_empty() {
-        generate_daily_missions(&state, user_id, today).await;
+        generate_daily_missions(&state, user_id, today, player_tier).await;
     }
 
     // Récupérer les missions avec leurs détails
@@ -176,12 +182,17 @@ pub async fn get_daily_missions_handler(
         (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
     };
 
+    let (tier_name, missions_to_next) = tier_info(player_tier, total_claimed);
+
     Json(MissionsOverview {
         daily_missions: missions,
         streak: streak_info,
         total_xp,
         missions_completed_today: completed_today,
         speed_factor,
+        player_tier,
+        player_tier_name: tier_name,
+        missions_to_next_tier: missions_to_next,
     }).into_response()
 }
 
@@ -647,10 +658,45 @@ pub async fn update_login_streak(state: &AppState, user_id: Uuid) {
 // HELPERS
 // ============================================================================
 
-async fn generate_daily_missions(state: &AppState, user_id: Uuid, date: NaiveDate) {
-    // Récupérer toutes les missions actives
+/// Calcule le tier du joueur basé sur le nombre total de missions réclamées.
+/// Retourne (tier, total_claimed).
+///   Tier 1 (Débutant)  : 0–9 missions
+///   Tier 2 (Apprenti)  : 10–39 missions
+///   Tier 3 (Vétéran)   : 40–99 missions
+///   Tier 4 (Expert)    : 100+ missions
+pub async fn get_player_tier(state: &AppState, user_id: Uuid) -> (i32, i32) {
+    let total_claimed = UserDailyMission::find()
+        .filter(user_daily_mission::Column::UserId.eq(user_id))
+        .filter(user_daily_mission::Column::Status.eq("claimed"))
+        .all(&state.db)
+        .await
+        .unwrap_or_default()
+        .len() as i32;
+
+    let tier = match total_claimed {
+        0..=9   => 1,
+        10..=39 => 2,
+        40..=99 => 3,
+        _       => 4,
+    };
+    (tier, total_claimed)
+}
+
+/// Retourne (nom du tier, missions restantes avant le tier suivant ou None si max)
+fn tier_info(tier: i32, total_claimed: i32) -> (String, Option<i32>) {
+    match tier {
+        1 => ("Débutant".into(),  Some((10 - total_claimed).max(0))),
+        2 => ("Apprenti".into(),  Some((40 - total_claimed).max(0))),
+        3 => ("Vétéran".into(),   Some((100 - total_claimed).max(0))),
+        _ => ("Expert".into(),    None),
+    }
+}
+
+async fn generate_daily_missions(state: &AppState, user_id: Uuid, date: NaiveDate, tier: i32) {
+    // Récupérer les missions actives du tier du joueur
     let all_missions = DailyMission::find()
         .filter(daily_mission::Column::IsActive.eq(true))
+        .filter(daily_mission::Column::Tier.eq(tier))
         .all(&state.db)
         .await
         .unwrap_or_default();

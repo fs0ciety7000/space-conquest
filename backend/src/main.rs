@@ -465,11 +465,12 @@ fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
 // --- COMBAT RESOLUTION ---
 
 async fn resolve_attack_mission(
-    db: &DatabaseConnection,
+    state: &AppState,
     mission: fleet_mission::Model,
     ws_state: Option<&websocket::WsState>,
     config: &backend::ServerConfigCache,
 ) -> Result<(), StatusCode> {
+    let db = &state.db;
     let now = Utc::now().naive_utc();
 
     let att_planet = Planet::find_by_id(mission.source_planet_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
@@ -832,6 +833,16 @@ async fn resolve_attack_mission(
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ACHIEVEMENTS COMBAT
+    // ═══════════════════════════════════════════════════════════════════════════
+    if result.winner == "attacker" {
+        missions::update_achievement_progress(state, att_user.id, "victories", 1).await;
+        if planet_conquered {
+            missions::update_achievement_progress(state, att_user.id, "planet_conquered", 1).await;
+        }
+    }
+
     Ok(())
 }
 
@@ -1188,6 +1199,13 @@ async fn get_planet_handler(
         });
 
         active.last_update = Set(now);
+
+        // Missions "collect" : tracker la production effective de métal
+        let produced_metal = active.metal_amount.clone().unwrap() - p.metal_amount;
+        if produced_metal > 0.0 {
+            missions::update_mission_progress(&state, p.owner_id, "collect", "metal", produced_metal as i32).await;
+            missions::update_achievement_progress(&state, p.owner_id, "total_metal", produced_metal as i32).await;
+        }
     }
 
     let finished = ConstructionQueue::find().filter(construction_queue::Column::PlanetId.eq(p.id)).filter(construction_queue::Column::EndTime.lte(now)).all(&state.db).await.unwrap_or_default();
@@ -1196,7 +1214,10 @@ async fn get_planet_handler(
         let is_ship_or_defense = matches!(
             item.building_type.as_str(),
             "light_hunter" | "cruiser" | "missile_launcher" | "plasma_turret" |
-            "spy_probe" | "transporter" | "colony_ship" | "recycler"
+            "spy_probe" | "transporter" | "colony_ship" | "recycler" |
+            "heavy_hunter" | "battleship" | "bomber" | "destroyer" |
+            "light_laser" | "heavy_laser" | "gauss_cannon" | "ion_cannon" |
+            "small_shield" | "large_shield"
         );
 
         // Check if this is a technology from the new tech tree system
@@ -1371,6 +1392,17 @@ async fn get_planet_handler(
             missions::update_mission_progress(&state, p.owner_id, "build", &item.building_type, item.level).await;
             // Achievement: constructions
             missions::update_achievement_progress(&state, p.owner_id, "buildings", item.level).await;
+            // Achievement: total_ships (threshold = max simultané)
+            let is_ship = matches!(
+                item.building_type.as_str(),
+                "light_hunter" | "cruiser" | "spy_probe" | "transporter" | "colony_ship" |
+                "recycler" | "heavy_hunter" | "battleship" | "bomber" | "destroyer"
+            );
+            if is_ship {
+                let ship_counts = tech_tree::get_all_planet_ship_counts(&state.db, p.id).await.unwrap_or_default();
+                let total_ships: i32 = ship_counts.values().sum();
+                missions::update_achievement_progress(&state, p.owner_id, "total_ships", total_ships).await;
+            }
         } else {
             // Bâtiment/Tech → mission "upgrade"
             missions::update_mission_progress(&state, p.owner_id, "upgrade", "any", 1).await;
@@ -1388,7 +1420,7 @@ async fn get_planet_handler(
     for m in arrived {
         if m.mission_type == "attack" {
             let config = state.config.read().unwrap().clone();
-            let _ = resolve_attack_mission(&state.db, m, state.ws.as_ref(), &config).await;
+            let _ = resolve_attack_mission(&state, m, state.ws.as_ref(), &config).await;
         } else if m.mission_type == "transport" {
             // Récupérer le nom de la planète source pour la notification
             let source_planet_name = if let Ok(Some(sp)) = Planet::find_by_id(m.source_planet_id).one(&state.db).await {
@@ -1950,7 +1982,7 @@ async fn build_fleet_handler(
             .await
             .unwrap_or_default()
             .iter()
-            .filter(|i| ["light_hunter", "cruiser", "transporter", "colony_ship", "recycler", "spy_probe"].contains(&i.building_type.as_str()))
+            .filter(|i| ["light_hunter", "cruiser", "transporter", "colony_ship", "recycler", "spy_probe", "heavy_hunter", "battleship", "bomber", "destroyer"].contains(&i.building_type.as_str()))
             .map(|i| i.level) 
             .sum();
 
