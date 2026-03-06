@@ -10,7 +10,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - /opt/space-conquest/pgdata:/var/lib/postgresql/data
       - ./docker/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -81,9 +81,6 @@ services:
         condition: service_healthy
 
 volumes:
-  pgdata:
-    external: true
-    name: space_conquest_pgdata
   redisdata:
     name: space_conquest_redisdata
   pgadmin_data:
