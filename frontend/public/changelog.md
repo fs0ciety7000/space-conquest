@@ -1,5 +1,15 @@
 # Changelog - Space Conquest
 
+## [4.2.0] - 2026-03-06 - Badge Admin / Développeur
+
+### ✨ Nouveautés
+
+#### 👑 Profil joueur — badge Admin / Développeur
+- Les utilisateurs ayant le rôle `admin` affichent désormais un badge **Admin / Développeur** dans leur profil public (visible dans le classement), en plus du badge de rang habituel.
+- Le champ `is_admin` est exposé par l'API `/players/:id/profile`.
+
+---
+
 ## [4.1.0] - 2026-03-06 - Performances & corrections système
 
 ### ⚡ Performances

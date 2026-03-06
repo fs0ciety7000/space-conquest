@@ -4399,6 +4399,7 @@ async fn get_player_profile_handler(
     let response = json!({
         "user_id": user.id,
         "username": user.username,
+        "is_admin": user.role == "admin",
         "created_at": if show_all { json!(created_at_utc) } else { json!(null) },
         "is_own_profile": is_own_profile,
         "espionage_level": espionage_level,

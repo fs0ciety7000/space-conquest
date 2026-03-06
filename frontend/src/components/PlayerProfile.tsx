@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { 
-  User, Globe, Trophy, Rocket, Shield, Target, Zap, Award, 
+import {
+  User, Globe, Trophy, Rocket, Shield, Target, Zap, Award,
   Star, Crown, Swords, TrendingUp, MapPin, Building, Atom, Calendar,
-  X, Lock, Eye, AlertTriangle, Flame
+  X, Lock, Eye, AlertTriangle, Flame, Code2
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -154,9 +154,17 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
               </h1>
               
               {/* ✅ Badge de rang (peut être masqué) */}
-              <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r ${getRankColor(profile.rank_badge)} text-white font-bold text-sm shadow-lg`}>
-                {isClassified(profile.rank_badge) ? <Lock size={14} /> : <Award size={16} />}
-                {profile.rank_badge}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r ${getRankColor(profile.rank_badge)} text-white font-bold text-sm shadow-lg`}>
+                  {isClassified(profile.rank_badge) ? <Lock size={14} /> : <Award size={16} />}
+                  {profile.rank_badge}
+                </div>
+                {profile.is_admin && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 text-white font-bold text-sm shadow-lg">
+                    <Code2 size={14} />
+                    Admin / Développeur
+                  </div>
+                )}
               </div>
 
               {/* Protection Badge */}
