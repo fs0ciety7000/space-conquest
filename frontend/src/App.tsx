@@ -95,6 +95,7 @@ export default function App() {
   const [showCasusBelliList, setShowCasusBelliList] = useState(false);
   const prevPlanetRef = useRef<any>(null);
   const processingReportRef = useRef(false);
+  const currentPlanetIdRef = useRef<string | null>(planetId);
 
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const prevUnreadCountRef = useRef<number | null>(null);
@@ -234,6 +235,7 @@ export default function App() {
   };
 
   const switchPlanet = (newId: string) => {
+    currentPlanetIdRef.current = newId;
     setPlanetId(newId);
     localStorage.setItem('planet_id', newId);
     playSound('click');
@@ -389,6 +391,8 @@ export default function App() {
             window.dispatchEvent(new Event('build-complete'));
         }
 
+        // Discard response if user already switched to a different planet
+        if (data.id && data.id !== currentPlanetIdRef.current) return;
         setPlanet(data);
         prevPlanetRef.current = data;
       } else if (res.status === 401) {
