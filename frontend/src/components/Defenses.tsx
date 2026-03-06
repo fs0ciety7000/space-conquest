@@ -6,6 +6,7 @@ import { apiUrl } from '@/config/api';
 import { toast } from "sonner";
 import { GameImage } from '@/components/ui/game-image';
 import { getDefenseImage } from '@/lib/images';
+import { formatDuration } from '@/lib/utils';
 
 interface DefenseRequirement {
   requirement_type: string;
@@ -41,6 +42,18 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
   const [defenseTypes, setDefenseTypes] = useState<DefenseTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [isBuilding, setIsBuilding] = useState(false);
+  const [speedFactor, setSpeedFactor] = useState(1);
+  const [constructionSpeed, setConstructionSpeed] = useState(1);
+
+  useEffect(() => {
+    fetch(apiUrl('/config'))
+      .then(r => r.json())
+      .then(d => {
+        setSpeedFactor(d.speed_factor ?? 1);
+        setConstructionSpeed(d.construction_speed_multiplier ?? 1);
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchDefenseTypes = async () => {
     const token = localStorage.getItem('token');
@@ -166,21 +179,14 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
 
   const totalM = selectedDefense.base_cost_metal * qty;
   const totalC = selectedDefense.base_cost_crystal * qty;
-  const canAfford = planet.metal_amount >= totalM && planet.crystal_amount >= totalC;
+  const totalD = selectedDefense.base_cost_deuterium * qty;
+  const totalBuildTime = Math.ceil(selectedDefense.build_time_seconds * qty / (speedFactor * constructionSpeed));
+  const canAfford = planet.metal_amount >= totalM && planet.crystal_amount >= totalC && planet.deuterium_amount >= totalD;
   const isBusy = timeLeft !== null && timeLeft > 0;
 
   // Check prerequisites
   const isLocked = selectedDefense.requirements.some(req => !req.met);
   const canBuild = !isBusy && !isBuilding && canAfford && !isLocked;
-
-  const formatTime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h > 0) return `${h}h ${m}m ${s}s`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
-  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 animate-in fade-in duration-500">
@@ -216,7 +222,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                    <div className="text-[9px] font-mono text-slate-400">
                      {Math.floor(defense.base_cost_metal).toLocaleString()}M {defense.base_cost_crystal > 0 && `/ ${Math.floor(defense.base_cost_crystal).toLocaleString()}C`}
                    </div>
-                   <span className="text-[10px] font-mono text-slate-500">{defense.build_time_seconds}s / unité</span>
+                   <span className="text-[10px] font-mono text-slate-500">{formatDuration(defense.build_time_seconds)} / unité</span>
                  </div>
               </button>
             );
@@ -293,6 +299,14 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                       <div className={planet.crystal_amount >= totalC ? "text-slate-400" : "text-red-500"}>
                         Cristal: {Math.floor(totalC).toLocaleString()}
                       </div>
+                      {totalD > 0 && (
+                        <div className={planet.deuterium_amount >= totalD ? "text-slate-400" : "text-red-500"}>
+                          Deutérium: {Math.floor(totalD).toLocaleString()}
+                        </div>
+                      )}
+                      <div className="text-indigo-300 flex items-center gap-1 mt-1">
+                        <Timer size={10} /> {formatDuration(totalBuildTime)}
+                      </div>
                   </div>
               </div>
 
@@ -314,7 +328,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                       <Timer className="animate-spin" size={18}/>
                       <span className="flex flex-col items-start">
                         <span className="text-[9px] text-slate-500 font-normal">Construction en cours</span>
-                        <span className="text-lg font-mono">{formatTime(timeLeft!)}</span>
+                        <span className="text-lg font-mono">{formatDuration(timeLeft!)}</span>
                       </span>
                     </span>
                   ) : isLocked ? (
@@ -356,7 +370,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                     <span className="text-[9px] uppercase text-indigo-400 font-bold">Construction Active</span>
                   </div>
                   <p className="text-xs text-slate-300 font-mono">
-                    Achèvement dans: <span className="text-indigo-400 font-bold">{formatTime(timeLeft!)}</span>
+                    Achèvement dans: <span className="text-indigo-400 font-bold">{formatDuration(timeLeft!)}</span>
                   </p>
                 </div>
               )}

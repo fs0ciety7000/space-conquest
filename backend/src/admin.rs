@@ -14,11 +14,19 @@ use chrono::Utc;
 use bcrypt;
 
 use crate::entities::{
-    prelude::{Planet, User, ServerConfig, Announcement},
+    prelude::{Planet, User, ServerConfig, Announcement, BuildingType, PlanetBuilding, ShipType, PlanetShip, DefenseType, PlanetDefense, Technology, PlanetTechnology},
     planet,
     server_config,
     user,
     announcement,
+    planet_building,
+    building_type,
+    planet_ship,
+    ship_type,
+    planet_defense,
+    defense_type,
+    planet_technology,
+    technology,
 };
 use crate::{AppState, game_logic};
 
@@ -152,7 +160,34 @@ pub async fn get_planet_admin_handler(
         .unwrap_or(None);
 
     if let Some(p) = planet {
-        Json(serde_json::to_value(&p).unwrap()).into_response()
+        let building_levels = crate::tech_tree::get_all_planet_building_levels(&state.db, p.id).await.unwrap_or_default();
+        let tech_levels = crate::tech_tree::get_all_planet_tech_levels(&state.db, p.id).await.unwrap_or_default();
+        let ship_counts = crate::tech_tree::get_all_planet_ship_counts(&state.db, p.id).await.unwrap_or_default();
+        let defense_counts = crate::tech_tree::get_all_planet_defense_counts(&state.db, p.id).await.unwrap_or_default();
+
+        let mut planet_json = serde_json::to_value(&p).unwrap();
+        if let Some(obj) = planet_json.as_object_mut() {
+            obj.insert("metal_mine_level".to_string(), json!(building_levels.get("metal").copied().unwrap_or(0)));
+            obj.insert("crystal_mine_level".to_string(), json!(building_levels.get("crystal").copied().unwrap_or(0)));
+            obj.insert("deuterium_mine_level".to_string(), json!(building_levels.get("deuterium").copied().unwrap_or(0)));
+            obj.insert("solar_plant_level".to_string(), json!(building_levels.get("solar_plant").copied().unwrap_or(0)));
+            obj.insert("shipyard_level".to_string(), json!(building_levels.get("shipyard").copied().unwrap_or(0)));
+            obj.insert("research_lab_level".to_string(), json!(building_levels.get("research").copied().unwrap_or(0)));
+            obj.insert("hangar_level".to_string(), json!(building_levels.get("hangar").copied().unwrap_or(0)));
+            obj.insert("energy_tech_level".to_string(), json!(tech_levels.get("energy_tech").copied().unwrap_or(0)));
+            obj.insert("laser_battery_level".to_string(), json!(tech_levels.get("laser_tech").copied().unwrap_or(0)));
+            obj.insert("armour_tech_level".to_string(), json!(tech_levels.get("armour_tech").copied().unwrap_or(0)));
+            obj.insert("espionage_tech_level".to_string(), json!(tech_levels.get("espionage").copied().unwrap_or(0)));
+            obj.insert("light_hunter_count".to_string(), json!(ship_counts.get("light_hunter").copied().unwrap_or(0)));
+            obj.insert("cruiser_count".to_string(), json!(ship_counts.get("cruiser").copied().unwrap_or(0)));
+            obj.insert("recycler_count".to_string(), json!(ship_counts.get("recycler").copied().unwrap_or(0)));
+            obj.insert("spy_probe_count".to_string(), json!(ship_counts.get("spy_probe").copied().unwrap_or(0)));
+            obj.insert("colony_ship_count".to_string(), json!(ship_counts.get("colony_ship").copied().unwrap_or(0)));
+            obj.insert("transporter_count".to_string(), json!(ship_counts.get("transporter").copied().unwrap_or(0)));
+            obj.insert("missile_launcher_count".to_string(), json!(defense_counts.get("missile_launcher").copied().unwrap_or(0)));
+            obj.insert("plasma_turret_count".to_string(), json!(defense_counts.get("plasma_turret").copied().unwrap_or(0)));
+        }
+        Json(planet_json).into_response()
     } else {
         (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"})))
             .into_response()
@@ -203,33 +238,157 @@ pub async fn update_planet_admin_handler(
         active.last_update = Set(Utc::now().naive_utc());
     }
 
-    // Application des autres modifications (mines, techs, flotte, etc.)
-    if let Some(v) = updates.metal_mine_level { active.metal_mine_level = Set(v); }
-    if let Some(v) = updates.crystal_mine_level { active.crystal_mine_level = Set(v); }
-    if let Some(v) = updates.deuterium_mine_level { active.deuterium_mine_level = Set(v); }
-    if let Some(v) = updates.solar_plant_level { active.solar_plant_level = Set(v); }
-    if let Some(v) = updates.shipyard_level { active.shipyard_level = Set(v); }
-    if let Some(v) = updates.research_lab_level { active.research_lab_level = Set(v); }
-    if let Some(v) = updates.hangar_level { active.hangar_level = Set(v); }
-    if let Some(v) = updates.energy_tech_level { active.energy_tech_level = Set(v); }
-    if let Some(v) = updates.laser_battery_level { active.laser_battery_level = Set(v); }
-    if let Some(v) = updates.armour_tech_level { active.armour_tech_level = Set(v); }
-    if let Some(v) = updates.espionage_tech_level { active.espionage_tech_level = Set(v); }
-    if let Some(v) = updates.light_hunter_count { active.light_hunter_count = Set(v); }
-    if let Some(v) = updates.cruiser_count { active.cruiser_count = Set(v); }
-    if let Some(v) = updates.recycler_count { active.recycler_count = Set(v); }
-    if let Some(v) = updates.spy_probe_count { active.spy_probe_count = Set(v); }
-    if let Some(v) = updates.colony_ship_count { active.colony_ship_count = Set(v); }
-    if let Some(v) = updates.transporter_count { active.transporter_count = Set(v); }
-    if let Some(v) = updates.missile_launcher_count { active.missile_launcher_count = Set(v); }
-    if let Some(v) = updates.plasma_turret_count { active.plasma_turret_count = Set(v); }
-
     match active.update(&state.db).await {
-        Ok(updated) => Json(json!({
-            "success": true,
-            "message": "Planète mise à jour",
-            "last_update": updated.last_update
-        })).into_response(),
+        Ok(updated) => {
+            // Upsert buildings into planet_buildings
+            let building_updates: &[(&str, Option<i32>)] = &[
+                ("metal", updates.metal_mine_level),
+                ("crystal", updates.crystal_mine_level),
+                ("deuterium", updates.deuterium_mine_level),
+                ("solar_plant", updates.solar_plant_level),
+                ("shipyard", updates.shipyard_level),
+                ("research", updates.research_lab_level),
+                ("hangar", updates.hangar_level),
+            ];
+            let now = Utc::now().naive_utc();
+            for (key, level_opt) in building_updates {
+                if let Some(level) = level_opt {
+                    if let Ok(Some(bt)) = BuildingType::find()
+                        .filter(building_type::Column::BuildingKey.eq(*key))
+                        .one(&state.db).await
+                    {
+                        let existing = PlanetBuilding::find()
+                            .filter(planet_building::Column::PlanetId.eq(planet_id))
+                            .filter(planet_building::Column::BuildingTypeId.eq(bt.id))
+                            .one(&state.db).await.unwrap_or(None);
+                        if let Some(ex) = existing {
+                            let mut a: planet_building::ActiveModel = ex.into();
+                            a.level = Set(*level);
+                            a.updated_at = Set(Some(now));
+                            let _ = a.update(&state.db).await;
+                        } else {
+                            let _ = planet_building::ActiveModel {
+                                planet_id: Set(planet_id),
+                                building_type_id: Set(bt.id),
+                                level: Set(*level),
+                                upgrading_to_level: Set(None),
+                                upgrade_end_time: Set(None),
+                                updated_at: Set(Some(now)),
+                            }.insert(&state.db).await;
+                        }
+                    }
+                }
+            }
+
+            // Upsert technologies into planet_technologies
+            let tech_updates: &[(&str, Option<i32>)] = &[
+                ("energy_tech", updates.energy_tech_level),
+                ("laser_tech", updates.laser_battery_level),
+                ("armour_tech", updates.armour_tech_level),
+                ("espionage", updates.espionage_tech_level),
+            ];
+            for (key, level_opt) in tech_updates {
+                if let Some(level) = level_opt {
+                    if let Ok(Some(tech)) = Technology::find()
+                        .filter(technology::Column::TechKey.eq(*key))
+                        .one(&state.db).await
+                    {
+                        let existing = PlanetTechnology::find()
+                            .filter(planet_technology::Column::PlanetId.eq(planet_id))
+                            .filter(planet_technology::Column::TechId.eq(tech.id))
+                            .one(&state.db).await.unwrap_or(None);
+                        if let Some(ex) = existing {
+                            let mut a: planet_technology::ActiveModel = ex.into();
+                            a.current_level = Set(*level);
+                            let _ = a.update(&state.db).await;
+                        } else {
+                            let _ = planet_technology::ActiveModel {
+                                planet_id: Set(planet_id),
+                                tech_id: Set(tech.id),
+                                current_level: Set(*level),
+                                researching_to_level: Set(None),
+                                research_end_time: Set(None),
+                            }.insert(&state.db).await;
+                        }
+                    }
+                }
+            }
+
+            // Upsert ships into planet_ships
+            let ship_updates: &[(&str, Option<i32>)] = &[
+                ("light_hunter", updates.light_hunter_count),
+                ("cruiser", updates.cruiser_count),
+                ("recycler", updates.recycler_count),
+                ("spy_probe", updates.spy_probe_count),
+                ("colony_ship", updates.colony_ship_count),
+                ("transporter", updates.transporter_count),
+            ];
+            for (key, count_opt) in ship_updates {
+                if let Some(count) = count_opt {
+                    if let Ok(Some(st)) = ShipType::find()
+                        .filter(ship_type::Column::ShipKey.eq(*key))
+                        .one(&state.db).await
+                    {
+                        let existing = PlanetShip::find()
+                            .filter(planet_ship::Column::PlanetId.eq(planet_id))
+                            .filter(planet_ship::Column::ShipTypeId.eq(st.id))
+                            .one(&state.db).await.unwrap_or(None);
+                        if let Some(ex) = existing {
+                            let mut a: planet_ship::ActiveModel = ex.into();
+                            a.count = Set(*count);
+                            let _ = a.update(&state.db).await;
+                        } else {
+                            let _ = planet_ship::ActiveModel {
+                                planet_id: Set(planet_id),
+                                ship_type_id: Set(st.id),
+                                count: Set(*count),
+                                building_count: Set(None),
+                                build_end_time: Set(None),
+                            }.insert(&state.db).await;
+                        }
+                    }
+                }
+            }
+
+            // Upsert defenses into planet_defenses
+            let defense_updates: &[(&str, Option<i32>)] = &[
+                ("missile_launcher", updates.missile_launcher_count),
+                ("plasma_turret", updates.plasma_turret_count),
+            ];
+            for (key, count_opt) in defense_updates {
+                if let Some(count) = count_opt {
+                    if let Ok(Some(dt)) = DefenseType::find()
+                        .filter(defense_type::Column::DefenseKey.eq(*key))
+                        .one(&state.db).await
+                    {
+                        let existing = PlanetDefense::find()
+                            .filter(planet_defense::Column::PlanetId.eq(planet_id))
+                            .filter(planet_defense::Column::DefenseTypeId.eq(dt.id))
+                            .one(&state.db).await.unwrap_or(None);
+                        if let Some(ex) = existing {
+                            let mut a: planet_defense::ActiveModel = ex.into();
+                            a.count = Set(*count);
+                            let _ = a.update(&state.db).await;
+                        } else {
+                            let _ = planet_defense::ActiveModel {
+                                planet_id: Set(planet_id),
+                                defense_type_id: Set(dt.id),
+                                count: Set(*count),
+                                building_count: Set(None),
+                                build_end_time: Set(None),
+                                updated_at: Set(None),
+                            }.insert(&state.db).await;
+                        }
+                    }
+                }
+            }
+
+            Json(json!({
+                "success": true,
+                "message": "Planète mise à jour",
+                "last_update": updated.last_update
+            })).into_response()
+        },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"})))
             .into_response(),
     }
@@ -272,11 +431,16 @@ pub async fn get_server_stats_handler(
         total_metal += p.metal_amount;
         total_crystal += p.crystal_amount;
         total_deuterium += p.deuterium_amount;
+    }
 
-        total_ships += p.light_hunter_count + p.cruiser_count + p.recycler_count
-                    + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
-
-        total_defenses += p.missile_launcher_count + p.plasma_turret_count;
+    // Aggregate ship and defense counts from relational tables
+    let all_ships = PlanetShip::find().all(&state.db).await.unwrap_or_default();
+    for s in all_ships {
+        total_ships += s.count;
+    }
+    let all_defenses = PlanetDefense::find().all(&state.db).await.unwrap_or_default();
+    for d in all_defenses {
+        total_defenses += d.count;
     }
 
     // Récupérer le SPEED_FACTOR depuis la DB (fallback sur la constante)

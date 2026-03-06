@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { apiUrl } from '@/config/api';
 import { toast } from 'sonner';
+import { formatTimeUntil, formatDuration } from '@/lib/utils';
 
 interface TechTreeVisualProps {
   planet: any;
@@ -38,6 +39,7 @@ interface TechInfo {
   base_time_seconds: number;
   cost_multiplier: number;
   current_level: number;
+  next_level_time_seconds?: number;
   requirements: Array<{
     required_tech_key: string;
     required_tech_name: string;
@@ -73,6 +75,26 @@ const getTechConfig = (tech_key: string) => {
   return configs[tech_key] || { icon: Microscope, color: 'text-gray-400', hexColor: '#9ca3af', border: 'border-gray-500/50', bg: 'bg-gray-950/30', category: 'Other' };
 };
 
+// Gain par niveau pour chaque technologie
+const getTechGainPerLevel = (tech_key: string): string => {
+  const gains: Record<string, string> = {
+    energy_tech:       '+10% production des mines',
+    laser_tech:        '+10% attaque des vaisseaux',
+    armour_tech:       '+10% points de coque',
+    espionage_tech:    '+1 couche de données espionnage',
+    ion_tech:          '+20% dégâts ioniques',
+    plasma_tech:       '+5% ATK/SHD/HULL',
+    shield_tech:       '+10% bouclier des vaisseaux',
+    weapons_tech:      '+10% attaque globale',
+    computer_tech:     '+1 slot de flotte',
+    combustion_drive:  '+10% vitesse (chasseurs légers)',
+    impulse_drive:     '+20% vitesse (croiseurs)',
+    hyperspace_drive:  '+30% vitesse (battleships)',
+    astrophysics:      '+1 slot de colonie',
+  };
+  return gains[tech_key] || '+1 niveau';
+};
+
 // Calcul du coût pour le prochain niveau
 const calculateNextLevelCost = (tech: TechInfo) => {
   const level = tech.current_level;
@@ -83,25 +105,6 @@ const calculateNextLevelCost = (tech: TechInfo) => {
     crystal: Math.ceil(tech.base_cost_crystal * Math.pow(multiplier, level)),
     deuterium: Math.ceil(tech.base_cost_deuterium * Math.pow(multiplier, level)),
   };
-};
-
-// Fonction pour formater le temps restant
-const formatTimeRemaining = (endTimeStr: string, now: number): string => {
-  const endTime = new Date(endTimeStr).getTime();
-  const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
-
-  if (remaining <= 0) return "Terminé";
-
-  const hours = Math.floor(remaining / 3600);
-  const minutes = Math.floor((remaining % 3600) / 60);
-  const seconds = remaining % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
-  } else if (minutes > 0) {
-    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
-  }
-  return `${seconds}s`;
 };
 
 // Composant personnalisé pour chaque noeud technologique
@@ -118,7 +121,7 @@ const TechNode = ({ data }: { data: any }) => {
   useEffect(() => {
     if (isResearching && data.researchEndTime) {
       const updateTimer = () => {
-        setTimeRemaining(formatTimeRemaining(data.researchEndTime, Date.now()));
+        setTimeRemaining(formatTimeUntil(data.researchEndTime));
       };
       updateTimer();
       const interval = setInterval(updateTimer, 1000);
@@ -254,6 +257,30 @@ const TechNode = ({ data }: { data: any }) => {
                 </span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Temps de recherche + gain */}
+        {!isLocked && !isResearching && (
+          <div className="space-y-1 mb-3">
+            {data.next_level_time_seconds && (
+              <div className="flex justify-between items-center text-[10px] bg-black/40 px-2 py-1 rounded border border-white/5">
+                <span className="text-indigo-400 flex items-center gap-1">
+                  <Clock size={10} /> Durée
+                </span>
+                <span className="font-mono font-bold text-indigo-300">
+                  {formatDuration(data.next_level_time_seconds)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between items-center text-[10px] bg-black/40 px-2 py-1 rounded border border-white/5">
+              <span className="text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 size={10} /> Gain Niv. {data.current_level + 1}
+              </span>
+              <span className="font-mono font-bold text-emerald-300">
+                {getTechGainPerLevel(data.tech_key)}
+              </span>
+            </div>
           </div>
         )}
 

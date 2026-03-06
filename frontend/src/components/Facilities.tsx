@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatDuration } from '@/lib/utils';
 import {
   Hammer, Microscope, Timer, ArrowUpCircle,
   Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp, Lock, ShieldCheck, Shield, Package
@@ -360,12 +361,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
                             <span>Temps Construction</span>
                         </div>
                         <div className="text-xs font-mono text-slate-300">
-                            {(() => {
-                              const timeSeconds = building.next_level_time_seconds || building.base_time_seconds;
-                              const minutes = Math.floor(timeSeconds / 60);
-                              const seconds = timeSeconds % 60;
-                              return `${minutes}m ${seconds}s`;
-                            })()}
+                            {formatDuration(building.next_level_time_seconds || building.base_time_seconds)}
                         </div>
                     </div>
                 )}

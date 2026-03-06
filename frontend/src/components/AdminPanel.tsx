@@ -46,7 +46,7 @@ interface PlanetData {
 
   // Installations
   shipyard_level: number;
-  research_level: number;
+  research_lab_level: number;
   hangar_level: number;
 
   // Technologies
@@ -1519,8 +1519,8 @@ export default function AdminPanel() {
                       <Input
                         type="number"
                         min="0"
-                        value={editedData.research_level ?? 0}
-                        onChange={(e) => setEditedData({...editedData, research_level: parseInt(e.target.value) || 0})}
+                        value={editedData.research_lab_level ?? 0}
+                        onChange={(e) => setEditedData({...editedData, research_lab_level: parseInt(e.target.value) || 0})}
                         className="bg-black/40 border-white/10 text-white font-mono"
                       />
                     </div>

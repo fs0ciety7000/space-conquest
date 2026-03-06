@@ -10,6 +10,7 @@ import { apiUrl } from '@/config/api';
 import { GameImage } from '@/components/ui/game-image';
 import { getShipImage } from '@/lib/images';
 import { getTechLevel, getBuildingLevel } from '@/utils/techTreeCompat';
+import { formatDuration } from '@/lib/utils';
 
 interface ShipRequirement {
   requirement_type: string;
@@ -60,10 +61,22 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const [qty, setQty] = useState<Record<string, number>>({});
   const [shipTypes, setShipTypes] = useState<ShipTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [speedFactor, setSpeedFactor] = useState(1);
+  const [constructionSpeed, setConstructionSpeed] = useState(1);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    fetch(apiUrl('/config'))
+      .then(r => r.json())
+      .then(d => {
+        setSpeedFactor(d.speed_factor ?? 1);
+        setConstructionSpeed(d.construction_speed_multiplier ?? 1);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -291,7 +304,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
               </div>
 
 {/* Coûts dynamiques selon quantité */}
-<div className="space-y-2 mb-4">
+<div className="space-y-2 mb-3">
   <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${planet.metal_amount >= ship.cost_metal * (qty[ship.ship_key] || 1) ? 'border-white/5' : 'border-red-900/50'}`}>
      <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
        <Box size={10} /> Métal
@@ -322,6 +335,17 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
        )}
      </div>
   </div>
+  {/* Temps de production */}
+  {(qty[ship.ship_key] || 0) > 0 && (
+    <div className="flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border border-white/5">
+      <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
+        <Timer size={10} /> Durée
+      </span>
+      <span className="text-sm font-mono font-black text-indigo-300">
+        {formatDuration(Math.ceil(ship.build_time_seconds * (qty[ship.ship_key] || 1) / (speedFactor * constructionSpeed)))}
+      </span>
+    </div>
+  )}
 </div>
 
 

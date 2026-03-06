@@ -1,5 +1,34 @@
 # Changelog - Space Conquest
 
+## [2.5.0] - 2026-03-06 - Correctifs Système de Combat PvP
+
+### 🐛 Corrections
+
+#### ⚔️ Combat PvP — 4 bugs critiques corrigés
+
+**Dégâts simultanés** (était séquentiel)
+- Avant : l'attaquant tirait en premier. Si le défenseur mourait au round 1, il ne ripostait jamais — l'attaquant gagnait sans prendre aucune perte.
+- Après : les deux camps calculent leurs dégâts **avant** de les appliquer. Un défenseur détruit en round 1 riposte quand même.
+
+**Technologies de combat prises en compte**
+- Avant : les niveaux `weapons_tech`, `shield_tech`, `armour_tech` n'avaient aucun effet sur le combat.
+- Après : chaque niveau ajoute +10% à l'attaque / bouclier / coque respectivement.
+
+**Défenses planétaires incluses dans le combat**
+- Avant : les canons, lance-roquettes et autres défenses de la planète défenseur étaient complètement ignorés.
+- Après : toutes les défenses participent au combat et leurs survivants sont sauvegardés après.
+
+**Ratio de pertes plafonné à 100%**
+- Avant : si les dégâts dépassaient les PV totaux, le calcul produisait des valeurs négatives intermédiaires.
+- Après : `loss_ratio` est clampé à `1.0` — impossible de perdre plus de 100% en un round.
+
+#### 🧪 Tests unitaires
+
+- Ajout d'une suite de tests unitaires Rust dans `combat.rs` (sans base de données, stats mockées)
+- Ajout d'un binaire `combat_sim` pour simuler des combats avec les vraies stats de la DB
+
+---
+
 ## [2.2.0] - 2026-01-20 - Configuration Serveur Complète & Correctifs Production
 
 ### 🎯 Nouvelles Fonctionnalités

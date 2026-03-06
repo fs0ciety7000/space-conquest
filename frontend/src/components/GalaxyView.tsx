@@ -15,6 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { apiUrl } from '@/config/api';
+import { formatDuration } from '@/lib/utils';
 import ColonizeModal from './ColonizeModal';
 import BeginnerProtectionBadge from './BeginnerProtectionBadge';
 import Galaxy3DView from './galaxy3d/Galaxy3DView';
@@ -167,7 +168,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
 
     const handleRecycle = async (targetId: string) => {
         const token = localStorage.getItem('token');
-        const availableRecyclers = planet.recycler_count || 0;
+        const availableRecyclers = planet.ships?.recycler ?? 0;
 
         if (availableRecyclers === 0) {
             toast.error("Aucun recycleur disponible", {
@@ -454,7 +455,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                         galaxy: planet.galaxy,
                         system: planet.system,
                         position: planet.position,
-                        colony_ship_count: planet.colony_ship_count || 0
+                        colony_ship_count: planet.ships?.colony_ship?.count ?? 0
                     }}
                     onConfirm={handleConfirmColonize}
                     onCancel={() => setShowColonizeModal(false)}
@@ -529,9 +530,6 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                 <tbody className="divide-y divide-white/5">
                                     {nearbyPlanets.map((p) => {
                                         const travelTime = Math.round(p.distance / 100);
-                                        const hours = Math.floor(travelTime / 3600);
-                                        const minutes = Math.floor((travelTime % 3600) / 60);
-                                        const seconds = travelTime % 60;
 
                                         return (
                                             <tr key={p.id} className="hover:bg-white/5 transition-colors">
@@ -562,7 +560,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                                     {p.distance.toLocaleString()}
                                                 </td>
                                                 <td className="p-4 text-right text-slate-400 font-mono text-sm">
-                                                    {hours > 0 && `${hours}h `}{minutes}m {seconds}s
+                                                    {formatDuration(travelTime)}
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="flex justify-center gap-2">

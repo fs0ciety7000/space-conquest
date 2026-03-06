@@ -39,14 +39,11 @@ interface CombatLog {
 interface Planet {
   id: string;
   name: string;
-  metal_mine_level: number;
-  crystal_mine_level: number;
-  deuterium_mine_level: number;
-  solar_plant_level: number;
-  energy_tech_level: number;
   energy_ratio: number;
   energy_production: number;
   energy_consumption: number;
+  buildings?: Record<string, number>;
+  technologies?: Record<string, number>;
 }
 
 export default function ProductionStats({ planet, speedFactor = 10 }: { planet: Planet; speedFactor: number }) {

@@ -478,46 +478,50 @@ async fn resolve_attack_mission(
     let def_user = User::find_by_id(def_planet_raw.owner_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
 
     // Calculer le ratio énergétique du défenseur pour un calcul précis des ressources
+    let def_metal_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "metal").await.unwrap_or(0);
+    let def_crystal_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "crystal").await.unwrap_or(0);
+    let def_deuterium_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "deuterium").await.unwrap_or(0);
+    let def_solar_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "solar_plant").await.unwrap_or(0);
+    let def_energy_tech = tech_tree::get_planet_tech_level(db, def_planet_raw.id, "energy_tech").await.unwrap_or(0);
+    let plasma_tech_level = tech_tree::get_planet_tech_level(db, def_planet_raw.id, "plasma_tech").await.unwrap_or(0);
+
     let def_energy_ratio = game_logic::calculate_energy_ratio(
-        def_planet_raw.solar_plant_level,
-        def_planet_raw.energy_tech_level,
-        def_planet_raw.metal_mine_level,
-        def_planet_raw.crystal_mine_level,
-        def_planet_raw.deuterium_mine_level,
+        def_solar_level,
+        def_energy_tech,
+        def_metal_level,
+        def_crystal_level,
+        def_deuterium_level,
         config
     );
 
     let mut def_planet = def_planet_raw.clone();
-    // Utiliser calculate_resources_with_energy pour prendre en compte le ratio énergétique
-    // Note: plasma_tech_level will be 0 until planet model is updated
-    let plasma_tech_level = 0;
 
     def_planet.metal_amount = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Metal,
-        def_planet_raw.metal_mine_level,
+        def_metal_level,
         def_planet_raw.metal_amount,
         def_planet_raw.last_update,
-        def_planet_raw.energy_tech_level,
+        def_energy_tech,
         plasma_tech_level,
         def_energy_ratio,
         config
     );
     def_planet.crystal_amount = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Crystal,
-        def_planet_raw.crystal_mine_level,
+        def_crystal_level,
         def_planet_raw.crystal_amount,
         def_planet_raw.last_update,
-        def_planet_raw.energy_tech_level,
+        def_energy_tech,
         plasma_tech_level,
         def_energy_ratio,
         config
     );
     def_planet.deuterium_amount = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Deuterium,
-        def_planet_raw.deuterium_mine_level,
+        def_deuterium_level,
         def_planet_raw.deuterium_amount,
         def_planet_raw.last_update,
-        def_planet_raw.energy_tech_level,
+        def_energy_tech,
         plasma_tech_level,
         def_energy_ratio,
         config
@@ -561,11 +565,21 @@ async fn resolve_attack_mission(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    // Load technology bonuses (weapons/shield/armour) for both sides
+    let att_bonuses = load_planet_tech_bonuses(db, att_planet.id).await;
+    let def_bonuses = load_planet_tech_bonuses(db, mission.target_planet_id).await;
+
+    // Load defender planetary defenses (participate in combat, keyed "def_{defense_key}")
+    let defender_defenses = load_planet_defenses_for_combat(db, mission.target_planet_id).await;
+
     // Run combat using new dynamic system
     let result = combat::resolve_pvp_combat(
         db,
         attacker_ships.clone(),
+        att_bonuses,
         defender_ships.clone(),
+        defender_defenses.clone(),
+        def_bonuses,
         (def_planet.metal_amount, def_planet.crystal_amount, def_planet.deuterium_amount)
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -621,13 +635,23 @@ async fn resolve_attack_mission(
     def_active.debris_crystal = Set(def_planet.debris_crystal + result.debris.1);
     def_active.last_update = Set(now);
 
-    // Update defender ships in planet_ship table
-    let _ = set_planet_ships(db, mission.target_planet_id, &result.defender_remaining).await;
+    // Update defender ships (exclude "def_" defense keys)
+    let defender_ships_remaining: HashMap<String, i32> = result.defender_remaining.iter()
+        .filter(|(k, _)| !k.starts_with("def_"))
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
+    let _ = set_planet_ships(db, mission.target_planet_id, &defender_ships_remaining).await;
 
-    // Calculate ship losses for reports
+    // Update defender planetary defenses after combat
+    set_planet_defenses_after_combat(db, mission.target_planet_id, &defender_defenses, &result.defender_remaining).await;
+
+    // Calculate ship losses for reports (ships + defenses)
     let defender_total_lost: i32 = defender_ships.iter()
         .map(|(key, &count)| count - result.defender_remaining.get(key).copied().unwrap_or(0))
-        .sum();
+        .sum::<i32>()
+        + defender_defenses.iter()
+        .map(|(key, &count)| count - result.defender_remaining.get(key).copied().unwrap_or(0))
+        .sum::<i32>();
     let attacker_total_lost: i32 = attacker_ships.iter()
         .map(|(key, &count)| count - result.attacker_remaining.get(key).copied().unwrap_or(0))
         .sum();
@@ -1030,8 +1054,7 @@ async fn get_ranking_handler(
 
 
 /// Helper function to get building level from planet_buildings table with fallback to legacy column
-async fn get_building_level(db: &DatabaseConnection, planet_id: Uuid, building_key: &str, legacy_level: i32) -> i32 {
-    // First, get the building_type_id for this building_key
+async fn get_building_level(db: &DatabaseConnection, planet_id: Uuid, building_key: &str) -> i32 {
     let building_type = BuildingType::find()
         .filter(building_type::Column::BuildingKey.eq(building_key))
         .one(db)
@@ -1039,10 +1062,9 @@ async fn get_building_level(db: &DatabaseConnection, planet_id: Uuid, building_k
 
     let building_type_id = match building_type {
         Ok(Some(bt)) => bt.id,
-        _ => return legacy_level, // If building type not found, use legacy
+        _ => return 0,
     };
 
-    // Now query planet_buildings for this planet and building type
     let planet_building = PlanetBuilding::find()
         .filter(planet_building::Column::PlanetId.eq(planet_id))
         .filter(planet_building::Column::BuildingTypeId.eq(building_type_id))
@@ -1051,7 +1073,7 @@ async fn get_building_level(db: &DatabaseConnection, planet_id: Uuid, building_k
 
     match planet_building {
         Ok(Some(building)) => building.level,
-        _ => legacy_level, // Fallback to legacy column if not found in planet_buildings
+        _ => 0,
     }
 }
 
@@ -1085,16 +1107,20 @@ async fn get_planet_handler(
     let config = state.config.read().unwrap().clone();
     let speed_factor = config.speed_factor;
 
-    // Get building levels from planet_buildings with fallback to legacy columns
-    let metal_mine_level = get_building_level(&state.db, id, "metal_mine", p.metal_mine_level).await;
-    let crystal_mine_level = get_building_level(&state.db, id, "crystal_mine", p.crystal_mine_level).await;
-    let deuterium_mine_level = get_building_level(&state.db, id, "deuterium_mine", p.deuterium_mine_level).await;
-    let solar_plant_level = get_building_level(&state.db, id, "solar_plant", p.solar_plant_level).await;
+    // Get building levels from planet_buildings
+    let metal_mine_level = get_building_level(&state.db, id, "metal").await;
+    let crystal_mine_level = get_building_level(&state.db, id, "crystal").await;
+    let deuterium_mine_level = get_building_level(&state.db, id, "deuterium").await;
+    let solar_plant_level = get_building_level(&state.db, id, "solar_plant").await;
+    let resource_storage_level = get_building_level(&state.db, id, "resource_storage").await;
+
+    // Get tech levels from planet_technologies
+    let energy_tech_level = tech_tree::get_planet_tech_level(&state.db, id, "energy_tech").await.unwrap_or(0);
 
     // Calculate energy ratio
     let energy_ratio = game_logic::calculate_energy_ratio(
         solar_plant_level,
-        p.energy_tech_level,
+        energy_tech_level,
         metal_mine_level,
         crystal_mine_level,
         deuterium_mine_level,
@@ -1114,15 +1140,15 @@ async fn get_planet_handler(
 
         let base_metal = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Metal, metal_mine_level, p.metal_amount, p.last_update,
-            p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
+            energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_crystal = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Crystal, crystal_mine_level, p.crystal_amount, p.last_update,
-            p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
+            energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
         let base_deuterium = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Deuterium, deuterium_mine_level, p.deuterium_amount, p.last_update,
-            p.energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
+            energy_tech_level, plasma_tech_level, energy_ratio, &slot_1, &slot_2, &slot_3, &slot_4, &config
         );
 
         // Appliquer le multiplicateur de sabotage (50% si sabotage actif, 100% sinon)
@@ -1138,7 +1164,7 @@ async fn get_planet_handler(
         // Appliquer les caps de stockage (SOFT CAP)
         // Si déjà au-dessus du cap, on arrête la production (garde ressources existantes)
         // Sinon on produit mais plafonne au cap
-        let storage_cap = game_logic::get_storage_capacity(p.resource_storage_level, &config);
+        let storage_cap = game_logic::get_storage_capacity(resource_storage_level, &config);
         let new_metal = active.metal_amount.clone().unwrap();
         let new_crystal = active.crystal_amount.clone().unwrap();
         let new_deuterium = active.deuterium_amount.clone().unwrap();
@@ -1247,22 +1273,6 @@ async fn get_planet_handler(
                 }
             }
 
-            // OLD SYSTEM - Update planet columns directly for backward compatibility
-            match item.building_type.as_str() {
-                "metal" => active.metal_mine_level = Set(item.level),
-                "crystal" => active.crystal_mine_level = Set(item.level),
-                "deuterium" => active.deuterium_mine_level = Set(item.level),
-                "solar_plant" => active.solar_plant_level = Set(item.level),
-                "shipyard" => active.shipyard_level = Set(item.level),
-                "research" => active.research_lab_level = Set(item.level),
-                "hangar" => active.hangar_level = Set(item.level),
-                "resource_storage" => active.resource_storage_level = Set(item.level),
-                "energy_tech" => active.energy_tech_level = Set(item.level),
-                "laser" => active.laser_battery_level = Set(item.level),
-                "espionage" => active.espionage_tech_level = Set(item.level),
-                "armour" => active.armour_tech_level = Set(item.level),
-                _ => {}
-            }
         } else {
             // Ships and Defenses - NEW SYSTEM
             // Check if it's a ship
@@ -1338,18 +1348,6 @@ async fn get_planet_handler(
                 }
             }
 
-            // OLD SYSTEM - Update planet columns for backward compatibility
-            match item.building_type.as_str() {
-                "light_hunter" => active.light_hunter_count = Set(active.light_hunter_count.unwrap() + item.level),
-                "cruiser" => active.cruiser_count = Set(active.cruiser_count.unwrap() + item.level),
-                "missile_launcher" => active.missile_launcher_count = Set(active.missile_launcher_count.unwrap() + item.level),
-                "plasma_turret" => active.plasma_turret_count = Set(active.plasma_turret_count.unwrap() + item.level),
-                "spy_probe" => active.spy_probe_count = Set(active.spy_probe_count.unwrap() + item.level),
-                "transporter" => active.transporter_count = Set(active.transporter_count.unwrap() + item.level),
-                "colony_ship" => active.colony_ship_count = Set(active.colony_ship_count.unwrap() + item.level),
-                "recycler" => active.recycler_count = Set(active.recycler_count.unwrap() + item.level),
-                _ => {}
-            }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1433,17 +1431,7 @@ async fn get_planet_handler(
             }
 
             // Retourner les transporteurs à la planète source
-            if m.source_planet_id == id {
-                // La planète qu'on fetch EST la source → on utilise `active`
-                active.transporter_count = Set(active.transporter_count.clone().unwrap() + m.ships_count);
-            } else {
-                // La planète qu'on fetch est la CIBLE → on doit charger et mettre à jour la SOURCE
-                if let Ok(Some(source_planet)) = Planet::find_by_id(m.source_planet_id).one(&state.db).await {
-                    let mut source_active: planet::ActiveModel = source_planet.clone().into();
-                    source_active.transporter_count = Set(source_planet.transporter_count + m.ships_count);
-                    let _ = source_active.update(&state.db).await;
-                }
-            }
+            let _ = tech_tree::add_ships(&state.db, m.source_planet_id, "transporter", m.ships_count).await;
 
             let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
         } else if m.mission_type == "colonize" {
@@ -1474,6 +1462,7 @@ async fn get_planet_handler(
                         let colony_name = generate_colony_name();
                         let new_id = Uuid::new_v4();
 
+                        let colony_now = Utc::now().naive_utc();
                         let new_planet = planet::ActiveModel {
                             id: Set(new_id),
                             owner_id: Set(owner_id),
@@ -1482,19 +1471,35 @@ async fn get_planet_handler(
                             galaxy: Set(target_galaxy),
                             system: Set(target_system),
                             position: Set(target_position),
-                            metal_mine_level: Set(1),
-                            crystal_mine_level: Set(1),
-                            deuterium_mine_level: Set(1),
-                            solar_plant_level: Set(3),
                             metal_amount: Set(500.0 + metal),
                             crystal_amount: Set(500.0 + crystal),
                             deuterium_amount: Set(deuterium),
-                            last_update: Set(Utc::now().naive_utc()),
-                            created_at: Set(Utc::now().naive_utc()),
+                            last_update: Set(colony_now),
+                            created_at: Set(colony_now),
                             is_homeworld: Set(false),
                             ..Default::default()
                         };
                         let _ = new_planet.insert(&state.db).await;
+
+                        // Initialiser les bâtiments de départ dans planet_buildings
+                        let initial_colony_buildings = vec![
+                            ("metal", 1i32), ("crystal", 1), ("deuterium", 1), ("solar_plant", 3),
+                        ];
+                        for (bkey, blevel) in initial_colony_buildings {
+                            if let Ok(Some(bt)) = BuildingType::find()
+                                .filter(building_type::Column::BuildingKey.eq(bkey))
+                                .one(&state.db).await
+                            {
+                                let _ = planet_building::ActiveModel {
+                                    planet_id: Set(new_id),
+                                    building_type_id: Set(bt.id),
+                                    level: Set(blevel),
+                                    upgrading_to_level: Set(None),
+                                    upgrade_end_time: Set(None),
+                                    updated_at: Set(Some(colony_now)),
+                                }.insert(&state.db).await;
+                            }
+                        }
 
                         // Créer les 8 slots de ressources pour la nouvelle planète
                         use entities::resource_slot;
@@ -1570,12 +1575,12 @@ async fn get_planet_handler(
 
     let updated_model = active.update(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
-    // Calculate energy using new functions with slots
+    // Calculate energy using new functions with slots (use already-fetched building/tech levels)
     let energy_prod = game_logic::calculate_energy_production_with_slots(
-        updated_model.solar_plant_level, updated_model.energy_tech_level,
+        solar_plant_level, energy_tech_level,
         &slot_1, &slot_2, &slot_3, &slot_4, &config
     );
-    let energy_cons = game_logic::calculate_energy_consumption(updated_model.metal_mine_level, updated_model.crystal_mine_level, updated_model.deuterium_mine_level, &config);
+    let energy_cons = game_logic::calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level, &config);
     let energy_ratio_percent = (energy_ratio * 100.0) as i32; // Convert to percentage
 
     // Calculer les infos sur les slots
@@ -1821,7 +1826,8 @@ async fn upgrade_mine_handler(
             deuterium: deuterium as f64,
         };
 
-        (current_level, cost, p.research_lab_level, true)
+        let research_lab_level = tech_tree::get_planet_building_level(&state.db, p.id, "research").await.unwrap_or(0);
+        (current_level, cost, research_lab_level, true)
     } else {
         // Check if this is a building from the new system
         let building = BuildingType::find()
@@ -1858,36 +1864,10 @@ async fn upgrade_mine_handler(
                 deuterium: deuterium as f64,
             };
 
-            (current_level, cost, p.shipyard_level, false)
+            let shipyard_level = tech_tree::get_planet_building_level(&state.db, p.id, "shipyard").await.unwrap_or(0);
+            (current_level, cost, shipyard_level, false)
         } else {
-            // OLD SYSTEM (backward compatibility)
-            let base_level = match type_mine.as_str() {
-            "metal" => p.metal_mine_level,
-            "crystal" => p.crystal_mine_level,
-            "deuterium" => p.deuterium_mine_level,
-            "energy_tech" => p.energy_tech_level,
-            "research" => p.research_lab_level,
-            "solar_plant" => p.solar_plant_level,
-            "shipyard" => p.shipyard_level,
-            "laser" => p.laser_battery_level,
-            "espionage" => p.espionage_tech_level,
-            "armour" => p.armour_tech_level,
-            "hangar" => p.hangar_level,
-            "resource_storage" => p.resource_storage_level,
-            _ => return Err(StatusCode::BAD_REQUEST),
-        };
-
-        let target_level = base_level + (in_queue_count as i32) + 1;
-        let cost = game_logic::get_upgrade_cost(&type_mine, target_level, &config);
-
-        let facility_level = match type_mine.as_str() {
-            "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level,
-            _ => p.shipyard_level,
-        };
-
-        let is_research = matches!(type_mine.as_str(), "research" | "energy_tech" | "laser" | "espionage" | "armour");
-
-        (base_level, cost, facility_level, is_research)
+            return Err(StatusCode::BAD_REQUEST);
         }
     };
 
@@ -1953,9 +1933,10 @@ async fn build_fleet_handler(
     }
 
     if !is_defense {
-        let current_fleet_size = p.light_hunter_count + p.cruiser_count + p.recycler_count
-                               + p.spy_probe_count + p.colony_ship_count + p.transporter_count;
-        let max_capacity = game_logic::get_fleet_capacity(p.hangar_level, &config);
+        let all_ship_counts = tech_tree::get_all_planet_ship_counts(&state.db, p.id).await.unwrap_or_default();
+        let current_fleet_size: i32 = all_ship_counts.values().sum();
+        let hangar_level = tech_tree::get_planet_building_level(&state.db, p.id, "hangar").await.unwrap_or(0);
+        let max_capacity = game_logic::get_fleet_capacity(hangar_level, &config);
         
         let pending_in_queue: i32 = ConstructionQueue::find()
             .filter(construction_queue::Column::PlanetId.eq(p.id))
@@ -1988,11 +1969,6 @@ async fn build_fleet_handler(
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         if !can_build {
-            return Err(StatusCode::FORBIDDEN);
-        }
-    } else {
-        // OLD SYSTEM: Use legacy check_prerequisites
-        if game_logic::check_prerequisites(&p, &type_ship).is_err() {
             return Err(StatusCode::FORBIDDEN);
         }
     }
@@ -2706,10 +2682,12 @@ async fn scout_expedition_handler(
     if total_ships <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
     }
-    if hunters > p.light_hunter_count {
+    let light_hunter_count = tech_tree::get_planet_ship_count(&state.db, p.id, "light_hunter").await.unwrap_or(0);
+    let cruiser_count = tech_tree::get_planet_ship_count(&state.db, p.id, "cruiser").await.unwrap_or(0);
+    if hunters > light_hunter_count {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de chasseurs"}))).into_response();
     }
-    if cruisers > p.cruiser_count {
+    if cruisers > cruiser_count {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de croiseurs"}))).into_response();
     }
 
@@ -3247,7 +3225,7 @@ async fn recycle_handler(
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible inconnue"}))).into_response(),
     };
 
-    let current_recyclers = att_planet.recycler_count.clone().unwrap();
+    let current_recyclers = tech_tree::get_planet_ship_count(&state.db, current_id, "recycler").await.unwrap_or(0);
     if payload.recyclers > current_recyclers || payload.recyclers <= 0 {
          return (StatusCode::BAD_REQUEST, Json(json!({"error": "Recycleurs insuffisants"}))).into_response();
     }
@@ -3486,7 +3464,7 @@ async fn colonize_handler(
         None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète inconnue"}))).into_response(),
     };
 
-    let ships = att_planet_data.colony_ship_count;
+    let ships = tech_tree::get_planet_ship_count(&state.db, current_id, "colony_ship").await.unwrap_or(0);
     if ships < 1 { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucun vaisseau de colonisation disponible"}))).into_response(); }
 
     // Vérifier la limite de planètes basée sur astrophysique
@@ -3619,8 +3597,8 @@ async fn colonize_handler(
     let _ = mission.insert(&state.db).await;
 
     // Déduire le vaisseau et les ressources de la planète source
+    let _ = tech_tree::deduct_ships(&state.db, current_id, "colony_ship", 1).await;
     let mut att_planet = att_planet_data.clone().into_active_model();
-    att_planet.colony_ship_count = Set(ships - 1);
     att_planet.metal_amount = Set(att_planet_data.metal_amount - metal_to_transport);
     att_planet.crystal_amount = Set(att_planet_data.crystal_amount - crystal_to_transport);
     att_planet.deuterium_amount = Set(att_planet_data.deuterium_amount - deuterium_to_transport);
@@ -3671,17 +3649,17 @@ async fn get_my_planets_handler(
         let mut list = Vec::new();
 
         for mp in my_planets {
-            // Get building levels from planet_buildings with fallback to legacy columns
-            let metal_mine_level = get_building_level(&state.db, mp.id, "metal_mine", mp.metal_mine_level).await;
-            let crystal_mine_level = get_building_level(&state.db, mp.id, "crystal_mine", mp.crystal_mine_level).await;
-            let deuterium_mine_level = get_building_level(&state.db, mp.id, "deuterium_mine", mp.deuterium_mine_level).await;
-            let solar_plant_level = get_building_level(&state.db, mp.id, "solar_plant", mp.solar_plant_level).await;
-            let shipyard_level = get_building_level(&state.db, mp.id, "shipyard", mp.shipyard_level).await;
-            let research_lab_level = get_building_level(&state.db, mp.id, "research_lab", mp.research_lab_level).await;
-            let hangar_level = get_building_level(&state.db, mp.id, "hangar", mp.hangar_level).await;
+            // Get building levels from planet_buildings
+            let metal_mine_level = get_building_level(&state.db, mp.id, "metal").await;
+            let crystal_mine_level = get_building_level(&state.db, mp.id, "crystal").await;
+            let deuterium_mine_level = get_building_level(&state.db, mp.id, "deuterium").await;
+            let solar_plant_level = get_building_level(&state.db, mp.id, "solar_plant").await;
+            let shipyard_level = get_building_level(&state.db, mp.id, "shipyard").await;
+            let research_lab_level = get_building_level(&state.db, mp.id, "research").await;
+            let hangar_level = get_building_level(&state.db, mp.id, "hangar").await;
 
             // Get tech levels from planet_technologies
-            let energy_tech_level = tech_tree::get_planet_tech_level(&state.db, mp.id, "energy_tech").await.unwrap_or(mp.energy_tech_level);
+            let energy_tech_level = tech_tree::get_planet_tech_level(&state.db, mp.id, "energy_tech").await.unwrap_or(0);
 
             // Calculate energy
             let energy_ratio = game_logic::calculate_energy_ratio(
@@ -3805,16 +3783,6 @@ async fn get_my_planets_handler(
                 "deuterium_production": deuterium_production as i32,
                 // Technologie
                 "energy_tech_level": energy_tech_level,
-                // Flotte (legacy columns for backward compatibility)
-                "light_hunter_count": mp.light_hunter_count,
-                "cruiser_count": mp.cruiser_count,
-                "recycler_count": mp.recycler_count,
-                "spy_probe_count": mp.spy_probe_count,
-                "colony_ship_count": mp.colony_ship_count,
-                "transporter_count": mp.transporter_count,
-                // Défenses (legacy columns for backward compatibility)
-                "missile_launcher_count": mp.missile_launcher_count,
-                "plasma_turret_count": mp.plasma_turret_count,
                 // NEW: Relational data
                 "ships": ships,
                 "defenses": defenses,
@@ -3899,13 +3867,15 @@ async fn transport_handler(
     let target_name = target_model.name.clone();
     let target_id = target_model.id;
 
-    if payload.transporters > source_model.transporter_count || payload.transporters <= 0 { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Transporteurs insuffisants"}))).into_response(); }
+    let available_transporters = tech_tree::get_planet_ship_count(&state.db, source_id, "transporter").await.unwrap_or(0);
+    if payload.transporters > available_transporters || payload.transporters <= 0 { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Transporteurs insuffisants"}))).into_response(); }
     if payload.metal > source_model.metal_amount || payload.crystal > source_model.crystal_amount || payload.deuterium > source_model.deuterium_amount { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ressources insuffisantes"}))).into_response(); }
 
     let total_load = payload.metal + payload.crystal + payload.deuterium;
     // Capacité évolutive: +5% par niveau de hangar
     let config_clone = state.config.read().unwrap().clone();
-    let transporter_capacity = game_logic::get_transporter_capacity(source_model.hangar_level, &config_clone);
+    let hangar_level_transport = tech_tree::get_planet_building_level(&state.db, source_id, "hangar").await.unwrap_or(0);
+    let transporter_capacity = game_logic::get_transporter_capacity(hangar_level_transport, &config_clone);
     let capacity = payload.transporters as f64 * transporter_capacity;
     if total_load > capacity { return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Surcharge ! Capacité max: {:.0}", capacity)}))).into_response(); }
 
@@ -3918,11 +3888,11 @@ async fn transport_handler(
     let flight_duration = game_logic::calculate_flight_time(dist, flight_speed);
     let arrival = Utc::now().naive_utc() + Duration::seconds(flight_duration);
 
+    let _ = tech_tree::deduct_ships(&state.db, source_id, "transporter", payload.transporters).await;
     let mut source: planet::ActiveModel = source_model.into();
     source.metal_amount = Set(source.metal_amount.unwrap() - payload.metal);
     source.crystal_amount = Set(source.crystal_amount.unwrap() - payload.crystal);
     source.deuterium_amount = Set(source.deuterium_amount.unwrap() - payload.deuterium);
-    source.transporter_count = Set(source.transporter_count.unwrap() - payload.transporters);
 
     let mission = fleet_mission::ActiveModel {
         id: Set(Uuid::new_v4()), source_planet_id: Set(source_id), target_planet_id: Set(target_id), mission_type: Set("transport".to_string()), arrival_time: Set(arrival),
@@ -3999,9 +3969,10 @@ async fn cancel_construction_handler(
              game_logic::get_ship_production_time(item.level, &config) as f64
         },
         _ => {
-            let facility_level = match item.building_type.as_str() {
-                "research" | "energy_tech" | "laser" | "espionage" | "armour" => p.research_lab_level,
-                _ => p.shipyard_level,
+            let facility_level = if matches!(item.building_type.as_str(), "research" | "energy_tech" | "laser" | "espionage" | "armour") {
+                tech_tree::get_planet_building_level(&state.db, p.id, "research").await.unwrap_or(0)
+            } else {
+                tech_tree::get_planet_building_level(&state.db, p.id, "shipyard").await.unwrap_or(0)
             };
             game_logic::get_build_time(base_m, base_c, facility_level, &config) as f64
         }
@@ -4363,6 +4334,17 @@ async fn get_player_profile_handler(
         None
     };
 
+    // Fetch main planet building levels for top_buildings
+    let main_planet_buildings = if let Some((main_planet, _, _, _)) = main_planet_with_points {
+        let metal = tech_tree::get_planet_building_level(&state.db, main_planet.id, "metal").await.unwrap_or(0);
+        let crystal = tech_tree::get_planet_building_level(&state.db, main_planet.id, "crystal").await.unwrap_or(0);
+        let shipyard = tech_tree::get_planet_building_level(&state.db, main_planet.id, "shipyard").await.unwrap_or(0);
+        let research = tech_tree::get_planet_building_level(&state.db, main_planet.id, "research").await.unwrap_or(0);
+        Some((metal, crystal, shipyard, research))
+    } else {
+        None
+    };
+
     // ✅ Formater created_at en ISO 8601 avec Z pour UTC
     let created_at_utc = user.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
 
@@ -4431,11 +4413,11 @@ async fn get_player_profile_handler(
 
         // Bâtiments (niveau 15+)
         "top_buildings": if show_buildings || show_all {
-            main_planet_with_points.map(|(p, _, _, _)| json!({
-                "metal_mine": p.metal_mine_level,
-                "crystal_mine": p.crystal_mine_level,
-                "shipyard": p.shipyard_level,
-                "research_lab": p.research_lab_level,
+            main_planet_buildings.map(|(metal, crystal, shipyard, research)| json!({
+                "metal_mine": metal,
+                "crystal_mine": crystal,
+                "shipyard": shipyard,
+                "research_lab": research,
             }))
         } else {
             Some(json!({
@@ -6238,6 +6220,103 @@ async fn set_planet_ships(
     }
 
     Ok(())
+}
+
+/// Load technology bonuses (weapons/shield/armour) for a planet from planet_technologies table
+async fn load_planet_tech_bonuses(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> combat::CombatBonuses {
+    let planet_techs = PlanetTechnology::find()
+        .filter(planet_technology::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await
+        .unwrap_or_default();
+
+    let all_techs = Technology::find()
+        .all(db)
+        .await
+        .unwrap_or_default();
+
+    let tech_key_map: HashMap<i32, String> = all_techs.iter()
+        .map(|t| (t.id, t.tech_key.clone()))
+        .collect();
+
+    let mut weapons_level = 0i32;
+    let mut shield_level  = 0i32;
+    let mut armour_level  = 0i32;
+
+    for pt in &planet_techs {
+        match tech_key_map.get(&pt.tech_id).map(|s| s.as_str()) {
+            Some("weapons_tech") => weapons_level = pt.current_level,
+            Some("shield_tech")  => shield_level  = pt.current_level,
+            Some("armour_tech")  => armour_level  = pt.current_level,
+            _ => {}
+        }
+    }
+
+    combat::CombatBonuses {
+        weapons_mult: 1.0 + weapons_level as f64 * 0.1,
+        shield_mult:  1.0 + shield_level  as f64 * 0.1,
+        armour_mult:  1.0 + armour_level  as f64 * 0.1,
+    }
+}
+
+/// Load planetary defenses as a HashMap for combat (keys: "def_{defense_key}")
+async fn load_planet_defenses_for_combat(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+) -> HashMap<String, i32> {
+    let planet_defenses = PlanetDefense::find()
+        .filter(planet_defense::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await
+        .unwrap_or_default();
+
+    let mut defenses = HashMap::new();
+    for pd in planet_defenses {
+        if pd.count > 0 {
+            if let Ok(Some(def_type)) = DefenseType::find_by_id(pd.defense_type_id).one(db).await {
+                defenses.insert(format!("def_{}", def_type.defense_key), pd.count);
+            }
+        }
+    }
+    defenses
+}
+
+/// Update planetary defense counts after combat.
+/// For each defense that was in combat (initial_defenses), set its count to whatever survived.
+async fn set_planet_defenses_after_combat(
+    db: &DatabaseConnection,
+    planet_id: Uuid,
+    initial_defenses: &HashMap<String, i32>,
+    remaining: &HashMap<String, i32>,
+) {
+    for key in initial_defenses.keys() {
+        let defense_key = match key.strip_prefix("def_") {
+            Some(k) => k,
+            None => continue,
+        };
+
+        let surviving = remaining.get(key).copied().unwrap_or(0).max(0);
+
+        if let Ok(Some(def_type)) = DefenseType::find()
+            .filter(defense_type::Column::DefenseKey.eq(defense_key))
+            .one(db)
+            .await
+        {
+            if let Ok(Some(pd)) = PlanetDefense::find()
+                .filter(planet_defense::Column::PlanetId.eq(planet_id))
+                .filter(planet_defense::Column::DefenseTypeId.eq(def_type.id))
+                .one(db)
+                .await
+            {
+                let mut active: planet_defense::ActiveModel = pd.into();
+                active.count = Set(surviving);
+                let _ = active.update(db).await;
+            }
+        }
+    }
 }
 
 /// POST /planets/:id/expedition-v2 - New expedition handler using dynamic combat system

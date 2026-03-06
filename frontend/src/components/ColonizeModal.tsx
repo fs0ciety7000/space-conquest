@@ -3,6 +3,7 @@ import { Globe, Rocket, Package, X, TrendingUp, Clock, AlertTriangle } from "luc
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { calculateDistance } from '@/utils/galaxyCalculations';
+import { formatDuration } from '@/lib/utils';
 
 interface ColonizeModalProps {
   position: number;
@@ -46,9 +47,6 @@ export default function ColonizeModal({
   ) : 0;
 
   const travelTime = Math.round(distance / 100); // Temps en secondes
-  const hours = Math.floor(travelTime / 3600);
-  const minutes = Math.floor((travelTime % 3600) / 60);
-  const seconds = travelTime % 60;
 
   const handleSubmit = () => {
     if (!hasColonyShip) {
@@ -103,7 +101,7 @@ export default function ColonizeModal({
             {currentPlanet && (
               <div className="flex items-center gap-2 text-xs text-cyan-400 font-mono bg-black/30 p-2 rounded">
                 <Clock size={12} />
-                <span>Temps de vol: {hours > 0 && `${hours}h `}{minutes}m {seconds}s</span>
+                <span>Temps de vol: {formatDuration(travelTime)}</span>
                 <span className="text-slate-500 ml-auto">Distance: {distance.toLocaleString()}</span>
               </div>
             )}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Clock, Trash2, Factory, Rocket, FlaskConical } from 'lucide-react';
+import { formatTimeUntilMs } from '@/lib/utils';
 
 interface QueueItem {
   id: string;
@@ -22,18 +23,6 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
-
-  const formatTime = (timestamp: number) => {
-    const remaining = Math.max(0, timestamp - now);
-    const hours = Math.floor(remaining / 3600000);
-    const minutes = Math.floor((remaining % 3600000) / 60000);
-    const seconds = Math.floor((remaining % 60000) / 1000);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${seconds}s`;
-    }
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
 
   const getProgress = (endTime: number) => {
     if (items.length === 0) return 0;
@@ -81,7 +70,7 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
         {items.map((item, idx) => {
           const isActive = idx === 0;
           const progress = isActive ? getProgress(item.endTime) : 0;
-          const timeRemaining = formatTime(item.endTime);
+          const timeRemaining = formatTimeUntilMs(item.endTime);
 
           return (
             <div 

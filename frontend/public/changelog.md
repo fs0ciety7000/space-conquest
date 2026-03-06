@@ -1,5 +1,59 @@
 # Changelog - Space Conquest
 
+## [3.1.0] - 2026-03-06 - Aperçu Coût/Temps/Gain avant Construction
+
+### ✨ Nouvelles Fonctionnalités UI
+
+#### 🚀 Chantier Spatial (Shipyard)
+- Affichage du **temps de production total** adaptatif selon la quantité choisie
+- Le temps est calculé en temps réel en tenant compte du `speed_factor` et du `construction_speed` serveur
+
+#### 🛡️ Défenses
+- Affichage du **coût en Deutérium** (était absent — bug corrigé)
+- La vérification `canAfford` inclut désormais le deutérium
+- Affichage du **temps de construction total** adaptatif selon la quantité
+- Le temps tient compte du `speed_factor` serveur
+
+#### 🔬 Arbre Technologique (TechTree)
+- Affichage de la **durée de recherche** pour le prochain niveau (déjà calculée côté serveur, maintenant exposée en frontend)
+- Affichage du **gain par niveau** pour chaque technologie (ex: `+10% attaque des vaisseaux`, `+1 slot de colonie`, etc.)
+
+---
+
+## [3.0.0] - 2026-03-06 - Suppression Colonnes Legacy & Refactoring Base de Données
+
+### 🏗️ Refactoring Architecture
+
+#### 🗄️ Suppression des Colonnes Legacy de la Table `planet`
+**Breaking Change (interne)**: Toutes les colonnes directes de niveaux/compteurs ont été supprimées de la table `planet`.
+
+**Colonnes supprimées**:
+- Niveaux de bâtiments: `metal_mine_level`, `crystal_mine_level`, `deuterium_mine_level`, `solar_plant_level`, `shipyard_level`, `research_lab_level`, `hangar_level`, `resource_storage_level`
+- Niveaux de technologies: `energy_tech_level`, `laser_battery_level`, `espionage_tech_level`, `armour_tech_level`
+- Compteurs de vaisseaux: `light_hunter_count`, `cruiser_count`, `recycler_count`, `spy_probe_count`, `colony_ship_count`, `transporter_count`
+- Compteurs de défenses: `missile_launcher_count`, `plasma_turret_count`
+- Champs legacy de construction: `construction_end`, `construction_type`, `shipyard_construction_end`, `pending_fleet_type`, `pending_fleet_count`
+
+**Remplacement**: Toutes les données vivent exclusivement dans les tables relationnelles:
+- `planet_buildings` — niveaux de bâtiments
+- `planet_technologies` — niveaux de technologies
+- `planet_ships` — compteurs de vaisseaux
+- `planet_defenses` — compteurs de défenses
+
+**Impact utilisateur**: Aucun — les interfaces et calculs restent identiques.
+
+---
+
+#### 🔧 Corrections Backend
+- `admin.rs`: L'endpoint `/admin/planet/:id` retourne maintenant les données complètes (bâtiments, techs, vaisseaux, défenses) issues des tables relationnelles
+- `game_logic.rs`: `calculate_planet_points` utilise les tables relationnelles
+- `tick_system.rs`: Suppression des mises à jour de colonnes legacy (rétrocompatibilité)
+- `auth.rs`: Création de planète initialise les bâtiments dans `planet_buildings`
+- Bug fix: `AdminPanel` — champ `research_level` corrigé en `research_lab_level`
+- Bug fix: `GalaxyView` — `colony_ship_count` lit correctement `ships.colony_ship.count`
+
+---
+
 ## [2.4.0] - 2026-01-26 - Amélioration des Tables Relationnelles & Missions de Colonisation
 
 ### 🛠️ Corrections & Améliorations

@@ -16,7 +16,7 @@ use uuid::Uuid;
 use rand::Rng;
 
 use crate::{
-    entities::{planet, user, prelude::{Planet, User}},
+    entities::{planet, user, planet_building, building_type, prelude::{Planet, User, BuildingType}},
     missions,
     AppState
 };
@@ -179,6 +179,7 @@ let (system, position) = {
 
     // Créer la planète (première planète = planète mère)
     let planet_id = Uuid::new_v4();
+    let now = Utc::now().naive_utc();
     let new_planet = planet::ActiveModel {
         id: Set(planet_id),
         owner_id: Set(user_id),
@@ -187,17 +188,12 @@ let (system, position) = {
         galaxy: Set(galaxy),
         system: Set(final_system),
         position: Set(final_position),
-        metal_mine_level: Set(1),
-        crystal_mine_level: Set(1),
-        deuterium_mine_level: Set(1),
-        solar_plant_level: Set(3), // Niveau 3 = ~240 énergie, garantit le minimum de 150
-        shipyard_level: Set(1),
         metal_amount: Set(2000.0),
         crystal_amount: Set(1000.0),
         deuterium_amount: Set(500.0),
-        last_update: Set(Utc::now().naive_utc()),
-        created_at: Set(Utc::now().naive_utc()),
-        is_homeworld: Set(true), // Première planète = planète mère
+        last_update: Set(now),
+        created_at: Set(now),
+        is_homeworld: Set(true),
         ..Default::default()
     };
 
@@ -206,6 +202,33 @@ let (system, position) = {
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": "Erreur lors de la création de la planète"}))
         );
+    }
+
+    // Initialiser les bâtiments de départ dans planet_buildings
+    let initial_buildings = vec![
+        ("metal", 1i32),
+        ("crystal", 1),
+        ("deuterium", 1),
+        ("solar_plant", 3),
+        ("shipyard", 1),
+    ];
+    for (building_key, level) in initial_buildings {
+        if let Ok(Some(bt)) = BuildingType::find()
+            .filter(building_type::Column::BuildingKey.eq(building_key))
+            .one(&state.db)
+            .await
+        {
+            let _ = planet_building::ActiveModel {
+                planet_id: Set(planet_id),
+                building_type_id: Set(bt.id),
+                level: Set(level),
+                upgrading_to_level: Set(None),
+                upgrade_end_time: Set(None),
+                updated_at: Set(Some(now)),
+            }
+            .insert(&state.db)
+            .await;
+        }
     }
 
     // Créer les 8 slots de ressources pour la nouvelle planète

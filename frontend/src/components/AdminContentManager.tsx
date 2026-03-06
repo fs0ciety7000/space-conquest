@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
+import { formatDuration } from '@/lib/utils';
 
 type ContentType = 'ships' | 'buildings' | 'defenses';
 
@@ -312,7 +313,7 @@ export default function AdminContentManager() {
                     <span className="text-green-400">{building.base_cost_deuterium}</span>
                   </td>
                   <td className="p-2">×{building.cost_multiplier}</td>
-                  <td className="p-2 text-xs">{building.base_time_seconds}s</td>
+                  <td className="p-2 text-xs">{formatDuration(building.base_time_seconds)}</td>
                   <td className="p-2 text-right space-x-2">
                     <Button size="sm" variant="outline" onClick={() => startEdit(building)}>
                       <Edit className="w-3 h-3" />
@@ -371,7 +372,7 @@ export default function AdminContentManager() {
                     <span className="text-cyan-400">{defense.shield}</span>/
                     <span className="text-orange-400">{defense.hull}</span>
                   </td>
-                  <td className="p-2 text-xs">{defense.build_time_seconds}s</td>
+                  <td className="p-2 text-xs">{formatDuration(defense.build_time_seconds)}</td>
                   <td className="p-2 text-right space-x-2">
                     <Button size="sm" variant="outline" onClick={() => startEdit(defense)}>
                       <Edit className="w-3 h-3" />

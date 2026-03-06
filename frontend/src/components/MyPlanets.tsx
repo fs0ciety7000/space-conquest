@@ -29,15 +29,7 @@ interface Planet {
   shipyard_level: number;
   research_lab_level: number;
   hangar_level: number;
-  light_hunter_count: number;
-  cruiser_count: number;
-  recycler_count: number;
-  spy_probe_count: number;
-  colony_ship_count: number;
-  transporter_count: number;
-  rocket_launcher_count: number;
-  plasma_turret_count: number;
-  energy_tech_level: number;
+  energy_tech_level?: number;
   is_current?: boolean;
   is_homeworld?: boolean;
   energy?: number;
@@ -129,14 +121,6 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
             shipyard_level: p.shipyard_level ?? 0,
             research_lab_level: p.research_lab_level ?? 0,
             hangar_level: p.hangar_level ?? 0,
-            light_hunter_count: getShipCount(p, 'light_hunter'),
-            cruiser_count: getShipCount(p, 'cruiser'),
-            recycler_count: getShipCount(p, 'recycler') ?? 0,
-            spy_probe_count: getShipCount(p, 'spy_probe') ?? 0,
-            colony_ship_count: getShipCount(p, 'colony_ship'),
-            transporter_count: getShipCount(p, 'transporter'),
-            rocket_launcher_count: getShipCount(p, 'rocket_launcher'),
-            plasma_turret_count: getShipCount(p, 'plasma_turret'),
             energy_tech_level: getTechLevel(p, 'energy_tech'),
           }));
           // Trier: planète mère en premier (is_homeworld ou 1:1:1), puis le reste

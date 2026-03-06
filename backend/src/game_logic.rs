@@ -95,187 +95,6 @@ pub fn get_unit_cost(unit_type: &str, config: &ServerConfigCache) -> (f64, f64) 
     (base.0 / divider, base.1 / divider)
 }
 
-// --- VÉRIFICATION DES PRÉREQUIS ---
-// DEPRECATED: Use tech_tree::can_build_ship() or tech_tree::can_research_tech() instead
-// This function uses old column-based tech levels and will be removed in future versions
-pub fn check_prerequisites(planet: &planet::Model, item_type: &str) -> Result<(), String> {
-    match item_type {
-        // 🔬 Technologies de Base
-        "energy_tech" => {
-            if planet.research_lab_level < 1 {
-                return Err("Laboratoire de Recherche niveau 1 requis".to_string());
-            }
-        },
-        "laser" => {
-            if planet.research_lab_level < 1 {
-                return Err("Laboratoire de Recherche niveau 1 requis".to_string());
-            }
-            if planet.energy_tech_level < 2 {
-                return Err("Technologie Énergie niveau 2 requise".to_string());
-            }
-        },
-        "espionage" => {
-            if planet.research_lab_level < 3 {
-                return Err("Laboratoire de Recherche niveau 3 requis".to_string());
-            }
-        },
-        "armour" => {
-            if planet.research_lab_level < 2 {
-                return Err("Laboratoire de Recherche niveau 2 requis".to_string());
-            }
-        },
-
-        // 🔥 Technologies Avancées - EXPANSION 2.0
-        "ion_tech" => {
-            if planet.research_lab_level < 4 {
-                return Err("Laboratoire de Recherche niveau 4 requis".to_string());
-            }
-            if planet.energy_tech_level < 4 {
-                return Err("Technologie Énergie niveau 4 requise".to_string());
-            }
-            if planet.laser_battery_level < 5 {
-                return Err("Technologie Laser niveau 5 requise".to_string());
-            }
-        },
-        "plasma_tech" => {
-            if planet.research_lab_level < 4 {
-                return Err("Laboratoire de Recherche niveau 4 requis".to_string());
-            }
-            if planet.energy_tech_level < 8 {
-                return Err("Technologie Énergie niveau 8 requise".to_string());
-            }
-            if planet.laser_battery_level < 10 {
-                return Err("Technologie Laser niveau 10 requise".to_string());
-            }
-            // Note: ion_tech_level will be checked when planet model is updated
-        },
-        "shield_tech" => {
-            if planet.research_lab_level < 6 {
-                return Err("Laboratoire de Recherche niveau 6 requis".to_string());
-            }
-            if planet.energy_tech_level < 3 {
-                return Err("Technologie Énergie niveau 3 requise".to_string());
-            }
-        },
-        "weapons_tech" => {
-            if planet.research_lab_level < 4 {
-                return Err("Laboratoire de Recherche niveau 4 requis".to_string());
-            }
-        },
-        "computer_tech" => {
-            if planet.research_lab_level < 1 {
-                return Err("Laboratoire de Recherche niveau 1 requis".to_string());
-            }
-        },
-
-        // 🚀 Technologies de Propulsion - EXPANSION 2.0
-        "combustion_drive" => {
-            if planet.research_lab_level < 1 {
-                return Err("Laboratoire de Recherche niveau 1 requis".to_string());
-            }
-            if planet.energy_tech_level < 1 {
-                return Err("Technologie Énergie niveau 1 requise".to_string());
-            }
-        },
-        "impulse_drive" => {
-            if planet.research_lab_level < 2 {
-                return Err("Laboratoire de Recherche niveau 2 requis".to_string());
-            }
-            if planet.energy_tech_level < 1 {
-                return Err("Technologie Énergie niveau 1 requise".to_string());
-            }
-        },
-        "hyperspace_drive" => {
-            if planet.research_lab_level < 7 {
-                return Err("Laboratoire de Recherche niveau 7 requis".to_string());
-            }
-            if planet.energy_tech_level < 5 {
-                return Err("Technologie Énergie niveau 5 requise".to_string());
-            }
-            // Note: shield_tech_level will be checked when planet model is updated
-        },
-        "astrophysics" => {
-            if planet.research_lab_level < 3 {
-                return Err("Laboratoire de Recherche niveau 3 requis".to_string());
-            }
-            if planet.espionage_tech_level < 4 {
-                return Err("Technologie Espionnage niveau 4 requise".to_string());
-            }
-            // Note: impulse_drive_level will be checked when planet model is updated
-        },
-
-        // 🚀 Vaisseaux de Base
-        "light_hunter" => {
-            if planet.shipyard_level < 1 {
-                return Err("Chantier Spatial niveau 1 requis".to_string());
-            }
-        },
-        "cruiser" => {
-            if planet.shipyard_level < 5 {
-                return Err("Chantier Spatial niveau 5 requis".to_string());
-            }
-            if planet.energy_tech_level < 3 {
-                return Err("Technologie Énergie niveau 3 requise".to_string());
-            }
-        },
-        "colony_ship" => {
-            if planet.shipyard_level < 4 {
-                return Err("Chantier Spatial niveau 4 requis".to_string());
-            }
-        },
-        "recycler" => {
-            if planet.shipyard_level < 4 {
-                return Err("Chantier Spatial niveau 4 requis".to_string());
-            }
-        },
-
-        // 🚀 Vaisseaux Avancés - EXPANSION 2.0
-        "heavy_hunter" => {
-            if planet.shipyard_level < 3 {
-                return Err("Chantier Spatial niveau 3 requis".to_string());
-            }
-            if planet.armour_tech_level < 3 {
-                return Err("Technologie Blindage niveau 3 requise".to_string());
-            }
-            // Note: impulse_drive_level will be checked when planet model is updated
-        },
-        "battleship" => {
-            if planet.shipyard_level < 7 {
-                return Err("Chantier Spatial niveau 7 requis".to_string());
-            }
-            // Note: hyperspace_drive_level will be checked when planet model is updated
-        },
-        "bomber" => {
-            if planet.shipyard_level < 8 {
-                return Err("Chantier Spatial niveau 8 requis".to_string());
-            }
-            // Note: plasma_tech_level and impulse_drive_level will be checked when planet model is updated
-        },
-        "destroyer" => {
-            if planet.shipyard_level < 9 {
-                return Err("Chantier Spatial niveau 9 requis".to_string());
-            }
-            // Note: hyperspace_drive_level and astrophysics_level will be checked when planet model is updated
-        },
-
-        // 🛡️ Défenses
-        "plasma_turret" => {
-            if planet.shipyard_level < 8 {
-                return Err("Chantier Spatial niveau 8 requis".to_string());
-            }
-            if planet.energy_tech_level < 6 {
-                return Err("Technologie Énergie niveau 6 requise".to_string());
-            }
-            if planet.laser_battery_level < 5 {
-                return Err("Technologie Laser niveau 5 requise".to_string());
-            }
-        },
-
-        _ => {},
-    }
-    Ok(())
-}
-
 // --- CALCULS RESSOURCES (Ratio 3:2:1) ---
 pub enum ResourceType { Metal, Crystal, Deuterium }
 
@@ -1063,27 +882,36 @@ pub fn calculate_flight_time(dist: f64, flight_speed_multiplier: f64) -> i64 {
 
 
 // 📊 CALCUL DES POINTS D'UNE PLANÈTE (utilisé par leaderboard et profil)
-// NEW: Now uses tech tree system for technologies and ships
+// Uses relational tables (planet_buildings, planet_technologies, planet_ships, planet_defenses)
 pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &sea_orm::DatabaseConnection, config: &ServerConfigCache) -> (i32, i32, i32) {
     use crate::tech_tree;
 
-    // Points économie (bâtiments) - DRASTIQUEMENT réduit
-    let buildings =
-        (p.metal_mine_level * p.metal_mine_level * 10) +      // 50 → 10
-        (p.crystal_mine_level * p.crystal_mine_level * 15) +  // 80 → 15
-        (p.deuterium_mine_level * p.deuterium_mine_level * 25) + // 150 → 25
-        (p.solar_plant_level * p.solar_plant_level * 5) +     // 30 → 5
-        (p.shipyard_level * p.shipyard_level * 40) +          // 200 → 40
-        (p.research_lab_level * p.research_lab_level * 50) +  // 300 → 50
-        (p.hangar_level * p.hangar_level * 35);               // 180 → 35
-
-    // Points recherche (technologies) - Use tech tree system DYNAMICALLY
+    // Load all relational data
+    let building_levels = tech_tree::get_all_planet_building_levels(db, p.id)
+        .await
+        .unwrap_or_default();
     let tech_levels = tech_tree::get_all_planet_tech_levels(db, p.id)
         .await
         .unwrap_or_default();
+    let ship_counts = tech_tree::get_all_planet_ship_counts(db, p.id)
+        .await
+        .unwrap_or_default();
+    let defense_counts = tech_tree::get_all_planet_defense_counts(db, p.id)
+        .await
+        .unwrap_or_default();
 
-    // Dynamic tech points calculation: level² × base_points
-    // Base points vary by tech importance (50-100 per tech)
+    // Points économie (bâtiments)
+    let get_bl = |key: &str| *building_levels.get(key).unwrap_or(&0);
+    let buildings =
+        (get_bl("metal") * get_bl("metal") * 10) +
+        (get_bl("crystal") * get_bl("crystal") * 15) +
+        (get_bl("deuterium") * get_bl("deuterium") * 25) +
+        (get_bl("solar_plant") * get_bl("solar_plant") * 5) +
+        (get_bl("shipyard") * get_bl("shipyard") * 40) +
+        (get_bl("research") * get_bl("research") * 50) +
+        (get_bl("hangar") * get_bl("hangar") * 35);
+
+    // Points recherche (technologies)
     let tech_base_points: std::collections::HashMap<&str, i32> = [
         ("energy_tech", 50),
         ("laser_tech", 40),
@@ -1104,88 +932,59 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
 
     let mut research = 0;
     for (tech_key, level) in &tech_levels {
-        let base = tech_base_points.get(tech_key.as_str()).unwrap_or(&50); // Default 50 for unknown techs
+        let base = tech_base_points.get(tech_key.as_str()).unwrap_or(&50);
         research += level * level * base;
     }
 
-    // Fallback to old system if no tech tree data
-    let research = if research == 0 {
-        (p.energy_tech_level * p.energy_tech_level * 50) +
-        (p.laser_battery_level * p.laser_battery_level * 40) +
-        (p.espionage_tech_level * p.espionage_tech_level * 60) +
-        (p.armour_tech_level * p.armour_tech_level * 70)
-    } else {
-        research
-    };
-
-    // Points militaire (flotte + défenses) - Use tech tree system DYNAMICALLY
-    let ship_counts = tech_tree::get_all_planet_ship_counts(db, p.id)
-        .await
-        .unwrap_or_default();
-
-    // Dynamic ship points calculation based on ship strength
+    // Points militaire (flotte)
     let ship_base_points: std::collections::HashMap<&str, i32> = [
-        // Basic ships
         ("light_hunter", 5),
         ("cruiser", 30),
         ("recycler", 20),
         ("transporter", 10),
         ("spy_probe", 1),
         ("colony_ship", 40),
-        // Advanced ships (EXPANSION 2.0)
         ("heavy_hunter", 15),
         ("battleship", 80),
         ("bomber", 100),
         ("destroyer", 120),
         ("death_star", 500),
-        // Utility ships
         ("solar_satellite", 2),
     ].iter().copied().collect();
 
     let mut fleet_points = 0;
     for (ship_key, count) in &ship_counts {
-        let base = ship_base_points.get(ship_key.as_str()).unwrap_or(&10); // Default 10 for unknown ships
+        let base = ship_base_points.get(ship_key.as_str()).unwrap_or(&10);
         fleet_points += count * base;
     }
 
-    // Add defense points
-    let defense_points = (p.missile_launcher_count * 2 + p.plasma_turret_count * 100) as i32;
+    // Points défenses
+    let missile_count = *defense_counts.get("missile_launcher").unwrap_or(&0);
+    let plasma_count = *defense_counts.get("plasma_turret").unwrap_or(&0);
+    let defense_points = missile_count * 2 + plasma_count * 100;
     let military = fleet_points + defense_points;
 
-    // Fallback to old system if no ship data
-    let military = if fleet_points == 0 && (p.light_hunter_count > 0 || p.cruiser_count > 0) {
-        (p.light_hunter_count * 5) +
-        (p.cruiser_count * 30) +
-        (p.recycler_count * 20) +
-        (p.transporter_count * 10) +
-        (p.spy_probe_count * 1) +
-        (p.colony_ship_count * 40) +
-        defense_points
-    } else {
-        military
-    };
-
     // Points production (basé sur la production horaire)
-    // Calculer la production horaire avec tous les bonus
     let energy_tech_level = *tech_levels.get("energy_tech").unwrap_or(&0);
     let plasma_tech_level = *tech_levels.get("plasma_tech").unwrap_or(&0);
-
-    // Fallback to old columns if no tech tree data
-    let energy_tech_level = if energy_tech_level == 0 { p.energy_tech_level } else { energy_tech_level };
+    let metal_level = get_bl("metal");
+    let crystal_level = get_bl("crystal");
+    let deuterium_level = get_bl("deuterium");
+    let solar_level = get_bl("solar_plant");
 
     let energy_ratio = calculate_energy_ratio(
-        p.solar_plant_level,
+        solar_level,
         energy_tech_level,
-        p.metal_mine_level,
-        p.crystal_mine_level,
-        p.deuterium_mine_level,
+        metal_level,
+        crystal_level,
+        deuterium_level,
         config
     );
 
     // Production de base avec bonus tech et énergie
     let prod_metal = calculate_resource_production(
         ResourceType::Metal,
-        p.metal_mine_level,
+        metal_level,
         energy_tech_level,
         plasma_tech_level,
         energy_ratio,
@@ -1193,7 +992,7 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
     );
     let prod_crystal = calculate_resource_production(
         ResourceType::Crystal,
-        p.crystal_mine_level,
+        crystal_level,
         energy_tech_level,
         plasma_tech_level,
         energy_ratio,
@@ -1201,7 +1000,7 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
     );
     let prod_deuterium = calculate_resource_production(
         ResourceType::Deuterium,
-        p.deuterium_mine_level,
+        deuterium_level,
         energy_tech_level,
         plasma_tech_level,
         energy_ratio,
