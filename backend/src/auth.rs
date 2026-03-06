@@ -140,8 +140,11 @@ pub async fn register_handler(
         email: Set(payload.email.clone()),
         created_at: Set(now),
         role: Set("user".to_string()),
-        protection_until: Set(Some(now + chrono::Duration::days(3))), // 3 day beginner protection
-        total_points: Set(0), // Start with 0 points
+        protection_until: Set(Some(now + chrono::Duration::days(3))),
+        total_points: Set(0),
+        avatar_url: Set(None),
+        bio: Set(None),
+        last_login: Set(Some(now)),
     };
 
     if new_user.insert(&state.db).await.is_err() {
@@ -318,9 +321,12 @@ pub async fn login_handler(
     let token = create_jwt(user.id.to_string());
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // MISE À JOUR DU LOGIN STREAK
+    // MISE À JOUR DU LOGIN STREAK + LAST LOGIN
     // ═══════════════════════════════════════════════════════════════════════════
     missions::update_login_streak(&state, user.id).await;
+    let mut user_active: user::ActiveModel = user.clone().into();
+    user_active.last_login = Set(Some(Utc::now().naive_utc()));
+    let _ = user_active.update(&state.db).await;
 
     (
         StatusCode::OK, 

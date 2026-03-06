@@ -53,3 +53,6 @@ pub use super :: planet_defense :: Entity as PlanetDefense ;
 
 // Global chat system
 pub use super :: global_chat_message :: Entity as GlobalChatMessage ;
+
+// Social system
+pub use super :: friendship :: Entity as Friendship ;

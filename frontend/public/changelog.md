@@ -1,5 +1,31 @@
 # Changelog - Space Conquest
 
+## [5.0.0] - 2026-03-06 - Système social & profils joueurs
+
+### ✨ Nouveautés
+
+#### 👤 Mon Profil (nouvelle page)
+- Nouvelle section "Mon Profil" dans le menu (catégorie SYSTÈME).
+- **Upload d'avatar** : formats PNG, JPG, WebP, max 2 Mo. L'avatar est visible par tous les joueurs.
+- **Biographie** : texte libre de 500 caractères, modifiable depuis son propre profil.
+- Affichage de la dernière connexion et de l'ancienneté du compte.
+
+#### 🤝 Système d'amitié (nouvelle page)
+- Nouvelle section "Amis" dans le menu (catégorie COMMUNICATION).
+- **Envoyer une demande** par nom d'utilisateur exact.
+- **Accepter / Décliner** les demandes reçues.
+- **Notifications** : un message privé automatique est envoyé lors d'une demande et lors d'une acceptation.
+- Les amis peuvent s'envoyer des ressources **sans être dans la même alliance** (même avantage que les membres d'alliance).
+
+#### 🖼️ Avatars dans le classement
+- Les avatars (ou avatars générés) s'affichent à côté de chaque joueur dans le classement.
+
+#### 📋 Fiche profil enrichie
+- Les fiches profil affichent l'avatar personnalisé et la biographie du joueur.
+- **Bouton ami** : ajouter, accepter ou retirer un ami directement depuis la fiche profil.
+
+---
+
 ## [4.2.0] - 2026-03-06 - Badge Admin / Développeur
 
 ### ✨ Nouveautés

@@ -1,10 +1,10 @@
 #![recursion_limit = "512"]
 
 use axum::{
-    extract::{Path, State, Query},
+    extract::{Path, State, Query, Multipart, DefaultBodyLimit},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, post, delete, patch},
+    routing::{get, post, delete, patch, put},
     Router,
 };
 use sea_orm::{
@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use tower_http::{
     cors::CorsLayer,
     trace::TraceLayer,
+    services::ServeDir,
 };
 use uuid::Uuid;
 use chrono::{Utc, Duration, DateTime};
@@ -50,8 +51,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember, Friendship},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member, friendship
 };
 
 #[derive(Serialize, Clone)]
@@ -79,6 +80,7 @@ struct RankItem {
     rank_badge: String,
     protection_until: Option<String>,
     galaxy: Option<i32>,
+    avatar_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -225,7 +227,13 @@ async fn main() {
     };
     let cors = CorsLayer::permissive();
 
+    // Dossier des avatars (bind-monté en production via UPLOADS_DIR)
+    let uploads_dir = std::env::var("UPLOADS_DIR").unwrap_or_else(|_| "./uploads".to_string());
+    let avatars_dir = format!("{}/avatars", uploads_dir);
+    std::fs::create_dir_all(&avatars_dir).ok();
+
     let app = Router::new()
+        .nest_service("/avatars", ServeDir::new(&avatars_dir))
         // Auth
         .route("/register", post(auth::register_handler))
         .route("/login", post(auth::login_handler))
@@ -291,7 +299,15 @@ async fn main() {
 
 .route("/users/:id", get(get_user_handler))
 .route("/users/:id/username", patch(update_username_handler))
+.route("/users/:id/avatar", post(upload_avatar_handler).layer(DefaultBodyLimit::max(20 * 1024 * 1024)))
+.route("/users/:id/bio", put(update_bio_handler))
 .route("/players/:user_id/profile", get(get_player_profile_handler))
+// Friendships
+.route("/users/:id/friends", get(get_friends_handler))
+.route("/friends/request", post(send_friend_request_handler))
+.route("/friends/:friendship_id/accept", post(accept_friend_request_handler))
+.route("/friends/:friendship_id/decline", post(decline_friend_request_handler))
+.route("/friends/:friendship_id", delete(remove_friend_handler))
         // Market
         .route("/market/listings", get(get_market_listings_handler))
         .route("/market/listings", post(create_market_listing_handler))
@@ -1024,14 +1040,15 @@ async fn get_ranking_handler(
         let is_me = current_owner_id.map(|id| id == owner_id).unwrap_or(false);
         let rank_badge = game_logic::get_rank_badge(total_score);
 
-        // Get protection data and galaxy from user
-        let (protection_until, galaxy) = users.iter()
+        // Get protection data, galaxy, and avatar from user
+        let (protection_until, galaxy, avatar_url) = users.iter()
             .find(|u| u.id == owner_id)
             .map(|u| (
                 u.protection_until.map(|dt| dt.to_string()),
-                planets.first().map(|p| p.galaxy)
+                planets.first().map(|p| p.galaxy),
+                u.avatar_url.clone(),
             ))
-            .unwrap_or((None, None));
+            .unwrap_or((None, None, None));
 
         ranked_users.push(RankItem {
             rank: 0,
@@ -1045,6 +1062,7 @@ async fn get_ranking_handler(
             rank_badge: rank_badge.to_string(),
             protection_until,
             galaxy,
+            avatar_url,
         });
     }
 
@@ -3869,34 +3887,49 @@ async fn transport_handler(
     let target_user = User::find_by_id(target_model.owner_id).one(&state.db).await.unwrap().unwrap();
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // VÉRIFICATION ALLIANCE - Transfer vers autre joueur nécessite même alliance
+    // VÉRIFICATION ALLIANCE / AMITIÉ - Transfer vers autre joueur
     // ═══════════════════════════════════════════════════════════════════════════
     if source_model.owner_id != target_model.owner_id {
-        // Vérifier que les deux joueurs sont dans la même alliance
+        // Vérifier alliance
         let source_member = AllianceMember::find()
             .filter(alliance_member::Column::UserId.eq(source_model.owner_id))
             .one(&state.db)
             .await
             .unwrap();
-
         let target_member = AllianceMember::find()
             .filter(alliance_member::Column::UserId.eq(target_model.owner_id))
             .one(&state.db)
             .await
             .unwrap();
+        let same_alliance = matches!(
+            (source_member, target_member),
+            (Some(src), Some(tgt)) if src.alliance_id == tgt.alliance_id
+        );
 
-        match (source_member, target_member) {
-            (Some(src), Some(tgt)) if src.alliance_id == tgt.alliance_id => {
-                // OK : même alliance
-            },
-            _ => {
-                return (
-                    StatusCode::FORBIDDEN,
-                    Json(json!({
-                        "error": "Transfer impossible : Vous devez être dans la même alliance que le destinataire pour envoyer des ressources."
-                    }))
-                ).into_response();
-            }
+        // Vérifier amitié (relation dans les deux sens)
+        let friendship_exists = Friendship::find()
+            .filter(
+                sea_orm::Condition::any()
+                    .add(sea_orm::Condition::all()
+                        .add(friendship::Column::SenderId.eq(source_model.owner_id))
+                        .add(friendship::Column::ReceiverId.eq(target_model.owner_id)))
+                    .add(sea_orm::Condition::all()
+                        .add(friendship::Column::SenderId.eq(target_model.owner_id))
+                        .add(friendship::Column::ReceiverId.eq(source_model.owner_id)))
+            )
+            .filter(friendship::Column::Status.eq("accepted"))
+            .one(&state.db)
+            .await
+            .unwrap()
+            .is_some();
+
+        if !same_alliance && !friendship_exists {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "error": "Transfer impossible : Vous devez être dans la même alliance ou ami avec le destinataire pour envoyer des ressources."
+                }))
+            ).into_response();
         }
     }
 
@@ -4400,6 +4433,9 @@ async fn get_player_profile_handler(
         "user_id": user.id,
         "username": user.username,
         "is_admin": user.role == "admin",
+        "avatar_url": user.avatar_url,
+        "bio": if show_basic || show_all { json!(user.bio) } else { json!(null) },
+        "last_login": if show_all { user.last_login.map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()) } else { None },
         "created_at": if show_all { json!(created_at_utc) } else { json!(null) },
         "is_own_profile": is_own_profile,
         "espionage_level": espionage_level,
@@ -6592,4 +6628,295 @@ async fn tick_handler(
             }))).into_response()
         }
     }
+}
+
+// ========== AVATAR & BIO HANDLERS ==========
+
+#[derive(Deserialize)]
+struct UpdateBioPayload {
+    bio: Option<String>,
+}
+
+async fn upload_avatar_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> impl IntoResponse {
+    let uploads_dir = std::env::var("UPLOADS_DIR").unwrap_or_else(|_| "./uploads".to_string());
+    let avatars_dir = format!("{}/avatars", uploads_dir);
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let content_type = field.content_type().unwrap_or("").to_string();
+        let allowed = ["image/webp", "image/png", "image/jpeg"];
+        if !allowed.contains(&content_type.as_str()) {
+            return (StatusCode::BAD_REQUEST, Json(json!({
+                "error": "Format non autorisé. Utilisez PNG, JPG ou WebP."
+            }))).into_response();
+        }
+
+        let ext = match content_type.as_str() {
+            "image/webp" => "webp",
+            "image/png" => "png",
+            _ => "jpg",
+        };
+
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Fichier invalide"}))).into_response(),
+        };
+
+        // Limit to 20 MB
+        if data.len() > 20 * 1024 * 1024 {
+            return (StatusCode::BAD_REQUEST, Json(json!({
+                "error": "Fichier trop volumineux (max 20 Mo)."
+            }))).into_response();
+        }
+
+        let filename = format!("{}.{}", user_id, ext);
+        let path = format!("{}/{}", avatars_dir, filename);
+        if std::fs::write(&path, &data).is_err() {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de sauvegarde"}))).into_response();
+        }
+
+        let avatar_url = format!("/avatars/{}", filename);
+        let user = match User::find_by_id(user_id).one(&state.db).await.unwrap() {
+            Some(u) => u,
+            None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"}))).into_response(),
+        };
+        let mut active: user::ActiveModel = user.into();
+        active.avatar_url = Set(Some(avatar_url.clone()));
+        if active.update(&state.db).await.is_err() {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de mise à jour"}))).into_response();
+        }
+
+        return (StatusCode::OK, Json(json!({"avatar_url": avatar_url}))).into_response();
+    }
+
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucun fichier reçu"}))).into_response()
+}
+
+async fn update_bio_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateBioPayload>,
+) -> impl IntoResponse {
+    let user = match User::find_by_id(user_id).one(&state.db).await.unwrap() {
+        Some(u) => u,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"}))).into_response(),
+    };
+    // Clamp bio to 500 chars
+    let bio = payload.bio.map(|b| b.chars().take(500).collect::<String>());
+    let mut active: user::ActiveModel = user.into();
+    active.bio = Set(bio.clone());
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de mise à jour"}))).into_response();
+    }
+    (StatusCode::OK, Json(json!({"bio": bio}))).into_response()
+}
+
+// ========== FRIENDSHIP HANDLERS ==========
+
+#[derive(Deserialize)]
+struct FriendRequestPayload {
+    sender_id: Uuid,
+    receiver_username: String,
+}
+
+async fn get_friends_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    // Fetch all friendships where user is sender or receiver
+    let friendships = Friendship::find()
+        .filter(
+            sea_orm::Condition::any()
+                .add(friendship::Column::SenderId.eq(user_id))
+                .add(friendship::Column::ReceiverId.eq(user_id))
+        )
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    let mut result = Vec::new();
+    for f in friendships {
+        let other_id = if f.sender_id == user_id { f.receiver_id } else { f.sender_id };
+        let other_user = User::find_by_id(other_id).one(&state.db).await.unwrap_or(None);
+        if let Some(u) = other_user {
+            result.push(json!({
+                "friendship_id": f.id,
+                "user_id": u.id,
+                "username": u.username,
+                "avatar_url": u.avatar_url,
+                "status": f.status,
+                "is_sender": f.sender_id == user_id,
+                "created_at": f.created_at,
+            }));
+        }
+    }
+    Json(result).into_response()
+}
+
+async fn send_friend_request_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<FriendRequestPayload>,
+) -> impl IntoResponse {
+    // Find receiver by username
+    let receiver = match User::find()
+        .filter(user::Column::Username.eq(&payload.receiver_username))
+        .one(&state.db)
+        .await
+        .unwrap()
+    {
+        Some(u) => u,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Joueur introuvable"}))).into_response(),
+    };
+
+    if receiver.id == payload.sender_id {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Impossible de s'ajouter soi-même"}))).into_response();
+    }
+
+    // Check existing friendship
+    let existing = Friendship::find()
+        .filter(
+            sea_orm::Condition::any()
+                .add(sea_orm::Condition::all()
+                    .add(friendship::Column::SenderId.eq(payload.sender_id))
+                    .add(friendship::Column::ReceiverId.eq(receiver.id)))
+                .add(sea_orm::Condition::all()
+                    .add(friendship::Column::SenderId.eq(receiver.id))
+                    .add(friendship::Column::ReceiverId.eq(payload.sender_id)))
+        )
+        .one(&state.db)
+        .await
+        .unwrap();
+
+    if existing.is_some() {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Demande déjà existante ou déjà ami"}))).into_response();
+    }
+
+    let now = Utc::now().naive_utc();
+    let new_friendship = friendship::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        sender_id: Set(payload.sender_id),
+        receiver_id: Set(receiver.id),
+        status: Set("pending".to_string()),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    if new_friendship.insert(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de l'envoi"}))).into_response();
+    }
+
+    // Send a notification message via messaging system
+    let sender = User::find_by_id(payload.sender_id).one(&state.db).await.unwrap();
+    let sender_name = sender.as_ref().map(|u| u.username.clone()).unwrap_or_default();
+    let _ = messaging::send_system_message(
+        &state.db,
+        payload.sender_id,
+        receiver.id,
+        &format!("Demande d'amitie de {}", sender_name),
+        &format!("{} vous a envoye une demande d'amitie. Rendez-vous dans votre liste d'amis pour accepter ou decliner.", sender_name),
+    ).await;
+
+    (StatusCode::CREATED, Json(json!({"success": true, "receiver_id": receiver.id, "receiver_username": receiver.username}))).into_response()
+}
+
+async fn accept_friend_request_handler(
+    Path(friendship_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id = match params.get("user_id").and_then(|s| Uuid::parse_str(s).ok()) {
+        Some(id) => id,
+        None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "user_id requis"}))).into_response(),
+    };
+
+    let f = match Friendship::find_by_id(friendship_id).one(&state.db).await.unwrap() {
+        Some(f) => f,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Demande introuvable"}))).into_response(),
+    };
+
+    if f.receiver_id != user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
+    }
+    if f.status != "pending" {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Cette demande n'est plus en attente"}))).into_response();
+    }
+
+    let now = Utc::now().naive_utc();
+    let mut active: friendship::ActiveModel = f.clone().into();
+    active.status = Set("accepted".to_string());
+    active.updated_at = Set(now);
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur"}))).into_response();
+    }
+
+    // Notify sender
+    let accepter = User::find_by_id(user_id).one(&state.db).await.unwrap();
+    let accepter_name = accepter.as_ref().map(|u| u.username.clone()).unwrap_or_default();
+    let _ = messaging::send_system_message(
+        &state.db,
+        user_id,
+        f.sender_id,
+        "Demande d'amitie acceptee",
+        &format!("{} a accepte votre demande d'amitie. Vous pouvez maintenant vous envoyer des ressources !", accepter_name),
+    ).await;
+
+    (StatusCode::OK, Json(json!({"success": true}))).into_response()
+}
+
+async fn decline_friend_request_handler(
+    Path(friendship_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id = match params.get("user_id").and_then(|s| Uuid::parse_str(s).ok()) {
+        Some(id) => id,
+        None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "user_id requis"}))).into_response(),
+    };
+
+    let f = match Friendship::find_by_id(friendship_id).one(&state.db).await.unwrap() {
+        Some(f) => f,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Demande introuvable"}))).into_response(),
+    };
+
+    if f.receiver_id != user_id && f.sender_id != user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
+    }
+
+    let mut active: friendship::ActiveModel = f.clone().into();
+    active.status = Set("declined".to_string());
+    active.updated_at = Set(Utc::now().naive_utc());
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur"}))).into_response();
+    }
+
+    (StatusCode::OK, Json(json!({"success": true}))).into_response()
+}
+
+async fn remove_friend_handler(
+    Path(friendship_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let user_id = match params.get("user_id").and_then(|s| Uuid::parse_str(s).ok()) {
+        Some(id) => id,
+        None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "user_id requis"}))).into_response(),
+    };
+
+    let f = match Friendship::find_by_id(friendship_id).one(&state.db).await.unwrap() {
+        Some(f) => f,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Amitié introuvable"}))).into_response(),
+    };
+
+    if f.sender_id != user_id && f.receiver_id != user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
+    }
+
+    use sea_orm::ModelTrait;
+    if f.delete(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur"}))).into_response();
+    }
+
+    (StatusCode::OK, Json(json!({"success": true}))).into_response()
 }

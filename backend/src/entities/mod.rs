@@ -55,3 +55,6 @@ pub mod planet_defense;
 
 // Global chat system
 pub mod global_chat_message;
+
+// Social system
+pub mod friendship;

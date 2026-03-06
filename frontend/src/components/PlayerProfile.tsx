@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   User, Globe, Trophy, Rocket, Shield, Target, Zap, Award,
   Star, Crown, Swords, TrendingUp, MapPin, Building, Atom, Calendar,
-  X, Lock, Eye, AlertTriangle, Flame, Code2
+  X, Lock, Eye, AlertTriangle, Flame, Code2, UserPlus, UserCheck, UserX
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,22 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
   const [profile, setProfile] = useState<any>(null);
   const [achievements, setAchievements] = useState<DisplayedAchievement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [friendStatus, setFriendStatus] = useState<{ friendship_id?: string; status?: string; is_sender?: boolean } | null>(null);
+  const [friendLoading, setFriendLoading] = useState(false);
+
+  const viewerId = localStorage.getItem('user_id');
+
+  const fetchFriendStatus = async () => {
+    if (!viewerId || viewerId === userId) return;
+    try {
+      const res = await fetch(apiUrl(`/users/${viewerId}/friends`));
+      if (res.ok) {
+        const friends: any[] = await res.json();
+        const rel = friends.find(f => f.user_id === userId);
+        setFriendStatus(rel ? { friendship_id: rel.friendship_id, status: rel.status, is_sender: rel.is_sender } : null);
+      }
+    } catch { /* ignore */ }
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -67,6 +83,7 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
 
     fetchProfile();
     fetchAchievements();
+    fetchFriendStatus();
   }, [userId]);
 
   if (loading) {
@@ -86,8 +103,51 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
     return typeof value === 'string' && (value.includes('█') || value === 'CLASSIFIÉ');
   };
 
-  // Avatar généré
-  const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+  // Avatar (custom ou généré)
+  const avatarUrl = profile.avatar_url
+    ? apiUrl(profile.avatar_url)
+    : `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+
+  const handleSendFriendRequest = async () => {
+    if (!viewerId) return;
+    setFriendLoading(true);
+    try {
+      const viewerUsername = localStorage.getItem('username') || '';
+      const res = await fetch(apiUrl('/friends/request'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender_id: viewerId, receiver_username: profile.username }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Demande d'amitié envoyée à ${profile.username} !`);
+        fetchFriendStatus();
+      } else {
+        toast.error(data.error || 'Erreur');
+      }
+    } catch { toast.error('Erreur de connexion'); }
+    setFriendLoading(false);
+  };
+
+  const handleAcceptRequest = async () => {
+    if (!friendStatus?.friendship_id || !viewerId) return;
+    setFriendLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/friends/${friendStatus.friendship_id}/accept?user_id=${viewerId}`), { method: 'POST' });
+      if (res.ok) { toast.success('Ami accepté !'); fetchFriendStatus(); }
+    } catch { toast.error('Erreur'); }
+    setFriendLoading(false);
+  };
+
+  const handleRemoveFriend = async () => {
+    if (!friendStatus?.friendship_id || !viewerId) return;
+    setFriendLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/friends/${friendStatus.friendship_id}?user_id=${viewerId}`), { method: 'DELETE' });
+      if (res.ok) { toast.success('Ami retiré.'); setFriendStatus(null); }
+    } catch { toast.error('Erreur'); }
+    setFriendLoading(false);
+  };
 
   // Couleur du badge selon le rang
   const getRankColor = (badge: string) => {
@@ -179,6 +239,44 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
                   />
                 </div>
               )}
+
+              {/* Bouton ami (uniquement sur profil d'un autre joueur) */}
+              {!profile.is_own_profile && viewerId && (
+                <div className="mt-3">
+                  {!friendStatus ? (
+                    <button
+                      onClick={handleSendFriendRequest}
+                      disabled={friendLoading}
+                      className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-600/30 hover:bg-indigo-600/60 border border-indigo-500/40 text-indigo-300 hover:text-white text-sm font-bold transition-colors"
+                    >
+                      <UserPlus size={14} /> Ajouter en ami
+                    </button>
+                  ) : friendStatus.status === 'accepted' ? (
+                    <button
+                      onClick={handleRemoveFriend}
+                      disabled={friendLoading}
+                      className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-900/30 hover:bg-red-900/30 border border-green-500/30 hover:border-red-500/30 text-green-400 hover:text-red-400 text-sm font-bold transition-colors group"
+                    >
+                      <UserCheck size={14} className="group-hover:hidden" />
+                      <UserX size={14} className="hidden group-hover:block" />
+                      <span className="group-hover:hidden">Ami</span>
+                      <span className="hidden group-hover:block">Retirer</span>
+                    </button>
+                  ) : friendStatus.status === 'pending' && !friendStatus.is_sender ? (
+                    <button
+                      onClick={handleAcceptRequest}
+                      disabled={friendLoading}
+                      className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-600/30 hover:bg-amber-600/60 border border-amber-500/40 text-amber-300 text-sm font-bold transition-colors"
+                    >
+                      <UserCheck size={14} /> Accepter la demande
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800/50 border border-white/10 text-slate-400 text-sm">
+                      <UserPlus size={14} /> Demande envoyée
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* ✅ Points totaux (peut être masqué) */}
@@ -211,6 +309,18 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bio */}
+          {profile.bio && (
+            <Card className="bg-slate-900/30 border border-white/10 mb-6">
+              <CardContent className="p-4">
+                <div className="text-xs font-bold uppercase text-slate-500 mb-2 flex items-center gap-1">
+                  <User size={11} /> Biographie
+                </div>
+                <p className="text-slate-300 text-sm leading-relaxed">{profile.bio}</p>
               </CardContent>
             </Card>
           )}

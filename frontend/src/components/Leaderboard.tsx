@@ -28,6 +28,7 @@ interface RankItem {
     rank_badge: string;
     protection_until: string | null;
     galaxy: number | null;
+    avatar_url?: string | null;
 }
 
 interface LeaderboardProps {
@@ -138,6 +139,11 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                         onClick={() => setSelectedPlayer(player.owner_id)}
                                                         className="flex items-center gap-2 group transition-all duration-300"
                                                     >
+                                                        <img
+                                                            src={player.avatar_url ? apiUrl(player.avatar_url) : `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${player.username}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
+                                                            alt=""
+                                                            className="w-7 h-7 rounded-lg object-cover shrink-0 opacity-90 group-hover:opacity-100"
+                                                        />
                                                         <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2 group-hover:scale-105 transition-transform duration-300`}>
                                                             {player.username}
                                                         </span>

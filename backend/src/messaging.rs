@@ -504,3 +504,61 @@ pub async fn send_global_chat_handler(
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to send message"}))).into_response(),
     }
 }
+
+/// Envoie un message de notification entre deux joueurs (ex: demande d'amitié).
+pub async fn send_system_message(
+    db: &sea_orm::DatabaseConnection,
+    sender_id: Uuid,
+    receiver_id: Uuid,
+    subject: &str,
+    content: &str,
+) -> Result<(), sea_orm::DbErr> {
+    let now = Utc::now().naive_utc();
+    let (u1, u2) = if sender_id <= receiver_id { (sender_id, receiver_id) } else { (receiver_id, sender_id) };
+
+    let existing_conv = Conversation::find()
+        .filter(conversation::Column::User1Id.eq(u1))
+        .filter(conversation::Column::User2Id.eq(u2))
+        .one(db)
+        .await
+        .ok()
+        .flatten();
+
+    let conv_id = if let Some(conv) = existing_conv {
+        let mut active: conversation::ActiveModel = conv.clone().into();
+        active.last_message_at = Set(now);
+        if sender_id == conv.user1_id {
+            active.user2_unread_count = Set(conv.user2_unread_count + 1);
+        } else {
+            active.user1_unread_count = Set(conv.user1_unread_count + 1);
+        }
+        active.update(db).await?;
+        conv.id
+    } else {
+        let new_conv = conversation::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            user1_id: Set(u1),
+            user2_id: Set(u2),
+            last_message_at: Set(now),
+            user1_unread_count: Set(0),
+            user2_unread_count: Set(1),
+            user1_archived: Set(false),
+            user2_archived: Set(false),
+        };
+        let inserted = new_conv.insert(db).await?;
+        inserted.id
+    };
+
+    let new_message = message::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        conversation_id: Set(Some(conv_id)),
+        sender_id: Set(sender_id),
+        receiver_id: Set(receiver_id),
+        subject: Set(subject.to_string()),
+        content: Set(content.to_string()),
+        created_at: Set(now),
+        is_read: Set(false),
+    };
+    new_message.insert(db).await?;
+    Ok(())
+}

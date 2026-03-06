@@ -16,6 +16,9 @@ pub struct Model {
     pub role: String, // "user" ou "admin"
     pub protection_until: Option<chrono::NaiveDateTime>, // Beginner protection expiry date
     pub total_points: i64, // Total points for attack restrictions
+    pub avatar_url: Option<String>,
+    pub bio: Option<String>,
+    pub last_login: Option<chrono::NaiveDateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
