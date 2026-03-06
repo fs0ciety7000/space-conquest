@@ -49,6 +49,7 @@ export function useRealtimeResources(
   const [resources, setResources] = useState<RealtimeResources | null>(null);
   const lastUpdateRef = useRef<number>(Date.now());
   const baseResourcesRef = useRef<RealtimeResources | null>(null);
+  const prevServerRef = useRef<RealtimeResources | null>(null);
 
   // Valeurs par défaut si config n'est pas fournie
   const safeConfig = config || {
@@ -158,15 +159,27 @@ export function useRealtimeResources(
       deutSlotBonus
     );
 
-    // Sauvegarder les ressources de base — ne pas reculer en dessous de la valeur déjà affichée
-    const prevResources = baseResourcesRef.current;
+    // Sauvegarder les ressources de base.
+    // - Si le serveur rapporte une valeur INFÉRIEURE à la dernière valeur serveur connue
+    //   (ex: déduction suite à une construction), on utilise directement la valeur serveur.
+    // - Sinon (lag de polling normal), on garde la valeur affichée pour éviter les oscillations.
+    const prevServer = prevServerRef.current;
     const prevDisplayed = resources;
-    baseResourcesRef.current = {
-      metal: prevDisplayed ? Math.max(planet.metal_amount, prevDisplayed.metal) : planet.metal_amount,
-      crystal: prevDisplayed ? Math.max(planet.crystal_amount, prevDisplayed.crystal) : planet.crystal_amount,
-      deuterium: prevDisplayed ? Math.max(planet.deuterium_amount, prevDisplayed.deuterium) : planet.deuterium_amount,
+    const serverNow = { metal: planet.metal_amount, crystal: planet.crystal_amount, deuterium: planet.deuterium_amount };
+
+    const resolveBase = (serverVal: number, prevServerVal: number | undefined, displayedVal: number | undefined): number => {
+      // Si la valeur serveur a diminué → déduction → utiliser la valeur serveur
+      if (prevServerVal !== undefined && serverVal < prevServerVal - 1) return serverVal;
+      // Sinon, ne pas reculer en dessous de ce qui est affiché (lag de polling)
+      return displayedVal ? Math.max(serverVal, displayedVal) : serverVal;
     };
-    void prevResources;
+
+    prevServerRef.current = serverNow;
+    baseResourcesRef.current = {
+      metal: resolveBase(serverNow.metal, prevServer?.metal, prevDisplayed?.metal),
+      crystal: resolveBase(serverNow.crystal, prevServer?.crystal, prevDisplayed?.crystal),
+      deuterium: resolveBase(serverNow.deuterium, prevServer?.deuterium, prevDisplayed?.deuterium),
+    };
 
     // Sauvegarder les productions pour le ticker
     const productionRef = { metalProdPerSec, crystalProdPerSec, deutProdPerSec };

@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { GameImage } from '@/components/ui/game-image';
 import { getResourceImage } from '@/lib/images';
 import { getTechLevel, getBuildingLevel } from '@/utils/techTreeCompat';
+import { formatDuration } from '@/lib/utils';
 
 interface ResourceSlot {
   id: number;
@@ -501,7 +502,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
                   {activeItem ? (
                      <span className="flex items-center gap-2 relative z-10 text-cyan-400">
-                       <Timer size={14} className="animate-spin-slow" /> En cours {timeLeft}s
+                       <Timer size={14} className="animate-spin-slow" /> En cours {formatDuration(timeLeft ?? 0)}
                      </span>
                   ) : isQueueFull ? (
                     <span className="relative z-10">File Pleine (3/3)</span>

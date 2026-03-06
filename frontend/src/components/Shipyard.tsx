@@ -360,7 +360,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
                     <Button onClick={() => buildShip(ship.ship_key)} disabled={locked || isQueueFull || !canAfford || (qty[ship.ship_key] || 0) <= 0 || isFull} className={`flex-1 h-10 font-black uppercase text-[10px] tracking-[0.2em] transition-all rounded-lg relative overflow-hidden group/btn ${isQueueFull ? 'bg-slate-800 text-slate-500 border border-slate-700' : isFull ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed' : !canAfford ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed' : `bg-black hover:bg-slate-900 text-white border ${theme.border} hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]`}`}>
                         {activeItem ? (
                              <span className="flex items-center gap-2 relative z-10 text-orange-300">
-                                <Timer size={14} className="animate-spin" /> En cours ({timeLeft}s)
+                                <Timer size={14} className="animate-spin" /> En cours ({formatDuration(timeLeft ?? 0)})
                              </span>
                         ) : isQueueFull ? (
                             <span className="relative z-10">File Pleine</span>

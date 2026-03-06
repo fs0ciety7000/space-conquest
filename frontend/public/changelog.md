@@ -1,5 +1,22 @@
 # Changelog - Space Conquest
 
+## [3.7.0] - 2026-03-06 - Succès & ressources
+
+### 🐛 Corrections
+
+#### 🏆 Succès — progrès jamais sauvegardé (bug critique)
+- **Bug** : `update_achievement_progress` appelait `.update()` pour les *nouveaux* enregistrements car `active.id.is_set()` retourne `true` dans les deux cas (Sea-ORM encode `Model::into()` en `Set(...)`). Résultat : toute progression (expéditions, attaques, bâtiments...) restait éternellement à 0/N.
+- **Fix** : suivi explicite d'un booléen `is_new` pour choisir `.insert()` vs `.update()`.
+
+#### 📊 Barre de ressources — déductions invisibles
+- **Bug** : la protection anti-oscillation (`Math.max`) dans `useRealtimeResources` empêchait les déductions de ressources de s'afficher dans la barre en haut — après construction de défenses/vaisseaux/recherches, les ressources semblaient ne pas diminuer.
+- **Fix** : comparaison avec la valeur serveur *précédente* pour distinguer une déduction (valeur serveur en baisse) d'un simple lag de polling.
+
+#### 🔬 Temps de recherche — niveau labo ignoré
+- La clé `"research"` ne correspondait pas à la clé DB `"research_lab"` → le bonus de réduction de temps du labo de recherche était ignoré pour tous les calculs de durée.
+
+---
+
 ## [3.6.0] - 2026-03-06 - Score, énergie & défenses
 
 ### 🐛 Corrections
