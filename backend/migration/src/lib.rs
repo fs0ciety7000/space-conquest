@@ -65,6 +65,7 @@ mod m20260128_000001_create_global_chat;
 mod m20260306_000001_drop_legacy_planet_columns;
 mod m20260306_000002_mission_tiers;
 mod m20260306_000003_user_profile_and_friends;
+mod m20260306_000004_fleet_presets;
 
 pub struct Migrator;
 
@@ -137,6 +138,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260306_000001_drop_legacy_planet_columns::Migration),
             Box::new(m20260306_000002_mission_tiers::Migration),
             Box::new(m20260306_000003_user_profile_and_friends::Migration),
+            Box::new(m20260306_000004_fleet_presets::Migration),
         ]
     }
 }

@@ -56,3 +56,6 @@ pub use super :: global_chat_message :: Entity as GlobalChatMessage ;
 
 // Social system
 pub use super :: friendship :: Entity as Friendship ;
+
+// Fleet presets
+pub use super :: fleet_preset :: Entity as FleetPreset ;

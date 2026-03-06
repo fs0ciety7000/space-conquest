@@ -51,8 +51,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember, Friendship},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member, friendship
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember, Friendship, FleetPreset},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member, friendship, fleet_preset
 };
 
 #[derive(Serialize, Clone)]
@@ -308,6 +308,11 @@ async fn main() {
 .route("/friends/:friendship_id/accept", post(accept_friend_request_handler))
 .route("/friends/:friendship_id/decline", post(decline_friend_request_handler))
 .route("/friends/:friendship_id", delete(remove_friend_handler))
+// Fleet presets
+.route("/users/:id/fleet-presets", get(get_fleet_presets_handler))
+.route("/users/:id/fleet-presets", post(create_fleet_preset_handler))
+.route("/users/:id/fleet-presets/:preset_id", put(update_fleet_preset_handler))
+.route("/users/:id/fleet-presets/:preset_id", delete(delete_fleet_preset_handler))
         // Market
         .route("/market/listings", get(get_market_listings_handler))
         .route("/market/listings", post(create_market_listing_handler))
@@ -6916,6 +6921,118 @@ async fn remove_friend_handler(
     use sea_orm::ModelTrait;
     if f.delete(&state.db).await.is_err() {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur"}))).into_response();
+    }
+
+    (StatusCode::OK, Json(json!({"success": true}))).into_response()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FLEET PRESETS
+// ═══════════════════════════════════════════════════════════════════════════
+
+async fn get_fleet_presets_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let presets = FleetPreset::find()
+        .filter(fleet_preset::Column::UserId.eq(user_id))
+        .order_by_asc(fleet_preset::Column::CreatedAt)
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    Json(presets).into_response()
+}
+
+#[derive(Deserialize)]
+struct FleetPresetPayload {
+    name: String,
+    composition: serde_json::Value,
+}
+
+async fn create_fleet_preset_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<FleetPresetPayload>,
+) -> impl IntoResponse {
+    let name = payload.name.trim().to_string();
+    if name.is_empty() || name.len() > 64 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nom invalide (1-64 caractères)"}))).into_response();
+    }
+
+    // Max 10 presets per user
+    let count = FleetPreset::find()
+        .filter(fleet_preset::Column::UserId.eq(user_id))
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
+    if count >= 10 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Maximum 10 presets autorisés"}))).into_response();
+    }
+
+    let now = Utc::now().naive_utc();
+    let new_preset = fleet_preset::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        user_id: Set(user_id),
+        name: Set(name),
+        composition: Set(payload.composition),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+
+    match new_preset.insert(&state.db).await {
+        Ok(preset) => (StatusCode::CREATED, Json(json!(preset))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de création"}))).into_response(),
+    }
+}
+
+async fn update_fleet_preset_handler(
+    Path((user_id, preset_id)): Path<(Uuid, Uuid)>,
+    State(state): State<AppState>,
+    Json(payload): Json<FleetPresetPayload>,
+) -> impl IntoResponse {
+    let preset = match FleetPreset::find_by_id(preset_id).one(&state.db).await.unwrap_or(None) {
+        Some(p) => p,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Preset introuvable"}))).into_response(),
+    };
+
+    if preset.user_id != user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
+    }
+
+    let name = payload.name.trim().to_string();
+    if name.is_empty() || name.len() > 64 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nom invalide (1-64 caractères)"}))).into_response();
+    }
+
+    let mut active: fleet_preset::ActiveModel = preset.into();
+    active.name = Set(name);
+    active.composition = Set(payload.composition);
+    active.updated_at = Set(Utc::now().naive_utc());
+
+    match active.update(&state.db).await {
+        Ok(updated) => Json(json!(updated)).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de mise à jour"}))).into_response(),
+    }
+}
+
+async fn delete_fleet_preset_handler(
+    Path((user_id, preset_id)): Path<(Uuid, Uuid)>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let preset = match FleetPreset::find_by_id(preset_id).one(&state.db).await.unwrap_or(None) {
+        Some(p) => p,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Preset introuvable"}))).into_response(),
+    };
+
+    if preset.user_id != user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
+    }
+
+    use sea_orm::ModelTrait;
+    if preset.delete(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de suppression"}))).into_response();
     }
 
     (StatusCode::OK, Json(json!({"success": true}))).into_response()

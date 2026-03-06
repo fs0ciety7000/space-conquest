@@ -58,3 +58,6 @@ pub mod global_chat_message;
 
 // Social system
 pub mod friendship;
+
+// Fleet presets
+pub mod fleet_preset;
