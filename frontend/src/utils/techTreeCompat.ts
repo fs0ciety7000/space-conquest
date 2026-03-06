@@ -243,6 +243,9 @@ export function calculateFleetHull(planet: Planet | null | undefined): number {
 export function getTotalFleetCount(planet: Planet | null | undefined): number {
   if (!planet) return 0;
 
-  const ships = ['light_hunter', 'cruiser', 'spy_probe', 'transporter', 'colony_ship', 'recycler'];
+  const ships = [
+    'light_hunter', 'heavy_hunter', 'cruiser', 'battleship', 'bomber', 'destroyer',
+    'spy_probe', 'transporter', 'colony_ship', 'recycler', 'deathstar',
+  ];
   return ships.reduce((total, shipKey) => total + getShipCount(planet, shipKey), 0);
 }

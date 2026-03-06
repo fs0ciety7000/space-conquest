@@ -1,5 +1,18 @@
 # Changelog - Space Conquest
 
+## [3.9.0] - 2026-03-06 - Hangar & classement
+
+### 🐛 Corrections
+
+#### 🚀 Capacité Hangar — vaisseaux expansion non comptés
+- `getTotalFleetCount` (PlanetOverview) et `getTotalFleet` (MyPlanets) ne comptaient que les 6 vaisseaux de base. Les 5 vaisseaux expansion (`heavy_hunter`, `battleship`, `bomber`, `destroyer`, `deathstar`) sont maintenant inclus dans l'occupation hangar.
+- Les deux composants utilisent désormais la même fonction `getTotalFleetCount` — plus de divergence possible.
+
+#### 🏆 Classement — badge "Zone Débutant" supprimé
+- Le badge s'affichait pour tous les joueurs (tous en galaxie 1). Retiré du classement.
+
+---
+
 ## [3.8.0] - 2026-03-06 - Admin refact & durée de construction
 
 ### ✨ Améliorations

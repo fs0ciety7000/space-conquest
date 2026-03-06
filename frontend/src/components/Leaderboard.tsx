@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import PlayerProfile from "./PlayerProfile";
-import BeginnerProtectionBadge from './BeginnerProtectionBadge';
 
 interface PlanetInfo {
     id: string;
@@ -148,15 +147,6 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                 <span className="text-[10px] text-yellow-500/80 font-semibold uppercase tracking-wide">
                                                     {player.rank_badge}
                                                 </span>
-                                                {!player.is_me && (
-                                                    <BeginnerProtectionBadge
-                                                        protectionUntil={player.protection_until}
-                                                        galaxy={player.galaxy || undefined}
-                                                        totalPoints={player.total_score}
-                                                        size="sm"
-                                                        showPoints={false}
-                                                    />
-                                                )}
                                             </div>
                                         </td>
                                         <td className="p-2 md:p-4 text-slate-400 font-mono text-xs hidden sm:table-cell">
