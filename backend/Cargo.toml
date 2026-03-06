@@ -17,7 +17,7 @@ sea-orm = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls"
 sea-orm-migration = { version = "1.1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 migration = { path = "../migration" }
 dotenvy = "0.15"
-lettre = { version = "0.11", features = ["tokio1", "tokio1-native-tls", "smtp-transport", "builder"] }
+reqwest = { version = "0.12", features = ["json"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
 http = "1.0"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }

@@ -885,6 +885,12 @@ async fn resolve_attack_mission(
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FLAGSHIP XP — combat PvP
+    // ═══════════════════════════════════════════════════════════════════════════
+    let att_xp = if result.winner == "attacker" { 20 } else { 5 };
+    award_flagship_xp(db, att_user.id, att_xp).await;
+
     Ok(())
 }
 
@@ -6663,6 +6669,10 @@ async fn expedition_v2_handler(
     missions::update_mission_progress(&state, planet.owner_id, "expedition", "any", 1).await;
     missions::update_achievement_progress(&state, planet.owner_id, "expeditions", 1).await;
 
+    // FLAGSHIP XP — expédition
+    let flagship_xp = if winner == "victory" || winner == "calm" { 10 } else { 5 };
+    award_flagship_xp(&state.db, planet.owner_id, flagship_xp).await;
+
     // Build response
     Json(json!({
         "success": true,
@@ -7381,6 +7391,39 @@ async fn get_flagship_handler(
 fn flagship_xp_for_level(level: i32) -> i32 {
     // XP requis pour atteindre ce niveau: 100 * level^2
     100 * level * level
+}
+
+async fn award_flagship_xp(db: &DatabaseConnection, user_id: Uuid, xp_gain: i32) {
+    use crate::entities::flagship;
+    let fs = match Flagship::find()
+        .filter(flagship::Column::UserId.eq(user_id))
+        .one(db)
+        .await
+        .unwrap_or(None)
+    {
+        Some(f) => f,
+        None => return,
+    };
+
+    let mut new_xp = fs.xp + xp_gain;
+    let mut new_level = fs.level;
+
+    // Level-up loop
+    loop {
+        let xp_needed = flagship_xp_for_level(new_level + 1);
+        if new_xp >= xp_needed {
+            new_xp -= xp_needed;
+            new_level += 1;
+        } else {
+            break;
+        }
+    }
+
+    let mut active: flagship::ActiveModel = fs.into();
+    active.xp = Set(new_xp);
+    active.level = Set(new_level);
+    active.updated_at = Set(Utc::now().naive_utc());
+    let _ = active.update(db).await;
 }
 
 #[derive(Deserialize)]

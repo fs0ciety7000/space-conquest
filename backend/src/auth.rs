@@ -14,12 +14,6 @@ use serde_json::json;
 use uuid::Uuid;
 use rand::Rng;
 
-use lettre::{
-    AsyncSmtpTransport, AsyncTransport, Message as EmailMessage,
-    Tokio1Executor,
-    message::header::ContentType,
-    transport::smtp::authentication::Credentials,
-};
 
 use crate::{
     entities::{planet, user, planet_building, building_type, password_reset_token,
@@ -103,19 +97,12 @@ fn generate_reset_token() -> String {
 }
 
 async fn send_reset_email(to_email: &str, token: &str) -> Result<(), String> {
-    let smtp_host = std::env::var("SMTP_HOST").unwrap_or_default();
-    let smtp_user = std::env::var("SMTP_USER").unwrap_or_default();
-    let smtp_pass = std::env::var("SMTP_PASSWORD").unwrap_or_default();
-    let smtp_from = std::env::var("SMTP_FROM")
-        .unwrap_or_else(|_| "noreply@space-conquest.local".to_string());
+    let api_key = std::env::var("RESEND_API_KEY")
+        .map_err(|_| "RESEND_API_KEY non configuré".to_string())?;
+    let from = std::env::var("SMTP_FROM")
+        .unwrap_or_else(|_| "Space Conquest <noreply@fs0ciety.org>".to_string());
     let frontend_url = std::env::var("FRONTEND_URL")
         .unwrap_or_else(|_| "http://localhost:5173".to_string());
-    let smtp_port: u16 = std::env::var("SMTP_PORT")
-        .ok().and_then(|p| p.parse().ok()).unwrap_or(587);
-
-    if smtp_host.is_empty() || smtp_user.is_empty() {
-        return Err("SMTP non configuré".to_string());
-    }
 
     let reset_link = format!("{}?reset_token={}", frontend_url, token);
     let body = format!(
@@ -123,22 +110,26 @@ async fn send_reset_email(to_email: &str, token: &str) -> Result<(), String> {
         reset_link
     );
 
-    let email = EmailMessage::builder()
-        .from(smtp_from.parse().map_err(|e| format!("From invalide : {e}"))?)
-        .to(to_email.parse().map_err(|e| format!("To invalide : {e}"))?)
-        .subject("Réinitialisation de votre mot de passe - Space Conquest")
-        .header(ContentType::TEXT_PLAIN)
-        .body(body)
-        .map_err(|e| format!("Erreur construction email : {e}"))?;
+    let client = reqwest::Client::new();
+    let res = client
+        .post("https://api.resend.com/emails")
+        .bearer_auth(&api_key)
+        .json(&serde_json::json!({
+            "from": from,
+            "to": [to_email],
+            "subject": "Réinitialisation de votre mot de passe - Space Conquest",
+            "text": body
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Erreur réseau Resend : {e}"))?;
 
-    let creds = Credentials::new(smtp_user, smtp_pass);
-    let mailer = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&smtp_host)
-        .map_err(|e| format!("Erreur SMTP relay : {e}"))?
-        .port(smtp_port)
-        .credentials(creds)
-        .build();
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        return Err(format!("Resend erreur {status} : {text}"));
+    }
 
-    mailer.send(email).await.map_err(|e| format!("Erreur envoi : {e}"))?;
     Ok(())
 }
 
