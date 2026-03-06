@@ -134,17 +134,14 @@ export default function App() {
   } = useWebSocket(planetId, {
     enabled: !!token && !!planetId,
     onResourcesUpdate: (resources) => {
-      // Mettre à jour les ressources de la planète en temps réel
-      // Guard: ignore updates from a stale WS connection (old planet)
+      // Ne mettre à jour que energy_ratio depuis le WebSocket.
+      // metal/crystal/deuterium sont extrapolés par useRealtimeResources —
+      // les mettre à jour ici causerait un yoyo : WS (valeur haute) puis
+      // fetchPlanet (valeur DB plus basse) déclencherait une fausse "déduction".
       setPlanet((prev: any) => {
         if (!prev || prev.id !== currentPlanetIdRef.current) return prev;
-        return {
-          ...prev,
-          metal_amount: resources.metal,
-          crystal_amount: resources.crystal,
-          deuterium_amount: resources.deuterium,
-          energy_ratio: resources.energy_ratio,
-        };
+        if (prev.energy_ratio === resources.energy_ratio) return prev;
+        return { ...prev, energy_ratio: resources.energy_ratio };
       });
     },
     onConstructionComplete: (data) => {
