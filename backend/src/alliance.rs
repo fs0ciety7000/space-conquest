@@ -1298,7 +1298,7 @@ async fn calculate_planet_score(planet: &planet::Model, db: &DatabaseConnection)
         ("battleship", 150),
         ("bomber", 200),
         ("destroyer", 250),
-        ("death_star", 1000),
+        ("deathstar", 1000),
         ("solar_satellite", 3),
     ].iter().copied().collect();
 

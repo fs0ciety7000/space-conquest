@@ -1,5 +1,24 @@
 # Changelog - Space Conquest
 
+## [3.8.0] - 2026-03-06 - Admin refact & durée de construction
+
+### ✨ Améliorations
+
+#### ⏱️ Mines — durée d'amélioration affichée
+- La section coût des mines (page Ressources) affiche maintenant la durée de construction pour le niveau suivant avant de valider l'amélioration.
+
+### 🐛 Corrections
+
+#### 🛠️ Page Admin — refactoring complet de la gestion des planètes
+- **Bâtiments** : clés DB corrigées — `"metal"/"crystal"/"deuterium"/"research"` remplacées par `"metal_mine"/"crystal_mine"/"deuterium_mine"/"research_lab"` dans le backend et le frontend.
+- **Vaisseaux** : 11 vaisseaux couverts — ajout de Chasseur Lourd, Cuirassé, Bombardier, Destroyer, **Étoile de la Mort** (`deathstar`).
+- **Défenses** : 10 types couverts — clé `missile_launcher` corrigée en `rocket_launcher` ; ajout de Laser Léger, Laser Lourd, Canon Gauss, Canon Ions, Petit Bouclier, Grand Bouclier, **Anti-Missile**, **Missile IP**.
+- **Technologies** : ajout des techs Armes (`weapons_tech`) et Bouclier (`shield_tech`) dans le panneau d'édition.
+- **Backend** : `PlanetUpdate`, `get_planet_admin_handler` et `update_planet_admin_handler` mis à jour pour refléter toutes les nouvelles entités.
+- **Score alliance** : clé `death_star` corrigée en `deathstar` dans le calcul de points militaires (`alliance.rs`).
+
+---
+
 ## [3.7.0] - 2026-03-06 - Succès & ressources
 
 ### 🐛 Corrections
