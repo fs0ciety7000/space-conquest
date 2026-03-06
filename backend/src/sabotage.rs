@@ -3,14 +3,13 @@ use axum::{
     http::{StatusCode, HeaderMap},
     response::{IntoResponse, Json},
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, DbErr, PaginatorTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, DbErr, PaginatorTrait, Condition};
 use chrono::{Utc, Duration};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::entities::{prelude::*, planet, sabotage_effect};
+use crate::entities::{prelude::*, planet, sabotage_effect, combat_log};
 use crate::AppState;
-use crate::tech_tree;
 
 /// Helper: extraire user_id depuis le header Authorization
 fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<Uuid, StatusCode> {
@@ -92,32 +91,71 @@ pub async fn attempt_sabotage(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
     };
 
-    // Vérifier la différence de tech espionnage (utilise le système relational tech_tree)
-    let attacker_spy_level = tech_tree::get_planet_tech_level(&state.db, attacker_planet.id, "espionage")
-        .await
-        .unwrap_or(0);
-    let defender_spy_level = tech_tree::get_planet_tech_level(&state.db, target_planet.id, "espionage")
-        .await
-        .unwrap_or(0);
-    let tech_difference = attacker_spy_level - defender_spy_level;
-
-    if tech_difference < 1 {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "error": "Avantage technologique insuffisant",
-            "required": "Niveau espionnage supérieur d'au moins 1"
-        }))).into_response();
-    }
-
-    // Récupérer le nom d'utilisateur de l'attaquant pour les notifications
+    // Récupérer le nom d'utilisateur de l'attaquant pour les notifications et le cooldown
     let attacker_user = match User::find_by_id(user_id).one(&state.db).await {
         Ok(Some(u)) => u,
         _ => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Utilisateur non trouvé"}))).into_response(),
     };
 
-    // Calculer la probabilité de détection
-    // Base: 30%, -5% par niveau de différence (minimum 5%)
-    let detection_chance = (30.0_f64 - (tech_difference as f64 * 5.0)).max(5.0_f64);
-    let detected = rand::random::<f64>() * 100.0 < detection_chance;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COOLDOWN SABOTAGE - configurable, par paire attaquant/planète cible
+    // Exceptions : contre-attaque en combat du défenseur
+    // ═══════════════════════════════════════════════════════════════════════════
+    let sabotage_cooldown_hours = state.config.read().unwrap().get_config("sabotage_cooldown_hours", 2.0) as i64;
+    let now_dt = Utc::now().naive_utc();
+
+    let existing_cooldown = SabotageEffect::find()
+        .filter(sabotage_effect::Column::AttackerUserId.eq(user_id))
+        .filter(sabotage_effect::Column::TargetPlanetId.eq(target_planet_id))
+        .filter(sabotage_effect::Column::EffectType.eq("sabotage_cooldown"))
+        .filter(sabotage_effect::Column::ExpiresAt.gt(now_dt))
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if let Some(ref cooldown) = existing_cooldown {
+        // Exception : le défenseur a contre-attaqué en combat depuis la mise en place du cooldown
+        let defender_user = User::find_by_id(target_planet.owner_id)
+            .one(&state.db).await.unwrap_or(None)
+            .map(|u| u.username).unwrap_or_default();
+
+        let counter = CombatLog::find()
+            .filter(combat_log::Column::PlanetId.eq(attacker_planet.id))
+            .filter(combat_log::Column::OpponentUsername.eq(&defender_user))
+            .filter(combat_log::Column::MissionType.eq("defense"))
+            .filter(combat_log::Column::Date.gt(cooldown.created_at))
+            .count(&state.db)
+            .await
+            .unwrap_or(0);
+
+        if counter == 0 {
+            let remaining = cooldown.expires_at - now_dt;
+            let hours = remaining.num_hours().max(0);
+            let minutes = (remaining.num_minutes().max(0)) % 60;
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({
+                "error": format!("Délai de sabotage non écoulé. Prochain créneau dans {}h {}min.", hours, minutes),
+                "cooldown_remaining_minutes": remaining.num_minutes().max(0)
+            }))).into_response();
+        }
+
+        // Contre-attaque détectée : supprimer l'ancien cooldown et autoriser
+        let _ = SabotageEffect::delete_by_id(cooldown.id).exec(&state.db).await;
+    }
+
+    // Insérer le marqueur de cooldown (couvre cet essai, qu'il réussisse ou soit détecté)
+    let _ = sabotage_effect::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        target_planet_id: Set(target_planet_id),
+        attacker_user_id: Set(Some(user_id)),
+        effect_type: Set("sabotage_cooldown".to_string()),
+        created_at: Set(now_dt),
+        expires_at: Set(now_dt + Duration::hours(sabotage_cooldown_hours)),
+        was_detected: Set(false),
+        metadata: Set(None),
+    }.insert(&state.db).await;
+
+    // Probabilité de détection fixe à 30%
+    let detected = rand::random::<f64>() * 100.0 < 30.0_f64;
 
     // Si détecté
     if detected {

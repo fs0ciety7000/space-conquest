@@ -197,6 +197,16 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     ]
   },
   {
+    id: 'cooldowns',
+    title: 'Cooldowns & Anti-flood',
+    icon: Package,
+    color: 'orange',
+    configs: [
+      { key: 'attack_cooldown_hours', label: 'Cooldown Attaque (h)', description: 'Délai minimum entre deux attaques sur le même joueur (heures)', defaultValue: '2.0' },
+      { key: 'sabotage_cooldown_hours', label: 'Cooldown Sabotage (h)', description: 'Délai minimum entre deux sabotages sur la même planète (heures)', defaultValue: '2.0' },
+    ]
+  },
+  {
     id: 'cargo',
     title: 'Capacités de Chargement',
     icon: Box,

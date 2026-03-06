@@ -894,6 +894,78 @@ async fn resolve_attack_mission(
     Ok(())
 }
 
+// --- ATTACK COOLDOWN ---
+
+/// Vérifie si l'attaquant est en cooldown contre ce défenseur.
+/// Retourne Some(message) si bloqué, None si autorisé.
+/// Exceptions : contre-attaque du défenseur OU victoire décisive (0 pertes).
+async fn check_attack_cooldown(
+    db: &DatabaseConnection,
+    attacker_user_id: Uuid,
+    defender_user_id: Uuid,
+    cooldown_hours: i64,
+) -> Option<String> {
+    let defender_user = User::find_by_id(defender_user_id).one(db).await.unwrap_or(None)?;
+    let cutoff = Utc::now().naive_utc() - Duration::hours(cooldown_hours);
+
+    let attacker_planet_ids: Vec<Uuid> = Planet::find()
+        .filter(planet::Column::OwnerId.eq(attacker_user_id))
+        .all(db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| p.id)
+        .collect();
+
+    if attacker_planet_ids.is_empty() {
+        return None;
+    }
+
+    // Dernier combat attaquant → défenseur dans la fenêtre de cooldown
+    let last_attack = CombatLog::find()
+        .filter(combat_log::Column::PlanetId.is_in(attacker_planet_ids.clone()))
+        .filter(combat_log::Column::OpponentUsername.eq(&defender_user.username))
+        .filter(
+            Condition::any()
+                .add(combat_log::Column::MissionType.eq("attack"))
+                .add(combat_log::Column::MissionType.eq("planet_conquered"))
+        )
+        .filter(combat_log::Column::Date.gt(cutoff))
+        .order_by_desc(combat_log::Column::Date)
+        .one(db)
+        .await
+        .unwrap_or(None)?;
+
+    // Exception 1 : victoire décisive (0 perte de l'attaquant)
+    if last_attack.result == "victory" && last_attack.ships_lost == 0 {
+        return None;
+    }
+
+    // Exception 2 : le défenseur a contre-attaqué depuis ce dernier combat
+    let counter = CombatLog::find()
+        .filter(combat_log::Column::PlanetId.is_in(attacker_planet_ids))
+        .filter(combat_log::Column::OpponentUsername.eq(&defender_user.username))
+        .filter(combat_log::Column::MissionType.eq("defense"))
+        .filter(combat_log::Column::Date.gt(last_attack.date))
+        .count(db)
+        .await
+        .unwrap_or(0);
+
+    if counter > 0 {
+        return None;
+    }
+
+    let next_allowed = last_attack.date + Duration::hours(cooldown_hours);
+    let remaining = next_allowed - Utc::now().naive_utc();
+    let hours = remaining.num_hours().max(0);
+    let minutes = (remaining.num_minutes().max(0)) % 60;
+
+    Some(format!(
+        "Délai d'attaque non écoulé. Prochain créneau dans {}h {}min. (Levé si la cible vous contre-attaque ou si victoire avec 0 pertes)",
+        hours, minutes
+    ))
+}
+
 // --- GAME HANDLERS ---
 
 async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -972,6 +1044,9 @@ async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResp
         "cargo_cruiser": config.get_config("cargo_cruiser", 800.0),
         "cargo_transporter_base": config.get_config("cargo_transporter_base", 10000.0),
         "cargo_transporter_bonus_per_hangar": config.get_config("cargo_transporter_bonus_per_hangar", 0.05),
+        // Cooldowns
+        "attack_cooldown_hours": config.get_config("attack_cooldown_hours", 2.0),
+        "sabotage_cooldown_hours": config.get_config("sabotage_cooldown_hours", 2.0),
         // Expedition mechanics
         "expedition_combat_chance": config.get_config("expedition_combat_chance", 0.3),
         "expedition_deuterium_chance": config.get_config("expedition_deuterium_chance", 0.5),
@@ -2153,6 +2228,14 @@ async fn attack_handler(
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // COOLDOWN ATTAQUE - Anti-flood par paire attaquant/défenseur
+    // ═══════════════════════════════════════════════════════════════════════════
+    let attack_cooldown_hours = config_clone.get_config("attack_cooldown_hours", 2.0) as i64;
+    if let Some(cooldown_msg) = check_attack_cooldown(&state.db, attacker_owner_id, defender_owner_id, attack_cooldown_hours).await {
+        return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": cooldown_msg}))).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // CASUS BELLI - Vérifier et consommer le droit d'attaque légitime
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2293,6 +2376,14 @@ async fn attack_v2_handler(
         &config_clone,
     ).await {
         return (StatusCode::FORBIDDEN, Json(json!({"error": error_msg}))).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COOLDOWN ATTAQUE - Anti-flood par paire attaquant/défenseur
+    // ═══════════════════════════════════════════════════════════════════════════
+    let attack_cooldown_hours = config_clone.get_config("attack_cooldown_hours", 2.0) as i64;
+    if let Some(cooldown_msg) = check_attack_cooldown(&state.db, attacker_owner_id, defender_owner_id, attack_cooldown_hours).await {
+        return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": cooldown_msg}))).into_response();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
