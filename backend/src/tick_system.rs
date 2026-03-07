@@ -285,11 +285,14 @@ pub async fn update_all_user_points(db: &DatabaseConnection) -> Result<usize, se
 /// (e.g., every 10 seconds via a background task or cron job)
 ///
 /// Returns statistics about what was processed
-pub async fn process_tick(db: &DatabaseConnection) -> Result<TickStats, sea_orm::DbErr> {
+pub async fn process_tick(db: &DatabaseConnection, config: &crate::ServerConfigCache) -> Result<TickStats, sea_orm::DbErr> {
     let research_completed = process_research_completion(db).await?;
     let ships_completed = process_ship_building_completion(db).await?;
     let defenses_completed = process_defense_building_completion(db).await?;
     let buildings_completed = process_construction_queue_completion(db).await?;
+
+    // Auto-start pending build queue items when slots free up
+    crate::build_queue::process_build_queue(db, config).await;
 
     // Update all user points after processing completions
     let points_updated = update_all_user_points(db).await.unwrap_or(0);

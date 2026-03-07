@@ -22,6 +22,9 @@ interface TradeRoute {
   crystal_ratio: number;
   deuterium_ratio: number;
   is_active: boolean;
+  schedule_type: 'interval' | 'daily';
+  interval_hours: number;
+  daily_hour: number | null;
   next_run_at?: string;
   created_at?: string;
 }
@@ -104,6 +107,9 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
     metal_ratio: 1.0,
     crystal_ratio: 1.0,
     deuterium_ratio: 0.0,
+    schedule_type: 'interval' as 'interval' | 'daily',
+    interval_hours: 24,
+    daily_hour: 3,
   });
   const [creating, setCreating] = useState(false);
 
@@ -174,7 +180,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
       if (res.ok) {
         toast.success(`Route "${form.name}" créée avec succès`);
         setShowCreateForm(false);
-        setForm({ name: '', source_planet_id: planetId, target_planet_id: '', ship_count: 50, metal_ratio: 1.0, crystal_ratio: 1.0, deuterium_ratio: 0.0 });
+        setForm({ name: '', source_planet_id: planetId, target_planet_id: '', ship_count: 50, metal_ratio: 1.0, crystal_ratio: 1.0, deuterium_ratio: 0.0, schedule_type: 'interval', interval_hours: 24, daily_hour: 3 });
         fetchRoutes();
         fetchHubInfo(form.source_planet_id);
       } else {
@@ -284,7 +290,6 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
               </div>
             </div>
             <div className="text-slate-400 text-xs text-right">
-              Intervalle: {intervalHours}h<br />
               Cargo: {formatNumber(cargoCapacity)}/vaisseau
             </div>
           </CardContent>
@@ -399,6 +404,69 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                   <Info size={11} /> 100% = tout le stock disponible (limité par la capacité cargo)
                 </p>
               </div>
+
+              {/* Schedule */}
+              <div className="md:col-span-2 space-y-3 border-t border-slate-700/30 pt-4">
+                <p className="text-slate-300 text-sm font-medium flex items-center gap-2">
+                  <Clock size={14} className="text-indigo-400" /> Fréquence d'exécution
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, schedule_type: 'interval' }))}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${
+                      form.schedule_type === 'interval'
+                        ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-300'
+                        : 'bg-slate-800/40 border-slate-600/40 text-slate-400 hover:border-slate-500/60'
+                    }`}
+                  >
+                    Toutes les N heures
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, schedule_type: 'daily' }))}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${
+                      form.schedule_type === 'daily'
+                        ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-300'
+                        : 'bg-slate-800/40 border-slate-600/40 text-slate-400 hover:border-slate-500/60'
+                    }`}
+                  >
+                    Chaque jour à heure fixe
+                  </button>
+                </div>
+
+                {form.schedule_type === 'interval' ? (
+                  <div className="flex items-center gap-3">
+                    <span className="text-slate-400 text-sm">Intervalle :</span>
+                    <select
+                      value={form.interval_hours}
+                      onChange={e => setForm(f => ({ ...f, interval_hours: Number(e.target.value) }))}
+                      className="bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-indigo-500/50"
+                    >
+                      {[1, 2, 4, 6, 8, 12, 24, 48, 72].map(h => (
+                        <option key={h} value={h}>{h}h</option>
+                      ))}
+                    </select>
+                    <span className="text-indigo-300 text-xs">
+                      → Prochain exécution dans ~{form.interval_hours}h après chaque transfert
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <span className="text-slate-400 text-sm">Heure d'exécution (UTC) :</span>
+                    <select
+                      value={form.daily_hour}
+                      onChange={e => setForm(f => ({ ...f, daily_hour: Number(e.target.value) }))}
+                      className="bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-indigo-500/50"
+                    >
+                      {Array.from({ length: 24 }, (_, h) => (
+                        <option key={h} value={h}>{String(h).padStart(2, '0')}:00 UTC</option>
+                      ))}
+                    </select>
+                    <span className="text-indigo-300 text-xs">→ Une fois par jour à cette heure</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Hub limit check */}
@@ -498,13 +566,20 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                         )}
                       </div>
 
-                      {/* Next run countdown */}
-                      {route.is_active && route.next_run_at && (
-                        <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400">
+                      {/* Schedule + next run */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                        <span className="flex items-center gap-1 text-xs text-slate-500">
                           <Clock size={11} className="text-indigo-400" />
-                          Prochain transfert : <span className="text-indigo-300 font-medium">{formatTimeUntil(route.next_run_at)}</span>
-                        </div>
-                      )}
+                          {route.schedule_type === 'daily' && route.daily_hour != null
+                            ? `Quotidien à ${String(route.daily_hour).padStart(2, '0')}:00 UTC`
+                            : `Toutes les ${route.interval_hours}h`}
+                        </span>
+                        {route.is_active && route.next_run_at && (
+                          <span className="text-xs text-slate-400">
+                            Prochain : <span className="text-indigo-300 font-medium">{formatTimeUntil(route.next_run_at)}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Actions */}
@@ -597,7 +672,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
             <Info size={12} /> Comment fonctionnent les Routes Commerciales ?
           </p>
           <ul className="text-slate-500 text-xs space-y-1.5">
-            <li>• Les routes s'exécutent automatiquement toutes les <strong className="text-slate-400">{intervalHours}h</strong>, en prenant les ressources de la planète source pour les déposer sur la destination.</li>
+            <li>• Chaque route s'exécute automatiquement selon la fréquence choisie (toutes les N heures ou une fois par jour à heure fixe UTC).</li>
             <li>• Chaque Grand Cargo transporte jusqu'à <strong className="text-slate-400">{formatNumber(cargoCapacity)}</strong> unités de ressources.</li>
             <li>• Les ratios (0-100%) définissent quelle fraction du stock disponible est embarquée pour chaque ressource.</li>
             <li>• Une flotte ennemie en embuscade dans le système solaire cible peut <strong className="text-red-400">intercepter</strong> les cargos et voler une partie des ressources.</li>

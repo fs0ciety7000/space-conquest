@@ -1,5 +1,33 @@
 # Changelog - Space Conquest
 
+## [6.3.0] - 2026-03-07 - Routes Commerciales, File de Construction & Grands Cargos
+
+### ✨ Nouveautés
+
+#### 🚚 Routes Commerciales automatisées
+- Nouveau bâtiment : **Hub Logistique** (prérequis : Hangar 20 + Stockage Ressources 15 + Tech Industrielle 3).
+- Nouvelle technologie : **Technologie Industrielle** (prérequis : Tech Informatique 4, Blindage 5, Hyperespace 1).
+- Nouveau vaisseau : **Grand Cargo** — 1 000 000 unités de capacité par unité, dédié aux routes auto (prérequis : Chantier 10 + Tech Industrielle 2 + Propulsion Hyperespace 3).
+- Créez des **routes commerciales** depuis l'onglet **ÉCONOMIE → Routes Commerciales** :
+  - Planète source → destination, nombre de Grands Cargos, ratios par ressource (0–100%).
+  - **Fréquence au choix** : toutes les N heures (1h, 2h, 4h… 72h) ou **chaque jour à heure fixe UTC**.
+  - Historique des transferts par route (ressources transférées, statut, piraterie).
+- Jusqu'à **12 routes actives** selon le niveau du Hub Logistique (niv. 1 → 2, niv. 3 → 6, niv. 5 → 12).
+- Risque de **piraterie** : une flotte ennemie en mission piraterie dans le système cible peut intercepter les cargos (chance configurable par l'admin).
+- Stats du Grand Cargo configurables depuis le panneau admin (capacité, attaque, bouclier, coque, vitesse).
+
+#### 🗂️ File de Construction par catégorie
+- Nouveau système de **file d'attente de construction** accessible via **ÉCONOMIE → File de Construction** :
+  - 5 catégories indépendantes : **Recherche, Vaisseaux, Défenses, Ressources, Installations**.
+  - Chaque catégorie possède ses propres **slots** (base configurable + bonus tech/bâtiment).
+  - **Slots évolutifs** : Labo Recherche débloque des slots recherche (+1 tous les 10 niveaux), Chantier Spatial des slots vaisseaux (+1 tous les 5 niveaux), Usine Nanite des slots installations (+1/niveau).
+  - Les items s'ajoutent automatiquement en file si tous les slots sont occupés.
+  - **Réorganisation par glisser-déposer** pour prioriser vos constructions.
+  - **Annulation** d'un item en attente avec remboursement des ressources.
+  - Démarrage automatique des items suivants dès qu'un slot se libère (intégré au tick).
+
+---
+
 ## [6.2.0] - 2026-03-06 - Nom d'affichage, Cargo amélioré, Corrections sabotage & Persistance avatars
 
 ### ✨ Nouveautés

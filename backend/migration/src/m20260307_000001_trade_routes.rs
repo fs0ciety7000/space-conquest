@@ -101,6 +101,11 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Alias::new("crystal_ratio")).double().not_null().default(1.0))
                     .col(ColumnDef::new(Alias::new("deuterium_ratio")).double().not_null().default(0.0))
                     .col(ColumnDef::new(Alias::new("is_active")).boolean().not_null().default(true))
+                    // 'interval' = every N hours, 'daily' = every day at daily_hour UTC
+                    .col(ColumnDef::new(Alias::new("schedule_type")).string().not_null().default("interval"))
+                    .col(ColumnDef::new(Alias::new("interval_hours")).integer().not_null().default(24))
+                    // 0-23, only used when schedule_type = 'daily'
+                    .col(ColumnDef::new(Alias::new("daily_hour")).integer().null())
                     .col(ColumnDef::new(Alias::new("next_run_at")).timestamp().not_null())
                     .col(ColumnDef::new(Alias::new("created_at")).timestamp().not_null())
                     .to_owned(),

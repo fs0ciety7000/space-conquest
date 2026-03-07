@@ -251,7 +251,7 @@ pub async fn create_route_handler(
         clamp_ratio(payload.metal_ratio), clamp_ratio(payload.crystal_ratio), clamp_ratio(payload.deuterium_ratio),
         next_run.format("%Y-%m-%d %H:%M:%S"),
         now.format("%Y-%m-%d %H:%M:%S"),
-    )).await.unwrap_or_default();
+    )).await.ok();
 
     match route_to_json(db, &route_id.to_string()).await {
         Some(r) => (StatusCode::CREATED, Json(json!({"route": r}))).into_response(),
@@ -308,7 +308,7 @@ pub async fn update_route_handler(
         "UPDATE trade_route SET {} WHERE id = '{}'",
         sets.join(", "), route_id
     );
-    db.execute_unprepared(&sql).await.unwrap_or_default();
+    let _ = db.execute_unprepared(&sql).await;
 
     match route_to_json(db, &route_id.to_string()).await {
         Some(r) => Json(json!({"route": r})).into_response(),
@@ -343,12 +343,12 @@ pub async fn delete_route_handler(
         return StatusCode::FORBIDDEN.into_response();
     }
 
-    db.execute_unprepared(&format!(
+    let _ = db.execute_unprepared(&format!(
         "DELETE FROM trade_route_log WHERE trade_route_id = '{}'", route_id
-    )).await.unwrap_or_default();
-    db.execute_unprepared(&format!(
+    )).await;
+    let _ = db.execute_unprepared(&format!(
         "DELETE FROM trade_route WHERE id = '{}'", route_id
-    )).await.unwrap_or_default();
+    )).await;
 
     StatusCode::NO_CONTENT.into_response()
 }

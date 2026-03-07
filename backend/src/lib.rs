@@ -21,6 +21,7 @@ pub mod tick_system;
 pub mod maintenance;
 pub mod protection;
 pub mod trade_routes;
+pub mod build_queue;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::ServerConfig, server_config};

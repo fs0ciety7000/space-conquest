@@ -41,7 +41,7 @@ use sea_orm::sea_query::extension::postgres::PgExpr;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin, admin_content,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -226,6 +226,7 @@ async fn main() {
     let config_trade = std::sync::Arc::new(std::sync::RwLock::new(
         backend::ServerConfigCache::load_from_db(&db).await
     ));
+    let config_tick = config_trade.clone();
 
     let state = AppState {
         db,
@@ -443,6 +444,11 @@ async fn main() {
         .route("/trade-routes/:id", patch(trade_routes::update_route_handler))
         .route("/trade-routes/:id", delete(trade_routes::delete_route_handler))
         .route("/trade-routes/:id/logs", get(trade_routes::get_route_logs_handler))
+        // Build Queue
+        .route("/planets/:id/build-queue", get(build_queue::get_queue_status_handler))
+        .route("/planets/:id/build-queue", post(build_queue::add_to_queue_handler))
+        .route("/planets/:id/build-queue/reorder", put(build_queue::reorder_queue_handler))
+        .route("/build-queue/:item_id", delete(build_queue::remove_from_queue_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -492,7 +498,8 @@ async fn main() {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(2));
         loop {
             interval.tick().await;
-            match tick_system::process_tick(&db_tick).await {
+            let config = config_tick.read().unwrap().clone();
+            match tick_system::process_tick(&db_tick, &config).await {
                 Ok(stats) => {
                     if stats.research_completed > 0 || stats.ships_completed > 0 ||
                        stats.defenses_completed > 0 || stats.buildings_completed > 0 {
@@ -6846,7 +6853,8 @@ async fn expedition_v2_handler(
 async fn tick_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    match tick_system::process_tick(&state.db).await {
+    let config = state.config.read().unwrap().clone();
+    match tick_system::process_tick(&state.db, &config).await {
         Ok(stats) => {
             Json(json!({
                 "success": true,
