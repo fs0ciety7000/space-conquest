@@ -193,7 +193,7 @@ pub async fn get_suggested_price_handler(
     )).await.ok().flatten();
 
     let listing = existing.map(|r| json!({
-        "id": r.try_get::<String>("", "id").ok(),
+        "id": r.try_get::<Uuid>("", "id").ok().map(|u| u.to_string()),
         "listing_type": r.try_get::<String>("", "listing_type").ok(),
         "asking_price_metal": r.try_get::<i64>("", "asking_price_metal").ok(),
         "asking_price_crystal": r.try_get::<i64>("", "asking_price_crystal").ok(),
@@ -401,9 +401,9 @@ pub async fn get_planet_listings_handler(
 
     let listings: Vec<serde_json::Value> = rows.iter().map(|r| {
         json!({
-            "id": r.try_get::<String>("", "id").ok(),
-            "planet_id": r.try_get::<String>("", "planet_id").ok(),
-            "seller_id": r.try_get::<String>("", "seller_id").ok(),
+            "id": r.try_get::<Uuid>("", "id").ok().map(|u| u.to_string()),
+            "planet_id": r.try_get::<Uuid>("", "planet_id").ok().map(|u| u.to_string()),
+            "seller_id": r.try_get::<Uuid>("", "seller_id").ok().map(|u| u.to_string()),
             "seller_name": r.try_get::<String>("", "seller_name").ok(),
             "listing_type": r.try_get::<String>("", "listing_type").ok(),
             "asking_price_metal": r.try_get::<i64>("", "asking_price_metal").ok(),
@@ -752,11 +752,11 @@ pub async fn get_listing_details_handler(
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Listing not found"}))).into_response(),
     };
 
-    let planet_id_str = row.try_get::<String>("", "planet_id").unwrap_or_default();
-    let planet_id = match Uuid::parse_str(&planet_id_str) {
+    let planet_id = match row.try_get::<Uuid>("", "planet_id") {
         Ok(id) => id,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "bad planet id"}))).into_response(),
     };
+    let planet_id_str = planet_id.to_string();
 
     // Buildings
     let buildings: Vec<serde_json::Value> = db.query_all(Statement::from_string(
@@ -827,9 +827,9 @@ pub async fn get_listing_details_handler(
     })).collect();
 
     Json(json!({
-        "id": row.try_get::<String>("", "id").ok(),
+        "id": row.try_get::<Uuid>("", "id").ok().map(|u| u.to_string()),
         "planet_id": planet_id_str,
-        "seller_id": row.try_get::<String>("", "seller_id").ok(),
+        "seller_id": row.try_get::<Uuid>("", "seller_id").ok().map(|u| u.to_string()),
         "seller_name": row.try_get::<String>("", "seller_name").ok(),
         "listing_type": row.try_get::<String>("", "listing_type").ok(),
         "asking_price_metal": row.try_get::<i64>("", "asking_price_metal").ok(),

@@ -67,7 +67,7 @@ export default function SellView({ planet, userId, onUpdate, onStatsUpdate }: Se
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(apiUrl(`/market/listings/${listingId}`), {
+      const res = await fetch(apiUrl(`/market/listings/${listingId}?user_id=${userId}`), {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -78,8 +78,10 @@ export default function SellView({ planet, userId, onUpdate, onStatsUpdate }: Se
         onUpdate();
         onStatsUpdate();
       } else {
-        const err = await res.json();
-        toast.error(err.error || "Erreur lors de la suppression");
+        const text = await res.text();
+        let message = "Erreur lors de la suppression";
+        try { message = JSON.parse(text).error || message; } catch { /* empty body */ }
+        toast.error(message);
       }
     } catch (e) {
       console.error(e);

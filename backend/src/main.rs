@@ -344,6 +344,7 @@ async fn main() {
         .route("/market/listings", get(get_market_listings_handler))
         .route("/market/listings", post(create_market_listing_handler))
         .route("/market/listings/:id", delete(cancel_market_listing_handler))
+        .route("/market/listings/:id/buy", post(buy_from_listing_by_path_handler))
         .route("/market/buy", post(buy_from_listing_handler))
         .route("/market/npc/buy", post(buy_from_npc_handler))
         .route("/market/transactions", get(get_market_transactions_handler))
@@ -3909,7 +3910,7 @@ async fn get_my_planets_handler(
                     format!("SELECT planet_id FROM planet_listings WHERE seller_id = '{}' AND is_active = true", owner_id)
                 )
             ).await.unwrap_or_default().into_iter()
-             .filter_map(|r| r.try_get::<String>("", "planet_id").ok().and_then(|s| uuid::Uuid::parse_str(&s).ok()))
+             .filter_map(|r| r.try_get::<uuid::Uuid>("", "planet_id").ok())
              .collect();
             if !listed_ids.is_empty() {
                 my_planets.retain(|pl| !listed_ids.contains(&pl.id));
@@ -5030,26 +5031,24 @@ async fn create_market_listing_handler(
 async fn cancel_market_listing_handler(
     Path(listing_id): Path<Uuid>,
     State(state): State<AppState>,
-    headers: axum::http::HeaderMap, // ← Ajoutez headers
+    Query(params): Query<std::collections::HashMap<String, String>>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let db = &state.db;
 
-     // Extraire le token du header Authorization
-    let auth_header = headers
-        .get("Authorization")
-        .and_then(|h| h.to_str().ok())
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    // Format: "Bearer jwt-{uuid}"
-    let token = auth_header
-        .strip_prefix("Bearer ")
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    // Extraire user_id du token
-    let user_id = extract_user_id_from_token(token)
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    println!("🗑️  User {} deleting listing {}", user_id, listing_id);
+    // Accept user_id from query param OR from JWT token
+    let user_id: Uuid = if let Some(id_str) = params.get("user_id") {
+        Uuid::parse_str(id_str).map_err(|_| StatusCode::BAD_REQUEST)?
+    } else {
+        let auth_header = headers
+            .get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+        let token = auth_header
+            .strip_prefix("Bearer ")
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+        extract_user_id_from_token(token).ok_or(StatusCode::UNAUTHORIZED)?
+    };
 
     // Get listing
     let listing = MarketListing::find_by_id(listing_id)
@@ -5097,6 +5096,30 @@ async fn cancel_market_listing_handler(
             "deuterium_amount": updated_planet.deuterium_amount,
         }
     })))
+}
+
+// POST /market/listings/:id/buy - Buy from player listing (listing_id in path)
+#[derive(Deserialize)]
+struct BuyFromListingByPathPayload {
+    buyer_planet_id: Uuid,
+    buyer_user_id: Uuid,
+    quantity: f64,
+}
+
+async fn buy_from_listing_by_path_handler(
+    Path(listing_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<BuyFromListingByPathPayload>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    buy_from_listing_handler(
+        State(state),
+        Json(BuyFromListingPayload {
+            listing_id,
+            buyer_planet_id: payload.buyer_planet_id,
+            buyer_user_id: payload.buyer_user_id,
+            quantity: payload.quantity,
+        }),
+    ).await
 }
 
 // POST /market/buy - Buy from player listing
