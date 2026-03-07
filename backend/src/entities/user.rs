@@ -20,6 +20,8 @@ pub struct Model {
     pub bio: Option<String>,
     pub last_login: Option<chrono::NaiveDateTime>,
     pub display_name: Option<String>,
+    #[sea_orm(column_type = "Double", default_value = 0.0)]
+    pub syndicate_credits: f64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

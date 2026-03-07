@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
-import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery, Radio } from 'lucide-react';
+import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery, Radio, Skull, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -112,7 +112,7 @@ interface Announcement {
   updated_at: string;
 }
 
-type AdminTab = 'players' | 'stats' | 'users' | 'config' | 'announcements' | 'content';
+type AdminTab = 'players' | 'stats' | 'users' | 'config' | 'announcements' | 'content' | 'black_market';
 
 interface ConfigCategory {
   id: string;
@@ -378,6 +378,16 @@ export default function AdminPanel() {
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '', type: 'info', is_active: true });
 
+  // Black market CRUD state
+  const [bmItems, setBmItems] = useState<any[]>([]);
+  const [bmLoading, setBmLoading] = useState(false);
+  const [bmEditingItem, setBmEditingItem] = useState<any | null>(null);
+  const [bmNewItem, setBmNewItem] = useState({
+    name: '', description: '', image_key: 'placeholder',
+    effect_type: 'orbital_strike', effect_params: '{"flight_hours": 12}',
+    base_price: 100, is_active: true,
+  });
+
   const token = localStorage.getItem('token');
   const currentUsername = localStorage.getItem('username');
   const userId = localStorage.getItem('user_id');
@@ -411,7 +421,75 @@ export default function AdminPanel() {
     if (activeTab === 'announcements') {
       fetchAnnouncements();
     }
+    if (activeTab === 'black_market') {
+      fetchBmItems();
+    }
   }, [activeTab]);
+
+  // ── Black Market admin functions ──────────────────────────────────────────
+  const fetchBmItems = async () => {
+    setBmLoading(true);
+    try {
+      const res = await fetch(apiUrl('/admin/black-market/items'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBmItems(data.items || []);
+      }
+    } catch { /* ignore */ } finally {
+      setBmLoading(false);
+    }
+  };
+
+  const createBmItem = async () => {
+    let parsed: unknown;
+    try { parsed = JSON.parse(bmNewItem.effect_params); } catch {
+      toast.error('effect_params invalide (doit être du JSON)'); return;
+    }
+    const res = await fetch(apiUrl('/admin/black-market/items'), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...bmNewItem, effect_params: parsed }),
+    });
+    if (res.ok) {
+      toast.success('Objet créé');
+      fetchBmItems();
+      setBmNewItem({ name: '', description: '', image_key: 'placeholder', effect_type: 'orbital_strike', effect_params: '{"flight_hours": 12}', base_price: 100, is_active: true });
+    } else {
+      toast.error('Erreur lors de la création');
+    }
+  };
+
+  const updateBmItem = async () => {
+    if (!bmEditingItem) return;
+    let parsed: unknown;
+    try { parsed = JSON.parse(typeof bmEditingItem.effect_params === 'string' ? bmEditingItem.effect_params : JSON.stringify(bmEditingItem.effect_params)); } catch {
+      toast.error('effect_params invalide (doit être du JSON)'); return;
+    }
+    const res = await fetch(apiUrl(`/admin/black-market/items/${bmEditingItem.id}`), {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...bmEditingItem, effect_params: parsed }),
+    });
+    if (res.ok) {
+      toast.success('Objet mis à jour');
+      fetchBmItems();
+      setBmEditingItem(null);
+    } else {
+      toast.error('Erreur lors de la mise à jour');
+    }
+  };
+
+  const deleteBmItem = async (id: string) => {
+    if (!confirm('Supprimer cet objet ?')) return;
+    const res = await fetch(apiUrl(`/admin/black-market/items/${id}`), {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) { toast.success('Objet supprimé'); fetchBmItems(); }
+    else toast.error('Erreur lors de la suppression');
+  };
 
   const fetchPlayers = async () => {
     try {
@@ -742,6 +820,18 @@ export default function AdminPanel() {
         >
           <Package size={16} />
           Contenu
+        </Button>
+        <Button
+          variant={activeTab === 'black_market' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('black_market')}
+          className={`flex items-center gap-2 transition-all duration-300 ${
+            activeTab === 'black_market'
+              ? 'bg-red-700 hover:bg-red-600 text-white card-depth shadow-lg'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <Skull size={16} />
+          Marché Underground
         </Button>
       </div>
 
@@ -2101,6 +2191,273 @@ export default function AdminPanel() {
       {/* TAB CONTENT */}
       {activeTab === 'content' && (
         <AdminContentManager />
+      )}
+
+      {/* TAB BLACK MARKET */}
+      {activeTab === 'black_market' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-red-950/40 border border-red-700/40">
+                <Skull size={20} className="text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-white">Marché Underground</h2>
+                <p className="text-xs text-slate-500">Gestion des objets du marché noir</p>
+              </div>
+            </div>
+            <button
+              onClick={fetchBmItems}
+              disabled={bmLoading}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700/40 bg-slate-900/40 hover:bg-slate-800/60 text-slate-400 text-xs transition-all disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={bmLoading ? 'animate-spin' : ''} />
+              Actualiser
+            </button>
+          </div>
+
+          {/* Create new item form */}
+          <Card className="bg-slate-950/60 border-red-700/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-bold text-red-400 flex items-center gap-2">
+                <Plus size={14} />
+                Nouvel objet
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Nom</label>
+                  <Input
+                    value={bmNewItem.name}
+                    onChange={(e) => setBmNewItem({ ...bmNewItem, name: e.target.value })}
+                    placeholder="Frappe Orbitale Anonyme"
+                    className="bg-black/40 border-red-700/20 text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Clé image</label>
+                  <Input
+                    value={bmNewItem.image_key}
+                    onChange={(e) => setBmNewItem({ ...bmNewItem, image_key: e.target.value })}
+                    placeholder="orbital_strike"
+                    className="bg-black/40 border-red-700/20 text-white text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Description</label>
+                <Input
+                  value={bmNewItem.description}
+                  onChange={(e) => setBmNewItem({ ...bmNewItem, description: e.target.value })}
+                  placeholder="Envoie une flotte de pirates anonyme..."
+                  className="bg-black/40 border-red-700/20 text-white text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Type d'effet</label>
+                  <select
+                    value={bmNewItem.effect_type}
+                    onChange={(e) => setBmNewItem({ ...bmNewItem, effect_type: e.target.value })}
+                    className="w-full bg-black/40 border border-red-700/20 text-white text-sm rounded-md px-3 py-2"
+                  >
+                    <option value="orbital_strike">orbital_strike</option>
+                    <option value="resource_boost">resource_boost</option>
+                    <option value="stealth">stealth</option>
+                    <option value="coordinate_jam">coordinate_jam</option>
+                    <option value="eco_virus">eco_virus</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Prix de base (SC)</label>
+                  <Input
+                    type="number"
+                    value={bmNewItem.base_price}
+                    onChange={(e) => setBmNewItem({ ...bmNewItem, base_price: Number(e.target.value) })}
+                    className="bg-black/40 border-red-700/20 text-white text-sm"
+                  />
+                </div>
+                <div className="flex items-end gap-2 pb-0.5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bmNewItem.is_active}
+                      onChange={(e) => setBmNewItem({ ...bmNewItem, is_active: e.target.checked })}
+                      className="w-4 h-4 accent-red-600"
+                    />
+                    <span className="text-sm text-slate-300">Actif</span>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Paramètres d'effet (JSON)</label>
+                <textarea
+                  value={bmNewItem.effect_params}
+                  onChange={(e) => setBmNewItem({ ...bmNewItem, effect_params: e.target.value })}
+                  rows={2}
+                  className="w-full bg-black/40 border border-red-700/20 text-white font-mono text-xs p-2 rounded-md resize-none"
+                  placeholder='{"flight_hours": 12}'
+                />
+              </div>
+              <button
+                onClick={createBmItem}
+                disabled={!bmNewItem.name || bmLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white text-sm font-bold transition-all disabled:opacity-50"
+              >
+                <Plus size={14} />
+                Créer l'objet
+              </button>
+            </CardContent>
+          </Card>
+
+          {/* Items list */}
+          <div className="space-y-3">
+            {bmLoading && (
+              <div className="text-center py-8 text-slate-500 text-sm">
+                <RefreshCw size={18} className="animate-spin mx-auto mb-2" />
+                Chargement...
+              </div>
+            )}
+            {!bmLoading && bmItems.length === 0 && (
+              <div className="text-center py-8 text-slate-600 text-sm border border-slate-800 rounded-xl">
+                Aucun objet trouvé
+              </div>
+            )}
+            {bmItems.map((item) => (
+              <Card key={item.id} className={`bg-slate-950/60 ${item.is_active ? 'border-red-700/20' : 'border-slate-800/40'}`}>
+                <CardContent className="p-4">
+                  {bmEditingItem?.id === item.id ? (
+                    /* Edit mode */
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Nom</label>
+                          <Input
+                            value={bmEditingItem.name}
+                            onChange={(e) => setBmEditingItem({ ...bmEditingItem, name: e.target.value })}
+                            className="bg-black/40 border-red-700/20 text-white text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Clé image</label>
+                          <Input
+                            value={bmEditingItem.image_key}
+                            onChange={(e) => setBmEditingItem({ ...bmEditingItem, image_key: e.target.value })}
+                            className="bg-black/40 border-red-700/20 text-white text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Description</label>
+                        <Input
+                          value={bmEditingItem.description}
+                          onChange={(e) => setBmEditingItem({ ...bmEditingItem, description: e.target.value })}
+                          className="bg-black/40 border-red-700/20 text-white text-sm"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Type d'effet</label>
+                          <select
+                            value={bmEditingItem.effect_type}
+                            onChange={(e) => setBmEditingItem({ ...bmEditingItem, effect_type: e.target.value })}
+                            className="w-full bg-black/40 border border-red-700/20 text-white text-sm rounded-md px-3 py-2"
+                          >
+                            <option value="orbital_strike">orbital_strike</option>
+                            <option value="resource_boost">resource_boost</option>
+                            <option value="stealth">stealth</option>
+                            <option value="coordinate_jam">coordinate_jam</option>
+                            <option value="eco_virus">eco_virus</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Prix de base (SC)</label>
+                          <Input
+                            type="number"
+                            value={bmEditingItem.base_price}
+                            onChange={(e) => setBmEditingItem({ ...bmEditingItem, base_price: Number(e.target.value) })}
+                            className="bg-black/40 border-red-700/20 text-white text-sm"
+                          />
+                        </div>
+                        <div className="flex items-end gap-2 pb-0.5">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={bmEditingItem.is_active}
+                              onChange={(e) => setBmEditingItem({ ...bmEditingItem, is_active: e.target.checked })}
+                              className="w-4 h-4 accent-red-600"
+                            />
+                            <span className="text-sm text-slate-300">Actif</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Paramètres d'effet (JSON)</label>
+                        <textarea
+                          value={typeof bmEditingItem.effect_params === 'string' ? bmEditingItem.effect_params : JSON.stringify(bmEditingItem.effect_params, null, 2)}
+                          onChange={(e) => setBmEditingItem({ ...bmEditingItem, effect_params: e.target.value })}
+                          rows={2}
+                          className="w-full bg-black/40 border border-red-700/20 text-white font-mono text-xs p-2 rounded-md resize-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={updateBmItem}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-bold transition-all"
+                        >
+                          <Save size={12} />
+                          Enregistrer
+                        </button>
+                        <button
+                          onClick={() => setBmEditingItem(null)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700/40 bg-slate-900/40 hover:bg-slate-800/60 text-slate-400 text-xs transition-all"
+                        >
+                          <X size={12} />
+                          Annuler
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* View mode */
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-sm font-bold ${item.is_active ? 'text-white' : 'text-slate-500'}`}>{item.name}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-mono bg-red-950/40 text-red-400 border border-red-800/30">{item.effect_type}</span>
+                          {!item.is_active && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/60 text-slate-500 border border-slate-700/30">inactif</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mb-2 truncate">{item.description}</p>
+                        <div className="flex items-center gap-4 text-[10px] text-slate-600">
+                          <span>Base: <span className="text-yellow-600 font-mono font-bold">{item.base_price} SC</span></span>
+                          <span>Actuel: <span className="text-yellow-500 font-mono font-bold">{Number(item.current_price).toFixed(0)} SC</span></span>
+                          <span className="font-mono text-slate-700 truncate max-w-[180px]">{JSON.stringify(item.effect_params)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => setBmEditingItem({ ...item, effect_params: JSON.stringify(item.effect_params) })}
+                          className="p-1.5 rounded-lg border border-slate-700/40 bg-slate-900/40 hover:bg-slate-800/60 text-slate-400 hover:text-white transition-all"
+                        >
+                          <Edit size={13} />
+                        </button>
+                        <button
+                          onClick={() => deleteBmItem(item.id)}
+                          className="p-1.5 rounded-lg border border-red-900/30 bg-red-950/20 hover:bg-red-900/30 text-red-600 hover:text-red-400 transition-all"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

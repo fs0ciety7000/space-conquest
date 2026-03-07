@@ -75,6 +75,9 @@ mod m20260307_000001_trade_routes;
 mod m20260307_000002_build_queue;
 mod m20260307_000003_planet_market;
 mod m20260307_000004_ship_building_requirements;
+mod m20260307_000005_syndicate_credits;
+mod m20260307_000006_black_market;
+mod m20260307_000007_black_market_seed;
 
 pub struct Migrator;
 
@@ -157,6 +160,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260307_000002_build_queue::Migration),
             Box::new(m20260307_000003_planet_market::Migration),
             Box::new(m20260307_000004_ship_building_requirements::Migration),
+            Box::new(m20260307_000005_syndicate_credits::Migration),
+            Box::new(m20260307_000006_black_market::Migration),
+            Box::new(m20260307_000007_black_market_seed::Migration),
         ]
     }
 }

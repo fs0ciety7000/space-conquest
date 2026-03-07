@@ -41,7 +41,7 @@ use sea_orm::sea_query::extension::postgres::PgExpr;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin, admin_content,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, black_market, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -190,7 +190,7 @@ pub struct UserResponse {
     id: Uuid,
     username: String,
     email: String,
-    
+    syndicate_credits: f64,
 }
 
 
@@ -223,6 +223,7 @@ async fn main() {
     let db_cleanup = db.clone();
     let db_tick = db.clone();
     let db_trade = db.clone();
+    let db_black_market = db.clone();
     let config_trade = std::sync::Arc::new(std::sync::RwLock::new(
         backend::ServerConfigCache::load_from_db(&db).await
     ));
@@ -462,6 +463,20 @@ async fn main() {
         .route("/market/planets/listings/:listing_id", delete(planet_market::cancel_listing_handler))
         .route("/market/planets/listings/:listing_id/buy", post(planet_market::buy_planet_handler))
         .route("/market/planets/listings/:listing_id/sell-npc", post(planet_market::sell_to_npc_handler))
+
+        // ── Underground Black Market ────────────────────────────────────────
+        .route("/black-market", get(black_market::list_items_handler))
+        .route("/black-market/buy", post(black_market::buy_item_handler))
+        .route("/black-market/inventory", get(black_market::get_inventory_handler))
+        .route("/black-market/activate", post(black_market::activate_item_handler))
+        .route("/black-market/extortions", get(black_market::list_extortions_handler))
+        .route("/black-market/extortions/:id/resolve", post(black_market::resolve_extortion_handler))
+        // Admin routes for black market item management
+        .route("/admin/black-market/items", get(black_market::admin_list_items_handler))
+        .route("/admin/black-market/items", post(black_market::admin_create_item_handler))
+        .route("/admin/black-market/items/:id", put(black_market::admin_update_item_handler))
+        .route("/admin/black-market/items/:id", delete(black_market::admin_delete_item_handler))
+
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -537,6 +552,18 @@ async fn main() {
         }
     });
     println!("🚚 Trade route background task started (interval: 1h)");
+
+    // Black market price fluctuation (every 6 hours)
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
+            black_market::PRICE_TICK_INTERVAL_SECS as u64,
+        ));
+        loop {
+            interval.tick().await;
+            black_market::randomize_black_market_prices(&db_black_market).await;
+        }
+    });
+    println!("💰 Black market price fluctuation started (interval: 6h)");
 
     println!("🚀 SPEED_GAME Backend opérationnel sur http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -4339,7 +4366,7 @@ pub async fn get_user_by_id(
                 id: u.id,
                 username: u.username,
                 email: u.email,
-               
+                syndicate_credits: u.syndicate_credits,
             };
             (StatusCode::OK, Json(response)).into_response()
         }
@@ -6892,6 +6919,23 @@ async fn expedition_v2_handler(
     let flagship_xp = if winner == "victory" || winner == "calm" { 10 } else { 5 };
     award_flagship_xp(&state.db, planet.owner_id, flagship_xp).await;
 
+    // Syndicate Credits — random reward from expedition (configurable chance, 1-2 SC)
+    let sc_chance = config.get_config("expedition_syndicate_credit_chance", 0.10);
+    let sc_min = config.get_config("expedition_syndicate_credit_min", 1.0);
+    let sc_max = config.get_config("expedition_syndicate_credit_max", 2.0);
+    let syndicate_credits_earned = if rand::random::<f64>() < sc_chance {
+        let credits = sc_min + (rand::random::<f64>() * (sc_max - sc_min)).round();
+        if let Ok(Some(owner)) = User::find_by_id(planet.owner_id).one(&state.db).await {
+            let new_total = owner.syndicate_credits + credits;
+            let mut user_active: user::ActiveModel = owner.into();
+            user_active.syndicate_credits = Set(new_total);
+            let _ = user_active.update(&state.db).await;
+        }
+        credits
+    } else {
+        0.0
+    };
+
     // Build response
     Json(json!({
         "success": true,
@@ -6902,6 +6946,7 @@ async fn expedition_v2_handler(
             "crystal": final_crystal,
             "deuterium": final_deuterium
         },
+        "syndicate_credits_earned": syndicate_credits_earned,
         "duration_seconds": duration
     })).into_response()
 }

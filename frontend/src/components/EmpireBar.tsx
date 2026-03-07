@@ -15,7 +15,8 @@ import {
   Search,
   Wifi,
   WifiOff,
-  Crown
+  Crown,
+  Coins,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -78,6 +79,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     mining_speed_multiplier: 1.0
   });
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [syndicateCredits, setSyndicateCredits] = useState<number | null>(null);
 
   // Hook pour ressources en temps réel
   const realtimeResources = useRealtimeResources(planet, speedFactor, config);
@@ -148,6 +150,27 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
 
     fetchMyPlanets();
   }, [planet?.id]);
+
+  // Fetch syndicate credits (per user, not per planet)
+  useEffect(() => {
+    if (!planet?.owner_id) return;
+    const fetchCredits = async () => {
+      try {
+        const res = await fetch(apiUrl(`/users/${planet.owner_id}`));
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.syndicate_credits === 'number') {
+            setSyndicateCredits(data.syndicate_credits);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    fetchCredits();
+    const id = setInterval(fetchCredits, 30_000);
+    return () => clearInterval(id);
+  }, [planet?.owner_id]);
 
   // Charger les slots pour calculer la production réelle
   useEffect(() => {
@@ -425,7 +448,30 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             <ResourceItem icon={Stone} value={realtimeResources?.metal ?? planet.metal_amount} label="Métal" color="text-orange-300" production={prodMetal} max={storageCapacity} />
             <ResourceItem icon={Gem} value={realtimeResources?.crystal ?? planet.crystal_amount} label="Cristal" color="text-cyan-300" production={prodCrystal} max={storageCapacity} />
             <ResourceItem icon={Droplets} value={realtimeResources?.deuterium ?? planet.deuterium_amount} label="Deutérium" color="text-green-300" production={prodDeut} max={storageCapacity} />
-            
+
+            {/* CRÉDITS DU SYNDICAT */}
+            {syndicateCredits !== null && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-yellow-600/25 bg-yellow-950/15 cursor-help card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300 hover:border-yellow-500/40">
+                      <Coins size={15} className="text-yellow-400 shrink-0" />
+                      <span className="font-mono text-sm font-black text-yellow-400 min-w-8 text-right">
+                        {syndicateCredits.toFixed(0)}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
+                    <div className="text-xs space-y-1">
+                      <p className="text-yellow-400 font-bold">Crédits du Syndicat</p>
+                      <p className="text-slate-400">Obtenables via les expéditions.</p>
+                      <p className="text-slate-400">Utilisables au Marché Underground.</p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
             {/* ÉNERGIE */}
             <TooltipProvider>
               <Tooltip>

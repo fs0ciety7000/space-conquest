@@ -71,3 +71,8 @@ pub use super :: flagship_module :: Entity as FlagshipModule ;
 
 // Auth system
 pub use super :: password_reset_token :: Entity as PasswordResetToken ;
+
+// Black market system
+pub use super :: black_market_item :: Entity as BlackMarketItem ;
+pub use super :: user_inventory :: Entity as UserInventory ;
+pub use super :: pirate_extortion :: Entity as PirateExtortion ;

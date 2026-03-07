@@ -1,5 +1,22 @@
 # Changelog - Space Conquest
 
+## [7.1.0] - 2026-03-07 - Marché Underground & Crédits du Syndicat
+
+### ✨ Nouvelles Fonctionnalités
+
+- **Crédits du Syndicat (SC)** : nouvelle monnaie secrète gagnée aléatoirement lors des expéditions (10% de chance, configurable dans le panel admin). Affichée dans la barre d'empire.
+- **Marché Underground** : accessible aux joueurs ayant Technologie d'Espionnage ≥ 13 et Informatique ≥ 10. Marché secret avec objets spéciaux achetables en SC. Les prix fluctuent toutes les 6 heures (±30% à +50% du prix de base).
+- **Inventaire** : vos objets achetés sont accessibles depuis le marché underground. Utilisez-les directement depuis l'interface.
+- **Frappe Orbitale Anonyme** : objet spécial qui envoie une flotte de pirates PNJ vers n'importe quelle planète ennemie en 12h. L'identité de l'instigateur reste secrète.
+- **Modal d'Extorsion Pirates** : lorsqu'une flotte pirate approche, un écran d'alerte s'affiche avec 3 choix :
+  - *Laisser faire* — les pirates pillent ~20% des ressources (gratuit)
+  - *Payer un tribut* — les pirates repartent et l'identité de l'instigateur est révélée (50 SC)
+  - *Contre-attaque* — les pirates font demi-tour et attaquent la planète mère de l'instigateur (120 SC)
+- **Panel Admin — Marché Underground** : nouvel onglet permettant de créer, modifier et supprimer les objets du marché (nom, description, type d'effet, paramètres JSON, prix de base, statut actif/inactif).
+- **Config serveur** : 3 nouvelles clés configurables dans le panel admin : `expedition_syndicate_credit_chance` (défaut 0.10), `expedition_syndicate_credit_min` (défaut 1.0), `expedition_syndicate_credit_max` (défaut 2.0).
+
+---
+
 ## [7.0.0] - 2026-03-07 - File de Construction : Séquentialité des Niveaux
 
 ### 🔧 Corrections

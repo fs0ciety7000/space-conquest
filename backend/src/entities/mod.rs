@@ -76,3 +76,8 @@ pub mod password_reset_token;
 
 // Planet market
 pub mod planet_listing;
+
+// Black market (underground) system
+pub mod black_market_item;
+pub mod user_inventory;
+pub mod pirate_extortion;
