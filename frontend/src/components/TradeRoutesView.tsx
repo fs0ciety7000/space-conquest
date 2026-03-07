@@ -148,7 +148,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
           galaxy: p.galaxy,
           system: p.system,
           position: p.position,
-          grand_cargo_count: p.ships?.grand_cargo ?? 0,
+          grand_cargo_count: (p.ships?.grand_cargo?.count ?? p.ships?.grand_cargo ?? 0) as number,
         }));
         setMyPlanets(planets);
       }

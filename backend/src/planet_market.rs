@@ -106,7 +106,7 @@ async fn compute_suggested_price(
         format!(
             "SELECT COALESCE(SUM((st.cost_metal + st.cost_crystal + st.cost_deuterium) * ps.count::float), 0)::BIGINT AS val \
              FROM planet_ships ps \
-             JOIN ship_types st ON st.ship_key = ps.ship_key \
+             JOIN ship_types st ON st.id = ps.ship_type_id \
              WHERE ps.planet_id = '{}' AND ps.count > 0",
             planet_id
         ),
@@ -120,7 +120,7 @@ async fn compute_suggested_price(
         format!(
             "SELECT COALESCE(SUM((dt.cost_metal + dt.cost_crystal + dt.cost_deuterium) * pd.count::float), 0)::BIGINT AS val \
              FROM planet_defenses pd \
-             JOIN defense_types dt ON dt.defense_key = pd.defense_key \
+             JOIN defense_types dt ON dt.id = pd.defense_type_id \
              WHERE pd.planet_id = '{}' AND pd.count > 0",
             planet_id
         ),
@@ -744,9 +744,9 @@ pub async fn get_listing_details_handler(
     let ships: Vec<serde_json::Value> = db.query_all(Statement::from_string(
         DbBackend::Postgres,
         format!(
-            "SELECT ps.ship_key AS key, st.name, ps.count \
+            "SELECT st.ship_key AS key, st.name, ps.count \
              FROM planet_ships ps \
-             JOIN ship_types st ON st.ship_key = ps.ship_key \
+             JOIN ship_types st ON st.id = ps.ship_type_id \
              WHERE ps.planet_id = '{}' AND ps.count > 0 \
              ORDER BY ps.count DESC",
             planet_id
@@ -761,9 +761,9 @@ pub async fn get_listing_details_handler(
     let defenses: Vec<serde_json::Value> = db.query_all(Statement::from_string(
         DbBackend::Postgres,
         format!(
-            "SELECT pd.defense_key AS key, dt.name, pd.count \
+            "SELECT dt.defense_key AS key, dt.name, pd.count \
              FROM planet_defenses pd \
-             JOIN defense_types dt ON dt.defense_key = pd.defense_key \
+             JOIN defense_types dt ON dt.id = pd.defense_type_id \
              WHERE pd.planet_id = '{}' AND pd.count > 0 \
              ORDER BY pd.count DESC",
             planet_id

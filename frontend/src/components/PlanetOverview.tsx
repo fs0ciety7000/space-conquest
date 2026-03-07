@@ -228,6 +228,28 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     }
   };
 
+  const cancelResearch = async (techKey: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/cancel-research/${techKey}`), {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const total = data.refund_metal + data.refund_crystal + data.refund_deuterium;
+        toast.success("Recherche annulée", {
+          description: `Remboursement de ${Math.floor(total).toLocaleString()} ressources (${Math.round(data.refund_ratio * 100)}%).`
+        });
+        onUpdate();
+      } else {
+        toast.error("Erreur lors de l'annulation");
+      }
+    } catch (e) {
+      toast.error("Serveur injoignable");
+    }
+  };
+
   const cancelDefenseBuild = async (defenseKey: string) => {
     const token = localStorage.getItem('token');
     try {
@@ -322,10 +344,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
   const fmt = (n: number) => Math.floor(n).toLocaleString();
 
-  // Combine all construction queues: buildings/tech + ships + defenses
+  // Combine all construction queues: buildings/tech + ships + defenses + research
   const buildingQueue = planet.constructions || [];
   const shipBuilds = planet.ship_builds || [];
   const defenseBuilds = planet.defense_builds || [];
+  const researchQueue = planet.research_queue || [];
 
   // Create a unified queue with all construction types
   const constructionQueue = [
@@ -345,6 +368,13 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
       level: db.building_count, // quantity
       is_defense: true,
       name: db.name
+    })),
+    ...researchQueue.map((r: any) => ({
+      id: `research_${r.tech_key}`,
+      building_type: r.tech_key,
+      end_time: r.end_time,
+      level: r.target_level,
+      is_research: true,
     }))
   ].sort((a, b) => new Date(a.end_time).getTime() - new Date(b.end_time).getTime());
 
@@ -635,7 +665,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                                     <Clock size={12} className={index === 0 ? "animate-spin-slow drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" : ""} />
                                                     <span className="font-black text-sm">{formatDuration(tl)}</span>
                                                 </div>
-                                                {/* Cancel button for all queue items */}
+                                                {/* Cancel button */}
                                                 <div className="relative group/cancel">
                                                     <button
                                                         onClick={() => {
@@ -643,6 +673,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                                                 cancelShipBuild(item.building_type);
                                                             } else if (item.is_defense) {
                                                                 cancelDefenseBuild(item.building_type);
+                                                            } else if (item.is_research) {
+                                                                cancelResearch(item.building_type);
                                                             } else {
                                                                 cancelOperation(item.id);
                                                             }
