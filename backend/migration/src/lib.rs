@@ -73,6 +73,7 @@ mod m20260306_000008_password_reset;
 mod m20260306_000009_add_display_name;
 mod m20260307_000001_trade_routes;
 mod m20260307_000002_build_queue;
+mod m20260307_000003_planet_market;
 
 pub struct Migrator;
 
@@ -153,6 +154,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260306_000009_add_display_name::Migration),
             Box::new(m20260307_000001_trade_routes::Migration),
             Box::new(m20260307_000002_build_queue::Migration),
+            Box::new(m20260307_000003_planet_market::Migration),
         ]
     }
 }

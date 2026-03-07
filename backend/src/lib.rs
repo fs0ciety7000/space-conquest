@@ -22,6 +22,7 @@ pub mod maintenance;
 pub mod protection;
 pub mod trade_routes;
 pub mod build_queue;
+pub mod planet_market;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::ServerConfig, server_config};

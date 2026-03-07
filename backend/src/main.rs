@@ -41,7 +41,7 @@ use sea_orm::sea_query::extension::postgres::PgExpr;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin, admin_content,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -449,6 +449,16 @@ async fn main() {
         .route("/planets/:id/build-queue", post(build_queue::add_to_queue_handler))
         .route("/planets/:id/build-queue/reorder", put(build_queue::reorder_queue_handler))
         .route("/build-queue/:item_id", delete(build_queue::remove_from_queue_handler))
+
+        // Planet Market
+        .route("/market/planets", get(planet_market::get_planet_listings_handler))
+        .route("/market/planets/suggested-price", get(planet_market::get_suggested_price_handler))
+        .route("/market/planets/:planet_id/list", post(planet_market::list_planet_handler))
+        .route("/market/planets/listings/:listing_id", get(planet_market::get_listing_details_handler))
+        .route("/market/planets/listings/:listing_id", patch(planet_market::update_listing_handler))
+        .route("/market/planets/listings/:listing_id", delete(planet_market::cancel_listing_handler))
+        .route("/market/planets/listings/:listing_id/buy", post(planet_market::buy_planet_handler))
+        .route("/market/planets/listings/:listing_id/sell-npc", post(planet_market::sell_to_npc_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -3888,7 +3898,22 @@ async fn get_my_planets_handler(
 
     if let Some(p) = current {
         let owner_id = p.owner_id;
-        let my_planets = Planet::find().filter(planet::Column::OwnerId.eq(owner_id)).all(&state.db).await.unwrap_or_default();
+        let mut my_planets = Planet::find().filter(planet::Column::OwnerId.eq(owner_id)).all(&state.db).await.unwrap_or_default();
+
+        // Exclude planets currently listed for sale (they appear in the market instead)
+        {
+            use sea_orm::ConnectionTrait;
+            let listed_ids: Vec<uuid::Uuid> = state.db.query_all(
+                sea_orm::Statement::from_string(sea_orm::DbBackend::Postgres,
+                    format!("SELECT planet_id FROM planet_listings WHERE seller_id = '{}' AND is_active = true", owner_id)
+                )
+            ).await.unwrap_or_default().into_iter()
+             .filter_map(|r| r.try_get::<String>("", "planet_id").ok().and_then(|s| uuid::Uuid::parse_str(&s).ok()))
+             .collect();
+            if !listed_ids.is_empty() {
+                my_planets.retain(|pl| !listed_ids.contains(&pl.id));
+            }
+        }
 
         // Récupérer le niveau d'astrophysique pour calculer la limite depuis la planète actuelle
         let astrophysics_level = tech_tree::get_planet_tech_level(&state.db, current_id, "astrophysics").await.unwrap_or(0);

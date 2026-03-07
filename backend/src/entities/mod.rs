@@ -72,3 +72,6 @@ pub mod flagship_module;
 
 // Auth system
 pub mod password_reset_token;
+
+// Planet market
+pub mod planet_listing;

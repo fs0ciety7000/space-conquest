@@ -1,5 +1,27 @@
 # Changelog - Space Conquest
 
+## [6.4.0] - 2026-03-07 - Marché Planétaire & Correctifs
+
+### ✨ Nouveautés
+
+#### 🌍 Marché Planétaire
+- Nouvelle section **Planètes** dans le Marché Galactique.
+- Vendez n'importe quelle colonie (sauf planète mère) au **marché PNJ** (40% de la valeur estimée) ou entre **joueurs** (prix libre, 70% suggéré).
+- La **valeur estimée** tient compte des bâtiments, technologies, vaisseaux, défenses et ressources stockées.
+- La planète est **masquée de vos vues** dès la mise en vente, et réapparaît si vous retirez l'annonce.
+- Les acheteurs voient une **fiche détaillée** : bâtiments, techs, vaisseaux et défenses listés avant achat.
+- **Transfert complet** à l'achat : ressources, bâtiments, technologies, vaisseaux et défenses passent au nouveau propriétaire.
+- Vente au PNJ : la planète est **supprimée** et le slot galactique libéré. Irréversible.
+- Modification du prix de vente possible à tout moment avant achat.
+
+### 🔧 Corrections
+
+- **Chaîne de Production** (PlanetOverview) : les items **en file d'attente** (build-queue) sont désormais visibles directement dans la section.
+- **Compteur de slots** : affiche maintenant les slots réels par catégorie (somme des catégories actives) au lieu d'une limite fixe de 3.
+- **Routes Commerciales** : bouton "Nouvelle Route" désactivé (avec tooltip) si les prérequis du Hub Logistique ne sont pas remplis.
+
+---
+
 ## [6.3.0] - 2026-03-07 - Routes Commerciales, File de Construction & Grands Cargos
 
 ### ✨ Nouveautés

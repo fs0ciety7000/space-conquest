@@ -1,12 +1,13 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, TrendingUp, TrendingDown, Activity } from "lucide-react";
+import { ShoppingCart, TrendingUp, Activity, Globe } from "lucide-react";
 import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
 import BuyView from "./market/BuyView";
 import SellView from "./market/SellView";
 import TransactionHistory from "./market/TransactionHistory";
 import PriceOverview from "./market/PriceOverview";
+import PlanetMarketView from "./market/PlanetMarketView";
 
 interface MarketplaceProps {
   planet: any;
@@ -14,7 +15,7 @@ interface MarketplaceProps {
   onUpdate: () => void;
 }
 
-type TabType = "buy" | "sell" | "history";
+type TabType = "buy" | "sell" | "history" | "planets";
 
 export default function Marketplace({ planet, userId, onUpdate }: MarketplaceProps) {
   const [activeTab, setActiveTab] = useState<TabType>("buy");
@@ -23,7 +24,7 @@ export default function Marketplace({ planet, userId, onUpdate }: MarketplacePro
 
   useEffect(() => {
     loadMarketStats();
-    const interval = setInterval(loadMarketStats, 5000); // Refresh every 5s
+    const interval = setInterval(loadMarketStats, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -45,9 +46,10 @@ export default function Marketplace({ planet, userId, onUpdate }: MarketplacePro
   };
 
   const tabs = [
-    { id: "buy", label: "Acheter", icon: ShoppingCart },
-    { id: "sell", label: "Vendre", icon: TrendingUp },
-    { id: "history", label: "Historique", icon: Activity }
+    { id: "buy",     label: "Acheter",   icon: ShoppingCart },
+    { id: "sell",    label: "Vendre",    icon: TrendingUp   },
+    { id: "planets", label: "Planètes",  icon: Globe        },
+    { id: "history", label: "Historique",icon: Activity     },
   ];
 
   return (
@@ -63,15 +65,15 @@ export default function Marketplace({ planet, userId, onUpdate }: MarketplacePro
             <div>
               <h2 className="text-2xl font-bold text-white">Marché Galactique</h2>
               <p className="text-sm text-gray-400">
-                Échangez vos ressources avec d'autres joueurs ou avec des PNJ
+                Échangez vos ressources ou achetez des planètes entières.
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Price Overview */}
-      {!loading && stats && <PriceOverview stats={stats} />}
+      {/* Price Overview (only on resource tabs) */}
+      {!loading && stats && activeTab !== "planets" && <PriceOverview stats={stats} />}
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-white/10 pb-2">
@@ -84,7 +86,9 @@ export default function Marketplace({ planet, userId, onUpdate }: MarketplacePro
               variant={activeTab === tab.id ? "default" : "ghost"}
               className={`flex items-center gap-2 ${
                 activeTab === tab.id
-                  ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                  ? tab.id === "planets"
+                    ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
                   : "text-gray-400 hover:text-white hover:bg-slate-800"
               }`}
             >
@@ -95,7 +99,7 @@ export default function Marketplace({ planet, userId, onUpdate }: MarketplacePro
         })}
       </div>
 
-      {/* Active Tab Content */}
+      {/* Tab content */}
       {activeTab === "buy" && (
         <BuyView
           planet={planet}
@@ -112,6 +116,14 @@ export default function Marketplace({ planet, userId, onUpdate }: MarketplacePro
           userId={userId}
           onUpdate={onUpdate}
           onStatsUpdate={loadMarketStats}
+        />
+      )}
+
+      {activeTab === "planets" && (
+        <PlanetMarketView
+          planet={planet}
+          userId={userId}
+          onUpdate={onUpdate}
         />
       )}
 

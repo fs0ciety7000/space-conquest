@@ -266,7 +266,9 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
         </div>
         <Button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
+          disabled={!hubInfo || hubInfo.max_routes === 0}
+          title={!hubInfo || hubInfo.max_routes === 0 ? 'Prérequis non remplis : Hangar 20, Stockage Ressources 15, Tech Industrielle 3' : undefined}
+          className="bg-amber-600 hover:bg-amber-500 text-white gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Plus size={16} /> Nouvelle Route
         </Button>

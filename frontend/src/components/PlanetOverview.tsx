@@ -102,6 +102,7 @@ interface ResourceSlot {
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
   const [, setTick] = useState(0);
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
+  const [buildQueueStatus, setBuildQueueStatus] = useState<any>(null);
   const [config, setConfig] = useState<any>({
     production_metal_base: 30,
     production_crystal_base: 20,
@@ -154,6 +155,23 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
       }
     };
     if (planet?.id) fetchSlots();
+  }, [planet?.id]);
+
+  // Charger le statut de la file de construction (pour slots et items en attente)
+  useEffect(() => {
+    const fetchBuildQueue = async () => {
+      try {
+        const res = await fetch(apiUrl(`/planets/${planet.id}/build-queue`), {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (res.ok) setBuildQueueStatus(await res.json());
+      } catch { /* silently ignore */ }
+    };
+    if (planet?.id) {
+      fetchBuildQueue();
+      const id = setInterval(fetchBuildQueue, 10_000);
+      return () => clearInterval(id);
+    }
   }, [planet?.id]);
 
   const getTimeLeft = (endDate: string) => {
@@ -330,8 +348,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     }))
   ].sort((a, b) => new Date(a.end_time).getTime() - new Date(b.end_time).getTime());
 
-  const slotsUsed = constructionQueue.length; // All constructions (buildings, ships, defenses) count towards the 3-slot limit
-  const maxSlots = 3;
+  // Slots: use build queue API data if available, fall back to active build count
+  const bqCategories: Record<string, any> = buildQueueStatus?.categories || {};
+  const maxSlots = Object.values(bqCategories).reduce((sum: number, c: any) => sum + (c.slots_total || 0), 0) || 3;
+  const slotsUsed = Object.values(bqCategories).reduce((sum: number, c: any) => sum + (c.slots_used || 0), 0) || constructionQueue.length;
+  const pendingQueueItems: any[] = buildQueueStatus?.pending_items || [];
 
   // --- MISSIONS (Backend enrichit l'objet planet avec ces listes) ---
   const incomingMissions = planet.incoming_missions || [];
@@ -650,6 +671,54 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 </div>
                                 <span className="text-[11px] uppercase tracking-[0.2em] font-black italic text-slate-500/70">Centre de Production Inactif</span>
                             </div>
+                        )}
+
+                        {/* Items en attente (file de construction) */}
+                        {pendingQueueItems.length > 0 && (
+                            <>
+                                <div className="flex items-center gap-2 mt-3 mb-2">
+                                    <div className="h-px flex-1 bg-slate-700/30" />
+                                    <span className="text-[9px] uppercase tracking-[0.2em] font-black text-slate-500">
+                                        {pendingQueueItems.length} en attente
+                                    </span>
+                                    <div className="h-px flex-1 bg-slate-700/30" />
+                                </div>
+                                {pendingQueueItems
+                                    .sort((a: any, b: any) => a.queue_position - b.queue_position)
+                                    .map((item: any) => {
+                                        const label = getLabel(item.item_key) || item.item_key;
+                                        const isShip = item.category === 'ships';
+                                        const isDefense = item.category === 'defenses';
+                                        const isTech = item.category === 'research';
+                                        let Icon = Hammer; let color = "text-slate-400";
+                                        if (isTech) { Icon = Microscope; color = "text-purple-400/60"; }
+                                        else if (isShip) { Icon = Rocket; color = "text-orange-400/60"; }
+                                        else if (isDefense) { Icon = Shield; color = "text-red-400/60"; }
+                                        return (
+                                            <div key={item.id} className="relative bg-slate-900/30 border border-slate-700/20 rounded-lg p-2.5 opacity-70">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="p-1.5 rounded-lg bg-black/30 border border-white/5">
+                                                            <Icon size={12} className={color} />
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-slate-300 text-xs font-medium block">{label}</span>
+                                                            <span className="text-[9px] text-slate-600 uppercase tracking-wider">
+                                                                {isShip || isDefense
+                                                                    ? `+${item.quantity} unités`
+                                                                    : item.target_level ? `→ niv. ${item.target_level}` : 'En attente'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-[9px] text-slate-600 font-mono bg-slate-800/50 px-2 py-1 rounded">
+                                                        File #{item.queue_position + 1}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                }
+                            </>
                         )}
                     </div>
                 </div>
