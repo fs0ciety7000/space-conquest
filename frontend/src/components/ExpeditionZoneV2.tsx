@@ -132,21 +132,23 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
           setCombatReport({
             result: data.result,
             logs: data.logs,
-            loot: data.loot
+            loot: data.loot,
+            syndicate_credits_earned: data.syndicate_credits_earned || 0,
           });
 
+          const scNote = data.syndicate_credits_earned > 0 ? ` • +${data.syndicate_credits_earned} SC` : '';
           // Toast based on result
           if (data.result === "victory") {
             toast.success("🎉 Expédition réussie !", {
-              description: `Butin: ${Math.floor(data.loot.metal)} métal, ${Math.floor(data.loot.crystal)} cristal, ${Math.floor(data.loot.deuterium || 0)} deutérium`
+              description: `Butin: ${Math.floor(data.loot.metal)} métal, ${Math.floor(data.loot.crystal)} cristal, ${Math.floor(data.loot.deuterium || 0)} deutérium${scNote}`
             });
           } else if (data.result === "defeat") {
             toast.error("💀 Défaite...", {
-              description: "Votre flotte a été détruite"
+              description: `Votre flotte a été détruite${scNote}`
             });
           } else if (data.result === "calm") {
             toast.success("🌌 Secteur calme", {
-              description: `Ressources collectées: ${Math.floor(data.loot.metal)} métal, ${Math.floor(data.loot.crystal || 0)} cristal, ${Math.floor(data.loot.deuterium || 0)} deutérium`
+              description: `Ressources collectées: ${Math.floor(data.loot.metal)} métal, ${Math.floor(data.loot.crystal || 0)} cristal, ${Math.floor(data.loot.deuterium || 0)} deutérium${scNote}`
             });
           }
         }
@@ -343,6 +345,12 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
                       <div className="text-[9px] text-slate-400 uppercase">Deutérium</div>
                       <div className="text-xl font-mono font-black text-emerald-400">{Math.floor(combatReport.loot.deuterium).toLocaleString()}</div>
                     </div>
+                  </div>
+                )}
+                {combatReport.syndicate_credits_earned > 0 && (
+                  <div className="mt-3 pt-3 border-t border-yellow-500/20 flex items-center justify-center gap-2">
+                    <span className="text-[9px] text-yellow-400 uppercase font-black">Crédits Syndicat trouvés</span>
+                    <span className="text-lg font-mono font-black text-yellow-300">+{combatReport.syndicate_credits_earned} SC</span>
                   </div>
                 )}
               </div>

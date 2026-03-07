@@ -36,6 +36,7 @@ import MissionsView from './components/MissionsView';
 import Officers from './components/Officers';
 import TradeRoutesView from './components/TradeRoutesView';
 import BuildQueueManager from './components/BuildQueueManager';
+import UndergroundMarket from './components/UndergroundMarket';
 import { SabotagesDashboard } from './components/SabotagesDashboard';
 import { SabotagesSufferedDashboard } from './components/SabotagesSufferedDashboard';
 import { CasusBelliList } from './components/CasusBelliList';
@@ -53,7 +54,7 @@ import { Toaster, toast } from "sonner";
 import {
   LayoutDashboard, Pickaxe, Hammer,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck, Layers,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap, Crosshair, Star
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap, Crosshair, Star, Skull
 } from "lucide-react";
 
 interface CombatReport {
@@ -66,7 +67,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -658,6 +659,7 @@ export default function App() {
     { id: 'market', label: 'Marché', icon: ShoppingCart, category: 'ÉCONOMIE' },
     { id: 'trade-routes', label: 'Routes Commerciales', icon: Truck, category: 'ÉCONOMIE' },
     { id: 'build-queue', label: 'File de Construction', icon: Layers, category: 'ÉCONOMIE' },
+    { id: 'underground', label: 'Marché Noir', icon: Skull, category: 'ÉCONOMIE' },
 
     { id: 'shipyard', label: 'Chantier Spatial', icon: Hammer, category: 'MILITAIRE' },
     { id: 'defenses', label: 'Défense', icon: ShieldCheck, category: 'MILITAIRE' },
@@ -908,6 +910,7 @@ export default function App() {
                         {activeTab === 'market' && <Marketplace planet={planet} userId={userId!} onUpdate={fetchPlanet} />}
                         {activeTab === 'trade-routes' && planet && <TradeRoutesView userId={userId!} planetId={planetId!} planet={planet} />}
                         {activeTab === 'build-queue' && planet && <BuildQueueManager planetId={planetId!} planet={planet} />}
+                        {activeTab === 'underground' && planet && <UndergroundMarket planet={planet} userId={userId!} />}
 
                         {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
                         {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}

@@ -6925,7 +6925,7 @@ async fn expedition_v2_handler(
     award_flagship_xp(&state.db, planet.owner_id, flagship_xp).await;
 
     // Syndicate Credits — random reward from expedition (configurable chance, 1-2 SC)
-    let sc_chance = config.get_config("expedition_syndicate_credit_chance", 0.10);
+    let sc_chance = config.get_config("expedition_syndicate_credit_chance", 0.35);
     let sc_min = config.get_config("expedition_syndicate_credit_min", 1.0);
     let sc_max = config.get_config("expedition_syndicate_credit_max", 2.0);
     let syndicate_credits_earned = if rand::random::<f64>() < sc_chance {

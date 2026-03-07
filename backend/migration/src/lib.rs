@@ -79,6 +79,7 @@ mod m20260307_000005_syndicate_credits;
 mod m20260307_000006_black_market;
 mod m20260307_000007_black_market_seed;
 mod m20260307_000008_economy_log;
+mod m20260307_000009_sc_chance_update;
 
 pub struct Migrator;
 
@@ -165,6 +166,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260307_000006_black_market::Migration),
             Box::new(m20260307_000007_black_market_seed::Migration),
             Box::new(m20260307_000008_economy_log::Migration),
+            Box::new(m20260307_000009_sc_chance_update::Migration),
         ]
     }
 }

@@ -33,6 +33,14 @@ pub struct CreateRoutePayload {
     pub metal_ratio: f64,
     pub crystal_ratio: f64,
     pub deuterium_ratio: f64,
+    #[serde(default = "default_schedule_type")]
+    pub schedule_type: String,
+    pub interval_hours: Option<i32>,
+    pub daily_hour: Option<i32>,
+}
+
+fn default_schedule_type() -> String {
+    "interval".to_string()
 }
 
 #[derive(Deserialize)]
@@ -43,6 +51,9 @@ pub struct UpdateRoutePayload {
     pub crystal_ratio: Option<f64>,
     pub deuterium_ratio: Option<f64>,
     pub is_active: Option<bool>,
+    pub schedule_type: Option<String>,
+    pub interval_hours: Option<i32>,
+    pub daily_hour: Option<i32>,
 }
 
 #[derive(Serialize)]
@@ -81,7 +92,7 @@ async fn route_to_json(db: &DatabaseConnection, route_id: &str, flight_speed: f6
         format!(
             "SELECT tr.id, tr.owner_id, tr.name, tr.source_planet_id, tr.target_planet_id, \
              tr.ship_count, tr.metal_ratio, tr.crystal_ratio, tr.deuterium_ratio, \
-             tr.is_active, tr.next_run_at, tr.created_at, \
+             tr.is_active, tr.next_run_at, tr.created_at, tr.schedule_type, tr.interval_hours, tr.daily_hour, \
              ps.name AS source_name, pt.name AS target_name, \
              ps.galaxy AS src_galaxy, ps.system AS src_system, ps.position AS src_position, \
              pt.galaxy AS tgt_galaxy, pt.system AS tgt_system, pt.position AS tgt_position \
@@ -117,6 +128,9 @@ async fn route_to_json(db: &DatabaseConnection, route_id: &str, flight_speed: f6
         "crystal_ratio": row.try_get::<f64>("", "crystal_ratio").ok()?,
         "deuterium_ratio": row.try_get::<f64>("", "deuterium_ratio").ok()?,
         "is_active": row.try_get::<bool>("", "is_active").ok()?,
+        "schedule_type": row.try_get::<String>("", "schedule_type").unwrap_or_else(|_| "interval".to_string()),
+        "interval_hours": row.try_get::<i32>("", "interval_hours").unwrap_or(24),
+        "daily_hour": row.try_get::<i32>("", "daily_hour").ok(),
         "next_run_at": row.try_get::<chrono::NaiveDateTime>("", "next_run_at").ok()
             .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
         "created_at": row.try_get::<chrono::NaiveDateTime>("", "created_at").ok()
@@ -167,7 +181,7 @@ pub async fn list_routes_handler(
         format!(
             "SELECT tr.id, tr.owner_id, tr.name, tr.source_planet_id, tr.target_planet_id, \
              tr.ship_count, tr.metal_ratio, tr.crystal_ratio, tr.deuterium_ratio, \
-             tr.is_active, tr.next_run_at, tr.created_at, \
+             tr.is_active, tr.next_run_at, tr.created_at, tr.schedule_type, tr.interval_hours, tr.daily_hour, \
              ps.name AS source_name, pt.name AS target_name, \
              ps.galaxy AS src_galaxy, ps.system AS src_system, ps.position AS src_position, \
              pt.galaxy AS tgt_galaxy, pt.system AS tgt_system, pt.position AS tgt_position \
@@ -220,6 +234,9 @@ pub async fn list_routes_handler(
             "crystal_ratio": row.try_get::<f64>("", "crystal_ratio").ok()?,
             "deuterium_ratio": row.try_get::<f64>("", "deuterium_ratio").ok()?,
             "is_active": row.try_get::<bool>("", "is_active").ok()?,
+            "schedule_type": row.try_get::<String>("", "schedule_type").unwrap_or_else(|_| "interval".to_string()),
+            "interval_hours": row.try_get::<i32>("", "interval_hours").unwrap_or(24),
+            "daily_hour": row.try_get::<i32>("", "daily_hour").ok(),
             "next_run_at": row.try_get::<chrono::NaiveDateTime>("", "next_run_at").ok()
                 .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
             "created_at": row.try_get::<chrono::NaiveDateTime>("", "created_at").ok()
@@ -293,23 +310,38 @@ pub async fn create_route_handler(
         }))).into_response();
     }
 
-    // Determine first run: in <interval_hours>
     let config = state.config.read().unwrap().clone();
-    let interval_hours = config.get_config("trade_route_interval_hours", 24.0) as i64;
+    let server_interval_hours = config.get_config("trade_route_interval_hours", 24.0) as i64;
     let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
     let now = Utc::now().naive_utc();
-    let next_run = now + Duration::hours(interval_hours);
-    let route_id = Uuid::new_v4();
 
+    // Determine schedule fields
+    let schedule_type = if payload.schedule_type == "daily" { "daily" } else { "interval" };
+    let interval_hours = payload.interval_hours.unwrap_or(server_interval_hours as i32) as i64;
+    let daily_hour = if schedule_type == "daily" { payload.daily_hour } else { None };
+
+    // Compute first next_run_at
+    let next_run = if schedule_type == "daily" {
+        let hour = daily_hour.unwrap_or(0).clamp(0, 23) as u32;
+        let today_run = now.date().and_hms_opt(hour, 0, 0).unwrap_or(now);
+        if today_run > now { today_run } else { today_run + Duration::days(1) }
+    } else {
+        now + Duration::hours(interval_hours)
+    };
+
+    let route_id = Uuid::new_v4();
     let name_escaped = payload.name.replace('\'', "''");
+    let daily_hour_sql = daily_hour.map(|h| h.to_string()).unwrap_or_else(|| "NULL".to_string());
+
     if let Err(e) = db.execute_unprepared(&format!(
         "INSERT INTO trade_route (id, owner_id, name, source_planet_id, target_planet_id, ship_count, \
-         metal_ratio, crystal_ratio, deuterium_ratio, is_active, next_run_at, created_at) \
-         VALUES ('{}', '{}', '{}', '{}', '{}', {}, {}, {}, {}, true, '{}', '{}')",
+         metal_ratio, crystal_ratio, deuterium_ratio, is_active, schedule_type, interval_hours, daily_hour, next_run_at, created_at) \
+         VALUES ('{}', '{}', '{}', '{}', '{}', {}, {}, {}, {}, true, '{}', {}, {}, '{}', '{}')",
         route_id, payload.owner_id, name_escaped,
         payload.source_planet_id, payload.target_planet_id,
         payload.ship_count,
         clamp_ratio(payload.metal_ratio), clamp_ratio(payload.crystal_ratio), clamp_ratio(payload.deuterium_ratio),
+        schedule_type, interval_hours, daily_hour_sql,
         next_run.format("%Y-%m-%d %H:%M:%S"),
         now.format("%Y-%m-%d %H:%M:%S"),
     )).await {
@@ -318,7 +350,7 @@ pub async fn create_route_handler(
 
     match route_to_json(db, &route_id.to_string(), flight_speed).await {
         Some(r) => (StatusCode::CREATED, Json(json!({"route": r}))).into_response(),
-        None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        None => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Route créée mais impossible de la récupérer"}))).into_response(),
     }
 }
 
@@ -352,13 +384,33 @@ pub async fn update_route_handler(
     if let Some(v) = payload.deuterium_ratio {
         sets.push(format!("deuterium_ratio = {}", clamp_ratio(v)));
     }
+    if let Some(ref st) = payload.schedule_type {
+        let st_val = if st == "daily" { "daily" } else { "interval" };
+        sets.push(format!("schedule_type = '{}'", st_val));
+    }
+    if let Some(ih) = payload.interval_hours {
+        sets.push(format!("interval_hours = {}", ih));
+    }
+    if let Some(dh) = payload.daily_hour {
+        sets.push(format!("daily_hour = {}", dh.clamp(0, 23)));
+    }
     if let Some(active) = payload.is_active {
         sets.push(format!("is_active = {}", active));
-        // If reactivating, set next_run to now + interval
+        // If reactivating, set next_run based on schedule type
         if active {
-            let config = state.config.read().unwrap().clone();
-            let interval_hours = config.get_config("trade_route_interval_hours", 24.0) as i64;
-            let next = Utc::now().naive_utc() + Duration::hours(interval_hours);
+            let now = Utc::now().naive_utc();
+            let schedule_type = payload.schedule_type.as_deref().unwrap_or("interval");
+            let next = if schedule_type == "daily" {
+                let hour = payload.daily_hour.unwrap_or(0).clamp(0, 23) as u32;
+                let today_run = now.date().and_hms_opt(hour, 0, 0).unwrap_or(now);
+                if today_run > now { today_run } else { today_run + Duration::days(1) }
+            } else {
+                let config = state.config.read().unwrap().clone();
+                let interval_hours = payload.interval_hours.unwrap_or(
+                    config.get_config("trade_route_interval_hours", 24.0) as i32
+                ) as i64;
+                now + Duration::hours(interval_hours)
+            };
             sets.push(format!("next_run_at = '{}'", next.format("%Y-%m-%d %H:%M:%S")));
         }
     }
@@ -485,7 +537,8 @@ pub async fn process_due_trade_routes(db: &DatabaseConnection, config: &crate::S
         sea_orm::DbBackend::Postgres,
         format!(
             "SELECT tr.id, tr.owner_id, tr.name, tr.source_planet_id, tr.target_planet_id, \
-             tr.ship_count, tr.metal_ratio, tr.crystal_ratio, tr.deuterium_ratio \
+             tr.ship_count, tr.metal_ratio, tr.crystal_ratio, tr.deuterium_ratio, \
+             tr.schedule_type, tr.interval_hours, tr.daily_hour \
              FROM trade_route tr \
              WHERE tr.is_active = true AND tr.next_run_at <= '{}' \
              ORDER BY tr.next_run_at ASC",
@@ -499,7 +552,6 @@ pub async fn process_due_trade_routes(db: &DatabaseConnection, config: &crate::S
         }
     };
 
-    let interval_hours = config.get_config("trade_route_interval_hours", 24.0) as i64;
     let piracy_chance = config.get_config("trade_route_piracy_chance", 0.10);
 
     for row in rows {
@@ -524,6 +576,9 @@ pub async fn process_due_trade_routes(db: &DatabaseConnection, config: &crate::S
         let metal_ratio: f64 = row.try_get("", "metal_ratio").unwrap_or(1.0);
         let crystal_ratio: f64 = row.try_get("", "crystal_ratio").unwrap_or(1.0);
         let deuterium_ratio: f64 = row.try_get("", "deuterium_ratio").unwrap_or(0.0);
+        let schedule_type: String = row.try_get("", "schedule_type").unwrap_or_else(|_| "interval".to_string());
+        let route_interval_hours: i64 = row.try_get::<i32>("", "interval_hours").unwrap_or(24) as i64;
+        let daily_hour: Option<i32> = row.try_get("", "daily_hour").ok();
 
         let source_uuid = match Uuid::parse_str(&source_id) { Ok(v) => v, Err(_) => continue };
         let target_uuid = match Uuid::parse_str(&target_id) { Ok(v) => v, Err(_) => continue };
@@ -533,7 +588,8 @@ pub async fn process_due_trade_routes(db: &DatabaseConnection, config: &crate::S
             db, config,
             route_uuid, owner_id, route_name, source_uuid, target_uuid,
             ship_count, metal_ratio, crystal_ratio, deuterium_ratio,
-            interval_hours, piracy_chance, now,
+            route_interval_hours, schedule_type, daily_hour,
+            piracy_chance, now,
         ).await;
     }
 }
@@ -551,6 +607,8 @@ async fn execute_trade_route(
     crystal_ratio: f64,
     deuterium_ratio: f64,
     interval_hours: i64,
+    schedule_type: String,
+    daily_hour: Option<i32>,
     piracy_chance: f64,
     now: chrono::NaiveDateTime,
 ) {
@@ -589,7 +647,7 @@ async fn execute_trade_route(
 
     if total_requested < 1.0 {
         // Nothing to transfer
-        log_and_advance_route(db, route_id, now, interval_hours, 0.0, 0.0, 0.0, "no_resources", None,
+        log_and_advance_route(db, route_id, now, interval_hours, &schedule_type, daily_hour, 0.0, 0.0, 0.0, "no_resources", None,
             Some(&source_planet.name), Some(&target_planet.name)).await;
         return;
     }
@@ -632,7 +690,7 @@ async fn execute_trade_route(
     )).await;
 
     log_and_advance_route(
-        db, route_id, now, interval_hours,
+        db, route_id, now, interval_hours, &schedule_type, daily_hour,
         metal_to_transfer, crystal_to_transfer, deuterium_to_transfer,
         status,
         if piracy_loss_ratio > 0.0 { Some(piracy_loss_ratio) } else { None },
@@ -733,6 +791,8 @@ async fn log_and_advance_route(
     route_id: Uuid,
     now: chrono::NaiveDateTime,
     interval_hours: i64,
+    schedule_type: &str,
+    daily_hour: Option<i32>,
     metal: f64,
     crystal: f64,
     deuterium: f64,
@@ -743,7 +803,13 @@ async fn log_and_advance_route(
 ) {
     use sea_orm::ConnectionTrait;
     let log_id = Uuid::new_v4();
-    let next_run = now + Duration::hours(interval_hours);
+    let next_run = if schedule_type == "daily" {
+        let hour = daily_hour.unwrap_or(0).clamp(0, 23) as u32;
+        let today_run = now.date().and_hms_opt(hour, 0, 0).unwrap_or(now);
+        if today_run > now { today_run } else { today_run + Duration::days(1) }
+    } else {
+        now + Duration::hours(interval_hours)
+    };
     let piracy_str = piracy_loss_ratio.map(|v| v.to_string()).unwrap_or("NULL".to_string());
     let src = source_name.map(|s| format!("'{}'", s.replace('\'', "''"))).unwrap_or("NULL".to_string());
     let tgt = target_name.map(|s| format!("'{}'", s.replace('\'', "''"))).unwrap_or("NULL".to_string());
