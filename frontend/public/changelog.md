@@ -1,5 +1,16 @@
 # Changelog - Space Conquest
 
+## [6.8.0] - 2026-03-07 - File de Construction : Intégrité & Corrections
+
+### 🔧 Corrections
+
+- **Stockage de Ressources** (`resource_storage`) correctement catégorisé en **Installations** (et non Ressources), côté backend et frontend.
+- **Centrale à Fusion** (`fusion_plant`) correctement catégorisée en **Ressources** dans toute la chaîne (BuildQueueManager, Facilities, ResourceDisplay).
+- **File d'attente — slot protection** : correction d'une race condition côté serveur — deux requêtes simultanées ne peuvent plus contourner la limite de slot en arrivant simultanément (mutex par planète ajouté dans le backend).
+- **Drag & drop** : protection contre la réorganisation invalide — impossible de placer un niveau supérieur avant un niveau inférieur pour le même bâtiment/technologie.
+
+---
+
 ## [6.7.0] - 2026-03-07 - Chaîne de Production Améliorée & Catégorisation
 
 ### ✨ Nouveautés

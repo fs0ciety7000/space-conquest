@@ -60,11 +60,11 @@ const COLOR_CLASSES: Record<string, { bg: string; border: string; text: string; 
 };
 
 function formatItemLabel(category: string, item_key: string, quantity: number, target_level: number | null): string {
-  const key = item_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  if (category === 'ships') return `${quantity}× ${key}`;
-  if (category === 'defenses') return `${quantity}× ${key}`;
-  if (target_level != null) return `${key} → niv. ${target_level}`;
-  return key;
+  const label = LABELS[item_key] || item_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  if (category === 'ships') return `${quantity}× ${label}`;
+  if (category === 'defenses') return `${quantity}× ${label}`;
+  if (target_level != null) return `${label} → niv. ${target_level}`;
+  return label;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -72,6 +72,12 @@ function formatItemLabel(category: string, item_key: string, quantity: number, t
 // ── Active build helpers ───────────────────────────────────────────────────────
 
 const RESOURCE_KEYS = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'fusion_plant'];
+
+const TECH_KEYS = [
+  'energy_tech', 'laser_tech', 'ion_tech', 'plasma_tech', 'armour_tech', 'shield_tech',
+  'weapons_tech', 'espionage_tech', 'computer_tech', 'astrophysics', 'hyperspace_tech',
+  'graviton_tech', 'industrial_tech', 'combustion_drive', 'impulse_drive', 'hyperspace_drive',
+];
 
 const LABELS: Record<string, string> = {
   // Resource buildings
@@ -124,14 +130,25 @@ interface ActiveBuild {
 function getActiveBuilds(planet: any, category: string): ActiveBuild[] {
   if (!planet) return [];
   switch (category) {
-    case 'research':
-      return (planet.research_queue || []).map((r: any) => ({
+    case 'research': {
+      const newPath = (planet.research_queue || []).map((r: any) => ({
         key: r.tech_key,
         name: getLabel(r.tech_key),
         endTime: r.end_time,
         targetLevel: r.target_level,
         cancelKey: r.tech_key,
       }));
+      const oldPath = (planet.constructions || [])
+        .filter((c: any) => TECH_KEYS.includes(c.building_type))
+        .map((c: any) => ({
+          key: c.id,
+          name: getLabel(c.building_type),
+          endTime: c.end_time,
+          targetLevel: c.level,
+          cancelKey: c.id,
+        }));
+      return [...newPath, ...oldPath];
+    }
     case 'ships':
       return (planet.ship_builds || []).map((s: any) => ({
         key: s.ship_key,
@@ -160,7 +177,7 @@ function getActiveBuilds(planet: any, category: string): ActiveBuild[] {
         }));
     case 'facilities':
       return (planet.constructions || [])
-        .filter((c: any) => !RESOURCE_KEYS.includes(c.building_type))
+        .filter((c: any) => !RESOURCE_KEYS.includes(c.building_type) && !TECH_KEYS.includes(c.building_type))
         .map((c: any) => ({
           key: c.id,
           name: getLabel(c.building_type),
