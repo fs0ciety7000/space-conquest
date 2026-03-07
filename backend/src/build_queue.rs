@@ -627,6 +627,10 @@ pub async fn process_build_queue(db: &DatabaseConnection, config: &ServerConfigC
                 Err(_) => continue,
             };
 
+            // Track which item_keys have already been started in this batch
+            // to prevent starting multiple levels of the same building simultaneously.
+            let mut started_keys_this_batch: std::collections::HashSet<String> = std::collections::HashSet::new();
+
             for item_row in &items {
                 let item_id: Uuid = match item_row.try_get("", "id") {
                     Ok(id) => id,
@@ -636,11 +640,30 @@ pub async fn process_build_queue(db: &DatabaseConnection, config: &ServerConfigC
                 let quantity: i32 = item_row.try_get("", "quantity").unwrap_or(1);
                 let target_level: Option<i32> = item_row.try_get("", "target_level").ok().flatten();
 
+                // For buildings (resources/facilities): enforce sequential upgrades.
+                // Don't start niv. N+1 if niv. N is already building (same item_key).
+                if *category == "resources" || *category == "facilities" {
+                    // Skip if already started this key in the current batch
+                    if started_keys_this_batch.contains(&item_key) {
+                        continue;
+                    }
+                    // Skip if already an active build for this key in construction_queue
+                    let already_active = db.query_one(Statement::from_sql_and_values(
+                        DbBackend::Postgres,
+                        "SELECT 1 FROM construction_queue WHERE planet_id = $1 AND building_type = $2 LIMIT 1",
+                        [planet_id.into(), item_key.clone().into()],
+                    )).await.unwrap_or(None).is_some();
+                    if already_active {
+                        continue;
+                    }
+                }
+
                 match start_item_immediately(db, config, planet_id, category, &item_key, quantity, target_level).await {
                     Ok(_) => {
                         let _ = db.execute_unprepared(&format!(
                             "DELETE FROM build_queue_item WHERE id = '{}'", item_id
                         )).await;
+                        started_keys_this_batch.insert(item_key.clone());
                         started += 1;
                         println!("✅ Build queue: started {} ({}) for planet {}", item_key, category, planet_id);
                     }

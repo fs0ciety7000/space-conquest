@@ -1,5 +1,13 @@
 # Changelog - Space Conquest
 
+## [7.0.0] - 2026-03-07 - File de Construction : Séquentialité des Niveaux
+
+### 🔧 Corrections
+
+- **Niveaux d'un même bâtiment désormais séquentiels** : si vous planifiez Usine Nanite niv. 4, 5, 6 et 7 avec plusieurs slots libres, chaque niveau attend maintenant que le précédent soit terminé avant de démarrer — plus de "Niv. 4 / 4h13m — Niv. 5 / 4h13m" simultanés. Les slots supplémentaires (Nanite Factory, Chantier…) permettent toujours de construire plusieurs **bâtiments différents** en parallèle.
+
+---
+
 ## [6.9.0] - 2026-03-07 - Marché : Corrections Majeures
 
 ### 🔧 Corrections
