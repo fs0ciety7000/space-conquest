@@ -192,6 +192,7 @@ pub async fn register_handler(
         avatar_url: Set(None),
         bio: Set(None),
         last_login: Set(Some(now)),
+        display_name: Set(None),
     };
 
     if new_user.insert(&state.db).await.is_err() {
