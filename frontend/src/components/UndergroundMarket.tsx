@@ -51,6 +51,9 @@ const EFFECT_LABELS: Record<string, string> = {
   eco_virus: "Virus Économique",
 };
 
+// Effect types not yet implemented on the backend — purchase disabled
+const UNIMPLEMENTED_EFFECTS = new Set(["stealth", "coordinate_jam", "eco_virus"]);
+
 const EFFECT_COLORS: Record<string, string> = {
   orbital_strike: "text-red-400 border-red-500/40 bg-red-950/20",
   resource_boost: "text-amber-400 border-amber-500/40 bg-amber-950/20",
@@ -243,6 +246,7 @@ export default function UndergroundMarket({
           const colorClass = EFFECT_COLORS[item.effect_type] || "text-slate-400 border-slate-600/40 bg-slate-900/20";
           const isSelected = selectedItem?.id === item.id;
           const canAfford = data.syndicate_credits >= item.current_price;
+          const isUnimplemented = UNIMPLEMENTED_EFFECTS.has(item.effect_type);
 
           return (
             <div
@@ -282,6 +286,11 @@ export default function UndergroundMarket({
                     </div>
                   </div>
 
+                  {isUnimplemented ? (
+                    <span className="text-xs font-black uppercase tracking-wider px-3 py-2 rounded-md bg-slate-800/40 border border-slate-700/30 text-slate-500 cursor-not-allowed">
+                      Bientôt
+                    </span>
+                  ) : (
                   <Button
                     onClick={(e) => { e.stopPropagation(); handleBuy(item); }}
                     disabled={!canAfford || buying === item.id}
@@ -297,6 +306,7 @@ export default function UndergroundMarket({
                       <><ShoppingCart size={13} className="mr-1.5" />Acheter</>
                     )}
                   </Button>
+                  )}
                 </div>
               </div>
 

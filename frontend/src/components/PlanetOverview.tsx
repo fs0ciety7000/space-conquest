@@ -799,6 +799,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             </CardContent>
         </Card>
 
+        {/* Colonne droite : réseau électrique (haut) + routes commerciales */}
+        <div className="flex flex-col gap-4">
+
         {/* ROUTES COMMERCIALES ACTIVES */}
         {tradeRoutes.length > 0 && (() => {
           const nowMs = Date.now();
@@ -806,7 +809,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
           const intervalHours = config.trade_route_interval_hours ?? 24;
 
           return (
-            <Card className="bg-slate-950 border border-amber-500/20 overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
+            <Card className="order-last bg-slate-950 border border-amber-500/20 overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
               <div className="absolute top-0 right-0 p-2 opacity-10"><Truck size={80} /></div>
               <CardHeader className="pb-2 border-b border-white/5">
                 <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-amber-400">
@@ -814,7 +817,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                   <span className="text-slate-500 normal-case font-normal text-[9px] ml-1">depuis cette planète</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4 space-y-3">
+              <CardContent className="p-3 space-y-2 max-h-[480px] overflow-y-auto">
                 {tradeRoutes.map((route: any) => {
                   const travelSec: number = route.travel_time_seconds ?? 0;
                   const arrivalMs = route.next_run_at ? new Date(route.next_run_at).getTime() : 0;
@@ -890,7 +893,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         })()}
 
         {/* ENERGIE - DESIGN ÉLECTRIQUE */}
-        <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${energyRatio >= 100 ? 'border-yellow-500/50' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
+        <Card className={`order-first bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${energyRatio >= 100 ? 'border-yellow-500/50' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
             {/* Effets de fond électriques */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 {/* Lueur principale */}
@@ -1077,6 +1080,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 </div>
             </CardContent>
         </Card>
+
+        </div>{/* end right column wrapper */}
       </div>
 
       {/* --- SECTION TACTIQUE MILITAIRE --- */}

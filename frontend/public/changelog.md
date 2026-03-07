@@ -1,5 +1,23 @@
 # Changelog - Space Conquest
 
+## [7.4.0] - 2026-03-07 - Routes Commerciales & Marché Underground : Corrections & Améliorations
+
+### ✨ Nouvelles Fonctionnalités
+
+- **Édition des routes commerciales** : chaque route dispose désormais d'un bouton crayon permettant de modifier directement — nom, nombre de Grands Cargos, ratios de ressources et fréquence d'exécution — sans avoir à supprimer et recréer la route.
+- **PlanetOverview — Réseau Électrique en haut à droite** : le widget "Réseau Électrique" occupe désormais le haut de la colonne droite, au-dessus des routes commerciales actives.
+- **PlanetOverview — Routes commerciales compactes** : le widget des routes commerciales est maintenant défilable (hauteur max 480 px) et s'affiche en format réduit.
+- **Marché Underground — articles non implémentés** : les objets *Brouilleur de Coordonnées*, *Virus Économique* et *Module Furtif* sont désormais affichés dans le catalogue mais leur bouton d'achat est remplacé par un badge **"Bientôt"** — ils seront activés dans une prochaine mise à jour.
+- **SC dans les expéditions — affichage** : les Crédits du Syndicat gagnés lors d'une expédition apparaissent maintenant dans le rapport de résultat et dans la notification toast (`+X SC`).
+
+### 🔧 Corrections
+
+- **Routes commerciales — POST 500** : la création d'une route renvoyait un corps JSON vide (erreur 500). Cause : SeaORM ne pouvait pas décoder les colonnes UUID PostgreSQL via `try_get::<String>`. La réponse de création est maintenant construite directement depuis les variables en mémoire — plus aucun aller-retour en base après l'INSERT.
+- **Marché Underground — Espionnage 0/13** : le niveau de Technologie d'Espionnage affiché dans les prérequis d'accès était toujours 0 malgré un niveau réel élevé. Cause : deux clés coexistaient en base (`"espionage"` legacy et `"espionage_tech"` actif) ; la fonction de lecture ne lisait que l'ancienne. Les deux clés sont maintenant acceptées.
+- **Fréquence des SC en expédition** : la probabilité de récompense en Crédits du Syndicat passe de **10 %** à **35 %** (config serveur `expedition_syndicate_credit_chance`).
+
+---
+
 ## [7.2.0] - 2026-03-07 - Journal Économique
 
 ### ✨ Nouvelles Fonctionnalités

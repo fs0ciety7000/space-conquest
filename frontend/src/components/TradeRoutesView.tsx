@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Route, Plus, Trash2, Play, Pause, ChevronDown, ChevronUp,
   Package, Clock, AlertTriangle, CheckCircle2, Truck, Info,
-  RefreshCw, Warehouse, Navigation, ArrowRight
+  RefreshCw, Warehouse, Navigation, ArrowRight, Pencil, X, Check
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -140,6 +140,12 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
   const [logs, setLogs] = useState<Record<string, RouteLog[]>>({});
   const [gameConfig, setGameConfig] = useState<any>(null);
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    name: string; ship_count: number; metal_ratio: number; crystal_ratio: number;
+    deuterium_ratio: number; schedule_type: 'interval' | 'daily'; interval_hours: number; daily_hour: number;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // Form state
   const [form, setForm] = useState({
@@ -259,6 +265,46 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
         fetchRoutes();
       }
     } catch {}
+  };
+
+  const startEdit = (route: TradeRoute) => {
+    setEditingRouteId(route.id);
+    setEditForm({
+      name: route.name,
+      ship_count: route.ship_count,
+      metal_ratio: route.metal_ratio,
+      crystal_ratio: route.crystal_ratio,
+      deuterium_ratio: route.deuterium_ratio,
+      schedule_type: route.schedule_type,
+      interval_hours: route.interval_hours ?? 24,
+      daily_hour: route.daily_hour ?? 3,
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editingRouteId || !editForm) return;
+    if (!editForm.name.trim()) { toast.error('Le nom ne peut pas être vide'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(apiUrl(`/trade-routes/${editingRouteId}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+      if (res.ok) {
+        toast.success('Route mise à jour');
+        setEditingRouteId(null);
+        setEditForm(null);
+        fetchRoutes();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Erreur lors de la mise à jour');
+      }
+    } catch {
+      toast.error('Erreur réseau');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleToggleLogs = async (routeId: string) => {
@@ -671,6 +717,13 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                         {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </button>
                       <button
+                        onClick={() => editingRouteId === route.id ? (setEditingRouteId(null), setEditForm(null)) : startEdit(route)}
+                        className={`p-1.5 rounded-lg transition-colors ${editingRouteId === route.id ? 'text-amber-400 bg-amber-900/20' : 'text-slate-400 hover:text-amber-300 hover:bg-amber-900/20'}`}
+                        title="Modifier"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
                         onClick={() => handleToggleActive(route)}
                         className={`p-1.5 rounded-lg transition-colors ${
                           route.is_active
@@ -690,6 +743,95 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                       </button>
                     </div>
                   </div>
+
+                  {/* Edit form */}
+                  {editingRouteId === route.id && editForm && (
+                    <div className="mt-4 border-t border-amber-500/20 pt-4 space-y-3">
+                      <p className="text-amber-300 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
+                        <Pencil size={11} /> Modifier la route
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="md:col-span-2">
+                          <label className="text-slate-400 text-xs mb-1 block">Nom</label>
+                          <input
+                            type="text"
+                            value={editForm.name}
+                            onChange={e => setEditForm(f => f && ({ ...f, name: e.target.value }))}
+                            className="w-full bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-amber-500/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-slate-400 text-xs mb-1 block">Grands Cargos ({editForm.ship_count})</label>
+                          <input
+                            type="range" min={1} max={200} value={editForm.ship_count}
+                            onChange={e => setEditForm(f => f && ({ ...f, ship_count: Number(e.target.value) }))}
+                            className="w-full accent-amber-500"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-slate-400 text-xs block">Ressources</label>
+                          {(['metal', 'crystal', 'deuterium'] as const).map(r => {
+                            const k = `${r}_ratio` as 'metal_ratio' | 'crystal_ratio' | 'deuterium_ratio';
+                            return (
+                              <div key={r} className="flex items-center gap-2">
+                                <span className="text-slate-500 text-xs w-16">{RESOURCE_LABELS[r]}</span>
+                                <input type="range" min={0} max={1} step={0.05} value={editForm[k]}
+                                  onChange={e => setEditForm(f => f && ({ ...f, [k]: Number(e.target.value) }))}
+                                  className="flex-1 accent-amber-500" />
+                                <span className="text-amber-300 text-xs w-8 text-right">{Math.round(editForm[k] * 100)}%</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="md:col-span-2 space-y-2">
+                          <label className="text-slate-400 text-xs block">Fréquence</label>
+                          <div className="flex gap-2">
+                            {(['interval', 'daily'] as const).map(st => (
+                              <button key={st} type="button"
+                                onClick={() => setEditForm(f => f && ({ ...f, schedule_type: st }))}
+                                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium border transition-colors ${
+                                  editForm.schedule_type === st
+                                    ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-300'
+                                    : 'bg-slate-800/40 border-slate-600/40 text-slate-400 hover:border-slate-500/60'
+                                }`}>
+                                {st === 'interval' ? 'Toutes les N heures' : 'Heure fixe quotidienne'}
+                              </button>
+                            ))}
+                          </div>
+                          {editForm.schedule_type === 'interval' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-500 text-xs">Intervalle :</span>
+                              <select value={editForm.interval_hours}
+                                onChange={e => setEditForm(f => f && ({ ...f, interval_hours: Number(e.target.value) }))}
+                                className="bg-slate-800/60 border border-slate-600/50 rounded px-2 py-1 text-white text-xs focus:outline-none">
+                                {[1, 2, 4, 6, 8, 12, 24, 48, 72].map(h => <option key={h} value={h}>{h}h</option>)}
+                              </select>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-500 text-xs">Heure UTC :</span>
+                              <select value={editForm.daily_hour}
+                                onChange={e => setEditForm(f => f && ({ ...f, daily_hour: Number(e.target.value) }))}
+                                className="bg-slate-800/60 border border-slate-600/50 rounded px-2 py-1 text-white text-xs focus:outline-none">
+                                {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <Button onClick={handleUpdate} disabled={saving}
+                          className="bg-amber-600 hover:bg-amber-500 text-white text-xs">
+                          {saving ? <RefreshCw size={12} className="animate-spin mr-1" /> : <Check size={12} className="mr-1" />}
+                          Enregistrer
+                        </Button>
+                        <Button variant="outline" onClick={() => { setEditingRouteId(null); setEditForm(null); }}
+                          className="border-slate-600 text-slate-300 text-xs">
+                          <X size={12} className="mr-1" /> Annuler
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Logs accordion */}
                   {isExpanded && (
