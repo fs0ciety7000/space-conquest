@@ -250,7 +250,7 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
         onUpgrade();
         toast.success(`${building.name} amélioré avec succès`);
       } else if (res.status === 409) {
-        const category = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'resource_storage'].includes(building_key) ? 'resources' : 'facilities';
+        const category = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'fusion_plant'].includes(building_key) ? 'resources' : 'facilities';
         const qRes = await fetch(apiUrl(`/planets/${planet.id}/build-queue`), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },

@@ -32,61 +32,81 @@ const getLabel = (id: string | null) => {
         metal: "Mine de Métal",
         crystal: "Mine de Cristal",
         deuterium: "Synth. Deutérium",
-        // New system keys
+        // Resource buildings
         metal_mine: "Mine de Métal",
         crystal_mine: "Mine de Cristal",
         deuterium_mine: "Synth. Deutérium",
-        fusion_plant: "Centrale à Fusion",
-        // Common buildings
         solar_plant: "Centrale Solaire",
+        fusion_plant: "Centrale à Fusion",
+        // Facility buildings
         shipyard: "Chantier Spatial",
         research: "Labo de Recherche",
         research_lab: "Labo de Recherche",
         hangar: "Hangar à Vaisseaux",
         resource_storage: "Hangar à Ressources",
+        nanite_factory: "Usine Nanite",
+        alliance_depot: "Dépôt Alliance",
+        missile_silo: "Silo à Missiles",
+        terraformer: "Terraformeur",
+        logistics_hub: "Hub Logistique",
         // Technologies
         energy_tech: "Tech. Énergie",
         laser: "Tech. Laser",
         laser_tech: "Tech. Laser",
-        armour: "Tech. Protection",
-        armour_tech: "Tech. Protection",
-        espionage: "Tech. Espionnage",
-        espionage_tech: "Tech. Espionnage",
         ion_tech: "Tech. Ions",
         plasma_tech: "Tech. Plasma",
+        armour: "Tech. Protection",
+        armour_tech: "Tech. Protection",
         shield_tech: "Tech. Boucliers",
         weapons_tech: "Tech. Armes",
         computer_tech: "Tech. Ordinateurs",
+        espionage: "Tech. Espionnage",
+        espionage_tech: "Tech. Espionnage",
         astrophysics: "Astrophysique",
+        hyperspace_tech: "Tech. Hyperespace",
+        graviton_tech: "Tech. Graviton",
+        industrial_tech: "Tech. Industrielle",
         // Propulsion
         combustion_drive: "Propulsion Combustion",
         impulse_drive: "Réacteur à Impulsion",
         hyperspace_drive: "Propulsion Hyperespace",
         // Ships
         light_hunter: "Chasseur Léger",
+        heavy_hunter: "Chasseur Lourd",
         cruiser: "Croiseur",
+        battleship: "Cuirassé",
+        destroyer: "Destructeur",
+        bomber: "Bombardier",
+        deathstar: "Étoile de la Mort",
+        death_star: "Étoile de la Mort",
         colony_ship: "Vaisseau Colon",
         transporter: "Transporteur",
         recycler: "Recycleur",
         spy_probe: "Sonde Espionnage",
-        battleship: "Cuirassé",
-        destroyer: "Destructeur",
-        death_star: "Étoile de la Mort",
+        grand_cargo: "Grand Cargo",
         // Defenses
         rocket_launcher: "Lanceur Missiles",
-        plasma_turret: "Tourelle Plasma",
-        laser_cannon: "Canon Laser",
+        light_laser: "Laser Léger",
+        heavy_laser: "Laser Lourd",
+        gauss_cannon: "Canon de Gauss",
         ion_cannon: "Canon à Ions",
-        gauss_cannon: "Canon de Gauss"
+        plasma_turret: "Tourelle Plasma",
+        small_shield: "Bouclier Léger",
+        large_shield: "Bouclier Lourd",
+        anti_missile: "Missile Anti-Balistique",
+        interplanetary_missile: "Missile Interplanétaire",
     };
     return labels[id] || id;
 };
 
-const getItemType = (id: string) => {
-    if (['light_hunter', 'cruiser', 'colony_ship', 'transporter', 'recycler', 'spy_probe', 'battleship', 'destroyer', 'death_star'].includes(id)) return 'fleet';
-    if (['rocket_launcher', 'light_laser', 'heavy_laser', 'gauss_cannon', 'ion_cannon', 'plasma_turret', 'small_shield', 'large_shield', 'antiballistic_missile', 'interplanetary_missile'].includes(id)) return 'defense';
-    if (['research', 'energy_tech', 'laser', 'espionage', 'armour', 'laser_tech', 'armour_tech', 'espionage_tech', 'ion_tech', 'plasma_tech', 'shield_tech', 'weapons_tech', 'computer_tech', 'astrophysics', 'combustion_drive', 'impulse_drive', 'hyperspace_drive'].includes(id)) return 'tech';
-    return 'building';
+const RESOURCE_PRODUCTION_KEYS = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'fusion_plant'];
+
+const getItemType = (id: string, isResearch?: boolean) => {
+    if (isResearch) return 'tech';
+    if (['light_hunter', 'heavy_hunter', 'cruiser', 'battleship', 'destroyer', 'bomber', 'deathstar', 'death_star', 'colony_ship', 'transporter', 'recycler', 'spy_probe', 'grand_cargo'].includes(id)) return 'fleet';
+    if (['rocket_launcher', 'light_laser', 'heavy_laser', 'gauss_cannon', 'ion_cannon', 'plasma_turret', 'small_shield', 'large_shield', 'anti_missile', 'interplanetary_missile'].includes(id)) return 'defense';
+    if (RESOURCE_PRODUCTION_KEYS.includes(id)) return 'resources';
+    return 'facilities';
 };
 
 interface ResourceSlot {
@@ -624,25 +644,26 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         </span>
                     </div>
 
-                    <div className="space-y-2.5 relative z-10">
+                    <div className="space-y-2.5 relative z-10 max-h-[420px] overflow-y-auto pr-1">
                         {constructionQueue.length > 0 ? (
                             constructionQueue.map((item: any, index: number) => {
                                 const tl = getTimeLeft(item.end_time);
                                 // Determine type based on flags or building_type
-                                const type = item.is_ship ? 'fleet' : item.is_defense ? 'defense' : getItemType(item.building_type);
+                                const type = item.is_ship ? 'fleet' : item.is_defense ? 'defense' : getItemType(item.building_type, item.is_research);
                                 // Use name if available (for ships/defenses), otherwise lookup label
                                 const label = item.name || getLabel(item.building_type);
                                 const refundPercent = index === 0 ? Math.max(0, Math.min(95, Math.round((tl / 60) * 100))) : 95;
                                 const progress = index === 0 ? Math.max(0, 100 - (tl / 3)) : 0;
 
                                 let Icon = Hammer;
-                                let color = "text-white";
-                                let bgGlow = "from-blue-500/10 to-slate-900/60";
-                                let borderColor = "border-blue-500/30";
+                                let color = "text-violet-400";
+                                let bgGlow = "from-violet-500/10 to-slate-900/60";
+                                let borderColor = "border-violet-500/30";
                                 if (type === 'tech') { Icon = Microscope; color = "text-purple-400"; bgGlow = "from-purple-500/10 to-slate-900/60"; borderColor = "border-purple-500/30"; }
-                                else if (type === 'fleet') { Icon = Rocket; color = "text-orange-400"; bgGlow = "from-orange-500/10 to-slate-900/60"; borderColor = "border-orange-500/30"; }
+                                else if (type === 'fleet') { Icon = Rocket; color = "text-cyan-400"; bgGlow = "from-cyan-500/10 to-slate-900/60"; borderColor = "border-cyan-500/30"; }
                                 else if (type === 'defense') { Icon = Shield; color = "text-red-400"; bgGlow = "from-red-500/10 to-slate-900/60"; borderColor = "border-red-500/30"; }
-                                else { color = "text-cyan-300"; bgGlow = "from-cyan-500/10 to-slate-900/60"; borderColor = "border-cyan-500/30"; }
+                                else if (type === 'resources') { color = "text-orange-400"; bgGlow = "from-orange-500/10 to-slate-900/60"; borderColor = "border-orange-500/30"; }
+                                // facilities: default violet
 
                                 return (
                                     <div key={item.id} className={`relative bg-gradient-to-r ${bgGlow} border-2 ${borderColor} rounded-lg p-3 group/item transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(6,182,212,0.2)] ${index === 0 ? 'shadow-[0_0_25px_rgba(99,102,241,0.15)]' : ''}`}>

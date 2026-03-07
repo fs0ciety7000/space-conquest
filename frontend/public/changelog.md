@@ -1,5 +1,29 @@
 # Changelog - Space Conquest
 
+## [6.7.0] - 2026-03-07 - Chaîne de Production Améliorée & Catégorisation
+
+### ✨ Nouveautés
+
+#### 🏭 Chaîne de Production — Couleurs par catégorie
+- Chaque construction dans la file affiche désormais la **couleur de sa catégorie** :
+  - 🟣 **Violet** — Installations (chantier, hangar, stockage, etc.)
+  - 🟠 **Orange** — Ressources (mines, centrales)
+  - 🔵 **Cyan** — Vaisseaux
+  - 🔴 **Rouge** — Défenses
+  - 🟣 **Indigo/Violet** — Recherche
+
+#### 📜 Scroll dans la Chaîne de Production
+- Le module "Chaîne de Production" est maintenant **défilable** (hauteur max 420px) — il ne grandit plus indéfiniment quand la file est longue.
+
+### 🔧 Corrections
+
+- **Chaîne de Production** : les recherches (ex. Tech. Industrielle) apparaissent maintenant correctement dans la catégorie **Recherche** et non dans Installations.
+- **File de Construction** : le "Hangar à Ressources" (`resource_storage`) apparaît désormais dans la catégorie **Installations** (et non Ressources).
+- **Labels complets** : tous les vaisseaux (`heavy_hunter`, `bomber`, `grand_cargo`, `deathstar`), technologies (`ion_tech`, `combustion_drive`, `impulse_drive`, `hyperspace_drive`, `industrial_tech`, `graviton_tech`), défenses (`anti_missile`, `interplanetary_missile`, `small_shield`, `large_shield`) et bâtiments (`nanite_factory`, `logistics_hub`, `terraformer`, etc.) ont désormais un nom lisible dans la file de construction.
+- **Centrale à Fusion** (`fusion_plant`) correctement catégorisée en Ressources.
+
+---
+
 ## [6.6.0] - 2026-03-07 - File de Construction Universelle
 
 ### ✨ Nouveautés

@@ -71,22 +71,37 @@ function formatItemLabel(category: string, item_key: string, quantity: number, t
 
 // ── Active build helpers ───────────────────────────────────────────────────────
 
-const RESOURCE_KEYS = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'resource_storage'];
+const RESOURCE_KEYS = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'fusion_plant'];
 
 const LABELS: Record<string, string> = {
+  // Resource buildings
   metal_mine: 'Mine de Métal', crystal_mine: 'Mine de Cristal', deuterium_mine: 'Synth. Deutérium',
-  solar_plant: 'Centrale Solaire', shipyard: 'Chantier Spatial', research_lab: 'Labo de Recherche',
+  solar_plant: 'Centrale Solaire', fusion_plant: 'Centrale à Fusion',
+  // Facility buildings
+  shipyard: 'Chantier Spatial', research_lab: 'Labo de Recherche',
   hangar: 'Hangar à Vaisseaux', resource_storage: 'Hangar Ressources', nanite_factory: 'Usine Nanite',
-  energy_tech: 'Tech. Énergie', laser_tech: 'Tech. Laser', armour_tech: 'Tech. Blindage',
-  espionage_tech: 'Tech. Espionnage', weapons_tech: 'Tech. Armes', shield_tech: 'Tech. Boucliers',
-  plasma_tech: 'Tech. Plasma', computer_tech: 'Tech. Ordinateurs', astrophysics: 'Astrophysique',
-  hyperspace_tech: 'Tech. Hyperespace', graviton_tech: 'Tech. Graviton',
-  light_hunter: 'Chasseur Léger', cruiser: 'Croiseur', battleship: 'Cuirassé',
-  destroyer: 'Destructeur', colony_ship: 'Vaisseau Colon', transporter: 'Transporteur',
-  recycler: 'Recycleur', spy_probe: 'Sonde Espionnage', death_star: 'Étoile de la Mort',
+  alliance_depot: 'Dépôt Alliance', missile_silo: 'Silo à Missiles',
+  terraformer: 'Terraformeur', logistics_hub: 'Hub Logistique',
+  // Technologies
+  energy_tech: 'Tech. Énergie', laser_tech: 'Tech. Laser', ion_tech: 'Tech. Ions',
+  plasma_tech: 'Tech. Plasma', armour_tech: 'Tech. Blindage', shield_tech: 'Tech. Boucliers',
+  weapons_tech: 'Tech. Armes', espionage_tech: 'Tech. Espionnage', computer_tech: 'Tech. Ordinateurs',
+  astrophysics: 'Astrophysique', hyperspace_tech: 'Tech. Hyperespace', graviton_tech: 'Tech. Graviton',
+  industrial_tech: 'Tech. Industrielle',
+  // Propulsion
+  combustion_drive: 'Propulsion Combustion', impulse_drive: 'Réacteur Impulsion',
+  hyperspace_drive: 'Propulsion Hyperespace',
+  // Ships
+  light_hunter: 'Chasseur Léger', heavy_hunter: 'Chasseur Lourd', cruiser: 'Croiseur',
+  battleship: 'Cuirassé', destroyer: 'Destructeur', bomber: 'Bombardier',
+  deathstar: 'Étoile de la Mort', death_star: 'Étoile de la Mort',
+  colony_ship: 'Vaisseau Colon', transporter: 'Transporteur',
+  recycler: 'Recycleur', spy_probe: 'Sonde Espionnage', grand_cargo: 'Grand Cargo',
+  // Defenses
   rocket_launcher: 'Lanceur Missiles', light_laser: 'Laser Léger', heavy_laser: 'Laser Lourd',
   gauss_cannon: 'Canon Gauss', ion_cannon: 'Canon Ion', plasma_turret: 'Tourelle Plasma',
   small_shield: 'Bouclier Léger', large_shield: 'Bouclier Lourd',
+  anti_missile: 'Missile Anti-Balistique', interplanetary_missile: 'Missile Interplanétaire',
 };
 
 function getLabel(key: string) { return LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }

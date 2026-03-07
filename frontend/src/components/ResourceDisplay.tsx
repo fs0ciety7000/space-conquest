@@ -231,7 +231,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
       if (res.ok) {
         onUpgrade();
       } else if (res.status === 409) {
-        const category = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'resource_storage'].includes(type) ? 'resources' : 'facilities';
+        const category = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'fusion_plant'].includes(type) ? 'resources' : 'facilities';
         const qRes = await fetch(apiUrl(`/planets/${planet.id}/build-queue`), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
