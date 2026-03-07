@@ -4396,6 +4396,7 @@ async fn get_user_handler(
         "id": user.id,
         "username": user.username,
         "email": user.email,
+        "syndicate_credits": user.syndicate_credits,
     });
     
     Ok(Json(response))

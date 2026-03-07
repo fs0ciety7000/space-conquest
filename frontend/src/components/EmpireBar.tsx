@@ -79,7 +79,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     mining_speed_multiplier: 1.0
   });
   const [configLoaded, setConfigLoaded] = useState(false);
-  const [syndicateCredits, setSyndicateCredits] = useState<number | null>(null);
+  const [syndicateCredits, setSyndicateCredits] = useState<number>(0);
 
   // Hook pour ressources en temps réel
   const realtimeResources = useRealtimeResources(planet, speedFactor, config);
@@ -450,7 +450,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             <ResourceItem icon={Droplets} value={realtimeResources?.deuterium ?? planet.deuterium_amount} label="Deutérium" color="text-green-300" production={prodDeut} max={storageCapacity} />
 
             {/* CRÉDITS DU SYNDICAT */}
-            {syndicateCredits !== null && (
+            {(
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>

@@ -302,7 +302,7 @@ pub async fn create_route_handler(
     let route_id = Uuid::new_v4();
 
     let name_escaped = payload.name.replace('\'', "''");
-    db.execute_unprepared(&format!(
+    if let Err(e) = db.execute_unprepared(&format!(
         "INSERT INTO trade_route (id, owner_id, name, source_planet_id, target_planet_id, ship_count, \
          metal_ratio, crystal_ratio, deuterium_ratio, is_active, next_run_at, created_at) \
          VALUES ('{}', '{}', '{}', '{}', '{}', {}, {}, {}, {}, true, '{}', '{}')",
@@ -312,7 +312,9 @@ pub async fn create_route_handler(
         clamp_ratio(payload.metal_ratio), clamp_ratio(payload.crystal_ratio), clamp_ratio(payload.deuterium_ratio),
         next_run.format("%Y-%m-%d %H:%M:%S"),
         now.format("%Y-%m-%d %H:%M:%S"),
-    )).await.ok();
+    )).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Erreur DB: {}", e)}))).into_response();
+    }
 
     match route_to_json(db, &route_id.to_string(), flight_speed).await {
         Some(r) => (StatusCode::CREATED, Json(json!({"route": r}))).into_response(),

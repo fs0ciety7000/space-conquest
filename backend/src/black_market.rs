@@ -60,45 +60,57 @@ fn extract_user_id(headers: &axum::http::HeaderMap) -> Option<Uuid> {
     Uuid::parse_str(uuid_str).ok()
 }
 
-/// Returns (espionage_level, computer_level) for a user's homeworld planet.
+/// Returns the best (espionage, computer) pair where both levels come from the same planet.
+/// Iterates all user planets; returns immediately if one planet satisfies both requirements.
+/// Falls back to per-planet best for display purposes (access check still uses AND logic).
 async fn get_user_tech_levels(
     db: &sea_orm::DatabaseConnection,
     user_id: Uuid,
 ) -> (i32, i32) {
-    // Find any planet owned by user to check tech levels
-    let planet = match crate::entities::prelude::Planet::find()
+    let planets = match crate::entities::prelude::Planet::find()
         .filter(crate::entities::planet::Column::OwnerId.eq(user_id))
-        .one(db)
+        .all(db)
         .await
     {
-        Ok(Some(p)) => p,
+        Ok(p) if !p.is_empty() => p,
         _ => return (0, 0),
     };
 
     let all_techs = Technology::find().all(db).await.unwrap_or_default();
-    let planet_techs = PlanetTechnology::find()
-        .filter(planet_technology::Column::PlanetId.eq(planet.id))
-        .all(db)
-        .await
-        .unwrap_or_default();
-
     let tech_id_map: std::collections::HashMap<i32, String> = all_techs
         .iter()
         .map(|t| (t.id, t.tech_key.clone()))
         .collect();
 
-    let mut espionage = 0i32;
-    let mut computer = 0i32;
+    let mut best_esp = 0i32;
+    let mut best_comp = 0i32;
 
-    for pt in &planet_techs {
-        match tech_id_map.get(&pt.tech_id).map(|s| s.as_str()) {
-            Some("espionage_tech") => espionage = pt.current_level,
-            Some("computer_tech") => computer = pt.current_level,
-            _ => {}
+    for planet in &planets {
+        let planet_techs = PlanetTechnology::find()
+            .filter(planet_technology::Column::PlanetId.eq(planet.id))
+            .all(db)
+            .await
+            .unwrap_or_default();
+
+        let mut esp = 0i32;
+        let mut comp = 0i32;
+        for pt in &planet_techs {
+            match tech_id_map.get(&pt.tech_id).map(|s| s.as_str()) {
+                Some("espionage") => esp = pt.current_level,
+                Some("computer_tech") => comp = pt.current_level,
+                _ => {}
+            }
         }
+        // Short-circuit: this planet alone satisfies both requirements
+        if esp >= ESPIONAGE_REQ && comp >= COMPUTER_REQ {
+            return (esp, comp);
+        }
+        best_esp = best_esp.max(esp);
+        best_comp = best_comp.max(comp);
     }
 
-    (espionage, computer)
+    // No single planet qualifies; return per-planet bests for display
+    (best_esp, best_comp)
 }
 
 fn access_denied() -> axum::response::Response {

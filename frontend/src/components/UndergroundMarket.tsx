@@ -174,7 +174,7 @@ export default function UndergroundMarket({
           <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
             {[
               { label: "Tech. Espionnage", key: "espionage_tech", req: req.espionage_tech },
-              { label: "Tech. Ordinateurs", key: "computer_tech", req: req.computer_tech },
+              { label: "Tech. Informatique", key: "computer_tech", req: req.computer_tech },
             ].map(({ label, key, req: required }) => {
               const current = cur?.[key as keyof typeof cur] ?? 0;
               const met = current >= required;
