@@ -366,6 +366,7 @@ async fn main() {
         .route("/admin/user/:id/username", patch(admin::update_username_handler))
         .route("/admin/user/:id/email", patch(admin::update_email_handler))
         .route("/admin/user/:id/reset-password", post(admin::reset_password_handler))
+        .route("/admin/user/:id/syndicate-credits", patch(admin::update_syndicate_credits_handler))
         .route("/admin/user/:id", delete(admin::delete_user_handler))
         // Announcements
         .route("/admin/announcements", get(admin::get_announcements_handler))

@@ -22,6 +22,7 @@ interface Player {
   email: string;
   planets: PlanetInfo[];
   total_points: number;
+  syndicate_credits: number;
 }
 
 interface PlanetData {
@@ -48,6 +49,8 @@ interface PlanetData {
   shipyard_level: number;
   research_lab_level: number;
   hangar_level: number;
+  resource_storage_level: number;
+  fusion_plant_level: number;
 
   // Technologies
   energy_tech_level: number;
@@ -56,6 +59,11 @@ interface PlanetData {
   espionage_tech_level: number;
   weapons_tech_level: number;
   shield_tech_level: number;
+  computer_tech_level: number;
+  hyperspace_tech_level: number;
+  plasma_tech_level: number;
+  astrophysics_level: number;
+  graviton_tech_level: number;
 
   // Flotte
   light_hunter_count: number;
@@ -69,6 +77,7 @@ interface PlanetData {
   colony_ship_count: number;
   transporter_count: number;
   deathstar_count: number;
+  grand_cargo_count: number;
 
   // Défenses
   rocket_launcher_count: number;
@@ -148,18 +157,30 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     icon: Target,
     color: 'orange',
     configs: [
-      { key: 'combat_light_hunter_attack', label: 'Chasseur - Attaque', description: 'Puissance attaque chasseur léger', defaultValue: '50.0' },
-      { key: 'combat_light_hunter_shield', label: 'Chasseur - Bouclier', description: 'Puissance bouclier chasseur léger', defaultValue: '10.0' },
-      { key: 'combat_light_hunter_hull', label: 'Chasseur - Coque', description: 'Points de structure chasseur léger', defaultValue: '400.0' },
-      { key: 'combat_cruiser_attack', label: 'Croiseur - Attaque', description: 'Puissance attaque croiseur', defaultValue: '400.0' },
-      { key: 'combat_cruiser_shield', label: 'Croiseur - Bouclier', description: 'Puissance bouclier croiseur', defaultValue: '50.0' },
-      { key: 'combat_cruiser_hull', label: 'Croiseur - Coque', description: 'Points de structure croiseur', defaultValue: '2700.0' },
-      { key: 'combat_missile_launcher_attack', label: 'Missile - Attaque', description: 'Puissance attaque lanceur missiles', defaultValue: '80.0' },
-      { key: 'combat_missile_launcher_shield', label: 'Missile - Bouclier', description: 'Puissance bouclier lanceur missiles', defaultValue: '20.0' },
-      { key: 'combat_missile_launcher_hull', label: 'Missile - Coque', description: 'Points de structure lanceur missiles', defaultValue: '200.0' },
-      { key: 'combat_plasma_turret_attack', label: 'Plasma - Attaque', description: 'Puissance attaque tourelle plasma', defaultValue: '3000.0' },
-      { key: 'combat_plasma_turret_shield', label: 'Plasma - Bouclier', description: 'Puissance bouclier tourelle plasma', defaultValue: '300.0' },
-      { key: 'combat_plasma_turret_hull', label: 'Plasma - Coque', description: 'Points de structure tourelle plasma', defaultValue: '10000.0' },
+      { key: 'combat_light_hunter_attack', label: 'Chasseur Léger - ATK', description: 'Puissance attaque chasseur léger', defaultValue: '50.0' },
+      { key: 'combat_light_hunter_shield', label: 'Chasseur Léger - BOU', description: 'Puissance bouclier chasseur léger', defaultValue: '10.0' },
+      { key: 'combat_light_hunter_hull', label: 'Chasseur Léger - COQ', description: 'Points de structure chasseur léger', defaultValue: '400.0' },
+      { key: 'combat_heavy_hunter_attack', label: 'Chasseur Lourd - ATK', description: 'Puissance attaque chasseur lourd', defaultValue: '150.0' },
+      { key: 'combat_heavy_hunter_shield', label: 'Chasseur Lourd - BOU', description: 'Puissance bouclier chasseur lourd', defaultValue: '25.0' },
+      { key: 'combat_heavy_hunter_hull', label: 'Chasseur Lourd - COQ', description: 'Points de structure chasseur lourd', defaultValue: '1000.0' },
+      { key: 'combat_cruiser_attack', label: 'Croiseur - ATK', description: 'Puissance attaque croiseur', defaultValue: '400.0' },
+      { key: 'combat_cruiser_shield', label: 'Croiseur - BOU', description: 'Puissance bouclier croiseur', defaultValue: '50.0' },
+      { key: 'combat_cruiser_hull', label: 'Croiseur - COQ', description: 'Points de structure croiseur', defaultValue: '2700.0' },
+      { key: 'combat_battleship_attack', label: 'Cuirassé - ATK', description: 'Puissance attaque cuirassé', defaultValue: '1000.0' },
+      { key: 'combat_battleship_shield', label: 'Cuirassé - BOU', description: 'Puissance bouclier cuirassé', defaultValue: '200.0' },
+      { key: 'combat_battleship_hull', label: 'Cuirassé - COQ', description: 'Points de structure cuirassé', defaultValue: '6000.0' },
+      { key: 'combat_bomber_attack', label: 'Bombardier - ATK', description: 'Puissance attaque bombardier', defaultValue: '1000.0' },
+      { key: 'combat_bomber_shield', label: 'Bombardier - BOU', description: 'Puissance bouclier bombardier', defaultValue: '500.0' },
+      { key: 'combat_bomber_hull', label: 'Bombardier - COQ', description: 'Points de structure bombardier', defaultValue: '7500.0' },
+      { key: 'combat_destroyer_attack', label: 'Destroyer - ATK', description: 'Puissance attaque destroyer', defaultValue: '2000.0' },
+      { key: 'combat_destroyer_shield', label: 'Destroyer - BOU', description: 'Puissance bouclier destroyer', defaultValue: '500.0' },
+      { key: 'combat_destroyer_hull', label: 'Destroyer - COQ', description: 'Points de structure destroyer', defaultValue: '11000.0' },
+      { key: 'combat_missile_launcher_attack', label: 'Lance-Missiles - ATK', description: 'Puissance attaque lanceur missiles', defaultValue: '80.0' },
+      { key: 'combat_missile_launcher_shield', label: 'Lance-Missiles - BOU', description: 'Puissance bouclier lanceur missiles', defaultValue: '20.0' },
+      { key: 'combat_missile_launcher_hull', label: 'Lance-Missiles - COQ', description: 'Points de structure lanceur missiles', defaultValue: '200.0' },
+      { key: 'combat_plasma_turret_attack', label: 'Tourelle Plasma - ATK', description: 'Puissance attaque tourelle plasma', defaultValue: '3000.0' },
+      { key: 'combat_plasma_turret_shield', label: 'Tourelle Plasma - BOU', description: 'Puissance bouclier tourelle plasma', defaultValue: '300.0' },
+      { key: 'combat_plasma_turret_hull', label: 'Tourelle Plasma - COQ', description: 'Points de structure tourelle plasma', defaultValue: '10000.0' },
     ]
   },
   {
@@ -168,10 +189,17 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     icon: Crosshair,
     color: 'purple',
     configs: [
-      { key: 'combat_rf_cruiser_vs_light_hunter', label: 'Croiseur vs Chasseur', description: 'Multiplicateur rapid fire croiseur contre chasseur', defaultValue: '6.0' },
-      { key: 'combat_rf_cruiser_vs_missile_launcher', label: 'Croiseur vs Missile', description: 'Multiplicateur rapid fire croiseur contre missile', defaultValue: '10.0' },
-      { key: 'combat_rf_plasma_vs_light_hunter', label: 'Plasma vs Chasseur', description: 'Multiplicateur rapid fire plasma contre chasseur', defaultValue: '5.0' },
-      { key: 'combat_rf_plasma_vs_cruiser', label: 'Plasma vs Croiseur', description: 'Multiplicateur rapid fire plasma contre croiseur', defaultValue: '3.0' },
+      { key: 'combat_rf_cruiser_vs_light_hunter', label: 'Croiseur vs Chasseur Léger', description: 'Rapid fire croiseur contre chasseur léger', defaultValue: '6.0' },
+      { key: 'combat_rf_cruiser_vs_missile_launcher', label: 'Croiseur vs Lance-Missiles', description: 'Rapid fire croiseur contre lance-missiles', defaultValue: '10.0' },
+      { key: 'combat_rf_heavy_hunter_vs_spy_probe', label: 'Chasseur Lourd vs Sonde', description: 'Rapid fire chasseur lourd contre sonde', defaultValue: '5.0' },
+      { key: 'combat_rf_battleship_vs_light_hunter', label: 'Cuirassé vs Chasseur Léger', description: 'Rapid fire cuirassé contre chasseur léger', defaultValue: '4.0' },
+      { key: 'combat_rf_battleship_vs_heavy_hunter', label: 'Cuirassé vs Chasseur Lourd', description: 'Rapid fire cuirassé contre chasseur lourd', defaultValue: '3.0' },
+      { key: 'combat_rf_bomber_vs_missile_launcher', label: 'Bombardier vs Lance-Missiles', description: 'Rapid fire bombardier contre lance-missiles', defaultValue: '20.0' },
+      { key: 'combat_rf_bomber_vs_plasma_turret', label: 'Bombardier vs Plasma', description: 'Rapid fire bombardier contre tourelle plasma', defaultValue: '10.0' },
+      { key: 'combat_rf_destroyer_vs_battleship', label: 'Destroyer vs Cuirassé', description: 'Rapid fire destroyer contre cuirassé', defaultValue: '2.0' },
+      { key: 'combat_rf_destroyer_vs_bomber', label: 'Destroyer vs Bombardier', description: 'Rapid fire destroyer contre bombardier', defaultValue: '5.0' },
+      { key: 'combat_rf_plasma_vs_light_hunter', label: 'Plasma vs Chasseur Léger', description: 'Rapid fire tourelle plasma contre chasseur léger', defaultValue: '5.0' },
+      { key: 'combat_rf_plasma_vs_cruiser', label: 'Plasma vs Croiseur', description: 'Rapid fire tourelle plasma contre croiseur', defaultValue: '3.0' },
     ]
   },
   {
@@ -212,11 +240,15 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     icon: Box,
     color: 'teal',
     configs: [
-      { key: 'cargo_light_hunter', label: 'Chasseur - Cargo', description: 'Capacité cargo chasseur léger', defaultValue: '50.0' },
+      { key: 'cargo_light_hunter', label: 'Chasseur Léger - Cargo', description: 'Capacité cargo chasseur léger', defaultValue: '50.0' },
+      { key: 'cargo_heavy_hunter', label: 'Chasseur Lourd - Cargo', description: 'Capacité cargo chasseur lourd', defaultValue: '100.0' },
       { key: 'cargo_cruiser', label: 'Croiseur - Cargo', description: 'Capacité cargo croiseur', defaultValue: '800.0' },
+      { key: 'cargo_battleship', label: 'Cuirassé - Cargo', description: 'Capacité cargo cuirassé', defaultValue: '1500.0' },
+      { key: 'cargo_bomber', label: 'Bombardier - Cargo', description: 'Capacité cargo bombardier', defaultValue: '500.0' },
+      { key: 'cargo_destroyer', label: 'Destroyer - Cargo', description: 'Capacité cargo destroyer', defaultValue: '2000.0' },
       { key: 'cargo_transporter_base', label: 'Transporteur - Base', description: 'Capacité base transporteur', defaultValue: '10000.0' },
       { key: 'cargo_transporter_bonus_per_hangar', label: 'Transporteur - Bonus Hangar', description: 'Bonus par niveau hangar (+5%)', defaultValue: '0.05' },
-      { key: 'cargo_transporter_bonus_per_computer_tech', label: 'Transporteur - Bonus Tech Informatique', description: 'Bonus de cargo par niveau de tech informatique (+10% par niv.)', defaultValue: '0.1' },
+      { key: 'cargo_transporter_bonus_per_computer_tech', label: 'Transporteur - Bonus Informatique', description: 'Bonus cargo par niveau tech informatique', defaultValue: '0.1' },
     ]
   },
   {
@@ -251,6 +283,9 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
       { key: 'expedition_cruiser_crystal_range', label: 'Croiseur - Cristal Range', description: 'Variation cristal croiseur', defaultValue: '40.0' },
       { key: 'expedition_cruiser_deut_min', label: 'Croiseur - Deut Min', description: 'Deutérium min par croiseur', defaultValue: '30.0' },
       { key: 'expedition_cruiser_deut_range', label: 'Croiseur - Deut Range', description: 'Variation deutérium croiseur', defaultValue: '30.0' },
+      { key: 'expedition_syndicate_credit_chance', label: 'SC - Chance Découverte', description: 'Probabilité de trouver des SC en expédition (10%)', defaultValue: '0.10' },
+      { key: 'expedition_syndicate_credit_min', label: 'SC - Min', description: 'SC minimum trouvables', defaultValue: '1.0' },
+      { key: 'expedition_syndicate_credit_max', label: 'SC - Max', description: 'SC maximum trouvables', defaultValue: '2.0' },
     ]
   },
   {
@@ -259,8 +294,8 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     icon: Crosshair,
     color: 'rose',
     configs: [
-      { key: 'expedition_pirate_strength_min', label: 'Force Pirates Min', description: 'Force min flotte pirates', defaultValue: '10.0' },
-      { key: 'expedition_pirate_strength_max', label: 'Force Pirates Max', description: 'Force max flotte pirates', defaultValue: '100.0' },
+      { key: 'expedition_pirate_scaling_min', label: 'Scaling Pirates Min', description: 'Échelle min flotte pirates (game_logic)', defaultValue: '10.0' },
+      { key: 'expedition_pirate_scaling_max', label: 'Scaling Pirates Max', description: 'Échelle max flotte pirates (game_logic)', defaultValue: '100.0' },
       { key: 'expedition_victory_loss_min', label: 'Perte Victoire Min', description: 'Perte min en victoire (3%)', defaultValue: '0.03' },
       { key: 'expedition_victory_loss_max', label: 'Perte Victoire Max', description: 'Perte max en victoire (15%)', defaultValue: '0.15' },
       { key: 'expedition_victory_loss_variation', label: 'Variation Perte Victoire', description: 'Variation perte victoire (±10%)', defaultValue: '0.1' },
@@ -305,10 +340,22 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     icon: Rocket,
     color: 'cyan',
     configs: [
-      { key: 'ship_light_hunter_metal', label: 'Chasseur - Métal', description: 'Coût métal chasseur léger', defaultValue: '3000.0' },
-      { key: 'ship_light_hunter_crystal', label: 'Chasseur - Cristal', description: 'Coût cristal chasseur léger', defaultValue: '1000.0' },
+      { key: 'ship_light_hunter_metal', label: 'Chasseur Léger - Métal', description: 'Coût métal chasseur léger', defaultValue: '3000.0' },
+      { key: 'ship_light_hunter_crystal', label: 'Chasseur Léger - Cristal', description: 'Coût cristal chasseur léger', defaultValue: '1000.0' },
+      { key: 'ship_heavy_hunter_metal', label: 'Chasseur Lourd - Métal', description: 'Coût métal chasseur lourd', defaultValue: '6000.0' },
+      { key: 'ship_heavy_hunter_crystal', label: 'Chasseur Lourd - Cristal', description: 'Coût cristal chasseur lourd', defaultValue: '4000.0' },
+      { key: 'ship_heavy_hunter_deuterium', label: 'Chasseur Lourd - Deutérium', description: 'Coût deutérium chasseur lourd', defaultValue: '1000.0' },
       { key: 'ship_cruiser_metal', label: 'Croiseur - Métal', description: 'Coût métal croiseur', defaultValue: '20000.0' },
       { key: 'ship_cruiser_crystal', label: 'Croiseur - Cristal', description: 'Coût cristal croiseur', defaultValue: '7000.0' },
+      { key: 'ship_battleship_metal', label: 'Cuirassé - Métal', description: 'Coût métal cuirassé', defaultValue: '45000.0' },
+      { key: 'ship_battleship_crystal', label: 'Cuirassé - Cristal', description: 'Coût cristal cuirassé', defaultValue: '15000.0' },
+      { key: 'ship_battleship_deuterium', label: 'Cuirassé - Deutérium', description: 'Coût deutérium cuirassé', defaultValue: '5000.0' },
+      { key: 'ship_bomber_metal', label: 'Bombardier - Métal', description: 'Coût métal bombardier', defaultValue: '50000.0' },
+      { key: 'ship_bomber_crystal', label: 'Bombardier - Cristal', description: 'Coût cristal bombardier', defaultValue: '25000.0' },
+      { key: 'ship_bomber_deuterium', label: 'Bombardier - Deutérium', description: 'Coût deutérium bombardier', defaultValue: '15000.0' },
+      { key: 'ship_destroyer_metal', label: 'Destroyer - Métal', description: 'Coût métal destroyer', defaultValue: '60000.0' },
+      { key: 'ship_destroyer_crystal', label: 'Destroyer - Cristal', description: 'Coût cristal destroyer', defaultValue: '50000.0' },
+      { key: 'ship_destroyer_deuterium', label: 'Destroyer - Deutérium', description: 'Coût deutérium destroyer', defaultValue: '15000.0' },
       { key: 'ship_transporter_metal', label: 'Transporteur - Métal', description: 'Coût métal transporteur', defaultValue: '4000.0' },
       { key: 'ship_transporter_crystal', label: 'Transporteur - Cristal', description: 'Coût cristal transporteur', defaultValue: '4000.0' },
       { key: 'ship_recycler_metal', label: 'Recycleur - Métal', description: 'Coût métal recycleur', defaultValue: '10000.0' },
@@ -317,6 +364,9 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
       { key: 'ship_spy_probe_crystal', label: 'Sonde - Cristal', description: 'Coût cristal sonde espionnage', defaultValue: '0.0' },
       { key: 'ship_colony_ship_metal', label: 'Colon - Métal', description: 'Coût métal vaisseau colonisation', defaultValue: '10000.0' },
       { key: 'ship_colony_ship_crystal', label: 'Colon - Cristal', description: 'Coût cristal vaisseau colonisation', defaultValue: '20000.0' },
+      { key: 'ship_deathstar_metal', label: 'Étoile Mort - Métal', description: 'Coût métal étoile de la mort', defaultValue: '5000000.0' },
+      { key: 'ship_deathstar_crystal', label: 'Étoile Mort - Cristal', description: 'Coût cristal étoile de la mort', defaultValue: '4000000.0' },
+      { key: 'ship_deathstar_deuterium', label: 'Étoile Mort - Deutérium', description: 'Coût deutérium étoile de la mort', defaultValue: '1000000.0' },
     ]
   },
   {
@@ -351,12 +401,12 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     icon: Battery,
     color: 'yellow',
     configs: [
-      { key: 'energy_solar_base', label: 'Production Solaire - Base', description: 'Production base centrale solaire', defaultValue: '60.0' },
-      { key: 'energy_solar_growth', label: 'Production Solaire - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
+      { key: 'energy_solar_base', label: 'Solaire - Base', description: 'Production base centrale solaire', defaultValue: '60.0' },
+      { key: 'energy_solar_growth', label: 'Solaire - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
       { key: 'energy_tech_bonus', label: 'Bonus Tech Énergie', description: 'Bonus par niveau tech énergie (+10%)', defaultValue: '0.10' },
       { key: 'energy_mine_consumption_base', label: 'Consommation Mine - Base', description: 'Consommation base des mines', defaultValue: '10.0' },
-      { key: 'energy_mine_consumption_growth', label: 'Consommation Mine - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
-      { key: 'energy_deuterium_extra_consumption', label: 'Deutérium - Consommation Extra', description: 'Consommation supplémentaire deutérium', defaultValue: '20.0' },
+      { key: 'energy_mine_consumption_growth', label: 'Consommation Mine - Croissance', description: 'Facteur croissance consommation mines', defaultValue: '1.1' },
+      { key: 'energy_deuterium_extra_consumption', label: 'Deutérium - Conso Extra', description: 'Consommation supplémentaire mine deutérium', defaultValue: '20.0' },
     ]
   },
 ];
@@ -1665,6 +1715,26 @@ export default function AdminPanel() {
                         className="bg-black/40 border-white/10 text-white font-mono"
                       />
                     </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Stockage</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={editedData.resource_storage_level ?? 0}
+                        onChange={(e) => setEditedData({...editedData, resource_storage_level: parseInt(e.target.value) || 0})}
+                        className="bg-black/40 border-white/10 text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Fusion</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={editedData.fusion_plant_level ?? 0}
+                        onChange={(e) => setEditedData({...editedData, fusion_plant_level: parseInt(e.target.value) || 0})}
+                        className="bg-black/40 border-white/10 text-white font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1679,6 +1749,11 @@ export default function AdminPanel() {
                       { key: 'weapons_tech_level', label: 'Armes' },
                       { key: 'shield_tech_level', label: 'Bouclier' },
                       { key: 'espionage_tech_level', label: 'Espionnage' },
+                      { key: 'computer_tech_level', label: 'Informatique' },
+                      { key: 'hyperspace_tech_level', label: 'Hyperespace' },
+                      { key: 'plasma_tech_level', label: 'Plasma' },
+                      { key: 'astrophysics_level', label: 'Astrophysique' },
+                      { key: 'graviton_tech_level', label: 'Graviton' },
                     ].map(item => (
                       <div key={item.key}>
                         <label className="text-xs text-slate-500 mb-1 block">{item.label}</label>
@@ -1710,6 +1785,7 @@ export default function AdminPanel() {
                       { key: 'colony_ship_count', label: 'Colons' },
                       { key: 'transporter_count', label: 'Transporteurs' },
                       { key: 'deathstar_count', label: 'Étoile de la Mort' },
+                      { key: 'grand_cargo_count', label: 'Grands Cargos' },
                     ].map(item => (
                       <div key={item.key}>
                         <label className="text-xs text-slate-500 mb-1 block">{item.label}</label>
@@ -1921,6 +1997,42 @@ export default function AdminPanel() {
                           }}
                         >
                           Modifier email
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10"
+                          onClick={async () => {
+                            const current = player.syndicate_credits ?? 0;
+                            const newVal = prompt(`Crédits Syndicat pour ${player.username} (actuel: ${current}):`, String(current));
+                            if (newVal === null) return;
+                            const parsed = parseFloat(newVal);
+                            if (isNaN(parsed) || parsed < 0) {
+                              toast.error('Valeur invalide');
+                              return;
+                            }
+                            try {
+                              const res = await fetch(apiUrl(`/admin/user/${player.id}/syndicate-credits?user_id=${userId}`), {
+                                method: 'PATCH',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ syndicate_credits: parsed })
+                              });
+                              if (res.ok) {
+                                toast.success(`✅ SC mis à jour: ${parsed}`);
+                                fetchPlayers();
+                              } else {
+                                const err = await res.json();
+                                toast.error(err.error || 'Erreur');
+                              }
+                            } catch (e) {
+                              toast.error('Erreur réseau');
+                            }
+                          }}
+                        >
+                          SC: {player.syndicate_credits?.toFixed(0) ?? 0}
                         </Button>
                         <Button
                           size="sm"

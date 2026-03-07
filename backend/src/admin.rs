@@ -46,6 +46,7 @@ struct PlayerListItem {
     email: String,
     planets: Vec<PlanetInfo>,
     total_points: i32,
+    syndicate_credits: f64,
 }
 
 #[derive(Deserialize)]
@@ -65,6 +66,8 @@ pub struct PlanetUpdate {
     pub shipyard_level: Option<i32>,
     pub research_lab_level: Option<i32>,
     pub hangar_level: Option<i32>,
+    pub resource_storage_level: Option<i32>,
+    pub fusion_plant_level: Option<i32>,
 
     // Technologies
     pub energy_tech_level: Option<i32>,
@@ -73,6 +76,11 @@ pub struct PlanetUpdate {
     pub espionage_tech_level: Option<i32>,
     pub weapons_tech_level: Option<i32>,
     pub shield_tech_level: Option<i32>,
+    pub computer_tech_level: Option<i32>,
+    pub hyperspace_tech_level: Option<i32>,
+    pub plasma_tech_level: Option<i32>,
+    pub astrophysics_level: Option<i32>,
+    pub graviton_tech_level: Option<i32>,
 
     // Flotte
     pub light_hunter_count: Option<i32>,
@@ -86,6 +94,7 @@ pub struct PlanetUpdate {
     pub colony_ship_count: Option<i32>,
     pub transporter_count: Option<i32>,
     pub deathstar_count: Option<i32>,
+    pub grand_cargo_count: Option<i32>,
 
     // Défenses
     pub rocket_launcher_count: Option<i32>,
@@ -148,10 +157,11 @@ pub async fn get_all_players_handler(
 
         result.push(PlayerListItem {
             id: user.id,
+            syndicate_credits: user.syndicate_credits,
             username: user.username,
             email: user.email,
             planets: planet_infos,
-            total_points: 0, // À calculer plus tard si besoin
+            total_points: 0,
         });
     }
 
@@ -176,9 +186,25 @@ pub async fn get_planet_admin_handler(
 
     if let Some(p) = planet {
         let building_levels = crate::tech_tree::get_all_planet_building_levels(&state.db, p.id).await.unwrap_or_default();
-        let tech_levels = crate::tech_tree::get_all_planet_tech_levels(&state.db, p.id).await.unwrap_or_default();
         let ship_counts = crate::tech_tree::get_all_planet_ship_counts(&state.db, p.id).await.unwrap_or_default();
         let defense_counts = crate::tech_tree::get_all_planet_defense_counts(&state.db, p.id).await.unwrap_or_default();
+
+        // Tech levels are per-planet in the DB, but technologies are effectively global
+        // (the game uses max across all planets). Show max across all owner's planets.
+        let owner_planets = Planet::find()
+            .filter(planet::Column::OwnerId.eq(p.owner_id))
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+        let mut tech_levels: HashMap<String, i32> = HashMap::new();
+        for op in &owner_planets {
+            if let Ok(levels) = crate::tech_tree::get_all_planet_tech_levels(&state.db, op.id).await {
+                for (key, level) in levels {
+                    let entry = tech_levels.entry(key).or_insert(0);
+                    if level > *entry { *entry = level; }
+                }
+            }
+        }
 
         let mut planet_json = serde_json::to_value(&p).unwrap();
         if let Some(obj) = planet_json.as_object_mut() {
@@ -189,12 +215,19 @@ pub async fn get_planet_admin_handler(
             obj.insert("shipyard_level".to_string(), json!(building_levels.get("shipyard").copied().unwrap_or(0)));
             obj.insert("research_lab_level".to_string(), json!(building_levels.get("research_lab").copied().unwrap_or(0)));
             obj.insert("hangar_level".to_string(), json!(building_levels.get("hangar").copied().unwrap_or(0)));
+            obj.insert("resource_storage_level".to_string(), json!(building_levels.get("resource_storage").copied().unwrap_or(0)));
+            obj.insert("fusion_plant_level".to_string(), json!(building_levels.get("fusion_plant").copied().unwrap_or(0)));
             obj.insert("energy_tech_level".to_string(), json!(tech_levels.get("energy_tech").copied().unwrap_or(0)));
             obj.insert("laser_battery_level".to_string(), json!(tech_levels.get("laser_tech").copied().unwrap_or(0)));
             obj.insert("armour_tech_level".to_string(), json!(tech_levels.get("armour_tech").copied().unwrap_or(0)));
             obj.insert("espionage_tech_level".to_string(), json!(tech_levels.get("espionage").copied().unwrap_or(0)));
             obj.insert("weapons_tech_level".to_string(), json!(tech_levels.get("weapons_tech").copied().unwrap_or(0)));
             obj.insert("shield_tech_level".to_string(), json!(tech_levels.get("shield_tech").copied().unwrap_or(0)));
+            obj.insert("computer_tech_level".to_string(), json!(tech_levels.get("computer_tech").copied().unwrap_or(0)));
+            obj.insert("hyperspace_tech_level".to_string(), json!(tech_levels.get("hyperspace_tech").copied().unwrap_or(0)));
+            obj.insert("plasma_tech_level".to_string(), json!(tech_levels.get("plasma_tech").copied().unwrap_or(0)));
+            obj.insert("astrophysics_level".to_string(), json!(tech_levels.get("astrophysics").copied().unwrap_or(0)));
+            obj.insert("graviton_tech_level".to_string(), json!(tech_levels.get("graviton_tech").copied().unwrap_or(0)));
             obj.insert("light_hunter_count".to_string(), json!(ship_counts.get("light_hunter").copied().unwrap_or(0)));
             obj.insert("heavy_hunter_count".to_string(), json!(ship_counts.get("heavy_hunter").copied().unwrap_or(0)));
             obj.insert("cruiser_count".to_string(), json!(ship_counts.get("cruiser").copied().unwrap_or(0)));
@@ -206,6 +239,7 @@ pub async fn get_planet_admin_handler(
             obj.insert("colony_ship_count".to_string(), json!(ship_counts.get("colony_ship").copied().unwrap_or(0)));
             obj.insert("transporter_count".to_string(), json!(ship_counts.get("transporter").copied().unwrap_or(0)));
             obj.insert("deathstar_count".to_string(), json!(ship_counts.get("deathstar").copied().unwrap_or(0)));
+            obj.insert("grand_cargo_count".to_string(), json!(ship_counts.get("grand_cargo").copied().unwrap_or(0)));
             obj.insert("rocket_launcher_count".to_string(), json!(defense_counts.get("rocket_launcher").copied().unwrap_or(0)));
             obj.insert("light_laser_count".to_string(), json!(defense_counts.get("light_laser").copied().unwrap_or(0)));
             obj.insert("heavy_laser_count".to_string(), json!(defense_counts.get("heavy_laser").copied().unwrap_or(0)));
@@ -279,6 +313,8 @@ pub async fn update_planet_admin_handler(
                 ("shipyard", updates.shipyard_level),
                 ("research_lab", updates.research_lab_level),
                 ("hangar", updates.hangar_level),
+                ("resource_storage", updates.resource_storage_level),
+                ("fusion_plant", updates.fusion_plant_level),
             ];
             let now = Utc::now().naive_utc();
             for (key, level_opt) in building_updates {
@@ -318,6 +354,11 @@ pub async fn update_planet_admin_handler(
                 ("espionage", updates.espionage_tech_level),
                 ("weapons_tech", updates.weapons_tech_level),
                 ("shield_tech", updates.shield_tech_level),
+                ("computer_tech", updates.computer_tech_level),
+                ("hyperspace_tech", updates.hyperspace_tech_level),
+                ("plasma_tech", updates.plasma_tech_level),
+                ("astrophysics", updates.astrophysics_level),
+                ("graviton_tech", updates.graviton_tech_level),
             ];
             for (key, level_opt) in tech_updates {
                 if let Some(level) = level_opt {
@@ -359,6 +400,7 @@ pub async fn update_planet_admin_handler(
                 ("colony_ship", updates.colony_ship_count),
                 ("transporter", updates.transporter_count),
                 ("deathstar", updates.deathstar_count),
+                ("grand_cargo", updates.grand_cargo_count),
             ];
             for (key, count_opt) in ship_updates {
                 if let Some(count) = count_opt {
@@ -820,6 +862,35 @@ pub async fn update_email_handler(
         })).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"})))
             .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SyndicateCreditsUpdate {
+    pub syndicate_credits: f64,
+}
+
+// PATCH /admin/user/:id/syndicate-credits - Modifier les SC d'un joueur
+pub async fn update_syndicate_credits_handler(
+    Path(target_user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(update): Json<SyndicateCreditsUpdate>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"}))).into_response();
+    }
+    let target_user = match User::find_by_id(target_user_id).one(&state.db).await.unwrap_or(None) {
+        Some(u) => u,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"}))).into_response(),
+    };
+    let new_credits = update.syndicate_credits.max(0.0);
+    let mut active: user::ActiveModel = target_user.into();
+    active.syndicate_credits = Set(new_credits);
+    match active.update(&state.db).await {
+        Ok(u) => Json(json!({"success": true, "syndicate_credits": u.syndicate_credits})).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
     }
 }
 

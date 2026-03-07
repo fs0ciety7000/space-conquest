@@ -17,11 +17,11 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use chrono::Utc;
-use sea_orm::{DatabaseConnection, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseConnection, Set};
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::entities::{economy_log, prelude::EconomyLog};
+use crate::entities::economy_log;
 use crate::AppState;
 
 // ── Helper ─────────────────────────────────────────────────────────────────────
