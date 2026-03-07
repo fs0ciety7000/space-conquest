@@ -139,7 +139,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
 
   const fetchMyPlanets = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl(`/my-planets?user_id=${userId}`));
+      const res = await fetch(apiUrl(`/my-planets?current_planet_id=${planetId}`));
       if (res.ok) {
         const data = await res.json();
         const planets: MyPlanet[] = (data.planets || data || []).map((p: any) => ({
@@ -153,7 +153,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
         setMyPlanets(planets);
       }
     } catch {}
-  }, [userId]);
+  }, [planetId]);
 
   useEffect(() => {
     Promise.all([fetchRoutes(), fetchMyPlanets(), fetchGameConfig(), fetchHubInfo(planetId)])

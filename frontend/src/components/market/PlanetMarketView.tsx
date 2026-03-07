@@ -421,20 +421,45 @@ function SellPanel({
   };
 
   const handleList = async () => {
+    if (!suggested) return;
+    // For NPC: confirm before proceeding (one-step flow)
+    if (listingType === 'npc') {
+      if (!confirm(`Vendre ${planet.name} au PNJ pour ${fmt(suggested.suggested_npc.metal)} M / ${fmt(suggested.suggested_npc.crystal)} C / ${fmt(suggested.suggested_npc.deuterium)} D ? IRRÉVERSIBLE.`)) return;
+    }
     setListing(true);
     try {
+      // Create or update listing
+      const npcMetal = suggested.suggested_npc.metal;
+      const npcCrystal = suggested.suggested_npc.crystal;
+      const npcDeuterium = suggested.suggested_npc.deuterium;
       const res = await fetch(apiUrl(`/market/planets/${planet.id}/list`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, listing_type: listingType, asking_price_metal: metal, asking_price_crystal: crystal, asking_price_deuterium: deuterium }),
+        body: JSON.stringify({
+          user_id: userId,
+          listing_type: listingType,
+          asking_price_metal: listingType === 'npc' ? npcMetal : metal,
+          asking_price_crystal: listingType === 'npc' ? npcCrystal : crystal,
+          asking_price_deuterium: listingType === 'npc' ? npcDeuterium : deuterium,
+        }),
       });
       const data = await res.json();
-      if (res.ok) {
-        toast.success(listingType === 'player' ? 'Planète mise en vente !' : 'Annonce créée — cliquez "Vendre au PNJ" pour finaliser');
+      if (!res.ok) { toast.error(data.error || 'Erreur'); return; }
+
+      if (listingType === 'npc') {
+        // Immediately sell to NPC after creating the listing
+        const sellRes = await fetch(apiUrl(`/market/planets/listings/${data.listing_id}/sell-npc?user_id=${userId}`), { method: 'POST' });
+        const sellData = await sellRes.json();
+        if (sellRes.ok) {
+          toast.success(`Planète vendue ! Reçu: ${fmt(sellData.received_metal)} M, ${fmt(sellData.received_crystal)} C, ${fmt(sellData.received_deuterium)} D.`);
+          onRefresh();
+        } else {
+          toast.error(sellData.error || 'Erreur lors de la vente');
+        }
+      } else {
+        toast.success('Planète mise en vente !');
         fetchSuggested();
         onRefresh();
-      } else {
-        toast.error(data.error || 'Erreur');
       }
     } finally {
       setListing(false);
@@ -506,60 +531,68 @@ function SellPanel({
           </Button>
         </div>
 
-        {/* Suggested price reference */}
-        {suggested && (
-          <div className="text-xs text-slate-500 space-y-1">
-            <div className="flex items-center justify-between">
-              <span>Prix suggéré ({listingType === 'player' ? '70%' : '40%'} valeur estimée)</span>
-              <button onClick={handleApplySuggested} className="text-indigo-400 hover:text-indigo-300 text-[10px] underline">Appliquer</button>
-            </div>
-            <PriceTag
-              metal={listingType === 'player' ? suggested.suggested_player.metal : suggested.suggested_npc.metal}
-              crystal={listingType === 'player' ? suggested.suggested_player.crystal : suggested.suggested_npc.crystal}
-              deuterium={listingType === 'player' ? suggested.suggested_player.deuterium : suggested.suggested_npc.deuterium}
-            />
+        {/* NPC mode: read-only fixed price */}
+        {listingType === 'npc' && suggested && (
+          <div className="bg-amber-950/30 border border-amber-500/20 rounded-lg p-3 space-y-2">
+            <div className="text-[10px] text-amber-400 uppercase tracking-wider font-bold">Prix PNJ fixe (40% valeur estimée)</div>
+            <PriceTag metal={suggested.suggested_npc.metal} crystal={suggested.suggested_npc.crystal} deuterium={suggested.suggested_npc.deuterium} />
+            <p className="text-[10px] text-amber-400/60">Ce prix est calculé automatiquement et ne peut pas être modifié.</p>
           </div>
         )}
 
-        {/* Price inputs */}
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <label className="text-[10px] text-yellow-400 mb-1 block">Métal</label>
-            <Input type="number" value={metal} onChange={e => setMetal(Number(e.target.value))}
-              className="h-8 text-xs bg-slate-900 border-yellow-500/30 text-yellow-300" />
-          </div>
-          <div>
-            <label className="text-[10px] text-cyan-400 mb-1 block">Cristal</label>
-            <Input type="number" value={crystal} onChange={e => setCrystal(Number(e.target.value))}
-              className="h-8 text-xs bg-slate-900 border-cyan-500/30 text-cyan-300" />
-          </div>
-          <div>
-            <label className="text-[10px] text-blue-400 mb-1 block">Deutérium</label>
-            <Input type="number" value={deuterium} onChange={e => setDeuterium(Number(e.target.value))}
-              className="h-8 text-xs bg-slate-900 border-blue-500/30 text-blue-300" />
-          </div>
-        </div>
+        {/* Player mode: editable price pre-filled from suggestion */}
+        {listingType === 'player' && (
+          <>
+            {suggested && (
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>Prix suggéré (70% valeur estimée)</span>
+                <button onClick={handleApplySuggested} className="text-indigo-400 hover:text-indigo-300 text-[10px] underline">Réinitialiser</button>
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-[10px] text-yellow-400 mb-1 block">Métal</label>
+                <Input type="number" value={metal} onChange={e => setMetal(Number(e.target.value))}
+                  className="h-8 text-xs bg-slate-900 border-yellow-500/30 text-yellow-300" />
+              </div>
+              <div>
+                <label className="text-[10px] text-cyan-400 mb-1 block">Cristal</label>
+                <Input type="number" value={crystal} onChange={e => setCrystal(Number(e.target.value))}
+                  className="h-8 text-xs bg-slate-900 border-cyan-500/30 text-cyan-300" />
+              </div>
+              <div>
+                <label className="text-[10px] text-blue-400 mb-1 block">Deutérium</label>
+                <Input type="number" value={deuterium} onChange={e => setDeuterium(Number(e.target.value))}
+                  className="h-8 text-xs bg-slate-900 border-blue-500/30 text-blue-300" />
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Actions */}
         <div className="flex gap-2">
-          {suggested?.existing_listing ? (
+          {listingType === 'npc' ? (
+            // NPC: direct sell button (no intermediate listing step needed for UX clarity)
+            <Button size="sm" onClick={suggested?.existing_listing ? handleSellNpc : handleList} disabled={sellingNpc || listing || !suggested}
+              className="w-full bg-red-800 hover:bg-red-700 text-xs gap-1">
+              {(sellingNpc || listing) ? <RefreshCw size={12} className="animate-spin" /> : <Coins size={12} />}
+              {suggested?.existing_listing ? 'Confirmer la vente au PNJ' : 'Vendre au PNJ'}
+            </Button>
+          ) : suggested?.existing_listing ? (
             <>
               <Button size="sm" onClick={handleList} disabled={listing} className="flex-1 bg-indigo-700 hover:bg-indigo-600 text-xs gap-1">
                 {listing ? <RefreshCw size={12} className="animate-spin" /> : <Tag size={12} />}
-                Mettre à jour l'annonce
+                Mettre à jour le prix
               </Button>
-              {listingType === 'npc' && (
-                <Button size="sm" onClick={handleSellNpc} disabled={sellingNpc}
-                  className="flex-1 bg-red-800 hover:bg-red-700 text-xs gap-1">
-                  {sellingNpc ? <RefreshCw size={12} className="animate-spin" /> : <Coins size={12} />}
-                  Vendre au PNJ maintenant
-                </Button>
-              )}
+              <Button size="sm" variant="ghost" onClick={() => { if (suggested?.existing_listing) { fetch(apiUrl(`/market/planets/listings/${suggested.existing_listing.id}?user_id=${userId}`), { method: 'DELETE' }).then(() => { fetchSuggested(); onRefresh(); }); } }}
+                className="text-red-400 hover:text-red-300 text-xs gap-1 h-8">
+                <X size={12} /> Retirer
+              </Button>
             </>
           ) : (
-            <Button size="sm" onClick={handleList} disabled={listing} className="w-full bg-indigo-700 hover:bg-indigo-600 text-xs gap-1">
+            <Button size="sm" onClick={handleList} disabled={listing || !suggested} className="w-full bg-indigo-700 hover:bg-indigo-600 text-xs gap-1">
               {listing ? <RefreshCw size={12} className="animate-spin" /> : <Tag size={12} />}
-              {listingType === 'player' ? 'Publier l\'annonce' : 'Créer annonce PNJ'}
+              Publier l'annonce
             </Button>
           )}
         </div>
@@ -567,7 +600,7 @@ function SellPanel({
         {listingType === 'npc' && (
           <p className="text-[10px] text-amber-400/70 flex items-start gap-1">
             <AlertTriangle size={10} className="mt-0.5 flex-shrink-0" />
-            La vente au PNJ est définitive : la planète sera supprimée et le slot libéré.
+            Irréversible : la planète sera supprimée et le slot libéré dans la galaxie.
           </p>
         )}
         {listingType === 'player' && (

@@ -70,14 +70,14 @@ async fn compute_suggested_price(
         row
     };
 
-    // 2. Buildings investment: SUM of base_cost_metal * 2 * level for each building
+    // 2. Buildings investment: SUM of costs * level for each building
     let buildings_metal: i64 = db.query_one(Statement::from_string(
         DbBackend::Postgres,
         format!(
             "SELECT COALESCE(SUM((bt.base_cost_metal + bt.base_cost_crystal + bt.base_cost_deuterium) \
              * POWER(bt.cost_multiplier, pb.level::float - 1) * pb.level::float / bt.cost_multiplier), 0)::BIGINT AS val \
              FROM planet_buildings pb \
-             JOIN building_types bt ON bt.building_key = pb.building_type_key \
+             JOIN building_types bt ON bt.id = pb.building_type_id \
              WHERE pb.planet_id = '{}'",
             planet_id
         ),
@@ -710,9 +710,9 @@ pub async fn get_listing_details_handler(
     let buildings: Vec<serde_json::Value> = db.query_all(Statement::from_string(
         DbBackend::Postgres,
         format!(
-            "SELECT pb.building_type_key AS key, pb.level, bt.name \
+            "SELECT bt.building_key AS key, pb.level, bt.name \
              FROM planet_buildings pb \
-             JOIN building_types bt ON bt.building_key = pb.building_type_key \
+             JOIN building_types bt ON bt.id = pb.building_type_id \
              WHERE pb.planet_id = '{}' AND pb.level > 0 \
              ORDER BY pb.level DESC",
             planet_id

@@ -2013,12 +2013,14 @@ async fn upgrade_mine_handler(
     let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     let config = state.config.read().unwrap().clone();
 
-    // Check queue limit across ALL build types (buildings, tech, ships, defenses)
-    let active_builds = count_active_builds(&state.db, p.id)
+    // Check per-category slot limit (buildings use "resources" or "facilities" category)
+    let bld_category = build_queue::building_category(&type_mine);
+    let category_slots = build_queue::get_category_slots(&state.db, &config, p.id, bld_category).await;
+    let active_in_cat = build_queue::count_active_in_category(&state.db, p.id, bld_category)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    if active_builds >= 3 {
+    if active_in_cat >= category_slots as i64 {
         return Err(StatusCode::CONFLICT);
     }
 
@@ -2164,16 +2166,10 @@ async fn build_fleet_handler(
     let is_defense = ["missile_launcher", "plasma_turret"].contains(&type_ship.as_str());
 
     if !is_defense {
-        let active_ship_constructions = ConstructionQueue::find()
-            .filter(construction_queue::Column::PlanetId.eq(p.id))
-            .all(&state.db)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .iter()
-            .filter(|c| !["missile_launcher", "plasma_turret"].contains(&c.building_type.as_str()))
-            .count();
-
-        if active_ship_constructions >= 3 { return Err(StatusCode::CONFLICT); }
+        let ship_slots = build_queue::get_category_slots(&state.db, &config, p.id, "ships").await;
+        let active_ship_constructions = build_queue::count_active_in_category(&state.db, p.id, "ships")
+            .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if active_ship_constructions >= ship_slots as i64 { return Err(StatusCode::CONFLICT); }
     }
 
     if !is_defense {
@@ -5901,14 +5897,16 @@ async fn start_research_handler(
         return (StatusCode::CONFLICT, Json(json!({"error": "Already researching this technology"}))).into_response();
     }
 
-    // Check queue limit across ALL build types (only if not already researching)
-    let active_builds = match count_active_builds(&state.db, planet_id).await {
-        Ok(count) => count,
+    // Check per-category slot limit for research
+    let config_for_slots = state.config.read().unwrap().clone();
+    let research_slots = build_queue::get_category_slots(&state.db, &config_for_slots, planet_id, "research").await;
+    let active_research = match build_queue::count_active_in_category(&state.db, planet_id, "research").await {
+        Ok(c) => c,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check queue"}))).into_response(),
     };
 
-    if active_builds >= 3 {
-        return (StatusCode::CONFLICT, Json(json!({"error": "Queue is full (3 slots max)"}))).into_response();
+    if active_research >= research_slots as i64 {
+        return (StatusCode::CONFLICT, Json(json!({"error": format!("Slots de recherche pleins ({}/{})", active_research, research_slots)}))).into_response();
     }
 
     // Calculate cost for next level
@@ -6060,20 +6058,22 @@ async fn build_ships_handler(
         .map(|count| count > 0)
         .unwrap_or(false);
 
+    // Calculate build time
+    let config = state.config.read().unwrap().clone();
+
     if !is_already_building {
-        // Check queue limit across ALL build types
-        let active_builds = match count_active_builds(&state.db, planet_id).await {
-            Ok(count) => count,
+        // Check per-category slot limit for ships
+        let ship_slots = build_queue::get_category_slots(&state.db, &config, planet_id, "ships").await;
+        let active_ships = match build_queue::count_active_in_category(&state.db, planet_id, "ships").await {
+            Ok(c) => c,
             Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check queue"}))).into_response(),
         };
 
-        if active_builds >= 3 {
-            return (StatusCode::CONFLICT, Json(json!({"error": "Queue is full (3 slots max)"}))).into_response();
+        if active_ships >= ship_slots as i64 {
+            return (StatusCode::CONFLICT, Json(json!({"error": format!("Slots de construction de vaisseaux pleins ({}/{})", active_ships, ship_slots)}))).into_response();
         }
     }
 
-    // Calculate build time
-    let config = state.config.read().unwrap().clone();
     let build_time_per_ship = ship.build_time_seconds as f64 / ((config.speed_factor / 100.0) * config.construction_speed);
     let additional_build_time = (build_time_per_ship * quantity as f64) as i64;
 
@@ -6255,20 +6255,22 @@ async fn build_defenses_handler(
         .map(|count| count > 0)
         .unwrap_or(false);
 
+    // Calculate build time
+    let config = state.config.read().unwrap().clone();
+
     if !is_already_building {
-        // Check queue limit across ALL build types
-        let active_builds = match count_active_builds(&state.db, planet_id).await {
-            Ok(count) => count,
+        // Check per-category slot limit for defenses
+        let def_slots = build_queue::get_category_slots(&state.db, &config, planet_id, "defenses").await;
+        let active_defs = match build_queue::count_active_in_category(&state.db, planet_id, "defenses").await {
+            Ok(c) => c,
             Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to check queue"}))).into_response(),
         };
 
-        if active_builds >= 3 {
-            return (StatusCode::CONFLICT, Json(json!({"error": "Queue is full (3 slots max)"}))).into_response();
+        if active_defs >= def_slots as i64 {
+            return (StatusCode::CONFLICT, Json(json!({"error": format!("Slots de construction de défenses pleins ({}/{})", active_defs, def_slots)}))).into_response();
         }
     }
 
-    // Calculate build time
-    let config = state.config.read().unwrap().clone();
     let build_time_per_defense = defense.build_time_seconds as f64 / ((config.speed_factor / 100.0) * config.construction_speed);
     let additional_build_time = (build_time_per_defense * quantity as f64) as i64;
 
