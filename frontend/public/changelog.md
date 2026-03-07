@@ -1,5 +1,17 @@
 # Changelog - Space Conquest
 
+## [6.9.0] - 2026-03-07 - Marché : Corrections Majeures
+
+### 🔧 Corrections
+
+- **Suppression d'offre** (`/market/listings`) : les offres de ressources peuvent désormais être supprimées sans erreur 403 — l'identifiant utilisateur est transmis explicitement.
+- **Achat d'offre joueur** : la route `/market/listings/:id/buy` est maintenant correctement câblée côté backend (404 corrigé).
+- **Marché Planétaire — détails** : le champ `id` des annonces de planètes était sérialisé en `null` (UUID → String impossible) — toutes les annonces planétaires ont maintenant des identifiants valides. Corrige "Impossible de charger les détails", l'URL `/listings/null` et les erreurs de suppression d'annonce.
+- **Planètes en vente visibles dans les colonies** : les planètes actuellement mises en vente sur le marché planétaire n'apparaissent plus dans la liste des colonies (bug de conversion UUID identique).
+- **Erreur JSON vide** : une réponse d'erreur sans corps ne génère plus de crash `SyntaxError: JSON.parse`.
+
+---
+
 ## [6.8.0] - 2026-03-07 - File de Construction : Intégrité & Corrections
 
 ### 🔧 Corrections
