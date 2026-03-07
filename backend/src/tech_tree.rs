@@ -2,7 +2,7 @@
 // Tech Tree System - Dynamic relational database queries
 
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySelect, ActiveModelTrait, Set};
-use crate::entities::{prelude::*, technology, planet_technology, ship_type, planet_ship, technology_requirement, ship_requirement, building_type, building_requirement, planet_building, defense_type, defense_requirement, planet_defense};
+use crate::entities::{prelude::*, technology, planet_technology, ship_type, planet_ship, technology_requirement, ship_requirement, ship_building_requirement, building_type, building_requirement, planet_building, defense_type, defense_requirement, planet_defense};
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
@@ -568,14 +568,14 @@ pub async fn get_ship_requirements(
     ship_type_id: i32,
     planet_id: Uuid,
 ) -> Result<Vec<ShipRequirementInfo>, sea_orm::DbErr> {
-    let requirements = ShipRequirement::find()
+    let tech_reqs = ShipRequirement::find()
         .filter(ship_requirement::Column::ShipTypeId.eq(ship_type_id))
         .all(db)
         .await?;
 
     let mut result = Vec::new();
 
-    for req in requirements {
+    for req in tech_reqs {
         if let Some(required_tech) = Technology::find_by_id(req.required_tech_id).one(db).await? {
             let current_level = get_planet_tech_level(db, planet_id, &required_tech.tech_key).await?;
 
@@ -584,6 +584,27 @@ pub async fn get_ship_requirements(
                 tech_key: Some(required_tech.tech_key.clone()),
                 tech_name: Some(required_tech.display_name),
                 building_name: None,
+                required_level: req.required_level,
+                current_level,
+                met: current_level >= req.required_level,
+            });
+        }
+    }
+
+    // Building requirements
+    let bld_reqs = ShipBuildingRequirement::find()
+        .filter(ship_building_requirement::Column::ShipTypeId.eq(ship_type_id))
+        .all(db)
+        .await?;
+
+    for req in bld_reqs {
+        if let Some(bld) = BuildingType::find_by_id(req.required_building_type_id).one(db).await? {
+            let current_level = get_planet_building_level(db, planet_id, &bld.building_key).await.unwrap_or(0);
+            result.push(ShipRequirementInfo {
+                requirement_type: "building".to_string(),
+                tech_key: None,
+                tech_name: None,
+                building_name: Some(bld.name),
                 required_level: req.required_level,
                 current_level,
                 met: current_level >= req.required_level,

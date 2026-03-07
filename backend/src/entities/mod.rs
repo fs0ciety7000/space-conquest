@@ -44,6 +44,7 @@ pub mod technology_requirement;
 pub mod planet_technology;
 pub mod ship_type;
 pub mod ship_requirement;
+pub mod ship_building_requirement;
 pub mod planet_ship;
 pub mod rapid_fire_rule;
 pub mod building_type;

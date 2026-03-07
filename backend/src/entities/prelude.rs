@@ -42,6 +42,7 @@ pub use super :: technology_requirement :: Entity as TechnologyRequirement ;
 pub use super :: planet_technology :: Entity as PlanetTechnology ;
 pub use super :: ship_type :: Entity as ShipType ;
 pub use super :: ship_requirement :: Entity as ShipRequirement ;
+pub use super :: ship_building_requirement :: Entity as ShipBuildingRequirement ;
 pub use super :: planet_ship :: Entity as PlanetShip ;
 pub use super :: rapid_fire_rule :: Entity as RapidFireRule ;
 pub use super :: building_type :: Entity as BuildingType ;
