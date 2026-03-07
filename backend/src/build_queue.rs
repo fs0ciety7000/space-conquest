@@ -304,6 +304,29 @@ async fn start_item_immediately(
     }
 }
 
+// ── Per-planet build lock ─────────────────────────────────────────────────────
+
+/// Acquires a per-planet async mutex to serialize concurrent build slot checks.
+/// Returns a guard that releases the lock when dropped.
+async fn acquire_planet_build_lock(
+    state: &AppState,
+    planet_id: Uuid,
+) -> tokio::sync::OwnedMutexGuard<()> {
+    let lock = state.build_locks
+        .entry(planet_id)
+        .or_insert_with(|| std::sync::Arc::new(tokio::sync::Mutex::new(())))
+        .clone();
+    lock.lock_owned().await
+}
+
+/// Public alias for use in main.rs handlers.
+pub async fn acquire_planet_build_lock_pub(
+    state: &AppState,
+    planet_id: Uuid,
+) -> tokio::sync::OwnedMutexGuard<()> {
+    acquire_planet_build_lock(state, planet_id).await
+}
+
 // ── HTTP Handlers ─────────────────────────────────────────────────────────────
 
 /// GET /planets/:id/build-queue — queue items and slot status per category
@@ -420,6 +443,9 @@ pub async fn add_to_queue_handler(
     if let Err(_) = active_planet.update(&state.db).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
     }
+
+    // Acquire per-planet lock to serialize concurrent slot checks (prevents race conditions)
+    let _build_guard = acquire_planet_build_lock(&state, planet_id).await;
 
     // Check if a slot is immediately free
     let slots_total = get_category_slots(&state.db, &config, planet_id, &body.category).await;

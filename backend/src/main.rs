@@ -232,6 +232,7 @@ async fn main() {
         db,
         config,
         ws: Some(ws_state.clone()),
+        build_locks: std::sync::Arc::new(dashmap::DashMap::new()),
     };
     let cors = CorsLayer::permissive();
 
@@ -2013,6 +2014,9 @@ async fn upgrade_mine_handler(
 ) -> Result<StatusCode, StatusCode> {
     let p = Planet::find_by_id(id).one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     let config = state.config.read().unwrap().clone();
+
+    // Acquire per-planet lock to serialize concurrent slot checks (prevents race conditions)
+    let _build_guard = build_queue::acquire_planet_build_lock_pub(&state, p.id).await;
 
     // Check per-category slot limit (buildings use "resources" or "facilities" category)
     let bld_category = build_queue::building_category(&type_mine);

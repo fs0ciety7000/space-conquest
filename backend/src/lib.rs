@@ -102,6 +102,9 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub config: Arc<RwLock<ServerConfigCache>>,
     pub ws: Option<websocket::WsState>,
+    /// Per-planet mutex to serialize concurrent build slot checks + inserts,
+    /// preventing race conditions where multiple upgrades bypass the 1-slot limit.
+    pub build_locks: Arc<dashmap::DashMap<uuid::Uuid, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 // Fonction helper pour recharger la config
