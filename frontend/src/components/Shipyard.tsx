@@ -57,17 +57,11 @@ const getShipTheme = (type: string) => {
 };
 
 export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
-  const [now, setNow] = useState(new Date().getTime());
   const [qty, setQty] = useState<Record<string, number>>({});
   const [shipTypes, setShipTypes] = useState<ShipTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [speedFactor, setSpeedFactor] = useState(1);
   const [constructionSpeed, setConstructionSpeed] = useState(1);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date().getTime()), 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     fetch(apiUrl('/config'))
@@ -111,9 +105,6 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const isFull = currentFleet >= maxFleet;
   const remainingSpace = Math.max(0, maxFleet - currentFleet);
 
-  const queue = planet.constructions || [];
-  const shipBuilds = planet.ship_builds || [];
-  const isQueueFull = queue.length + shipBuilds.length >= 3;
 
   // Map ship_key to icon and type
   const getShipIcon = (ship_key: string) => {
@@ -171,11 +162,27 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if(res.ok) {
+        if (res.ok) {
             const shipInfo = shipTypes.find(s => s.ship_key === type);
             toast.success(`Production lancée : ${shipInfo?.display_name || type}`);
             onUpdate();
             setQty({ ...qty, [type]: 0 });
+        } else if (res.status === 409) {
+            // Slot full → add to pending queue
+            const qRes = await fetch(apiUrl(`/planets/${planet.id}/build-queue`), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ category: 'ships', item_key: type, quantity: amount }),
+            });
+            if (qRes.ok) {
+                const shipInfo = shipTypes.find(s => s.ship_key === type);
+                toast.success(`En file d'attente : ${shipInfo?.display_name || type}`);
+                onUpdate();
+                setQty({ ...qty, [type]: 0 });
+            } else {
+                const err = await qRes.json();
+                toast.error(err.error || "Erreur");
+            }
         } else {
             const err = await res.json();
             toast.error(err.error || "Erreur");
@@ -231,12 +238,6 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
 
         const theme = getShipTheme(shipCategory);
         const canAfford = planet.metal_amount >= ship.cost_metal && planet.crystal_amount >= ship.cost_crystal;
-
-        const activeItem = shipBuilds.find((sb: any) => sb.ship_key === ship.ship_key);
-        // Ensure build_end_time is treated as UTC
-        const buildEndTime = activeItem?.build_end_time ?
-          (activeItem.build_end_time.endsWith('Z') ? activeItem.build_end_time : activeItem.build_end_time + 'Z') : null;
-        const timeLeft = buildEndTime ? Math.max(0, Math.floor((new Date(buildEndTime).getTime() - now) / 1000)) : null;
 
         const maxMetal = ship.cost_metal > 0 ? Math.floor(planet.metal_amount / ship.cost_metal) : Infinity;
         const maxCrystal = ship.cost_crystal > 0 ? Math.floor(planet.crystal_amount / ship.cost_crystal) : Infinity;
@@ -353,18 +354,12 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
               <div className="mt-auto">
                 <div className="flex justify-between text-[10px] mb-1 px-1">
                    <span className="text-slate-500 uppercase font-bold">Production</span>
-                   <button onClick={() => !locked && !isQueueFull && !isFull && setQty({...qty, [ship.ship_key]: maxBuildable})} className={`uppercase font-bold tracking-wider hover:text-white transition-colors ${maxBuildable > 0 ? 'text-indigo-400 cursor-pointer' : 'text-slate-600 cursor-not-allowed'}`}>Max: {maxBuildable.toLocaleString()}</button>
+                   <button onClick={() => !locked && !isFull && setQty({...qty, [ship.ship_key]: maxBuildable})} className={`uppercase font-bold tracking-wider hover:text-white transition-colors ${maxBuildable > 0 ? 'text-indigo-400 cursor-pointer' : 'text-slate-600 cursor-not-allowed'}`}>Max: {maxBuildable.toLocaleString()}</button>
                 </div>
                 <div className="flex gap-2">
-                    <input type="number" min="1" max={maxBuildable} value={qty[ship.ship_key] || ''} placeholder="0" className="w-20 bg-black/50 border border-white/10 rounded-lg text-center text-white text-sm font-bold focus:outline-none focus:border-indigo-500 transition-colors" onChange={(e) => setQty({...qty, [ship.ship_key]: parseInt(e.target.value)})} disabled={locked || isQueueFull || isFull} />
-                    <Button onClick={() => buildShip(ship.ship_key)} disabled={locked || isQueueFull || !canAfford || (qty[ship.ship_key] || 0) <= 0 || isFull} className={`flex-1 h-10 font-black uppercase text-[10px] tracking-[0.2em] transition-all rounded-lg relative overflow-hidden group/btn ${isQueueFull ? 'bg-slate-800 text-slate-500 border border-slate-700' : isFull ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed' : !canAfford ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed' : `bg-black hover:bg-slate-900 text-white border ${theme.border} hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]`}`}>
-                        {activeItem ? (
-                             <span className="flex items-center gap-2 relative z-10 text-orange-300">
-                                <Timer size={14} className="animate-spin" /> En cours ({formatDuration(timeLeft ?? 0)})
-                             </span>
-                        ) : isQueueFull ? (
-                            <span className="relative z-10">File Pleine</span>
-                        ) : isFull ? (
+                    <input type="number" min="1" max={maxBuildable} value={qty[ship.ship_key] || ''} placeholder="0" className="w-20 bg-black/50 border border-white/10 rounded-lg text-center text-white text-sm font-bold focus:outline-none focus:border-indigo-500 transition-colors" onChange={(e) => setQty({...qty, [ship.ship_key]: parseInt(e.target.value)})} disabled={locked || isFull} />
+                    <Button onClick={() => buildShip(ship.ship_key)} disabled={locked || !canAfford || (qty[ship.ship_key] || 0) <= 0 || isFull} className={`flex-1 h-10 font-black uppercase text-[10px] tracking-[0.2em] transition-all rounded-lg relative overflow-hidden group/btn ${isFull ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed' : !canAfford ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed' : `bg-black hover:bg-slate-900 text-white border ${theme.border} hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]`}`}>
+                        {isFull ? (
                             <span className="relative z-10">Hangar Saturé</span>
                         ) : !canAfford ? (
                             <span className="relative z-10">Manque Ress.</span>

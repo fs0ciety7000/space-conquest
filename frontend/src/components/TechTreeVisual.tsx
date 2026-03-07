@@ -288,14 +288,14 @@ const TechNode = ({ data }: { data: any }) => {
         {!isLocked && !isResearching && (
           <Button
             onClick={data.onResearch}
-            disabled={!canAfford || data.queueFull}
+            disabled={!canAfford}
             className={`w-full h-8 text-[10px] font-black uppercase tracking-wider ${
-              !canAfford || data.queueFull
+              !canAfford
                 ? 'bg-slate-900 text-slate-500 border border-white/5'
                 : `${config.bg} ${config.border} ${config.color} hover:bg-white/10`
             }`}
           >
-            {data.queueFull ? 'File Pleine' : canAfford ? `Rechercher Niv. ${data.current_level + 1}` : 'Ressources Manquantes'}
+            {canAfford ? `Rechercher Niv. ${data.current_level + 1}` : 'Ressources Manquantes'}
           </Button>
         )}
 
@@ -318,11 +318,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   const [techTree, setTechTree] = useState<TechInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const queue = planet.constructions || [];
-  const shipBuilds = planet.ship_builds || [];
-  const defenseBuilds = planet.defense_builds || [];
   const researchQueue = planet.research_queue || [];
-  const isQueueFull = queue.length + shipBuilds.length + defenseBuilds.length >= 3;
 
   const metal = planet.metal_amount ?? 0;
   const crystal = planet.crystal_amount ?? 0;
@@ -351,14 +347,30 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   }, [planet.id]);
 
   const handleResearch = async (tech_key: string) => {
+    const token = localStorage.getItem('token');
+    const tech = techTree.find(t => t.tech_key === tech_key);
+    const targetLevel = tech ? tech.current_level + 1 : undefined;
     try {
       const res = await fetch(apiUrl(`/planets/${planet.id}/upgrade/${tech_key}`), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         toast.success('Recherche lancée !');
         onUpdate();
+      } else if (res.status === 409) {
+        const qRes = await fetch(apiUrl(`/planets/${planet.id}/build-queue`), {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: 'research', item_key: tech_key, target_level: targetLevel }),
+        });
+        if (qRes.ok) {
+          toast.success('Recherche en file d\'attente');
+          onUpdate();
+        } else {
+          const data = await qRes.json();
+          toast.error(data.error || 'Erreur lors de la mise en file');
+        }
       } else {
         const data = await res.json();
         toast.error(data.error || 'Erreur lors du lancement de la recherche');
@@ -456,14 +468,13 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
           metal,
           crystal,
           deuterium,
-          queueFull: isQueueFull,
           onResearch: () => handleResearch(tech.tech_key),
         },
       });
     });
 
     return nodes;
-  }, [techTree, researchQueue, metal, crystal, deuterium, isQueueFull]);
+  }, [techTree, researchQueue, metal, crystal, deuterium]);
 
   // Créer les edges (dépendances) dynamiquement
   const initialEdges: Edge[] = useMemo(() => {

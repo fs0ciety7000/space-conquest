@@ -145,14 +145,26 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
       if (res.ok) {
         toast.success(`Construction lancée : ${qty}x ${selectedDefense.name}`);
         onBuild();
-        // Refresh defense types to update current counts
         fetchDefenseTypes();
+      } else if (res.status === 409) {
+        // Slot full → add to pending queue
+        const token = localStorage.getItem('token');
+        const qRes = await fetch(apiUrl(`/planets/${planet.id}/build-queue`), {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: 'defenses', item_key: selected, quantity: qty }),
+        });
+        if (qRes.ok) {
+          toast.success(`En file d'attente : ${qty}x ${selectedDefense.name}`);
+          onBuild();
+        } else {
+          const err = await qRes.json();
+          toast.error(err.error || "Erreur lors de la mise en file");
+        }
       } else if (res.status === 403) {
         toast.error("Prérequis non satisfaits");
       } else if (res.status === 400) {
         toast.error("Ressources insuffisantes");
-      } else if (res.status === 409) {
-        toast.error("File de construction pleine");
       } else {
         toast.error("Erreur lors de la construction");
       }
@@ -186,7 +198,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
 
   // Check prerequisites
   const isLocked = selectedDefense.requirements.some(req => !req.met);
-  const canBuild = !isBusy && !isBuilding && canAfford && !isLocked;
+  const canBuild = !isBuilding && canAfford && !isLocked;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 animate-in fade-in duration-500">
@@ -289,7 +301,6 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                         type="number" min="1" value={qty} 
                         onChange={e => setQty(Math.max(1, Number(e.target.value)))}
                         className="bg-transparent border-b-2 border-white/20 text-3xl font-mono font-black text-white w-24 focus:outline-none focus:border-white/40 pb-1"
-                        disabled={isBusy}
                       />
                   </div>
                   <div className="space-y-1 text-xs font-mono">
@@ -314,24 +325,14 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                 onClick={startBuild}
                 disabled={!canBuild}
                 className={`w-full h-14 uppercase font-black tracking-widest transition-all ${
-                  isBusy
-                    ? 'bg-slate-800 text-slate-400 border border-slate-700'
-                    : isLocked
-                      ? 'bg-orange-900/20 text-orange-500 border border-orange-500/50'
+                  isLocked
+                    ? 'bg-orange-900/20 text-orange-500 border border-orange-500/50'
                     : !canAfford
                       ? 'bg-red-900/20 text-red-500 border border-red-500/50'
                       : `bg-black hover:bg-slate-900 text-white border ${selectedTheme.border} ${selectedTheme.glow}`
                 }`}
               >
-                  {isBusy ? (
-                    <span className="flex items-center gap-3">
-                      <Timer className="animate-spin" size={18}/>
-                      <span className="flex flex-col items-start">
-                        <span className="text-[9px] text-slate-500 font-normal">Construction en cours</span>
-                        <span className="text-lg font-mono">{formatDuration(timeLeft!)}</span>
-                      </span>
-                    </span>
-                  ) : isLocked ? (
+                  {isLocked ? (
                     "Prérequis Non Satisfaits"
                   ) : !canAfford ? (
                     "Ressources Insuffisantes"

@@ -113,7 +113,6 @@ const getFacilityStats = (id: string, level: number) => {
 };
 
 export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
-  const [now, setNow] = useState(new Date().getTime());
   const [buildingTypes, setBuildingTypes] = useState<BuildingTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<any>({
@@ -122,11 +121,6 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     storage_capacity_base: 600000,
     storage_capacity_growth: 1.6,
   });
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date().getTime()), 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Charger la config serveur
   useEffect(() => {
@@ -239,7 +233,6 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     const building = buildingTypes.find(b => b.building_key === building_key);
     if (!building) return;
 
-    // Check tech requirements
     const hasUnmetRequirements = building.requirements.some(req => !req.met);
     if (hasUnmetRequirements) {
         toast.error("Prérequis technologiques non satisfaits");
@@ -247,13 +240,33 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     }
 
     const token = localStorage.getItem('token');
+    const targetLevel = building.current_level + 1;
     try {
-      await fetch(apiUrl(`/planets/${planet.id}/upgrade/${building_key}`), {
+      const res = await fetch(apiUrl(`/planets/${planet.id}/upgrade/${building_key}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
-      onUpgrade();
-      toast.success(`${building.name} amélioré avec succès`);
+      if (res.ok) {
+        onUpgrade();
+        toast.success(`${building.name} amélioré avec succès`);
+      } else if (res.status === 409) {
+        const category = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'resource_storage'].includes(building_key) ? 'resources' : 'facilities';
+        const qRes = await fetch(apiUrl(`/planets/${planet.id}/build-queue`), {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category, item_key: building_key, target_level: targetLevel }),
+        });
+        if (qRes.ok) {
+          toast.success(`${building.name} en file d'attente`);
+          onUpgrade();
+        } else {
+          const err = await qRes.json().catch(() => ({}));
+          toast.error(err.error || "Erreur lors de la mise en file");
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Erreur lors de l'amélioration");
+      }
     } catch (e) {
       console.error(e);
       toast.error("Erreur lors de l'amélioration");
@@ -270,10 +283,6 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
     };
   };
 
-  const queue = planet.constructions || [];
-  const shipBuilds = planet.ship_builds || [];
-  const defenseBuilds = planet.defense_builds || [];
-  const isQueueFull = queue.length + shipBuilds.length + defenseBuilds.length >= 3;
 
   if (loading) {
     return (
@@ -289,8 +298,6 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
         // Check if requirements are met
         const locked = building.requirements.some(req => !req.met);
 
-        const activeItem = queue.find((q: any) => q.building_type === building.building_key);
-        const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
         const cost = getCost(building);
         const stats = getConfiguredStats(building.building_key, building.current_level);
         const canAfford = (planet.metal_amount >= cost.m) && (planet.crystal_amount >= cost.c) && (planet.deuterium_amount >= cost.d);
@@ -405,25 +412,17 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
 
               <Button
                 onClick={() => handleUpgrade(building.building_key)}
-                disabled={locked || !!activeItem || isQueueFull || !canAfford}
+                disabled={locked || !canAfford}
                 className={`w-full font-black uppercase tracking-widest transition-all duration-500 ${
-                    activeItem
-                        ? 'bg-indigo-900/50 border border-indigo-500 text-indigo-300 animate-pulse'
-                        : locked
-                            ? 'bg-slate-900 text-slate-600 border border-red-900/20 cursor-not-allowed'
-                            : isQueueFull
-                                ? 'bg-slate-800 text-slate-500 border border-white/5 cursor-not-allowed'
-                                : !canAfford
-                                    ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
-                                    : `bg-gradient-to-r from-indigo-950/60 to-purple-950/60 hover:from-indigo-900/80 hover:to-purple-900/80 border border-indigo-500/50 hover:border-cyan-400/80 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]`
+                    locked
+                        ? 'bg-slate-900 text-slate-600 border border-red-900/20 cursor-not-allowed'
+                        : !canAfford
+                            ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
+                            : `bg-gradient-to-r from-indigo-950/60 to-purple-950/60 hover:from-indigo-900/80 hover:to-purple-900/80 border border-indigo-500/50 hover:border-cyan-400/80 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]`
                 }`}
               >
-                {activeItem ? (
-                    <span className="flex items-center gap-2"><Timer size={16} className="animate-spin" /> En cours: {formatDuration(timeLeft ?? 0)}</span>
-                ) : locked ? (
+                {locked ? (
                     "Accès Refusé"
-                ) : isQueueFull ? (
-                    "File Pleine (3/3)"
                 ) : !canAfford ? (
                     "Ressources Insuffisantes!"
                 ) : (

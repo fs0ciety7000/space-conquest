@@ -74,7 +74,6 @@ const getResourceTheme = (type: string) => {
 };
 
 export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }: ResourceDisplayProps) {
-  const [now, setNow] = useState(new Date().getTime());
   const [extraSlots, setExtraSlots] = useState<ResourceSlot[]>([]);
   const [buildingTypes, setBuildingTypes] = useState<BuildingTypeInfo[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; slotNumber: number; cost: any } | null>(null);
@@ -93,11 +92,6 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
     energy_deuterium_extra_consumption: 20,
     mining_speed_multiplier: 1.0
   });
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date().getTime()), 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Récupérer la configuration serveur
   useEffect(() => {
@@ -227,12 +221,33 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
   const handleUpgrade = async (type: string) => {
     const token = localStorage.getItem('token');
+    const building = buildingTypes.find(b => b.building_key === type);
+    const targetLevel = building ? building.current_level + 1 : undefined;
     try {
       const res = await fetch(apiUrl(`/planets/${planet.id}/upgrade/${type}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
-      if (res.ok) onUpgrade();
+      if (res.ok) {
+        onUpgrade();
+      } else if (res.status === 409) {
+        const category = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'resource_storage'].includes(type) ? 'resources' : 'facilities';
+        const qRes = await fetch(apiUrl(`/planets/${planet.id}/build-queue`), {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category, item_key: type, target_level: targetLevel }),
+        });
+        if (qRes.ok) {
+          const name = building?.name || type;
+          toast.success(`${name} en file d'attente`);
+          onUpgrade();
+        } else {
+          const err = await qRes.json().catch(() => ({}));
+          toast.error(err.error || "Erreur lors de la mise en file");
+        }
+      } else {
+        console.error("Erreur upgrade", await res.text().catch(() => ''));
+      }
     } catch (e) { console.error("Erreur upgrade", e); }
   };
 
@@ -338,18 +353,10 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   const deuteriumNow = planet.deuterium_amount ?? 0;
   
   // LOGIQUE QUEUE MULTIPLE
-  const queue = planet.constructions || [];
-  const shipBuilds = planet.ship_builds || [];
-  const defenseBuilds = planet.defense_builds || [];
-  const isQueueFull = queue.length + shipBuilds.length + defenseBuilds.length >= 3;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       {buildings.map((build) => {
-        // Trouver l'item actif
-        const activeItem = queue.find((q: any) => q.building_type === build.id);
-        const timeLeft = activeItem ? Math.max(0, Math.floor((new Date(activeItem.end_time + "Z").getTime() - now) / 1000)) : null;
-
         // Calculs (Design Riche)
         const currentProd = calculateProd(build.id, build.lv, build.base, build.growth);
         const currentEnergy = calculateEnergyCons(build.id, build.lv);
@@ -459,9 +466,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                     </div>
                 </div>
 
-                {/* COÛTS SUIVANT (Visibles si pas en cours) */}
-                {!activeItem && (
-                    <div className="space-y-2 mb-6">
+                {/* COÛTS SUIVANT */}
+                <div className="space-y-2 mb-6">
                         <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${metalNow >= cost.m ? 'border-white/5' : 'border-red-900/50'}`}>
                             <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2"><Box size={10} /> Métal</span>
                             <span className={`text-xs font-mono font-bold ${metalNow >= cost.m ? 'text-slate-300' : 'text-red-500'}`}>{Math.floor(cost.m).toLocaleString()}</span>
@@ -485,37 +491,24 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
                                 </div>
                             ) : null;
                         })()}
-                    </div>
-                )}
+                </div>
               </div>
 
-              {/* BOUTON D'ACTION (Logique Multi-files + Design Riche Swipe) */}
+              {/* BOUTON D'ACTION */}
               <div className="mt-auto">
                 <Button
                   onClick={() => handleUpgrade(build.id)}
-                  disabled={!!activeItem || isQueueFull || !canAfford}
+                  disabled={!canAfford}
                   className={`w-full h-10 font-black uppercase text-[10px] tracking-[0.2em] transition-all rounded-lg relative overflow-hidden group/btn ${
-                    activeItem
-                      ? 'bg-slate-900 text-slate-300 border border-indigo-500/50'
-                      : isQueueFull
-                        ? 'bg-slate-900 text-slate-500 border border-white/5'
-                        : !canAfford
-                            ? 'bg-red-950/20 text-red-500 border border-red-900/30 cursor-not-allowed'
-                            : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow}`
+                    !canAfford
+                        ? 'bg-red-950/20 text-red-500 border border-red-900/30 cursor-not-allowed'
+                        : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow}`
                   }`}
                 >
-                  {/* Effet Swipe restauré */}
-                  {!activeItem && canAfford && !isQueueFull && (
+                  {canAfford && (
                       <div className={`absolute top-0 bottom-0 w-2 bg-white/20 blur-md -skew-x-12 -left-10 group-hover/btn:left-[120%] transition-all duration-700`}></div>
                   )}
-
-                  {activeItem ? (
-                     <span className="flex items-center gap-2 relative z-10 text-cyan-400">
-                       <Timer size={14} className="animate-spin-slow" /> En cours {formatDuration(timeLeft ?? 0)}
-                     </span>
-                  ) : isQueueFull ? (
-                    <span className="relative z-10">File Pleine (3/3)</span>
-                  ) : !canAfford ? (
+                  {!canAfford ? (
                     <span className="relative z-10">Ressources Manquantes</span>
                   ) : (
                     <span className="flex items-center gap-2 relative z-10">

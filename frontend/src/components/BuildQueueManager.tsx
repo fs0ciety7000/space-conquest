@@ -91,7 +91,8 @@ const LABELS: Record<string, string> = {
 
 function getLabel(key: string) { return LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
 
-function getTimeLeft(endTime: string) {
+function getTimeLeft(endTime: string | null | undefined) {
+  if (!endTime) return 0;
   const end = new Date(endTime.endsWith('Z') ? endTime : endTime + 'Z').getTime();
   return Math.max(0, Math.floor((end - Date.now()) / 1000));
 }
@@ -99,7 +100,7 @@ function getTimeLeft(endTime: string) {
 interface ActiveBuild {
   key: string;
   name: string;
-  endTime: string;
+  endTime: string | null | undefined;
   quantity?: number;
   targetLevel?: number;
   cancelKey: string; // used to call cancel endpoint

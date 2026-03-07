@@ -1,5 +1,21 @@
 # Changelog - Space Conquest
 
+## [6.6.0] - 2026-03-07 - File de Construction Universelle
+
+### ✨ Nouveautés
+
+#### 🏗️ File d'attente pour toutes les constructions
+- Les boutons de construction/amélioration ne sont **plus jamais bloqués** par une file pleine.
+- Si tous les slots actifs sont occupés, l'action est automatiquement **mise en attente** dans la file de construction.
+- Fonctionne pour : mines, installations, recherches, vaisseaux et défenses.
+- La file d'attente démarre automatiquement dès qu'un slot se libère.
+
+### 🔧 Corrections
+
+- **File de Construction** : les recherches actives (slots 2/2, etc.) s'affichent désormais correctement dans la section "Constructions actives" (bug lié à un `end_time` null).
+
+---
+
 ## [6.5.0] - 2026-03-07 - Routes en Transit, Annulation Recherche & Correctifs Marché
 
 ### ✨ Nouveautés
