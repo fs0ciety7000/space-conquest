@@ -21,7 +21,7 @@ use crate::tech_tree;
 // ── Category helpers ─────────────────────────────────────────────────────────
 
 const RESOURCE_BUILDING_KEYS: &[&str] = &[
-    "metal_mine", "crystal_mine", "deuterium_mine", "solar_plant", "resource_storage",
+    "metal_mine", "crystal_mine", "deuterium_mine", "solar_plant", "fusion_plant",
 ];
 
 const ALL_CATEGORIES: &[&str] = &["research", "ships", "defenses", "resources", "facilities"];

@@ -292,6 +292,24 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
     const reordered = [...items];
     const [moved] = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
+
+    // Protection: same item_key must keep ascending target_level order
+    const byKey: Record<string, QueueItem[]> = {};
+    for (const item of reordered) {
+      if (!byKey[item.item_key]) byKey[item.item_key] = [];
+      byKey[item.item_key].push(item);
+    }
+    for (const group of Object.values(byKey)) {
+      for (let i = 1; i < group.length; i++) {
+        const prev = group[i - 1].target_level;
+        const curr = group[i].target_level;
+        if (prev != null && curr != null && curr < prev) {
+          toast.error('Ordre invalide : impossible de placer un niveau supérieur avant un niveau inférieur pour le même élément.');
+          return;
+        }
+      }
+    }
+
     const orderedIds = reordered.map(i => i.id);
 
     // Optimistic update
