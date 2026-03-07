@@ -4844,6 +4844,7 @@ struct MarketListingsQuery {
     resource_type: Option<String>,
     target_resource: Option<String>,
     limit: Option<u64>,
+    user_id: Option<Uuid>,
 }
 
 // GET /market/listings - Get all active market listings
@@ -4898,6 +4899,10 @@ async fn get_market_listings_handler(
 
     if let Some(target_resource) = query.target_resource {
         query_builder = query_builder.filter(market_listing::Column::TargetResource.eq(target_resource));
+    }
+
+    if let Some(user_id) = query.user_id {
+        query_builder = query_builder.filter(market_listing::Column::SellerUserId.eq(user_id));
     }
 
     let limit = query.limit.unwrap_or(50);
