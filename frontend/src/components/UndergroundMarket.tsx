@@ -52,7 +52,7 @@ const EFFECT_LABELS: Record<string, string> = {
 };
 
 // Effect types not yet implemented on the backend — purchase disabled
-const UNIMPLEMENTED_EFFECTS = new Set(["stealth", "coordinate_jam", "eco_virus"]);
+const UNIMPLEMENTED_EFFECTS = new Set(["stealth", "coordinate_jam", "eco_virus", "resource_boost"]);
 
 const EFFECT_COLORS: Record<string, string> = {
   orbital_strike: "text-red-400 border-red-500/40 bg-red-950/20",
