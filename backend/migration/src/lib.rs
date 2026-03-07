@@ -71,6 +71,7 @@ mod m20260306_000006_bounty_board;
 mod m20260306_000007_flagship;
 mod m20260306_000008_password_reset;
 mod m20260306_000009_add_display_name;
+mod m20260307_000001_trade_routes;
 
 pub struct Migrator;
 
@@ -149,6 +150,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260306_000007_flagship::Migration),
             Box::new(m20260306_000008_password_reset::Migration),
             Box::new(m20260306_000009_add_display_name::Migration),
+            Box::new(m20260307_000001_trade_routes::Migration),
         ]
     }
 }

@@ -19,6 +19,7 @@ export const getShipImage = (shipType: string): string => {
     transporter: '/images/ships/ship-transporter.webp',
     colony_ship: '/images/ships/ship-colony-ship.webp',
     recycler: '/images/ships/ship-recycler.webp',
+    grand_cargo: '/images/ships/ship-grand-cargo.webp',
   };
 
   return images[shipType] || '/images/misc/placeholder.svg';
@@ -42,8 +43,10 @@ export const getBuildingImage = (buildingType: string): string => {
     missile_silo: '/images/buildings/building-missile-silo.webp',
     nanite_factory: '/images/buildings/building-nanite-factory.webp',
     terraformer: '/images/buildings/building-terraformer.webp',
+    logistics_hub: '/images/buildings/building-logistics-hub.webp',
     // Technologies
     armour: '/images/buildings/building-armour.webp',
+    industrial_tech: '/images/buildings/tech-industrial.webp',
   };
 
   return images[buildingType] || '/images/misc/placeholder.svg';

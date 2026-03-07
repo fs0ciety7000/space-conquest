@@ -285,6 +285,21 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
     ]
   },
   {
+    id: 'trade_routes',
+    title: 'Routes Commerciales',
+    icon: Map,
+    color: 'amber',
+    configs: [
+      { key: 'trade_route_interval_hours', label: 'Intervalle (heures)', description: 'Fréquence d\'exécution des routes (défaut: 24h)', defaultValue: '24.0' },
+      { key: 'trade_route_piracy_chance', label: 'Chance de Piraterie', description: 'Probabilité d\'interception par une flotte ennemie (10%)', defaultValue: '0.1' },
+      { key: 'grand_cargo_capacity', label: 'Grand Cargo - Capacité', description: 'Capacité cargo par Grand Cargo (unités)', defaultValue: '1000000' },
+      { key: 'grand_cargo_attack', label: 'Grand Cargo - Attaque', description: 'Valeur d\'attaque du Grand Cargo', defaultValue: '50' },
+      { key: 'grand_cargo_shield', label: 'Grand Cargo - Bouclier', description: 'Valeur de bouclier du Grand Cargo', defaultValue: '100' },
+      { key: 'grand_cargo_hull', label: 'Grand Cargo - Coque', description: 'Valeur de coque (PV) du Grand Cargo', defaultValue: '15000' },
+      { key: 'grand_cargo_speed', label: 'Grand Cargo - Vitesse', description: 'Vitesse du Grand Cargo', defaultValue: '5000' },
+    ]
+  },
+  {
     id: 'ships',
     title: 'Coûts des Vaisseaux',
     icon: Rocket,

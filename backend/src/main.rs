@@ -41,7 +41,7 @@ use sea_orm::sea_query::extension::postgres::PgExpr;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin, admin_content,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -222,6 +222,10 @@ async fn main() {
     // Cloner la DB pour les tâches en arrière-plan avant de la déplacer dans AppState
     let db_cleanup = db.clone();
     let db_tick = db.clone();
+    let db_trade = db.clone();
+    let config_trade = std::sync::Arc::new(std::sync::RwLock::new(
+        backend::ServerConfigCache::load_from_db(&db).await
+    ));
 
     let state = AppState {
         db,
@@ -432,6 +436,13 @@ async fn main() {
         .route("/sabotage/my-sabotages", get(sabotage::get_my_sabotages_handler))
         .route("/sabotage/suffered", get(sabotage::get_sabotages_suffered_handler))
         .route("/casus-belli/active", get(sabotage::get_casus_belli_handler))
+        // Trade Routes
+        .route("/trade-routes", get(trade_routes::list_routes_handler))
+        .route("/trade-routes", post(trade_routes::create_route_handler))
+        .route("/trade-routes/hub-info", get(trade_routes::get_hub_info_handler))
+        .route("/trade-routes/:id", patch(trade_routes::update_route_handler))
+        .route("/trade-routes/:id", delete(trade_routes::delete_route_handler))
+        .route("/trade-routes/:id/logs", get(trade_routes::get_route_logs_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -495,6 +506,17 @@ async fn main() {
         }
     });
     println!("⏱️  Automatic tick system started (interval: 2s)");
+
+    // Trade route execution (check every hour)
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            let config = config_trade.read().unwrap().clone();
+            trade_routes::process_due_trade_routes(&db_trade, &config).await;
+        }
+    });
+    println!("🚚 Trade route background task started (interval: 1h)");
 
     println!("🚀 SPEED_GAME Backend opérationnel sur http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -1087,6 +1109,14 @@ async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResp
         "storage_capacity_base": config.get_config("storage_capacity_base", 600000.0),
         "storage_capacity_growth": config.get_config("storage_capacity_growth", 1.6),
         "slot_bonus_per_slot": config.get_config("slot_bonus_per_slot", 0.5),
+        // Trade routes
+        "trade_route_interval_hours": config.get_config("trade_route_interval_hours", 24.0),
+        "trade_route_piracy_chance": config.get_config("trade_route_piracy_chance", 0.10),
+        "grand_cargo_capacity": config.get_config("grand_cargo_capacity", 1_000_000.0),
+        "grand_cargo_attack": config.get_config("grand_cargo_attack", 50.0),
+        "grand_cargo_shield": config.get_config("grand_cargo_shield", 100.0),
+        "grand_cargo_hull": config.get_config("grand_cargo_hull", 15000.0),
+        "grand_cargo_speed": config.get_config("grand_cargo_speed", 5000.0),
     }))
 }
 

@@ -34,6 +34,7 @@ import ProductionStats from './components/ProductionStats';
 import AllianceView from './components/AllianceView';
 import MissionsView from './components/MissionsView';
 import Officers from './components/Officers';
+import TradeRoutesView from './components/TradeRoutesView';
 import { SabotagesDashboard } from './components/SabotagesDashboard';
 import { SabotagesSufferedDashboard } from './components/SabotagesSufferedDashboard';
 import { CasusBelliList } from './components/CasusBelliList';
@@ -64,7 +65,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -654,6 +655,7 @@ export default function App() {
     { id: 'facilities', label: 'Installations', icon: Factory, category: 'DÉVELOPPEMENT' },
     { id: 'tech', label: 'Laboratoire', icon: FlaskConical, category: 'DÉVELOPPEMENT' },
     { id: 'market', label: 'Marché', icon: ShoppingCart, category: 'ÉCONOMIE' },
+    { id: 'trade-routes', label: 'Routes Commerciales', icon: Truck, category: 'ÉCONOMIE' },
 
     { id: 'shipyard', label: 'Chantier Spatial', icon: Hammer, category: 'MILITAIRE' },
     { id: 'defenses', label: 'Défense', icon: ShieldCheck, category: 'MILITAIRE' },
@@ -902,6 +904,7 @@ export default function App() {
                         {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
                         {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}
                         {activeTab === 'market' && <Marketplace planet={planet} userId={userId!} onUpdate={fetchPlanet} />}
+                        {activeTab === 'trade-routes' && planet && <TradeRoutesView userId={userId!} planetId={planetId!} planet={planet} />}
 
                         {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
                         {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
