@@ -70,6 +70,7 @@ mod m20260306_000005_planetary_biomes;
 mod m20260306_000006_bounty_board;
 mod m20260306_000007_flagship;
 mod m20260306_000008_password_reset;
+mod m20260306_000009_add_display_name;
 
 pub struct Migrator;
 
@@ -147,6 +148,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260306_000006_bounty_board::Migration),
             Box::new(m20260306_000007_flagship::Migration),
             Box::new(m20260306_000008_password_reset::Migration),
+            Box::new(m20260306_000009_add_display_name::Migration),
         ]
     }
 }

@@ -1,5 +1,40 @@
 # Changelog - Space Conquest
 
+## [6.2.0] - 2026-03-06 - Nom d'affichage, Cargo amélioré, Corrections sabotage & Persistance avatars
+
+### ✨ Nouveautés
+
+#### 🏷️ Nom d'affichage personnalisé
+- Les joueurs peuvent définir un **nom d'affichage** distinct de leur identifiant de connexion.
+- Modifiable depuis son propre profil (bouton ✏️ Modifier sous le nom).
+- Affiché dans le classement et les profils — l'identifiant `@username` reste visible en sous-titre si différent.
+
+#### 📦 Cargo Transporteur — Bonus Tech Informatique
+- La capacité de cargo des transporteurs dépend désormais aussi du **niveau de Tech Informatique** (+10% par niveau, configurable).
+- Formule : `base × (1 + hangar×5%) × (1 + computer_tech×10%)`
+- Extensible : d'autres bonus pourront être ajoutés via les clefs de config admin.
+
+#### 🖼️ Persistance des Avatars
+- Les avatars uploadés sont maintenant stockés dans un volume Docker persistant (`/opt/space-conquest/uploads`).
+- Plus de perte d'avatar lors des redéploiements Coolify.
+
+### 🐛 Corrections
+
+#### 💀 Sabotages
+- **Cooldown markers** ne sont plus visibles dans "Mes Sabotages" ni dans "Sabotages Subis" — seuls les vrais sabotages s'affichent.
+- **Notification WebSocket sabotage subi** : envoyée à toutes les planètes de la victime (pas uniquement la planète ciblée).
+- **Sabotage silencieux réussi** : une alerte discrète est envoyée à la victime (sans révéler l'attaquant).
+
+#### 🏰 Hangar / Capacité de flotte
+- La capacité max du hangar est désormais calculée par le serveur (valeur config `hangar_capacity_base` + `hangar_capacity_per_level`) et incluse dans la réponse planet.
+- Tous les composants (Vue planète, Chantier, Mes Planètes) utilisent maintenant cette valeur serveur au lieu d'une formule hardcodée.
+
+#### ⚔️ Attaques — Restriction de points supprimée
+- La protection basée sur le ratio de points (min/max) est retirée.
+- Seuls restent : protection anti-débutant (bouclier 3j), zone débutante, et anti-flood (cooldown 2h configurable).
+
+---
+
 ## [6.1.0] - 2026-03-06 - Présence en ligne, XP Vaisseau Amiral & Anti-flood
 
 ### ✨ Nouveautés

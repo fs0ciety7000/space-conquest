@@ -170,11 +170,11 @@ pub async fn attempt_sabotage(
             // 1. Notifier la victime que son système de défense a détecté un sabotage
             crate::websocket::notify_sabotage_detected(
                 ws,
-                target_planet_id,
+                target_planet.owner_id,
                 &attacker_user.username, // Nom de l'attaquant révélé car détecté
                 &target_planet.name,
                 &payload.action_type,
-            );
+            ).await;
 
             // 2. Notifier la victime qu'elle a obtenu un Casus Belli
             crate::websocket::notify_casus_belli_granted(
@@ -226,10 +226,17 @@ pub async fn attempt_sabotage(
         _ => "Sabotage réussi",
     };
 
-    // TODO: Notification non détaillée à la victime (pour disable_mine seulement)
-    // if payload.action_type == "disable_mine" {
-    //     send_message(...);
-    // }
+    // Notifier silencieusement la victime (sans révéler l'attaquant)
+    if let Some(ref ws) = state.ws {
+        let expires_str = expires_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        crate::websocket::notify_sabotage_applied(
+            ws,
+            target_planet.owner_id,
+            &target_planet.name,
+            &payload.action_type,
+            &expires_str,
+        ).await;
+    }
 
     (StatusCode::OK, Json(SabotageResponse {
         success: true,
@@ -265,11 +272,12 @@ pub async fn get_active_sabotages(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
     };
 
-    // Récupérer les effets actifs non expirés
+    // Récupérer les effets actifs non expirés (excl. cooldown markers)
     let now = Utc::now().naive_utc();
     let active_effects = match SabotageEffect::find()
         .filter(sabotage_effect::Column::TargetPlanetId.eq(planet_uuid))
         .filter(sabotage_effect::Column::ExpiresAt.gt(now))
+        .filter(sabotage_effect::Column::EffectType.ne("sabotage_cooldown"))
         .all(&state.db)
         .await
     {
@@ -495,10 +503,11 @@ pub async fn get_my_sabotages_handler(
 
     let now = Utc::now().naive_utc();
 
-    // Récupérer tous les sabotages actifs que j'ai effectués
+    // Récupérer tous les sabotages actifs que j'ai effectués (excl. cooldown markers)
     let sabotages = match SabotageEffect::find()
         .filter(sabotage_effect::Column::AttackerUserId.eq(user_id))
         .filter(sabotage_effect::Column::ExpiresAt.gt(now))
+        .filter(sabotage_effect::Column::EffectType.ne("sabotage_cooldown"))
         .all(&state.db)
         .await
     {
@@ -600,9 +609,10 @@ pub async fn get_sabotages_suffered_handler(
 
     let planet_ids: Vec<Uuid> = my_planets.iter().map(|p| p.id).collect();
 
-    // Récupérer tous les sabotages actifs et expirés sur mes planètes (historique complet)
+    // Récupérer tous les sabotages actifs et expirés sur mes planètes (historique complet, excl. cooldown markers)
     let sabotages = match SabotageEffect::find()
         .filter(sabotage_effect::Column::TargetPlanetId.is_in(planet_ids.clone()))
+        .filter(sabotage_effect::Column::EffectType.ne("sabotage_cooldown"))
         .order_by_desc(sabotage_effect::Column::CreatedAt)
         .all(&state.db)
         .await

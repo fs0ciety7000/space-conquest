@@ -93,6 +93,15 @@ export interface WsSabotageDetected extends WsEvent {
   };
 }
 
+export interface WsSabotageApplied extends WsEvent {
+  type: 'sabotage_applied';
+  payload: {
+    planet_name: string;
+    effect_type: 'disable_mine' | 'steal_tech';
+    expires_at: string;
+  };
+}
+
 export interface WsCasusBelliGranted extends WsEvent {
   type: 'casus_belli_granted';
   payload: {
@@ -282,6 +291,18 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
           });
           window.dispatchEvent(new Event('sabotage-detected'));
           break;
+
+        case 'sabotage_applied': {
+          const appliedData = (data as WsSabotageApplied).payload;
+          const appliedLabel = appliedData.effect_type === 'disable_mine'
+            ? 'Production -50% pendant 1h'
+            : 'Recherche ralentie (7j)';
+          toast.warning('⚠️ SABOTAGE SUBI', {
+            description: `${appliedData.planet_name} : ${appliedLabel}`,
+            duration: 8000,
+          });
+          break;
+        }
 
         case 'casus_belli_granted':
           const cbData = (data as WsCasusBelliGranted).payload;

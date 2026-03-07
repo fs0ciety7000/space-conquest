@@ -106,7 +106,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
 
   // Calculate current fleet from dynamic ship types data
   const currentFleet = shipTypes.reduce((total, ship) => total + ship.current_count, 0);
-  const maxFleet = 500 + (getBuildingLevel(planet, 'hangar') * 500);
+  const maxFleet = planet.fleet_capacity ?? (500 + (getBuildingLevel(planet, 'hangar') * 500));
   const capacityPercent = Math.min(100, (currentFleet / maxFleet) * 100);
   const isFull = currentFleet >= maxFleet;
   const remainingSpace = Math.max(0, maxFleet - currentFleet);

@@ -47,6 +47,9 @@ services:
       RUST_LOG: ${RUST_LOG:-info}
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL:-https://conquest.fs0ciety.org}
+      UPLOADS_DIR: /app/uploads
+    volumes:
+      - /opt/space-conquest/uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy

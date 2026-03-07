@@ -19,6 +19,7 @@ interface PlanetInfo {
 interface RankItem {
     rank: number;
     username: string;
+    display_name?: string;
     total_score: number;
     economy_score: number;
     military_score: number;
@@ -151,7 +152,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                             )}
                                                         </div>
                                                         <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2 group-hover:scale-105 transition-transform duration-300`}>
-                                                            {player.username}
+                                                            {player.display_name || player.username}
                                                         </span>
                                                     </button>
                                                     {player.is_me && <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-bold tracking-wider w-fit">VOUS</span>}

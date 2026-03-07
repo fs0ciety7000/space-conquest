@@ -83,6 +83,7 @@ struct RankItem {
     galaxy: Option<i32>,
     avatar_url: Option<String>,
     is_online: bool,
+    display_name: String,
 }
 
 #[derive(Deserialize)]
@@ -305,6 +306,7 @@ async fn main() {
 .route("/users/:id/username", patch(update_username_handler))
 .route("/users/:id/avatar", post(upload_avatar_handler).layer(DefaultBodyLimit::max(20 * 1024 * 1024)))
 .route("/users/:id/bio", put(update_bio_handler))
+.route("/users/:id/display-name", put(update_display_name_handler))
 .route("/players/search", get(search_players_handler))
 .route("/players/online-count", get(get_online_count_handler))
 .route("/players/:user_id/profile", get(get_player_profile_handler))
@@ -1046,6 +1048,7 @@ async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResp
         "cargo_cruiser": config.get_config("cargo_cruiser", 800.0),
         "cargo_transporter_base": config.get_config("cargo_transporter_base", 10000.0),
         "cargo_transporter_bonus_per_hangar": config.get_config("cargo_transporter_bonus_per_hangar", 0.05),
+        "cargo_transporter_bonus_per_computer_tech": config.get_config("cargo_transporter_bonus_per_computer_tech", 0.1),
         // Cooldowns
         "attack_cooldown_hours": config.get_config("attack_cooldown_hours", 2.0),
         "sabotage_cooldown_hours": config.get_config("sabotage_cooldown_hours", 2.0),
@@ -1149,15 +1152,16 @@ async fn get_ranking_handler(
         let is_me = current_owner_id.map(|id| id == owner_id).unwrap_or(false);
         let rank_badge = game_logic::get_rank_badge(total_score);
 
-        // Get protection data, galaxy, and avatar from user
-        let (protection_until, galaxy, avatar_url) = users.iter()
+        // Get protection data, galaxy, avatar, and display_name from user
+        let (protection_until, galaxy, avatar_url, display_name) = users.iter()
             .find(|u| u.id == owner_id)
             .map(|u| (
                 u.protection_until.map(|dt| dt.to_string()),
                 planets.first().map(|p| p.galaxy),
                 u.avatar_url.clone(),
+                u.display_name.clone().unwrap_or_else(|| u.username.clone()),
             ))
-            .unwrap_or((None, None, None));
+            .unwrap_or((None, None, None, username.clone()));
 
         let is_online = state.ws.as_ref()
             .map(|ws| ws.is_user_online(owner_id))
@@ -1166,6 +1170,7 @@ async fn get_ranking_handler(
         ranked_users.push(RankItem {
             rank: 0,
             username,
+            display_name,
             total_score,
             economy_score: total_economy,
             military_score: total_military,
@@ -1894,6 +1899,11 @@ async fn get_planet_handler(
         if let Ok(defense_details) = tech_tree::get_all_planet_defense_details(&state.db, updated_model.id).await {
             obj.insert("defenses".into(), json!(defense_details));
         }
+
+        // Fleet capacity computed from config (so admin changes take effect immediately)
+        let hangar_lvl = tech_tree::get_planet_building_level(&state.db, updated_model.id, "hangar").await.unwrap_or(0);
+        let fleet_cap = game_logic::get_fleet_capacity(hangar_lvl, &config);
+        obj.insert("fleet_capacity".into(), json!(fleet_cap));
     }
 
     Ok(Json(json_response))
@@ -4002,7 +4012,9 @@ async fn get_my_planets_handler(
                 // Points (economy, military, total)
                 "points": total_points,
                 "economy_points": economy_points,
-                "military_points": military_points
+                "military_points": military_points,
+                // Fleet capacity from config
+                "fleet_capacity": game_logic::get_fleet_capacity(hangar_level, &config),
             }));
         }
 
@@ -4090,10 +4102,11 @@ async fn transport_handler(
     if payload.metal > source_model.metal_amount || payload.crystal > source_model.crystal_amount || payload.deuterium > source_model.deuterium_amount { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ressources insuffisantes"}))).into_response(); }
 
     let total_load = payload.metal + payload.crystal + payload.deuterium;
-    // Capacité évolutive: +5% par niveau de hangar
+    // Capacité évolutive: +5% par niveau de hangar, +10% par niveau de tech informatique
     let config_clone = state.config.read().unwrap().clone();
     let hangar_level_transport = tech_tree::get_planet_building_level(&state.db, source_id, "hangar").await.unwrap_or(0);
-    let transporter_capacity = game_logic::get_transporter_capacity(hangar_level_transport, &config_clone);
+    let computer_tech_level = tech_tree::get_planet_tech_level(&state.db, source_id, "computer_tech").await.unwrap_or(0);
+    let transporter_capacity = game_logic::get_transporter_capacity_with_tech(hangar_level_transport, computer_tech_level, &config_clone);
     let capacity = payload.transporters as f64 * transporter_capacity;
     if total_load > capacity { return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Surcharge ! Capacité max: {:.0}", capacity)}))).into_response(); }
 
@@ -4618,6 +4631,7 @@ async fn get_player_profile_handler(
     let response = json!({
         "user_id": user.id,
         "username": user.username,
+        "display_name": user.display_name.as_deref().unwrap_or(&user.username),
         "is_admin": user.role == "admin",
         "is_online": is_online,
         "avatar_url": user.avatar_url,
@@ -6903,6 +6917,29 @@ async fn update_bio_handler(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de mise à jour"}))).into_response();
     }
     (StatusCode::OK, Json(json!({"bio": bio}))).into_response()
+}
+
+async fn update_display_name_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let display_name = payload.get("display_name").and_then(|v| v.as_str()).map(|s| s.trim().to_string());
+    if let Some(ref name) = display_name {
+        if name.is_empty() || name.chars().count() > 32 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Le nom d'affichage doit faire entre 1 et 32 caractères"}))).into_response();
+        }
+    }
+    let user = match User::find_by_id(user_id).one(&state.db).await.unwrap() {
+        Some(u) => u,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"}))).into_response(),
+    };
+    let mut active: user::ActiveModel = user.into();
+    active.display_name = Set(display_name.clone());
+    if active.update(&state.db).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de mise à jour"}))).into_response();
+    }
+    (StatusCode::OK, Json(json!({"display_name": display_name}))).into_response()
 }
 
 // ========== FRIENDSHIP HANDLERS ==========

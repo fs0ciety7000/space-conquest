@@ -289,7 +289,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   ) * hullBonus;
 
   const totalFleet = getTotalFleetCount(planet);
-  const hangarCap = 500 + (getBuildingLevel(planet, 'hangar') * 500);
+  const hangarCap = planet.fleet_capacity ?? (500 + (getBuildingLevel(planet, 'hangar') * 500));
   const totalDefense =
     (getShipCount(planet, 'rocket_launcher') || 0) +
     (getShipCount(planet, 'light_laser') || 0) +

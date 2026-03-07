@@ -149,12 +149,20 @@ pub enum WsEvent {
         from: String,
     },
 
-    /// Sabotage détecté sur ma planète
+    /// Sabotage détecté sur ma planète (attaquant identifié)
     #[serde(rename = "sabotage_detected")]
     SabotageDetected {
         attacker_name: String,
         planet_name: String,
         effect_type: String, // "disable_mine" | "steal_tech"
+    },
+
+    /// Sabotage appliqué silencieusement (attaquant non identifié)
+    #[serde(rename = "sabotage_applied")]
+    SabotageApplied {
+        planet_name: String,
+        effect_type: String,
+        expires_at: String,
     },
 
     /// Casus Belli accordé (droit d'attaque)
@@ -616,13 +624,22 @@ pub fn notify_spy_alert(state: &WsState, planet_id: Uuid, from: &str) {
     });
 }
 
-/// Notifie qu'un sabotage a été détecté sur une planète
-pub fn notify_sabotage_detected(state: &WsState, planet_id: Uuid, attacker_name: &str, planet_name: &str, effect_type: &str) {
-    state.broadcast_to_planet(planet_id, WsEvent::SabotageDetected {
+/// Notifie qu'un sabotage a été détecté (attaquant révélé)
+pub async fn notify_sabotage_detected(state: &WsState, owner_id: Uuid, attacker_name: &str, planet_name: &str, effect_type: &str) {
+    state.broadcast_to_user(owner_id, WsEvent::SabotageDetected {
         attacker_name: attacker_name.to_string(),
         planet_name: planet_name.to_string(),
         effect_type: effect_type.to_string(),
-    });
+    }).await;
+}
+
+/// Notifie qu'un sabotage a été appliqué silencieusement (attaquant non identifié)
+pub async fn notify_sabotage_applied(state: &WsState, owner_id: Uuid, planet_name: &str, effect_type: &str, expires_at: &str) {
+    state.broadcast_to_user(owner_id, WsEvent::SabotageApplied {
+        planet_name: planet_name.to_string(),
+        effect_type: effect_type.to_string(),
+        expires_at: expires_at.to_string(),
+    }).await;
 }
 
 /// Notifie qu'un Casus Belli a été accordé à un utilisateur

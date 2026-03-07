@@ -509,11 +509,20 @@ pub fn get_fleet_capacity(hangar_level: i32, config: &ServerConfigCache) -> i32 
     base + (hangar_level * per_level)
 }
 
-// Capacité transporteur évolutive basée sur niveau hangar
+/// Capacité transporteur par unité.
+/// Formule : base * (1 + hangar_level * bonus_hangar) * (1 + computer_tech_level * bonus_computer)
+/// Les bonus supplémentaires pourront être ajoutés via config sans changer la signature.
 pub fn get_transporter_capacity(hangar_level: i32, config: &ServerConfigCache) -> f64 {
+    get_transporter_capacity_with_tech(hangar_level, 0, config)
+}
+
+pub fn get_transporter_capacity_with_tech(hangar_level: i32, computer_tech_level: i32, config: &ServerConfigCache) -> f64 {
     let base_capacity = config.get_config("cargo_transporter_base", 10000.0);
-    let bonus_per_level = config.get_config("cargo_transporter_bonus_per_hangar", 0.05);
-    base_capacity * (1.0 + (hangar_level as f64 * bonus_per_level))
+    let bonus_per_hangar = config.get_config("cargo_transporter_bonus_per_hangar", 0.05);
+    let bonus_per_computer_tech = config.get_config("cargo_transporter_bonus_per_computer_tech", 0.1);
+    base_capacity
+        * (1.0 + (hangar_level as f64 * bonus_per_hangar))
+        * (1.0 + (computer_tech_level as f64 * bonus_per_computer_tech))
 }
 
 pub const TRANSPORTER_CAPACITY: f64 = 10000.0; // Deprecated: utilisez get_transporter_capacity()

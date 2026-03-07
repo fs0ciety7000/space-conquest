@@ -214,41 +214,5 @@ pub async fn validate_attack(
         }
     }
 
-    // Check points ratio
-    let attacker_user = User::find_by_id(attacker_user_id).one(db).await
-        .map_err(|_| "Impossible de charger les données de l'attaquant".to_string())?
-        .ok_or("Attaquant introuvable".to_string())?;
-
-    let defender_user = User::find_by_id(defender_user_id).one(db).await
-        .map_err(|_| "Impossible de charger les données du défenseur".to_string())?
-        .ok_or("Défenseur introuvable".to_string())?;
-
-    let min_ratio = config.get_config("attack_min_points_ratio", 0.2);
-    let max_ratio = config.get_config("attack_max_points_ratio", 5.0);
-
-    if !is_attack_allowed_by_points(attacker_user.total_points, defender_user.total_points, min_ratio, max_ratio) {
-        let ratio = if attacker_user.total_points > 0 {
-            defender_user.total_points as f64 / attacker_user.total_points as f64
-        } else {
-            0.0
-        };
-
-        if ratio < min_ratio {
-            return Err(format!(
-                "Ce joueur a trop peu de points ({} pts vs vos {} pts). Ratio minimum: {:.0}%",
-                defender_user.total_points,
-                attacker_user.total_points,
-                min_ratio * 100.0
-            ));
-        } else {
-            return Err(format!(
-                "Ce joueur a trop de points ({} pts vs vos {} pts). Ratio maximum: {:.0}x",
-                defender_user.total_points,
-                attacker_user.total_points,
-                max_ratio
-            ));
-        }
-    }
-
     Ok(())
 }

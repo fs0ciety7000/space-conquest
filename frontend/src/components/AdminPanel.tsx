@@ -216,6 +216,7 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
       { key: 'cargo_cruiser', label: 'Croiseur - Cargo', description: 'Capacité cargo croiseur', defaultValue: '800.0' },
       { key: 'cargo_transporter_base', label: 'Transporteur - Base', description: 'Capacité base transporteur', defaultValue: '10000.0' },
       { key: 'cargo_transporter_bonus_per_hangar', label: 'Transporteur - Bonus Hangar', description: 'Bonus par niveau hangar (+5%)', defaultValue: '0.05' },
+      { key: 'cargo_transporter_bonus_per_computer_tech', label: 'Transporteur - Bonus Tech Informatique', description: 'Bonus de cargo par niveau de tech informatique (+10% par niv.)', defaultValue: '0.1' },
     ]
   },
   {

@@ -30,6 +30,9 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
   const [loading, setLoading] = useState(true);
   const [friendStatus, setFriendStatus] = useState<{ friendship_id?: string; status?: string; is_sender?: boolean } | null>(null);
   const [friendLoading, setFriendLoading] = useState(false);
+  const [editingDisplayName, setEditingDisplayName] = useState(false);
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [savingDisplayName, setSavingDisplayName] = useState(false);
 
   const viewerId = localStorage.getItem('user_id');
 
@@ -58,6 +61,7 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
         if (res.ok) {
           const data = await res.json();
           setProfile(data);
+          setDisplayNameInput(data.display_name || data.username || '');
         } else {
           toast.error("Profil introuvable");
         }
@@ -160,6 +164,27 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
     return "from-slate-500 to-slate-600";
   };
 
+  const handleSaveDisplayName = async () => {
+    if (!displayNameInput.trim()) return;
+    setSavingDisplayName(true);
+    try {
+      const res = await fetch(apiUrl(`/users/${userId}/display-name`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ display_name: displayNameInput.trim() }),
+      });
+      if (res.ok) {
+        setProfile((p: any) => ({ ...p, display_name: displayNameInput.trim() }));
+        setEditingDisplayName(false);
+        toast.success('Nom d\'affichage mis à jour !');
+      } else {
+        const d = await res.json();
+        toast.error(d.error || 'Erreur');
+      }
+    } catch { toast.error('Erreur réseau'); }
+    setSavingDisplayName(false);
+  };
+
   // Calcul du temps de jeu (si visible)
   const memberSince = profile.created_at ? new Date(profile.created_at) : null;
   const daysSince = memberSince 
@@ -208,16 +233,47 @@ export default function PlayerProfile({ userId, onClose }: PlayerProfileProps) {
 
             {/* Nom + Badge */}
             <div className="flex-1 text-center md:text-left">
-              <h1 className="text-4xl font-black text-white uppercase tracking-tight mb-2 flex items-center gap-3 justify-center md:justify-start">
-                {profile.username}
-                <Crown size={24} className="text-yellow-500" />
-                {profile.is_online && (
-                  <span className="flex items-center gap-1.5 text-sm font-normal text-emerald-400 normal-case tracking-normal">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    En ligne
-                  </span>
+              <div className="flex items-center gap-3 justify-center md:justify-start mb-2">
+                {editingDisplayName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="text-2xl font-black text-white uppercase bg-slate-800 border border-indigo-500/50 rounded-lg px-3 py-1 w-48 focus:outline-none"
+                      value={displayNameInput}
+                      onChange={e => setDisplayNameInput(e.target.value)}
+                      maxLength={32}
+                      autoFocus
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveDisplayName(); if (e.key === 'Escape') setEditingDisplayName(false); }}
+                    />
+                    <button onClick={handleSaveDisplayName} disabled={savingDisplayName} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg font-bold">
+                      {savingDisplayName ? '...' : 'OK'}
+                    </button>
+                    <button onClick={() => setEditingDisplayName(false)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg">✕</button>
+                  </div>
+                ) : (
+                  <h1 className="text-4xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                    {profile.display_name || profile.username}
+                    <Crown size={24} className="text-yellow-500" />
+                    {profile.is_online && (
+                      <span className="flex items-center gap-1.5 text-sm font-normal text-emerald-400 normal-case tracking-normal">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        En ligne
+                      </span>
+                    )}
+                    {profile.is_own_profile && (
+                      <button
+                        onClick={() => { setDisplayNameInput(profile.display_name || profile.username); setEditingDisplayName(true); }}
+                        className="text-xs font-normal text-slate-400 hover:text-indigo-400 normal-case tracking-normal border border-slate-600 hover:border-indigo-500 rounded px-2 py-0.5 transition-colors"
+                        title="Modifier le nom d'affichage"
+                      >
+                        ✏️ Modifier
+                      </button>
+                    )}
+                  </h1>
                 )}
-              </h1>
+              </div>
+              {profile.display_name && profile.display_name !== profile.username && (
+                <p className="text-slate-500 text-sm font-mono mb-1">@{profile.username}</p>
+              )}
               
               {/* ✅ Badge de rang (peut être masqué) */}
               <div className="flex flex-wrap items-center gap-2">

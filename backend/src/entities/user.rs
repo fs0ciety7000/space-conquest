@@ -19,6 +19,7 @@ pub struct Model {
     pub avatar_url: Option<String>,
     pub bio: Option<String>,
     pub last_login: Option<chrono::NaiveDateTime>,
+    pub display_name: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

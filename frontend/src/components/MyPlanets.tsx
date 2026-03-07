@@ -415,7 +415,7 @@ export default function MyPlanets({ currentPlanetId, onSelectPlanet, onNavigateT
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {planets.map((planet, index) => {
           const totalFleet = getTotalFleet(planet);
-          const hangarCap = getHangarCap(getBuildingLevel(planet, 'hangar'));
+          const hangarCap = planet.fleet_capacity ?? getHangarCap(getBuildingLevel(planet, 'hangar'));
           const totalDefense = getTotalDefense(planet);
           const score = getPlanetScore(planet);
           const isCurrent = planet.id === currentPlanetId;

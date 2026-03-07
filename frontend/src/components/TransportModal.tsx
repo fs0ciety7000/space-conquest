@@ -26,7 +26,8 @@ export default function TransportModal({ currentPlanet, targetPlanet, onClose, o
 
   const maxShips = getShipCount(currentPlanet, 'transporter');
   const hangarLevel = currentPlanet.buildings?.hangar ?? currentPlanet.hangar_level ?? 0;
-  const capacity = transporters * getTransporterCapacity(hangarLevel);
+  const computerTechLevel = currentPlanet.technologies?.computer_tech ?? 0;
+  const capacity = transporters * getTransporterCapacity(hangarLevel, computerTechLevel);
   const currentLoad = metal + crystal + deuterium;
 
   // Calcul du temps de vol basé sur la distance 3D (comme le backend)
