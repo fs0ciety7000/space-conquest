@@ -87,12 +87,16 @@ fn compute_travel_time_seconds(
 
 async fn route_to_json(db: &DatabaseConnection, route_id: &str, flight_speed: f64) -> Option<serde_json::Value> {
     use sea_orm::ConnectionTrait;
-    let row = db.query_one(sea_orm::Statement::from_string(
+    let query_result = db.query_one(sea_orm::Statement::from_string(
         sea_orm::DbBackend::Postgres,
         format!(
-            "SELECT tr.id, tr.owner_id, tr.name, tr.source_planet_id, tr.target_planet_id, \
+            "SELECT tr.id::text AS id, tr.owner_id::text AS owner_id, tr.name, \
+             tr.source_planet_id::text AS source_planet_id, tr.target_planet_id::text AS target_planet_id, \
              tr.ship_count, tr.metal_ratio, tr.crystal_ratio, tr.deuterium_ratio, \
-             tr.is_active, tr.next_run_at, tr.created_at, tr.schedule_type, tr.interval_hours, tr.daily_hour, \
+             tr.is_active, tr.next_run_at, tr.created_at, \
+             COALESCE(tr.schedule_type, 'interval') AS schedule_type, \
+             COALESCE(tr.interval_hours, 24) AS interval_hours, \
+             tr.daily_hour, \
              ps.name AS source_name, pt.name AS target_name, \
              ps.galaxy AS src_galaxy, ps.system AS src_system, ps.position AS src_position, \
              pt.galaxy AS tgt_galaxy, pt.system AS tgt_system, pt.position AS tgt_position \
@@ -101,7 +105,12 @@ async fn route_to_json(db: &DatabaseConnection, route_id: &str, flight_speed: f6
              JOIN planet pt ON pt.id = tr.target_planet_id \
              WHERE tr.id = '{}'", route_id
         ),
-    )).await.ok()??;
+    )).await;
+    let row = match query_result {
+        Ok(Some(r)) => r,
+        Ok(None) => { eprintln!("route_to_json: no row found for id={}", route_id); return None; }
+        Err(e) => { eprintln!("route_to_json: query error for id={}: {:?}", route_id, e); return None; }
+    };
 
     let src = (
         row.try_get::<i32>("", "src_galaxy").unwrap_or(1),
@@ -179,9 +188,13 @@ pub async fn list_routes_handler(
     let rows = db.query_all(sea_orm::Statement::from_string(
         sea_orm::DbBackend::Postgres,
         format!(
-            "SELECT tr.id, tr.owner_id, tr.name, tr.source_planet_id, tr.target_planet_id, \
+            "SELECT tr.id::text AS id, tr.owner_id::text AS owner_id, tr.name, \
+             tr.source_planet_id::text AS source_planet_id, tr.target_planet_id::text AS target_planet_id, \
              tr.ship_count, tr.metal_ratio, tr.crystal_ratio, tr.deuterium_ratio, \
-             tr.is_active, tr.next_run_at, tr.created_at, tr.schedule_type, tr.interval_hours, tr.daily_hour, \
+             tr.is_active, tr.next_run_at, tr.created_at, \
+             COALESCE(tr.schedule_type, 'interval') AS schedule_type, \
+             COALESCE(tr.interval_hours, 24) AS interval_hours, \
+             tr.daily_hour, \
              ps.name AS source_name, pt.name AS target_name, \
              ps.galaxy AS src_galaxy, ps.system AS src_system, ps.position AS src_position, \
              pt.galaxy AS tgt_galaxy, pt.system AS tgt_system, pt.position AS tgt_position \
@@ -274,7 +287,7 @@ pub async fn create_route_handler(
         Ok(Some(p)) if p.owner_id == payload.owner_id => p,
         _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Source planet not found or not yours"}))).into_response(),
     };
-    let _target = match Planet::find_by_id(payload.target_planet_id).one(db).await {
+    let target = match Planet::find_by_id(payload.target_planet_id).one(db).await {
         Ok(Some(p)) if p.owner_id == payload.owner_id => p,
         _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Target planet not found or not yours"}))).into_response(),
     };
@@ -348,10 +361,34 @@ pub async fn create_route_handler(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Erreur DB: {}", e)}))).into_response();
     }
 
-    match route_to_json(db, &route_id.to_string(), flight_speed).await {
-        Some(r) => (StatusCode::CREATED, Json(json!({"route": r}))).into_response(),
-        None => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Route créée mais impossible de la récupérer"}))).into_response(),
-    }
+    // Build response directly from known data — avoids a round-trip SELECT that may fail
+    let travel_time_seconds = compute_travel_time_seconds(
+        (source.galaxy, source.system, source.position),
+        (target.galaxy, target.system, target.position),
+        flight_speed, 0,
+    );
+    (StatusCode::CREATED, Json(json!({
+        "route": {
+            "id": route_id.to_string(),
+            "owner_id": payload.owner_id.to_string(),
+            "name": payload.name,
+            "source_planet_id": payload.source_planet_id.to_string(),
+            "target_planet_id": payload.target_planet_id.to_string(),
+            "source_planet_name": source.name,
+            "target_planet_name": target.name,
+            "ship_count": payload.ship_count,
+            "metal_ratio": clamp_ratio(payload.metal_ratio),
+            "crystal_ratio": clamp_ratio(payload.crystal_ratio),
+            "deuterium_ratio": clamp_ratio(payload.deuterium_ratio),
+            "is_active": true,
+            "schedule_type": schedule_type,
+            "interval_hours": interval_hours,
+            "daily_hour": daily_hour,
+            "next_run_at": next_run.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            "created_at": now.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            "travel_time_seconds": travel_time_seconds,
+        }
+    }))).into_response()
 }
 
 /// PATCH /trade-routes/:id

@@ -96,7 +96,7 @@ async fn get_user_tech_levels(
         let mut comp = 0i32;
         for pt in &planet_techs {
             match tech_id_map.get(&pt.tech_id).map(|s| s.as_str()) {
-                Some("espionage") => esp = pt.current_level,
+                Some("espionage") | Some("espionage_tech") => esp = pt.current_level,
                 Some("computer_tech") => comp = pt.current_level,
                 _ => {}
             }
