@@ -162,16 +162,16 @@ pub async fn get_suggested_price_handler(
         format!("SELECT owner_id, is_homeworld, name FROM planet WHERE id = '{}'", planet_id),
     )).await.ok().flatten();
 
-    let (owner_id_str, is_homeworld, name) = match planet_row {
+    let (owner_id, is_homeworld, name) = match planet_row {
         Some(r) => (
-            r.try_get::<String>("", "owner_id").unwrap_or_default(),
+            r.try_get::<Uuid>("", "owner_id").unwrap_or_default(),
             r.try_get::<bool>("", "is_homeworld").unwrap_or(false),
             r.try_get::<String>("", "name").unwrap_or_default(),
         ),
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
     };
 
-    if Uuid::parse_str(&owner_id_str).ok() != Some(user_id) {
+    if owner_id != user_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your planet"}))).into_response();
     }
     if is_homeworld {
@@ -231,15 +231,15 @@ pub async fn list_planet_handler(
         format!("SELECT owner_id, is_homeworld FROM planet WHERE id = '{}'", planet_id),
     )).await.ok().flatten();
 
-    let (owner_id_str, is_homeworld) = match planet_row {
+    let (planet_owner_id, is_homeworld) = match planet_row {
         Some(r) => (
-            r.try_get::<String>("", "owner_id").unwrap_or_default(),
+            r.try_get::<Uuid>("", "owner_id").unwrap_or_default(),
             r.try_get::<bool>("", "is_homeworld").unwrap_or(false),
         ),
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
     };
 
-    if Uuid::parse_str(&owner_id_str).ok() != Some(payload.user_id) {
+    if planet_owner_id != payload.user_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your planet"}))).into_response();
     }
     if is_homeworld {
@@ -306,12 +306,12 @@ pub async fn update_listing_handler(
         format!("SELECT seller_id FROM planet_listings WHERE id = '{}' AND is_active = true", listing_id),
     )).await.ok().flatten();
 
-    let seller_id_str = match row {
-        Some(r) => r.try_get::<String>("", "seller_id").unwrap_or_default(),
+    let seller_id = match row {
+        Some(r) => r.try_get::<Uuid>("", "seller_id").unwrap_or_default(),
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Listing not found"}))).into_response(),
     };
 
-    if Uuid::parse_str(&seller_id_str).ok() != Some(payload.user_id) {
+    if seller_id != payload.user_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your listing"}))).into_response();
     }
 
@@ -344,12 +344,12 @@ pub async fn cancel_listing_handler(
         format!("SELECT seller_id FROM planet_listings WHERE id = '{}' AND is_active = true", listing_id),
     )).await.ok().flatten();
 
-    let seller_id_str = match row {
-        Some(r) => r.try_get::<String>("", "seller_id").unwrap_or_default(),
+    let seller_id = match row {
+        Some(r) => r.try_get::<Uuid>("", "seller_id").unwrap_or_default(),
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Listing not found"}))).into_response(),
     };
 
-    if Uuid::parse_str(&seller_id_str).ok() != Some(user_id) {
+    if seller_id != user_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your listing"}))).into_response();
     }
 
@@ -445,10 +445,10 @@ pub async fn buy_planet_handler(
         ),
     )).await.ok().flatten();
 
-    let (planet_id_str, seller_id_str, price_metal, price_crystal, price_deuterium) = match listing_row {
+    let (planet_id, seller_id, price_metal, price_crystal, price_deuterium) = match listing_row {
         Some(r) => (
-            r.try_get::<String>("", "planet_id").unwrap_or_default(),
-            r.try_get::<String>("", "seller_id").unwrap_or_default(),
+            r.try_get::<Uuid>("", "planet_id").unwrap_or_default(),
+            r.try_get::<Uuid>("", "seller_id").unwrap_or_default(),
             r.try_get::<i64>("", "asking_price_metal").unwrap_or(0),
             r.try_get::<i64>("", "asking_price_crystal").unwrap_or(0),
             r.try_get::<i64>("", "asking_price_deuterium").unwrap_or(0),
@@ -456,13 +456,8 @@ pub async fn buy_planet_handler(
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Listing not found"}))).into_response(),
     };
 
-    let planet_id = match Uuid::parse_str(&planet_id_str) {
-        Ok(id) => id,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Invalid planet id"}))).into_response(),
-    };
-
     // Cannot buy own planet
-    if Uuid::parse_str(&seller_id_str).ok() == Some(payload.buyer_id) {
+    if seller_id == payload.buyer_id {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Cannot buy your own planet"}))).into_response();
     }
 
@@ -475,9 +470,9 @@ pub async fn buy_planet_handler(
         ),
     )).await.ok().flatten();
 
-    let (buyer_owner_str, buyer_metal, buyer_crystal, buyer_deuterium) = match buyer_planet_row {
+    let (buyer_owner_id, buyer_metal, buyer_crystal, buyer_deuterium) = match buyer_planet_row {
         Some(r) => (
-            r.try_get::<String>("", "owner_id").unwrap_or_default(),
+            r.try_get::<Uuid>("", "owner_id").unwrap_or_default(),
             r.try_get::<f64>("", "metal_amount").unwrap_or(0.0),
             r.try_get::<f64>("", "crystal_amount").unwrap_or(0.0),
             r.try_get::<f64>("", "deuterium_amount").unwrap_or(0.0),
@@ -485,7 +480,7 @@ pub async fn buy_planet_handler(
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Buyer planet not found"}))).into_response(),
     };
 
-    if Uuid::parse_str(&buyer_owner_str).ok() != Some(payload.buyer_id) {
+    if buyer_owner_id != payload.buyer_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your planet"}))).into_response();
     }
 
@@ -542,11 +537,11 @@ pub async fn buy_planet_handler(
     )).await;
 
     // 2. Find seller's homeworld to credit resources
-    let seller_homeworld: Option<String> = db.query_one(Statement::from_string(
+    let seller_homeworld: Option<Uuid> = db.query_one(Statement::from_string(
         DbBackend::Postgres,
-        format!("SELECT id FROM planet WHERE owner_id = '{}' AND is_homeworld = true LIMIT 1", seller_id_str),
+        format!("SELECT id FROM planet WHERE owner_id = '{}' AND is_homeworld = true LIMIT 1", seller_id),
     )).await.ok().flatten()
-      .and_then(|r| r.try_get::<String>("", "id").ok());
+      .and_then(|r| r.try_get::<Uuid>("", "id").ok());
 
     if let Some(hw_id) = seller_homeworld {
         let _ = db.execute_unprepared(&format!(
@@ -555,6 +550,28 @@ pub async fn buy_planet_handler(
             price_metal, price_crystal, price_deuterium, hw_id
         )).await;
     }
+
+    // Fetch planet name and buyer username for messages
+    let planet_name: String = db.query_one(Statement::from_string(
+        DbBackend::Postgres,
+        format!("SELECT name FROM planet WHERE id = '{}'", planet_id),
+    )).await.ok().flatten()
+      .and_then(|r| r.try_get::<String>("", "name").ok())
+      .unwrap_or_else(|| "Inconnue".to_string());
+
+    let buyer_username: String = db.query_one(Statement::from_string(
+        DbBackend::Postgres,
+        format!("SELECT username FROM \"user\" WHERE id = '{}'", payload.buyer_id),
+    )).await.ok().flatten()
+      .and_then(|r| r.try_get::<String>("", "username").ok())
+      .unwrap_or_else(|| "Acheteur".to_string());
+
+    let seller_username: String = db.query_one(Statement::from_string(
+        DbBackend::Postgres,
+        format!("SELECT username FROM \"user\" WHERE id = '{}'", seller_id),
+    )).await.ok().flatten()
+      .and_then(|r| r.try_get::<String>("", "username").ok())
+      .unwrap_or_else(|| "Vendeur".to_string());
 
     // 3. Transfer planet ownership
     let _ = db.execute_unprepared(&format!(
@@ -573,15 +590,31 @@ pub async fn buy_planet_handler(
         "UPDATE planet_listings SET is_active = false WHERE id = '{}'", listing_id
     )).await;
 
-    // 6. Send in-game message to seller
-    let seller_uuid = Uuid::parse_str(&seller_id_str).unwrap_or_default();
     let system_id = Uuid::nil();
     let now = Utc::now().naive_utc();
-    let msg_id = Uuid::new_v4();
+
+    // 6. Send in-game message to seller
     let _ = db.execute_unprepared(&format!(
         "INSERT INTO message (id, sender_id, recipient_id, subject, content, sent_at, is_read) \
-         VALUES ('{}', '{}', '{}', 'Planète vendue', 'Votre planète a été vendue avec succès. Vous avez reçu {} métal, {} cristal et {} deutérium.', '{}', false)",
-        msg_id, system_id, seller_uuid,
+         VALUES ('{}', '{}', '{}', 'Planète vendue — {}', \
+         'Votre colonie **{}** a été achetée par **{}** pour {} métal, {} cristal et {} deutérium. Ces ressources ont été créditées sur votre planète mère.', \
+         '{}', false)",
+        Uuid::new_v4(), system_id, seller_id,
+        planet_name,
+        planet_name, buyer_username,
+        price_metal, price_crystal, price_deuterium,
+        now
+    )).await;
+
+    // 7. Send in-game message to buyer
+    let _ = db.execute_unprepared(&format!(
+        "INSERT INTO message (id, sender_id, recipient_id, subject, content, sent_at, is_read) \
+         VALUES ('{}', '{}', '{}', 'Acquisition de planète — {}', \
+         'Vous avez acquis la colonie **{}** (vendue par **{}**) pour {} métal, {} cristal et {} deutérium. La planète est désormais sous votre contrôle.', \
+         '{}', false)",
+        Uuid::new_v4(), system_id, payload.buyer_id,
+        planet_name,
+        planet_name, seller_username,
         price_metal, price_crystal, price_deuterium,
         now
     )).await;
@@ -589,6 +622,7 @@ pub async fn buy_planet_handler(
     Json(json!({
         "success": true,
         "planet_id": planet_id,
+        "planet_name": planet_name,
         "paid_metal": price_metal,
         "paid_crystal": price_crystal,
         "paid_deuterium": price_deuterium
@@ -618,10 +652,10 @@ pub async fn sell_to_npc_handler(
         ),
     )).await.ok().flatten();
 
-    let (planet_id_str, seller_id_str, sug_metal, sug_crystal, sug_deuterium) = match listing_row {
+    let (planet_id, seller_id, sug_metal, sug_crystal, sug_deuterium) = match listing_row {
         Some(r) => (
-            r.try_get::<String>("", "planet_id").unwrap_or_default(),
-            r.try_get::<String>("", "seller_id").unwrap_or_default(),
+            r.try_get::<Uuid>("", "planet_id").unwrap_or_default(),
+            r.try_get::<Uuid>("", "seller_id").unwrap_or_default(),
             r.try_get::<i64>("", "suggested_price_metal").unwrap_or(0),
             r.try_get::<i64>("", "suggested_price_crystal").unwrap_or(0),
             r.try_get::<i64>("", "suggested_price_deuterium").unwrap_or(0),
@@ -629,26 +663,29 @@ pub async fn sell_to_npc_handler(
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Listing not found"}))).into_response(),
     };
 
-    if Uuid::parse_str(&seller_id_str).ok() != Some(user_id) {
+    if seller_id != user_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your listing"}))).into_response();
     }
-
-    let planet_id = match Uuid::parse_str(&planet_id_str) {
-        Ok(id) => id,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Invalid planet id"}))).into_response(),
-    };
 
     // NPC pays 40% of suggested
     let npc_metal = (sug_metal as f64 * 0.40) as i64;
     let npc_crystal = (sug_crystal as f64 * 0.40) as i64;
     let npc_deuterium = (sug_deuterium as f64 * 0.40) as i64;
 
+    // Fetch planet name before deleting
+    let planet_name: String = db.query_one(Statement::from_string(
+        DbBackend::Postgres,
+        format!("SELECT name FROM planet WHERE id = '{}'", planet_id),
+    )).await.ok().flatten()
+      .and_then(|r| r.try_get::<String>("", "name").ok())
+      .unwrap_or_else(|| "Inconnue".to_string());
+
     // Credit seller's homeworld
-    let seller_homeworld: Option<String> = db.query_one(Statement::from_string(
+    let seller_homeworld: Option<Uuid> = db.query_one(Statement::from_string(
         DbBackend::Postgres,
         format!("SELECT id FROM planet WHERE owner_id = '{}' AND is_homeworld = true LIMIT 1", user_id),
     )).await.ok().flatten()
-      .and_then(|r| r.try_get::<String>("", "id").ok());
+      .and_then(|r| r.try_get::<Uuid>("", "id").ok());
 
     if let Some(hw_id) = seller_homeworld {
         let _ = db.execute_unprepared(&format!(
@@ -660,6 +697,21 @@ pub async fn sell_to_npc_handler(
 
     // Delete planet (CASCADE will clean buildings, techs, ships, defenses, listing, etc.)
     let _ = db.execute_unprepared(&format!("DELETE FROM planet WHERE id = '{}'", planet_id)).await;
+
+    // Send confirmation message to seller
+    let system_id = Uuid::nil();
+    let now = Utc::now().naive_utc();
+    let _ = db.execute_unprepared(&format!(
+        "INSERT INTO message (id, sender_id, recipient_id, subject, content, sent_at, is_read) \
+         VALUES ('{}', '{}', '{}', 'Planète vendue au PNJ — {}', \
+         'Votre colonie **{}** a été vendue à un acheteur PNJ pour {} métal, {} cristal et {} deutérium (40%% de la valeur estimée). Ces ressources ont été créditées sur votre planète mère. La colonie a été libérée dans la galaxie.', \
+         '{}', false)",
+        Uuid::new_v4(), system_id, seller_id,
+        planet_name,
+        planet_name,
+        npc_metal, npc_crystal, npc_deuterium,
+        now
+    )).await;
 
     Json(json!({
         "success": true,

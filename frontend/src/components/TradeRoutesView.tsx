@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Route, Plus, Trash2, Play, Pause, ChevronDown, ChevronUp,
   Package, Clock, AlertTriangle, CheckCircle2, Truck, Info,
-  RefreshCw, Warehouse
+  RefreshCw, Warehouse, Navigation, ArrowRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ interface TradeRoute {
   daily_hour: number | null;
   next_run_at?: string;
   created_at?: string;
+  travel_time_seconds?: number;
 }
 
 interface RouteLog {
@@ -88,7 +89,49 @@ function formatNumber(n: number): string {
   return String(Math.round(n));
 }
 
+function useNow() {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
+function getTransitStatus(route: TradeRoute, now: number, intervalHours: number) {
+  if (!route.is_active || !route.next_run_at || !route.travel_time_seconds) return null;
+  const arrivalMs = new Date(route.next_run_at).getTime();
+  const travelMs = route.travel_time_seconds * 1000;
+  const intervalMs = intervalHours * 3600 * 1000;
+  const departureMs = arrivalMs - travelMs;
+  const nextDepartureMs = arrivalMs + travelMs; // fleet returning, departs again after full round-trip
+
+  if (now >= departureMs && now < arrivalMs) {
+    const remainingSec = Math.max(0, Math.floor((arrivalMs - now) / 1000));
+    const totalSec = route.travel_time_seconds;
+    const progress = Math.min(100, ((totalSec - remainingSec) / totalSec) * 100);
+    return { phase: 'outbound' as const, remainingSec, progress };
+  }
+  if (now >= arrivalMs && now < nextDepartureMs) {
+    const remainingSec = Math.max(0, Math.floor((nextDepartureMs - now) / 1000));
+    const totalSec = route.travel_time_seconds;
+    const progress = Math.min(100, ((totalSec - remainingSec) / totalSec) * 100);
+    return { phase: 'returning' as const, remainingSec, progress };
+  }
+  return null;
+}
+
+function formatSec(s: number): string {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  if (m > 0) return `${m}m ${String(sec).padStart(2, '0')}s`;
+  return `${sec}s`;
+}
+
 export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewProps) {
+  const now = useNow();
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
   const [myPlanets, setMyPlanets] = useState<MyPlanet[]>([]);
   const [hubInfo, setHubInfo] = useState<HubInfo | null>(null);
@@ -520,6 +563,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
           {routes.map(route => {
             const isExpanded = expandedLogs.has(route.id);
             const routeLogs = logs[route.id] || [];
+            const transit = getTransitStatus(route, now, intervalHours);
 
             return (
               <Card
@@ -574,14 +618,47 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                           <Clock size={11} className="text-indigo-400" />
                           {route.schedule_type === 'daily' && route.daily_hour != null
                             ? `Quotidien à ${String(route.daily_hour).padStart(2, '0')}:00 UTC`
-                            : `Toutes les ${route.interval_hours}h`}
+                            : `Toutes les ${intervalHours}h`}
                         </span>
-                        {route.is_active && route.next_run_at && (
+                        {route.travel_time_seconds && (
+                          <span className="text-xs text-slate-500">
+                            Trajet : <span className="text-amber-400/70">{formatSec(route.travel_time_seconds)}</span>
+                          </span>
+                        )}
+                        {route.is_active && route.next_run_at && !transit && (
                           <span className="text-xs text-slate-400">
-                            Prochain : <span className="text-indigo-300 font-medium">{formatTimeUntil(route.next_run_at)}</span>
+                            Collecte : <span className="text-indigo-300 font-medium">{formatTimeUntil(route.next_run_at)}</span>
                           </span>
                         )}
                       </div>
+
+                      {/* Fleet transit bar */}
+                      {transit && (
+                        <div className="mt-3">
+                          <div className={`flex items-center gap-2 mb-1.5 text-xs font-medium ${
+                            transit.phase === 'outbound' ? 'text-amber-300' : 'text-cyan-300'
+                          }`}>
+                            <Navigation size={12} className="animate-pulse" />
+                            {transit.phase === 'outbound'
+                              ? <>Flotte en route → <span className="font-semibold">{route.target_planet_name}</span></>
+                              : <>Flotte en retour → <span className="font-semibold">{route.source_planet_name}</span></>
+                            }
+                            <span className="ml-auto text-slate-400 font-normal">
+                              ETA : <span className={transit.phase === 'outbound' ? 'text-amber-300' : 'text-cyan-300'}>{formatSec(transit.remainingSec)}</span>
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-1000 ${
+                                transit.phase === 'outbound'
+                                  ? 'bg-linear-to-r from-amber-500 to-amber-300'
+                                  : 'bg-linear-to-r from-cyan-600 to-cyan-400'
+                              }`}
+                              style={{ width: `${transit.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}

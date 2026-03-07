@@ -61,7 +61,20 @@ struct RouteLog {
 // ─── Sea-ORM entity stubs (raw SQL is simpler here since tables are new) ──────
 // We use execute_unprepared for inserts/updates and SELECT via raw query.
 
-async fn route_to_json(db: &DatabaseConnection, route_id: &str) -> Option<serde_json::Value> {
+fn compute_travel_time_seconds(
+    src: (i32, i32, i32),
+    tgt: (i32, i32, i32),
+    flight_speed: f64,
+    hyperspace_level: i32,
+) -> i64 {
+    let dist = crate::game_logic::calculate_distance(src, tgt);
+    let base_time = crate::game_logic::calculate_flight_time(dist, flight_speed);
+    // Hyperspace tech: each level gives +10% speed → reduce time
+    let bonus = 1.0 + hyperspace_level as f64 * 0.10;
+    ((base_time as f64) / bonus).max(1.0) as i64
+}
+
+async fn route_to_json(db: &DatabaseConnection, route_id: &str, flight_speed: f64) -> Option<serde_json::Value> {
     use sea_orm::ConnectionTrait;
     let row = db.query_one(sea_orm::Statement::from_string(
         sea_orm::DbBackend::Postgres,
@@ -69,13 +82,27 @@ async fn route_to_json(db: &DatabaseConnection, route_id: &str) -> Option<serde_
             "SELECT tr.id, tr.owner_id, tr.name, tr.source_planet_id, tr.target_planet_id, \
              tr.ship_count, tr.metal_ratio, tr.crystal_ratio, tr.deuterium_ratio, \
              tr.is_active, tr.next_run_at, tr.created_at, \
-             ps.name AS source_name, pt.name AS target_name \
+             ps.name AS source_name, pt.name AS target_name, \
+             ps.galaxy AS src_galaxy, ps.system AS src_system, ps.position AS src_position, \
+             pt.galaxy AS tgt_galaxy, pt.system AS tgt_system, pt.position AS tgt_position \
              FROM trade_route tr \
              JOIN planet ps ON ps.id = tr.source_planet_id \
              JOIN planet pt ON pt.id = tr.target_planet_id \
              WHERE tr.id = '{}'", route_id
         ),
     )).await.ok()??;
+
+    let src = (
+        row.try_get::<i32>("", "src_galaxy").unwrap_or(1),
+        row.try_get::<i32>("", "src_system").unwrap_or(1),
+        row.try_get::<i32>("", "src_position").unwrap_or(1),
+    );
+    let tgt = (
+        row.try_get::<i32>("", "tgt_galaxy").unwrap_or(1),
+        row.try_get::<i32>("", "tgt_system").unwrap_or(1),
+        row.try_get::<i32>("", "tgt_position").unwrap_or(1),
+    );
+    let travel_time_seconds = compute_travel_time_seconds(src, tgt, flight_speed, 0);
 
     Some(json!({
         "id": row.try_get::<String>("", "id").ok()?,
@@ -94,6 +121,7 @@ async fn route_to_json(db: &DatabaseConnection, route_id: &str) -> Option<serde_
             .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
         "created_at": row.try_get::<chrono::NaiveDateTime>("", "created_at").ok()
             .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+        "travel_time_seconds": travel_time_seconds,
     }))
 }
 
@@ -132,13 +160,17 @@ pub async fn list_routes_handler(
         None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "user_id required"}))).into_response(),
     };
 
+    let flight_speed = state.config.read().unwrap().get_config("flight_speed_multiplier", 5.0);
+
     let rows = db.query_all(sea_orm::Statement::from_string(
         sea_orm::DbBackend::Postgres,
         format!(
             "SELECT tr.id, tr.owner_id, tr.name, tr.source_planet_id, tr.target_planet_id, \
              tr.ship_count, tr.metal_ratio, tr.crystal_ratio, tr.deuterium_ratio, \
              tr.is_active, tr.next_run_at, tr.created_at, \
-             ps.name AS source_name, pt.name AS target_name \
+             ps.name AS source_name, pt.name AS target_name, \
+             ps.galaxy AS src_galaxy, ps.system AS src_system, ps.position AS src_position, \
+             pt.galaxy AS tgt_galaxy, pt.system AS tgt_system, pt.position AS tgt_position \
              FROM trade_route tr \
              JOIN planet ps ON ps.id = tr.source_planet_id \
              JOIN planet pt ON pt.id = tr.target_planet_id \
@@ -148,7 +180,34 @@ pub async fn list_routes_handler(
         ),
     )).await.unwrap_or_default();
 
+    // Get hyperspace_tech level for this player (from any of their planets)
+    let hyperspace_level: i32 = db.query_one(sea_orm::Statement::from_string(
+        sea_orm::DbBackend::Postgres,
+        format!(
+            "SELECT COALESCE(MAX(pt.current_level), 0) AS lvl \
+             FROM planet_technologies pt \
+             JOIN technologies t ON t.id = pt.tech_id \
+             JOIN planet p ON p.id = pt.planet_id \
+             WHERE t.tech_key = 'hyperspace_tech' AND p.owner_id = '{}'",
+            user_id
+        ),
+    )).await.unwrap_or(None)
+      .and_then(|r| r.try_get::<i64>("", "lvl").ok())
+      .unwrap_or(0) as i32;
+
     let routes: Vec<serde_json::Value> = rows.iter().filter_map(|row| {
+        let src = (
+            row.try_get::<i32>("", "src_galaxy").unwrap_or(1),
+            row.try_get::<i32>("", "src_system").unwrap_or(1),
+            row.try_get::<i32>("", "src_position").unwrap_or(1),
+        );
+        let tgt = (
+            row.try_get::<i32>("", "tgt_galaxy").unwrap_or(1),
+            row.try_get::<i32>("", "tgt_system").unwrap_or(1),
+            row.try_get::<i32>("", "tgt_position").unwrap_or(1),
+        );
+        let travel_time_seconds = compute_travel_time_seconds(src, tgt, flight_speed, hyperspace_level);
+
         Some(json!({
             "id": row.try_get::<String>("", "id").ok()?,
             "name": row.try_get::<String>("", "name").ok()?,
@@ -165,6 +224,7 @@ pub async fn list_routes_handler(
                 .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
             "created_at": row.try_get::<chrono::NaiveDateTime>("", "created_at").ok()
                 .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+            "travel_time_seconds": travel_time_seconds,
         }))
     }).collect();
 
@@ -236,6 +296,7 @@ pub async fn create_route_handler(
     // Determine first run: in <interval_hours>
     let config = state.config.read().unwrap().clone();
     let interval_hours = config.get_config("trade_route_interval_hours", 24.0) as i64;
+    let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
     let now = Utc::now().naive_utc();
     let next_run = now + Duration::hours(interval_hours);
     let route_id = Uuid::new_v4();
@@ -253,7 +314,7 @@ pub async fn create_route_handler(
         now.format("%Y-%m-%d %H:%M:%S"),
     )).await.ok();
 
-    match route_to_json(db, &route_id.to_string()).await {
+    match route_to_json(db, &route_id.to_string(), flight_speed).await {
         Some(r) => (StatusCode::CREATED, Json(json!({"route": r}))).into_response(),
         None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
@@ -310,7 +371,8 @@ pub async fn update_route_handler(
     );
     let _ = db.execute_unprepared(&sql).await;
 
-    match route_to_json(db, &route_id.to_string()).await {
+    let flight_speed = state.config.read().unwrap().get_config("flight_speed_multiplier", 5.0);
+    match route_to_json(db, &route_id.to_string(), flight_speed).await {
         Some(r) => Json(json!({"route": r})).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }
@@ -336,10 +398,11 @@ pub async fn delete_route_handler(
         format!("SELECT owner_id FROM trade_route WHERE id = '{}'", route_id),
     )).await.unwrap_or(None);
 
-    let owner: Option<String> = row.as_ref().and_then(|r| r.try_get("", "owner_id").ok());
-    let owner_id = owner.and_then(|s| Uuid::parse_str(&s).ok());
+    let owner_id: Uuid = row.as_ref()
+        .and_then(|r| r.try_get::<Uuid>("", "owner_id").ok())
+        .unwrap_or_default();
 
-    if owner_id != Some(user_id) {
+    if owner_id != user_id {
         return StatusCode::FORBIDDEN.into_response();
     }
 
@@ -442,6 +505,11 @@ pub async fn process_due_trade_routes(db: &DatabaseConnection, config: &crate::S
             Ok(v) => v,
             Err(_) => continue,
         };
+        let owner_id: Uuid = match row.try_get::<Uuid>("", "owner_id") {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let route_name: String = row.try_get::<String>("", "name").unwrap_or_else(|_| "Route".to_string());
         let source_id: String = match row.try_get("", "source_planet_id") {
             Ok(v) => v,
             Err(_) => continue,
@@ -461,7 +529,7 @@ pub async fn process_due_trade_routes(db: &DatabaseConnection, config: &crate::S
 
         execute_trade_route(
             db, config,
-            route_uuid, source_uuid, target_uuid,
+            route_uuid, owner_id, route_name, source_uuid, target_uuid,
             ship_count, metal_ratio, crystal_ratio, deuterium_ratio,
             interval_hours, piracy_chance, now,
         ).await;
@@ -472,6 +540,8 @@ async fn execute_trade_route(
     db: &DatabaseConnection,
     config: &crate::ServerConfigCache,
     route_id: Uuid,
+    owner_id: Uuid,
+    route_name: String,
     source_id: Uuid,
     target_id: Uuid,
     ship_count: i32,
@@ -567,6 +637,36 @@ async fn execute_trade_route(
         Some(&source_planet.name),
         Some(&target_planet.name),
     ).await;
+
+    // Send logistique notification to route owner
+    {
+        use sea_orm::ConnectionTrait;
+        let system_id = Uuid::nil();
+        let piracy_note = if piracy_loss_ratio > 0.0 {
+            format!("\n\n⚠️ Une flotte ennemie a intercepté **{:.0}%** du cargo en route !", piracy_loss_ratio * 100.0)
+        } else {
+            String::new()
+        };
+        let content = format!(
+            "Votre route commerciale **{}** ({} → {}) a transféré :\n\
+             • **{:.0}** métal\n\
+             • **{:.0}** cristal\n\
+             • **{:.0}** deutérium{}",
+            route_name,
+            source_planet.name, target_planet.name,
+            metal_to_transfer, crystal_to_transfer, deuterium_to_transfer,
+            piracy_note
+        );
+        let subject = format!("Logistique — {}", route_name);
+        let _ = db.execute_unprepared(&format!(
+            "INSERT INTO message (id, sender_id, recipient_id, subject, content, sent_at, is_read) \
+             VALUES ('{}', '{}', '{}', '{}', '{}', '{}', false)",
+            Uuid::new_v4(), system_id, owner_id,
+            subject.replace('\'', "''"),
+            content.replace('\'', "''"),
+            now.format("%Y-%m-%d %H:%M:%S")
+        )).await;
+    }
 
     println!(
         "🚚 Trade route {}: {:.0} métal, {:.0} cristal, {:.0} deutérium transférés ({}) - perte piraterie: {:.0}%",

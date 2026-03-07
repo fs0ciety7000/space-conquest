@@ -100,9 +100,10 @@ interface ResourceSlot {
 }
 
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
   const [buildQueueStatus, setBuildQueueStatus] = useState<any>(null);
+  const [tradeRoutes, setTradeRoutes] = useState<any[]>([]);
   const [config, setConfig] = useState<any>({
     production_metal_base: 30,
     production_crystal_base: 20,
@@ -173,6 +174,26 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
       return () => clearInterval(id);
     }
   }, [planet?.id]);
+
+  // Charger les routes commerciales depuis cette planète
+  useEffect(() => {
+    const fetchRoutes = async () => {
+      if (!planet?.owner_id) return;
+      try {
+        const res = await fetch(apiUrl(`/trade-routes?user_id=${planet.owner_id}`));
+        if (res.ok) {
+          const data = await res.json();
+          const sourceRoutes = (data.routes || []).filter((r: any) => r.source_planet_id === planet.id);
+          setTradeRoutes(sourceRoutes);
+        }
+      } catch { /* silently ignore */ }
+    };
+    if (planet?.id && planet?.owner_id) {
+      fetchRoutes();
+      const id = setInterval(fetchRoutes, 30_000);
+      return () => clearInterval(id);
+    }
+  }, [planet?.id, planet?.owner_id]);
 
   const getTimeLeft = (endDate: string) => {
     const end = new Date(endDate.endsWith("Z") ? endDate : endDate + "Z").getTime();
@@ -756,6 +777,96 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 </div>
             </CardContent>
         </Card>
+
+        {/* ROUTES COMMERCIALES ACTIVES */}
+        {tradeRoutes.length > 0 && (() => {
+          const nowMs = Date.now();
+          const flightSpeed = config.flight_speed_multiplier ?? 5.0;
+          const intervalHours = config.trade_route_interval_hours ?? 24;
+
+          return (
+            <Card className="bg-slate-950 border border-amber-500/20 overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
+              <div className="absolute top-0 right-0 p-2 opacity-10"><Truck size={80} /></div>
+              <CardHeader className="pb-2 border-b border-white/5">
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-amber-400">
+                  <Truck size={14} className="text-amber-400" /> Routes Commerciales
+                  <span className="text-slate-500 normal-case font-normal text-[9px] ml-1">depuis cette planète</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                {tradeRoutes.map((route: any) => {
+                  const travelSec: number = route.travel_time_seconds ?? 0;
+                  const arrivalMs = route.next_run_at ? new Date(route.next_run_at).getTime() : 0;
+                  const departureMs = arrivalMs - travelSec * 1000;
+                  const returnMs = arrivalMs + travelSec * 1000;
+
+                  let phase: 'waiting' | 'outbound' | 'returning' = 'waiting';
+                  let remainingSec = 0;
+                  let progress = 0;
+
+                  if (route.is_active && arrivalMs > 0 && travelSec > 0) {
+                    if (nowMs >= departureMs && nowMs < arrivalMs) {
+                      phase = 'outbound';
+                      remainingSec = Math.max(0, Math.floor((arrivalMs - nowMs) / 1000));
+                      progress = Math.min(100, ((travelSec - remainingSec) / travelSec) * 100);
+                    } else if (nowMs >= arrivalMs && nowMs < returnMs) {
+                      phase = 'returning';
+                      remainingSec = Math.max(0, Math.floor((returnMs - nowMs) / 1000));
+                      progress = Math.min(100, ((travelSec - remainingSec) / travelSec) * 100);
+                    }
+                  }
+
+                  const fmtSec = (s: number) => {
+                    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+                    if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+                    if (m > 0) return `${m}m ${String(sec).padStart(2, '0')}s`;
+                    return `${sec}s`;
+                  };
+
+                  const nextCollectSec = arrivalMs > nowMs ? Math.floor((arrivalMs - nowMs) / 1000) : 0;
+
+                  return (
+                    <div key={route.id} className={`rounded-lg border p-3 ${route.is_active ? 'bg-amber-950/20 border-amber-500/20' : 'bg-slate-900/20 border-slate-700/20 opacity-50'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${route.is_active ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`} />
+                          <span className="text-white font-medium truncate max-w-[140px]">{route.name}</span>
+                          <span className="text-slate-500">→</span>
+                          <span className="text-cyan-300 text-xs">{route.target_planet_name ?? route.target_planet_id.slice(0, 8)}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500">{route.ship_count} cargos</span>
+                      </div>
+
+                      {phase !== 'waiting' ? (
+                        <>
+                          <div className={`flex items-center gap-1.5 mb-1.5 text-xs font-medium ${phase === 'outbound' ? 'text-amber-300' : 'text-cyan-300'}`}>
+                            <Navigation size={11} className="animate-pulse" />
+                            {phase === 'outbound' ? `En route → ${route.target_planet_name}` : `Retour → ${route.source_planet_name ?? 'source'}`}
+                            <span className="ml-auto text-slate-400 font-normal text-[10px]">
+                              ETA : <span className={phase === 'outbound' ? 'text-amber-300' : 'text-cyan-300'}>{fmtSec(remainingSec)}</span>
+                            </span>
+                          </div>
+                          <div className="h-1 bg-slate-700/50 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-1000 ${phase === 'outbound' ? 'bg-amber-500' : 'bg-cyan-500'}`}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </>
+                      ) : route.is_active && nextCollectSec > 0 ? (
+                        <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                          <Clock size={10} className="text-indigo-400" />
+                          Départ dans <span className="text-indigo-300 ml-1 font-medium">{fmtSec(Math.max(0, nextCollectSec - travelSec))}</span>
+                          <span className="ml-auto">Collecte : <span className="text-amber-400">{fmtSec(nextCollectSec)}</span></span>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* ENERGIE - DESIGN ÉLECTRIQUE */}
         <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${energyRatio >= 100 ? 'border-yellow-500/50' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>

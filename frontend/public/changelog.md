@@ -1,5 +1,33 @@
 # Changelog - Space Conquest
 
+## [6.5.0] - 2026-03-07 - Routes en Transit, Annulation Recherche & Correctifs Marché
+
+### ✨ Nouveautés
+
+#### 🚚 Flottes de Routes Commerciales en transit
+- Les routes commerciales affichent désormais l'état de la **flotte en transit** en temps réel.
+- **Temps de trajet calculé** selon la distance réelle entre les planètes (même formule que les missions de flotte), avec bonus de vitesse selon le niveau de **Technologie Hyperespace** (+10% par niveau).
+- Dans **Routes Commerciales** : barre de progression animée (ambre = aller, cyan = retour) avec ETA à la seconde près.
+- Dans **Vue Planète** : widget compact "Routes Commerciales" affichant les routes actives depuis cette planète, avec barre de transit et compteur jusqu'à la prochaine collecte.
+- **Rapport Logistique** automatique dans la messagerie après chaque exécution de route (ressources transférées, éventuels dégâts de piraterie).
+
+#### 🔬 Annulation de Recherche
+- Il est désormais possible d'**annuler une recherche en cours** depuis la Chaîne de Production.
+- **Remboursement au prorata** du temps restant (jusqu'à 95% si annulé immédiatement).
+- Le bouton d'annulation est visible pour tous les types de construction : bâtiments, recherches, vaisseaux et défenses.
+
+#### 📬 Notifications Marché Planétaire
+- Lors d'un achat inter-joueur : **message automatique** à l'acheteur et au vendeur avec les détails de la transaction (planète, prix, ressources reçues).
+- Lors d'une vente au PNJ : **message de confirmation** au vendeur avec les ressources obtenues.
+
+### 🔧 Corrections
+
+- **Marché Planétaire** : correction de l'erreur "Not your planet" / "Not your listing" sur toutes les opérations (bug lié à la lecture UUID depuis PostgreSQL).
+- **Routes Commerciales** : correction du bug "Not your route" lors de la suppression.
+- **SQL Jointures** : correction des jointures `planet_ships` et `planet_defenses` dans le calcul de prix suggéré et la fiche détaillée (colonnes `ship_type_id`/`defense_type_id` au lieu de colonnes inexistantes).
+
+---
+
 ## [6.4.0] - 2026-03-07 - Marché Planétaire & Correctifs
 
 ### ✨ Nouveautés
