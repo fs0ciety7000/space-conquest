@@ -81,3 +81,6 @@ pub mod planet_listing;
 pub mod black_market_item;
 pub mod user_inventory;
 pub mod pirate_extortion;
+
+// Economy log
+pub mod economy_log;

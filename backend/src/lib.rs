@@ -24,6 +24,7 @@ pub mod trade_routes;
 pub mod build_queue;
 pub mod planet_market;
 pub mod black_market;
+pub mod economy_log;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::ServerConfig, server_config};

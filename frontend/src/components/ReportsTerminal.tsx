@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert, Trophy } from "lucide-react";
+import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert, Trophy, BarChart3 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { apiUrl } from '@/config/api';
 import { toast } from 'sonner';
 import CombatModal from './CombatModal';
+import EconomyLog from './EconomyLog';
 
 interface CombatLog {
   id: string;
@@ -34,7 +35,7 @@ interface TransportLog {
 export default function ReportsTerminal({ planetId }: { planetId: string }) {
   const [combatLogs, setCombatLogs] = useState<CombatLog[]>([]);
   const [transportLogs, setTransportLogs] = useState<TransportLog[]>([]);
-  const [view, setView] = useState<'combat' | 'transport'>('combat');
+  const [view, setView] = useState<'combat' | 'transport' | 'economy'>('combat');
   const [selectedReport, setSelectedReport] = useState<any>(null);
 
   useEffect(() => {
@@ -136,6 +137,12 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                 className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'transport' ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.2)]' : 'text-slate-500 hover:text-white'}`}
             >
                 <Truck size={12} /> Logistique
+            </button>
+            <button
+                onClick={() => setView('economy')}
+                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'economy' ? 'bg-green-500/20 text-green-400 shadow-[0_0_10px_rgba(74,222,128,0.2)]' : 'text-slate-500 hover:text-white'}`}
+            >
+                <BarChart3 size={12} /> Économie
             </button>
         </div>
       </div>
@@ -402,6 +409,9 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                 })
             )
         )}
+
+        {/* VUE ÉCONOMIE */}
+        {view === 'economy' && <EconomyLog />}
 
       </div>
 

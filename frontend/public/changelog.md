@@ -1,5 +1,19 @@
 # Changelog - Space Conquest
 
+## [7.2.0] - 2026-03-07 - Journal Économique
+
+### ✨ Nouvelles Fonctionnalités
+
+- **Journal Économique** : nouvel onglet "Économie" dans les Rapports, retraçant l'intégralité des mouvements de ressources et de monnaie :
+  - **Constructions** : chaque mise en file (bâtiment, installation, technologie, vaisseau, défense) est loguée avec le coût en métal/cristal/deutérium, le nom de la planète et le type de construction.
+  - **Marché de ressources** : historique des achats et ventes avec le partenaire commercial, les ressources échangées et le prix unitaire.
+  - **Marché planétaire** : transactions de vente/achat de planètes.
+  - **Marché Underground** : chaque dépense en Crédits du Syndicat est tracée avec le détail de l'objet acheté.
+- **Filtres** : affichage par catégorie — Tout / Constructions / Marché / Underground.
+- Les montants sont affichés avec signe +/− et code couleur (orange=métal, cyan=cristal, bleu=deutérium, jaune=SC). Les entrées sont triées par date décroissante (timestamp relatif en FR).
+
+---
+
 ## [7.1.0] - 2026-03-07 - Marché Underground & Crédits du Syndicat
 
 ### ✨ Nouvelles Fonctionnalités

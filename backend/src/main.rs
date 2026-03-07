@@ -41,7 +41,7 @@ use sea_orm::sea_query::extension::postgres::PgExpr;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin, admin_content,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, black_market, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, black_market, economy_log, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -476,6 +476,9 @@ async fn main() {
         .route("/admin/black-market/items", post(black_market::admin_create_item_handler))
         .route("/admin/black-market/items/:id", put(black_market::admin_update_item_handler))
         .route("/admin/black-market/items/:id", delete(black_market::admin_delete_item_handler))
+
+        // ── Economy Log ─────────────────────────────────────────────────────
+        .route("/economy/log", get(economy_log::get_economy_log_handler))
 
         .layer(TraceLayer::new_for_http())
         .with_state(state);

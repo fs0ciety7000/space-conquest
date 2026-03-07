@@ -76,3 +76,6 @@ pub use super :: password_reset_token :: Entity as PasswordResetToken ;
 pub use super :: black_market_item :: Entity as BlackMarketItem ;
 pub use super :: user_inventory :: Entity as UserInventory ;
 pub use super :: pirate_extortion :: Entity as PirateExtortion ;
+
+// Economy log
+pub use super :: economy_log :: Entity as EconomyLog ;

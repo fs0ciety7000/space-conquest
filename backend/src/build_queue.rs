@@ -436,12 +436,49 @@ pub async fn add_to_queue_handler(
     }
 
     // Deduct resources
+    let planet_owner_id = planet.owner_id;
+    let planet_name = planet.name.clone();
     let mut active_planet: planet::ActiveModel = planet.into();
     active_planet.metal_amount = Set(active_planet.metal_amount.unwrap() - cost_metal as f64);
     active_planet.crystal_amount = Set(active_planet.crystal_amount.unwrap() - cost_crystal as f64);
     active_planet.deuterium_amount = Set(active_planet.deuterium_amount.unwrap() - cost_deuterium as f64);
     if let Err(_) = active_planet.update(&state.db).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
+    }
+
+    // Log economy event
+    {
+        let category_label = match body.category.as_str() {
+            "research" => "Technologie",
+            "ships" => "Vaisseau",
+            "defenses" => "Défense",
+            "resources" => "Bâtiment",
+            "facilities" => "Installation",
+            _ => "Construction",
+        };
+        let desc = if quantity > 1 {
+            format!("{} × {} {}", quantity, category_label, body.item_key)
+        } else {
+            format!("{} {}", category_label, body.item_key)
+        };
+        let db_clone = state.db.clone();
+        let item_key = body.item_key.clone();
+        tokio::spawn(async move {
+            crate::economy_log::log_event(
+                &db_clone,
+                planet_owner_id,
+                "construction",
+                "build",
+                &desc,
+                -(cost_metal as f64),
+                -(cost_crystal as f64),
+                -(cost_deuterium as f64),
+                0.0,
+                Some(&planet_name),
+                None,
+                Some(&item_key),
+            ).await;
+        });
     }
 
     // Acquire per-planet lock to serialize concurrent slot checks (prevents race conditions)

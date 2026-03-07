@@ -133,13 +133,19 @@ pub async fn randomize_black_market_prices(db: &sea_orm::DatabaseConnection) {
         }
     };
 
-    let mut rng = rand::thread_rng();
+    // Generate all new prices synchronously — ThreadRng is !Send and cannot cross .await points
+    let new_prices: Vec<f64> = {
+        let mut rng = rand::thread_rng();
+        items
+            .iter()
+            .map(|item| {
+                let factor = rng.gen_range(0.70_f64..=1.50_f64);
+                (item.base_price * factor).round().max(1.0)
+            })
+            .collect()
+    };
 
-    for item in items {
-        // Random factor: base * [0.70 … 1.50]
-        let factor = rng.gen_range(0.70_f64..=1.50_f64);
-        let new_price = (item.base_price * factor).round().max(1.0);
-
+    for (item, new_price) in items.into_iter().zip(new_prices) {
         let mut active: black_market_item::ActiveModel = item.into();
         active.current_price = Set(new_price);
         active.price_last_updated = Set(Utc::now().naive_utc());
@@ -295,6 +301,31 @@ pub async fn buy_item_handler(
             quantity: Set(qty),
             acquired_at: Set(Utc::now().naive_utc()),
         }.insert(&state.db).await;
+    }
+
+    // Log economy event
+    {
+        let db_clone = state.db.clone();
+        let desc = if qty > 1 {
+            format!("Achat ×{} : {}", qty, item.name)
+        } else {
+            format!("Achat : {}", item.name)
+        };
+        let effect_type = item.effect_type.clone();
+        tokio::spawn(async move {
+            crate::economy_log::log_event(
+                &db_clone,
+                user_id,
+                "black_market",
+                "sc_purchase",
+                &desc,
+                0.0, 0.0, 0.0,
+                -total_cost,
+                None,
+                None,
+                Some(&effect_type),
+            ).await;
+        });
     }
 
     Json(json!({
