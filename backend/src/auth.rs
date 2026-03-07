@@ -193,6 +193,7 @@ pub async fn register_handler(
         bio: Set(None),
         last_login: Set(Some(now)),
         display_name: Set(None),
+        syndicate_credits: Set(0.0),
     };
 
     if new_user.insert(&state.db).await.is_err() {

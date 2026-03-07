@@ -135,25 +135,32 @@ export default function PirateExtortionModal({
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-300">
       <div className="relative overflow-hidden rounded-2xl border-2 border-red-700/60 bg-gradient-to-b from-slate-950 via-red-950/20 to-slate-950 shadow-[0_0_60px_rgba(220,38,38,0.3)] w-full max-w-lg">
-        {/* Animated background skull */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
-          <Skull size={400} className="text-red-500 animate-pulse" />
-        </div>
-
         {/* Top danger stripe */}
         <div className="w-full h-1.5 bg-gradient-to-r from-transparent via-red-500 to-transparent animate-pulse" />
+
+        {/* Pirate fleet image — 16/9 */}
+        <div className="relative w-full aspect-video overflow-hidden">
+          <img
+            src="/images/events/pirate-fleet.webp"
+            alt="Flotte de pirates"
+            className="w-full h-full object-cover"
+          />
+          {/* Gradient overlay fading into modal body */}
+          <div className="absolute inset-0 bg-linear-to-t from-slate-950 via-slate-950/20 to-transparent" />
+          {/* Alert badge */}
+          <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/70 border border-red-700/60 backdrop-blur-sm">
+            <AlertTriangle size={12} className="text-red-400 animate-bounce" />
+            <span className="text-red-400 text-[10px] font-black uppercase tracking-widest">Alerte Extorsion</span>
+          </div>
+        </div>
 
         <div className="relative p-6">
           {/* Header */}
           <div className="flex items-start gap-4 mb-6">
-            <div className="p-3 rounded-xl border-2 border-red-700/50 bg-red-950/40 animate-pulse">
+            <div className="p-3 rounded-xl border-2 border-red-700/50 bg-red-950/40 animate-pulse shrink-0">
               <Skull size={28} className="text-red-400" />
             </div>
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle size={14} className="text-red-400 animate-bounce" />
-                <span className="text-red-400 text-[10px] font-black uppercase tracking-widest">Alerte Extorsion</span>
-              </div>
               <h2 className="text-xl font-black text-white">Flotte de Pirates Inconnue</h2>
               <p className="text-slate-400 text-xs mt-1">
                 Une flotte de pirates PNJ approche de votre planète. L'instigateur reste <span className="text-red-400 font-bold">anonyme</span>.
