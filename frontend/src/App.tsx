@@ -398,15 +398,15 @@ function AppContent({
           const planets = await myPlanetsRes.json();
           if (Array.isArray(planets) && planets.length > 0) {
             const homeworld = planets.find((p: { is_homeworld: boolean; id: string }) => p.is_homeworld) ?? planets[0];
-            setPlanetId(homeworld.id);
-            localStorage.setItem('planet_id', homeworld.id);
+            switchPlanet(homeworld.id); // updates PlanetContext + localStorage + triggers fetchPlanet
+            setPlanetId(homeworld.id);  // keeps App's own state in sync
           }
         }
       }
     } catch (e) {
         console.error(e);
     }
-  }, [planetId, token, playSound, setPlanetId]);
+  }, [planetId, token, playSound, setPlanetId, switchPlanet]);
 
   // Handle messages when we hear the event emitted by WebSocketContext
   useEffect(() => {

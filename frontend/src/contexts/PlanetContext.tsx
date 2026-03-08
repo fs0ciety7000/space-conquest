@@ -52,6 +52,23 @@ export function PlanetProvider({ children, initialPlanetId, token }: { children:
       } else {
         console.error("Failed to fetch planet:", await res.text());
         if (res.status === 404) {
+          // Planet no longer exists (sold/conquered) — switch to homeworld
+          try {
+            const myPlanetsRes = await fetch(apiUrl('/my-planets'), {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (myPlanetsRes.ok) {
+              const planets = await myPlanetsRes.json();
+              if (Array.isArray(planets) && planets.length > 0) {
+                const homeworld = planets.find((p: { is_homeworld: boolean }) => p.is_homeworld) ?? planets[0];
+                currentPlanetIdRef.current = homeworld.id;
+                setPlanetId(homeworld.id);
+                localStorage.setItem('planet_id', homeworld.id);
+                return; // useEffect will re-trigger fetchPlanet with new id
+              }
+            }
+          } catch { /* ignore */ }
+          // No planets left — clear state
           localStorage.removeItem('planet_id');
           setPlanetId(null);
           currentPlanetIdRef.current = null;
