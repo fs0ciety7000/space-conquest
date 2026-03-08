@@ -16,6 +16,7 @@ interface ShipType {
   shield: number;
   hull: number;
   cargo_capacity: number;
+  fuel_consumption: number;
 }
 
 interface FleetPreset {
@@ -121,6 +122,14 @@ export default function FleetDispatcher({
   const totalCargo = availableShips.reduce((sum, ship) => sum + (ship.cargo_capacity * (shipSelection[ship.ship_key] || 0)), 0);
   const totalShips = Object.values(shipSelection).reduce((sum, count) => sum + count, 0);
   const targetLoad = metal + crystal + deuterium;
+
+  // Fuel cost estimate (same formula as backend)
+  const g1 = currentPlanet.galaxy || 1, s1 = currentPlanet.system || 1, p1 = currentPlanet.position || 1;
+  const g2 = targetPlanet.galaxy || g1, s2 = targetPlanet.system || s1, p2 = targetPlanet.position || p1;
+  const fleetDist = g1 !== g2 ? Math.abs(g1 - g2) * 20000 : s1 !== s2 ? Math.abs(s1 - s2) * 2000 + 2700 : Math.abs(p1 - p2) * 5 + 1000;
+  const totalFuelPerUnit = availableShips.reduce((sum, ship) => sum + (ship.fuel_consumption || 0) * (shipSelection[ship.ship_key] || 0), 0);
+  const estimatedFuelCost = Math.max(1, Math.ceil(totalFuelPerUnit * fleetDist / 1000));
+  const hasSufficientFuel = (currentPlanet.deuterium_amount || 0) >= estimatedFuelCost;
 
   const handleShipCountChange = (shipKey: string, count: number) => {
     const ship = availableShips.find(s => s.ship_key === shipKey);
@@ -472,11 +481,21 @@ export default function FleetDispatcher({
         </div>
 
         {/* FOOTER ACTIONS */}
-        <div className="p-4 bg-slate-900/90 border-t border-white/5 flex gap-4 shrink-0">
+        <div className="p-4 bg-slate-900/90 border-t border-white/5 space-y-3 shrink-0">
+            {/* Fuel cost indicator (attack/spy/expedition only) */}
+            {mission !== 'transport' && totalShips > 0 && (
+                <div className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg border ${hasSufficientFuel ? 'bg-emerald-950/30 border-emerald-900/40 text-emerald-400' : 'bg-red-950/40 border-red-900/50 text-red-400'}`}>
+                    <span className="font-bold uppercase tracking-widest">Carburant requis</span>
+                    <span className="font-mono font-black">
+                        {estimatedFuelCost.toLocaleString()} <span className="font-normal opacity-70">/ {Math.floor(currentPlanet.deuterium_amount || 0).toLocaleString()}</span>
+                    </span>
+                </div>
+            )}
+            <div className="flex gap-4">
             <Button onClick={onClose} variant="ghost" className="flex-1 border border-white/5 font-bold uppercase tracking-widest text-slate-400">Annuler</Button>
-            <Button 
-                onClick={handleLaunch} 
-                disabled={isLaunching || (mission !== 'spy' && totalShips === 0)}
+            <Button
+                onClick={handleLaunch}
+                disabled={isLaunching || (mission !== 'spy' && totalShips === 0) || (mission !== 'transport' && totalShips > 0 && !hasSufficientFuel)}
                 className={`flex-[2] font-black uppercase tracking-widest shadow-lg hover:-translate-y-1 transition-all ${
                     mission === 'attack' ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/20' : 
                     mission === 'spy' ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20' : 
@@ -485,6 +504,7 @@ export default function FleetDispatcher({
             >
                 {isLaunching ? "LANCEMENT..." : "ORDRE D'EXÉCUTION"}
             </Button>
+            </div>
         </div>
 
       </DialogContent>

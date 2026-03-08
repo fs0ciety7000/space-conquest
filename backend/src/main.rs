@@ -2592,6 +2592,7 @@ async fn attack_v2_handler(
 
     // Verify planet has all requested ships
     let mut total_ships = 0;
+    let mut total_fuel_per_unit: f64 = 0.0;
     for (ship_key, &count) in &payload.fleet {
         if count <= 0 {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
@@ -2625,6 +2626,22 @@ async fn attack_v2_handler(
         }
 
         total_ships += count;
+        total_fuel_per_unit += (count as f64) * (ship.fuel_consumption as f64);
+    }
+
+    // Distance for fuel calculation (same formula used for travel time below)
+    let dist = game_logic::calculate_distance(
+        (att_planet.galaxy, att_planet.system, att_planet.position),
+        (target_planet.galaxy, target_planet.system, target_planet.position)
+    );
+
+    // Deuterium fuel check — cost = fuel_per_unit * distance / 1000 (minimum 1)
+    let fuel_needed = (total_fuel_per_unit * dist / 1000.0).ceil().max(1.0);
+    if att_planet.deuterium_amount < fuel_needed {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
+                fuel_needed as i64, att_planet.deuterium_amount as i64)
+        }))).into_response();
     }
 
     // Deduct ships from attacker
@@ -2634,10 +2651,12 @@ async fn attack_v2_handler(
         }
     }
 
-    let dist = game_logic::calculate_distance(
-        (att_planet.galaxy, att_planet.system, att_planet.position),
-        (target_planet.galaxy, target_planet.system, target_planet.position)
-    );
+    // Deduct deuterium fuel cost
+    {
+        let mut att_active: planet::ActiveModel = att_planet.clone().into();
+        att_active.deuterium_amount = Set((att_planet.deuterium_amount - fuel_needed).max(0.0));
+        let _ = att_active.update(&state.db).await;
+    }
     let travel_time = {
         let config = state.config.read().unwrap();
         let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
@@ -3448,7 +3467,8 @@ async fn spy_v2_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "No ships selected"}))).into_response();
     }
 
-    // Verify planet has all requested ships and deduct them
+    // Verify planet has all requested ships
+    let mut total_fuel_spy: f64 = 0.0;
     for (ship_key, &count) in &payload.fleet {
         if count <= 0 {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
@@ -3481,10 +3501,34 @@ async fn spy_v2_handler(
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Not enough {}", ship.display_name)}))).into_response();
         }
 
-        // Deduct ships
+        total_fuel_spy += (count as f64) * (ship.fuel_consumption as f64);
+    }
+
+    // Deuterium fuel check
+    let spy_dist = game_logic::calculate_distance(
+        (att_planet.galaxy, att_planet.system, att_planet.position),
+        (def_planet.galaxy, def_planet.system, def_planet.position),
+    );
+    let spy_fuel_needed = (total_fuel_spy * spy_dist / 1000.0).ceil().max(1.0);
+    if att_planet.deuterium_amount < spy_fuel_needed {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
+                spy_fuel_needed as i64, att_planet.deuterium_amount as i64)
+        }))).into_response();
+    }
+
+    // Deduct ships
+    for (ship_key, &count) in &payload.fleet {
         if let Err(_) = tech_tree::deduct_ships(&state.db, att_planet.id, ship_key, count).await {
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to deduct {}", ship_key)}))).into_response();
         }
+    }
+
+    // Deduct deuterium fuel cost
+    {
+        let mut att_active: planet::ActiveModel = att_planet.clone().into();
+        att_active.deuterium_amount = Set((att_planet.deuterium_amount - spy_fuel_needed).max(0.0));
+        let _ = att_active.update(&state.db).await;
     }
 
     // Load relational data for both planets
@@ -6910,6 +6954,7 @@ async fn expedition_v2_handler(
     }
 
     // Verify planet has these ships
+    let mut expedition_fuel_per_unit: f64 = 0.0;
     for (ship_key, &count) in &payload.fleet {
         if count <= 0 {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
@@ -6941,6 +6986,23 @@ async fn expedition_v2_handler(
         if count > planet_ship_count {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Not enough {}", ship.display_name)}))).into_response();
         }
+
+        expedition_fuel_per_unit += (count as f64) * (ship.fuel_consumption as f64);
+    }
+
+    // Deuterium fuel check — expeditions use a fixed base distance of 5000 units
+    let expedition_fuel_needed = (expedition_fuel_per_unit * 5000.0 / 1000.0).ceil().max(1.0);
+    if planet.deuterium_amount < expedition_fuel_needed {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Deutérium insuffisant pour l'expédition ({} requis, {} disponible)",
+                expedition_fuel_needed as i64, planet.deuterium_amount as i64)
+        }))).into_response();
+    }
+    // Deduct deuterium fuel cost before combat
+    {
+        let mut planet_active: planet::ActiveModel = planet.clone().into();
+        planet_active.deuterium_amount = Set((planet.deuterium_amount - expedition_fuel_needed).max(0.0));
+        let _ = planet_active.update(&state.db).await;
     }
 
     // Get config
