@@ -798,3 +798,107 @@ body.alert-red-flash::before {
 
 /* PVE icon pulse (dans le banner) */
 .pve-icon[data-type="pirate_invasion"] { animation: invasion-pulse 1.5s ease-in-out infinite; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PVE — Overlays globaux body (appliqués quand un événement est actif)
+   Pattern identique à alert-red-flash, adapté par type.
+═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Pirate Invasion — bord rouge pulsant lent ── */
+@keyframes pve-global-invasion {
+  0%, 100% { box-shadow: inset 0 0 0px 0px rgba(239, 68, 68, 0); }
+  50%       { box-shadow: inset 0 0 120px 20px rgba(239, 68, 68, 0.18); }
+}
+body.pve-active-invasion::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  animation: pve-global-invasion 3s ease-in-out infinite;
+  /* coins rouges pour un effet "encerclement" */
+  background:
+    radial-gradient(ellipse at top left,     rgba(239, 68, 68, 0.10) 0%, transparent 40%),
+    radial-gradient(ellipse at top right,    rgba(239, 68, 68, 0.10) 0%, transparent 40%),
+    radial-gradient(ellipse at bottom left,  rgba(239, 68, 68, 0.10) 0%, transparent 40%),
+    radial-gradient(ellipse at bottom right, rgba(239, 68, 68, 0.10) 0%, transparent 40%);
+}
+
+/* ── Radioactive Cloud — brume verte sur les bords ── */
+@keyframes pve-global-radioactive {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.75; }
+}
+body.pve-active-radioactive::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  animation: pve-global-radioactive 4s ease-in-out infinite;
+  background:
+    radial-gradient(ellipse at top,    rgba(34, 197, 94, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom, rgba(74, 222, 128, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at left,   rgba(34, 197, 94, 0.06) 0%, transparent 40%),
+    radial-gradient(ellipse at right,  rgba(34, 197, 94, 0.06) 0%, transparent 40%);
+}
+
+/* ── Solar Storm — éclair jaune en haut ── */
+@keyframes pve-global-solar {
+  0%, 85%, 100% { opacity: 0; }
+  90%            { opacity: 1; }
+  92%            { opacity: 0.3; }
+  94%            { opacity: 0.9; }
+}
+body.pve-active-solar::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  animation: pve-global-solar 5s ease-in-out infinite;
+  background:
+    radial-gradient(ellipse at top,  rgba(234, 179, 8, 0.20) 0%, transparent 55%),
+    radial-gradient(ellipse at top,  rgba(251, 146, 60, 0.10) 0%, transparent 40%);
+}
+
+/* ── Meteor Shower — traînées orange diagonales ── */
+@keyframes pve-global-meteor {
+  0%   { background-position: -100% -100%; opacity: 0.5; }
+  100% { background-position: 200% 200%; opacity: 0.7; }
+}
+body.pve-active-meteor::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  animation: pve-global-meteor 6s linear infinite;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      transparent 0px,
+      transparent 120px,
+      rgba(249, 115, 22, 0.04) 121px,
+      rgba(249, 115, 22, 0.04) 122px
+    );
+  background-size: 300px 300px;
+}
+
+/* ── Ancient Artifact — lueur violette mystique aux coins ── */
+@keyframes pve-global-artifact {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
+}
+body.pve-active-artifact::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  animation: pve-global-artifact 4s ease-in-out infinite;
+  background:
+    radial-gradient(ellipse at top left,     rgba(168, 85, 247, 0.12) 0%, transparent 45%),
+    radial-gradient(ellipse at bottom right, rgba(139, 92, 246, 0.10) 0%, transparent 45%),
+    radial-gradient(ellipse at center,       rgba(168, 85, 247, 0.04) 0%, transparent 60%);
+}

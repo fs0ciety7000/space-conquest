@@ -194,6 +194,31 @@ export function useServerEvents() {
   const incomingEvents = events.filter(e => e.status === 'incoming');
   const hasActiveEvents = activeEvents.length > 0;
 
+  // Applique/retire les classes body pour les overlays globaux
+  useEffect(() => {
+    const ALL_TYPES = ['invasion', 'radioactive', 'solar', 'meteor', 'artifact'] as const;
+    const TYPE_MAP: Record<string, string> = {
+      pirate_invasion: 'invasion',
+      radioactive_cloud: 'radioactive',
+      solar_storm: 'solar',
+      meteor_shower: 'meteor',
+      ancient_artifact: 'artifact',
+    };
+
+    // Retirer toutes les classes PVE d'abord
+    ALL_TYPES.forEach(t => document.body.classList.remove(`pve-active-${t}`));
+
+    // Ajouter les classes des événements actifs
+    activeEvents.forEach(ev => {
+      const cls = TYPE_MAP[ev.event_type_key];
+      if (cls) document.body.classList.add(`pve-active-${cls}`);
+    });
+
+    return () => {
+      ALL_TYPES.forEach(t => document.body.classList.remove(`pve-active-${t}`));
+    };
+  }, [activeEvents]);
+
   return {
     events,
     activeEvents,
