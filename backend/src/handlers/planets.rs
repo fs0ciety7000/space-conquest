@@ -1148,48 +1148,50 @@ async fn cancel_construction_handler(
         .ok_or(StatusCode::NOT_FOUND)?;
     let config = state.config.read().unwrap().clone();
 
-    let (base_m, base_c, base_d) = match item.building_type.as_str() {
-        "light_hunter" | "cruiser" | "recycler" | "spy_probe" | "colony_ship" | "transporter"
-        | "missile_launcher" | "plasma_turret" => {
-            let (m, c) = match item.building_type.as_str() {
-                "light_hunter" => game_logic::get_light_hunter_stats(&config),
-                "cruiser" => game_logic::get_cruiser_stats(&config),
-                "recycler" => game_logic::get_recycler_stats(&config),
-                "spy_probe" => game_logic::get_spy_probe_stats(&config),
-                "colony_ship" => game_logic::get_colony_ship_stats(&config),
-                "transporter" => game_logic::get_transporter_stats(&config),
-                "missile_launcher" => game_logic::get_missile_launcher_stats(&config),
-                "plasma_turret" => game_logic::get_plasma_turret_stats(&config),
-                _ => (0.0, 0.0),
-            };
-            (m * item.level as f64, c * item.level as f64, 0.0)
-        }
-        _ => {
+    // Try DB lookup for ships first, then defenses, then building/tech formula
+    let (base_m, base_c, base_d, is_ship_unit, is_defense_unit) = {
+        if let Ok(Some(st)) = ShipType::find()
+            .filter(ship_type::Column::ShipKey.eq(&item.building_type))
+            .one(&state.db)
+            .await
+        {
+            let qty = item.level as f64;
+            (st.cost_metal as f64 * qty, st.cost_crystal as f64 * qty, st.cost_deuterium as f64 * qty, true, false)
+        } else if let Ok(Some(dt)) = DefenseType::find()
+            .filter(defense_type::Column::DefenseKey.eq(&item.building_type))
+            .one(&state.db)
+            .await
+        {
+            let qty = item.level as f64;
+            (dt.base_cost_metal as f64 * qty, dt.base_cost_crystal as f64 * qty, dt.base_cost_deuterium as f64 * qty, false, true)
+        } else {
             let cost = game_logic::get_upgrade_cost(&item.building_type, item.level, &config);
-            (cost.metal, cost.crystal, cost.deuterium)
+            (cost.metal, cost.crystal, cost.deuterium, false, false)
         }
     };
 
-    let total_duration = match item.building_type.as_str() {
-        "light_hunter" | "cruiser" | "recycler" | "spy_probe" | "colony_ship" | "transporter"
-        | "missile_launcher" | "plasma_turret" => {
-            game_logic::get_ship_production_time(item.level, &config) as f64
-        }
-        _ => {
-            let facility_level = if matches!(
-                item.building_type.as_str(),
-                "research" | "energy_tech" | "laser" | "espionage" | "armour"
-            ) {
-                tech_tree::get_planet_building_level(&state.db, p.id, "research")
-                    .await
-                    .unwrap_or(0)
-            } else {
-                tech_tree::get_planet_building_level(&state.db, p.id, "shipyard")
-                    .await
-                    .unwrap_or(0)
-            };
-            game_logic::get_build_time(base_m, base_c, facility_level, &config) as f64
-        }
+    let is_unit = is_ship_unit || is_defense_unit;
+
+    let total_duration = if is_unit {
+        game_logic::get_ship_production_time(item.level, &config) as f64
+    } else {
+        let is_tech = Technology::find()
+            .filter(backend::entities::technology::Column::TechKey.eq(&item.building_type))
+            .one(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .is_some();
+        let facility_level = if is_tech {
+            tech_tree::get_planet_building_level(&state.db, p.id, "research_lab")
+                .await
+                .unwrap_or(0)
+        } else {
+            tech_tree::get_planet_building_level(&state.db, p.id, "shipyard")
+                .await
+                .unwrap_or(0)
+        };
+        game_logic::get_build_time(base_m, base_c, facility_level, &config) as f64
     };
 
     let now = Utc::now().naive_utc();
