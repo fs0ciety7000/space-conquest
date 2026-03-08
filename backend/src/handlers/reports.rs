@@ -87,10 +87,29 @@ pub async fn get_combat_report_detail_handler(
 
     match report {
         Some(log) => {
-            if let Some(detailed) = log.detailed_report {
-                (StatusCode::OK, Json(detailed)).into_response()
-            } else {
-                (StatusCode::NOT_FOUND, Json(json!({"error": "Aucun détail disponible pour ce rapport"}))).into_response()
+            match (log.detailed_report, log.details) {
+                (None, None) => {
+                    (StatusCode::NOT_FOUND, Json(json!({"error": "Aucun détail disponible pour ce rapport"}))).into_response()
+                }
+                (detailed_report, details) => {
+                    // Merge both fields: detailed_report (legacy) + details (Expansion 5.0 DetailedCombatReport)
+                    let response = if let Some(mut dr) = detailed_report {
+                        if let Some(obj) = dr.as_object_mut() {
+                            if let Some(d) = details {
+                                obj.insert("details".to_string(), d);
+                            }
+                        }
+                        dr
+                    } else {
+                        // Only details available (future path)
+                        let mut obj = serde_json::Map::new();
+                        if let Some(d) = details {
+                            obj.insert("details".to_string(), d);
+                        }
+                        serde_json::Value::Object(obj)
+                    };
+                    (StatusCode::OK, Json(response)).into_response()
+                }
             }
         }
         None => {

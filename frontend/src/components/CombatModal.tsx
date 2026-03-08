@@ -586,6 +586,101 @@ export default function CombatModal({ report, onClose, onSabotage }: CombatModal
             </section>
           )}
 
+          {/* RAPPORT DÉTAILLÉ (Expansion 5.0 — DetailedCombatReport) */}
+          {parsedReport.details && (
+            <section className="space-y-4">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-violet-500/20">
+                  <Activity size={14} className="text-violet-400" />
+                </div>
+                Analyse Tactique Détaillée
+              </h3>
+
+              {/* Rounds + Tech bonuses */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-slate-900/60 border border-white/10 rounded-xl p-4 text-center">
+                  <Clock size={18} className="text-violet-400 mx-auto mb-2" />
+                  <div className="text-3xl font-black font-mono text-violet-400">
+                    {parsedReport.details.rounds_played ?? '—'}
+                  </div>
+                  <div className="text-[10px] font-bold uppercase text-slate-500 mt-1">Rounds</div>
+                </div>
+
+                {/* Attacker bonuses */}
+                {parsedReport.details.attacker_bonuses && (
+                  <div className="bg-red-900/20 border border-red-500/20 rounded-xl p-4">
+                    <div className="text-[10px] font-bold uppercase text-red-400 mb-3 tracking-widest">Bonus Attaquant</div>
+                    <div className="space-y-1.5">
+                      {[
+                        { label: 'Armement', value: parsedReport.details.attacker_bonuses.weapons_mult },
+                        { label: 'Bouclier', value: parsedReport.details.attacker_bonuses.shield_mult },
+                        { label: 'Blindage', value: parsedReport.details.attacker_bonuses.armour_mult },
+                      ].map(({ label, value }) => value != null && (
+                        <div key={label} className="flex items-center justify-between">
+                          <span className="text-xs text-slate-400">{label}</span>
+                          <span className="text-xs font-mono font-bold text-red-300">
+                            ×{typeof value === 'number' ? value.toFixed(2) : value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Defender bonuses */}
+                {parsedReport.details.defender_bonuses && (
+                  <div className="bg-blue-900/20 border border-blue-500/20 rounded-xl p-4">
+                    <div className="text-[10px] font-bold uppercase text-blue-400 mb-3 tracking-widest">Bonus Défenseur</div>
+                    <div className="space-y-1.5">
+                      {[
+                        { label: 'Armement', value: parsedReport.details.defender_bonuses.weapons_mult },
+                        { label: 'Bouclier', value: parsedReport.details.defender_bonuses.shield_mult },
+                        { label: 'Blindage', value: parsedReport.details.defender_bonuses.armour_mult },
+                      ].map(({ label, value }) => value != null && (
+                        <div key={label} className="flex items-center justify-between">
+                          <span className="text-xs text-slate-400">{label}</span>
+                          <span className="text-xs font-mono font-bold text-blue-300">
+                            ×{typeof value === 'number' ? value.toFixed(2) : value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Débris générés */}
+              {parsedReport.details.debris && (parsedReport.details.debris.metal > 0 || parsedReport.details.debris.crystal > 0) && (
+                <div className="bg-slate-800/40 border border-slate-600/30 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Rocket size={14} className="text-slate-400" />
+                    <span className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Champ de Débris Généré</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Box size={12} className="text-orange-400" />
+                        <span className="text-xs text-slate-400">Métal</span>
+                      </div>
+                      <span className="text-sm font-mono font-bold text-orange-400">
+                        +{Math.floor(parsedReport.details.debris.metal).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Gem size={12} className="text-cyan-400" />
+                        <span className="text-xs text-slate-400">Cristal</span>
+                      </div>
+                      <span className="text-sm font-mono font-bold text-cyan-400">
+                        +{Math.floor(parsedReport.details.debris.crystal).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* ANALYSE DES PERTES */}
           <section className="space-y-4">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
