@@ -77,9 +77,9 @@ export function useServerEvents() {
   const [loading, setLoading] = useState(false);
   const lastFetchRef = useRef(0);
 
-  const fetchEvents = useCallback(async () => {
+  const fetchEvents = useCallback(async (force = false) => {
     const now = Date.now();
-    if (now - lastFetchRef.current < 5000) return; // debounce 5s
+    if (!force && now - lastFetchRef.current < 5000) return; // debounce 5s
     lastFetchRef.current = now;
 
     setLoading(true);
@@ -98,10 +98,12 @@ export function useServerEvents() {
 
   // Écoute les custom events WS dispatchés depuis useWebSocket.ts
   useEffect(() => {
-    fetchEvents();
+    fetchEvents(true); // premier fetch forcé
+
+    // Refetch périodique toutes les 60s (rattrape les events si WS manqué)
+    const interval = setInterval(() => fetchEvents(true), 60_000);
 
     const handleAnnounced = (e: CustomEvent<WsServerEventAnnounced>) => {
-      // Ajouter l'événement incoming dans la liste
       const d = e.detail;
       setEvents(prev => {
         if (prev.find(ev => ev.id === d.event_id)) return prev;
@@ -151,7 +153,6 @@ export function useServerEvents() {
           ? { ...ev, status: d.outcome === 'cancelled' ? 'cancelled' : 'resolved' }
           : ev
       ));
-      // Retirer l'événement terminé après 10s
       setTimeout(() => {
         setEvents(prev => prev.filter(ev => ev.id !== d.event_id));
       }, 10000);
@@ -163,6 +164,7 @@ export function useServerEvents() {
     window.addEventListener('server-event-resolved', handleResolved as EventListener);
 
     return () => {
+      clearInterval(interval);
       window.removeEventListener('server-event-announced', handleAnnounced as EventListener);
       window.removeEventListener('server-event-started', handleStarted as EventListener);
       window.removeEventListener('server-event-progress', handleProgress as EventListener);

@@ -61,7 +61,7 @@ export default function ServerEventBanner({ events, userId, planetId }: ServerEv
 
   return (
     <>
-      <div className="fixed top-0 left-0 right-0 z-50 pointer-events-none">
+      <div className="fixed top-[60px] md:top-[72px] left-0 right-0 z-40 pointer-events-none">
         <div className="pointer-events-auto">
           {/* Header barre avec toggle */}
           <div

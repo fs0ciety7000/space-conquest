@@ -91,7 +91,7 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => { if (open && unreadCount > 0) markAllAsRead(); }}>
       <DropdownMenuTrigger asChild>
         <button
           className="relative p-2 md:p-2.5 rounded-full hover:bg-white/10 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 card-depth group shrink-0 hover:shadow-lg"
