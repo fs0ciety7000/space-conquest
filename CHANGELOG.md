@@ -1,14 +1,33 @@
 # Changelog - Space Conquest
 
+## [5.1.1] - 2026-03-08 - Expansion 5.1.1 : Rééquilibrage Expéditions
+
+### ⚖️ Expéditions — Récompenses Proportionnelles (Rééquilibrage Complet)
+
+- **Nouvelle formule** : `récompense = pirate_str × value_per_cp × tier_mult × loss_mult × rand × recycler`
+- **`loss_mult = 1.0 + (pertes/flotte) × 2.0`** — plus la flotte subit de pertes, plus la récompense est grande (jusqu'à ×3)
+- **Tier multiplier** : 0.5 (pirates faibles) / 1.0 (moyens) / 2.0 (forts) — reflète la difficulté du combat
+- `value_per_cp = 5000` (vs 2000 avant), `value_per_cap = 800` (vs 500) — récompenses beaucoup plus généreuses
+- Outcomes pacifiques : basés sur `total_capacity × value_per_cap` (pas speed_factor)
+- **Découverte SC** : `5 + rand(0-10) + (combat_power × 0.05, max 8)` → 13-23 SC pour une grosse flotte
+- Fix critique : variables `base_metal/crystal/deut` → `base_calm_metal/crystal/deut` (compilation cassée)
+
+**Simulations équilibrées (100 Croiseurs — coût ~2M métal + 700k cristal) :**
+- Pirates faibles : **170k–530k métal** (+~5-15% retour sur investissement)
+- Pirates moyens : **530k–1.55M métal** (+~20-57% ROI)
+- Pirates forts (victoire ~23%) : **2.1M–3.8M métal** (récompense élevée, risque réel de défaite)
+
+---
+
 ## [5.1.0] - 2026-03-08 - Expansion 5.1 : Expéditions Multi-Vaisseaux & Bug-fixes
 
 ### 🚀 Expéditions — Support Tous Types de Vaisseaux
 
-- `expedition_handler` refactorisé : accepte n'importe quelle composition `fleet: HashMap<ship_key, count>`
+- `expedition_v2_handler` (`handlers/fleet.rs`) : accepte n'importe quelle composition `fleet: HashMap<ship_key, count>`
 - Config par type : `capacity` (loot), `combat_power` (vs pirates), `vulnerability` (répartition pertes)
-- Comparaison pirates basée sur `combat_power` pondérée (fini `total_ships`)
+- 6 outcomes pondérés : EmptySpace 10% / FloatingResources 25% / PiratesWeak 20% / PiratesMedium 25% / PiratesStrong 15% / Discovery 5%
 - Rapport JSON : `lost_ships: HashMap<String, i32>` par type (fin des champs legacy `lost_hunters`/`lost_cruisers`)
-- `ExpeditionZoneV2.tsx` : fix parsing `data.report.*`, affichage pertes par type dans le rapport
+- `ExpeditionZoneV2.tsx` : fix parsing `data.report.*` (clé `log` pas `logs`), affichage pertes par type dans le rapport
 
 ### 🐛 Fix — Sell Planet (Infinite Loading + Logout)
 

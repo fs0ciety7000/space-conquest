@@ -1,7 +1,30 @@
 # ANTIGRAVITY_SYNC — Résumé des changements backend → frontend
 
-> Dernière mise à jour : Session 2026-03-08 (Expansion 5.1)
+> Dernière mise à jour : Session 2026-03-08 (Expansion 5.1.1)
 > Destiné à **antigravity** pour intégrer et tester les nouvelles fonctionnalités frontend.
+
+---
+
+## Expansion 5.1.1 — Session 2026-03-08 — Rééquilibrage Expéditions
+
+### Expéditions — Rééquilibrage récompenses ✅
+
+**Changements backend uniquement** (`handlers/fleet.rs::expedition_v2_handler`) :
+
+- **Nouvelle formule** : `reward = pirate_str × value_per_cp × tier_mult × loss_mult × rand × recycler_bonus`
+- **`loss_mult = 1.0 + (n_losses / total_ships) × 2.0`** — bonus jusqu'à ×3 si flotte décimée
+- Tier multiplier par difficulté : `0.5` (faibles) / `1.0` (moyens) / `2.0` (forts)
+- `value_per_cp = 5000`, `value_per_cap = 800`
+- **SC Découverte** : `floor(5 + rand(0-10) + min(combat_power × 0.05, 8))` → 13-23 SC pour grosse flotte
+- Fix compilation : variables `base_metal/crystal/deut` remplacées par `base_calm_metal/crystal/deut`
+- Outcomes pacifiques (Vide, Flottant, Découverte) : basés sur `total_capacity × value_per_cap`, sans speed_factor
+
+**Aucun changement frontend** — la structure de réponse est identique.
+
+**À tester :**
+- [ ] 100 croiseurs vs pirates moyens → rapport affiche 530k–1.55M métal (pas 170k)
+- [ ] 100 croiseurs vs pirates forts avec pertes → métal augmente avec le nb de vaisseaux perdus
+- [ ] Découverte avec grosse flotte → 13-23 SC crédités sur le compte
 
 ---
 

@@ -108,6 +108,18 @@ Cette section documente les changements techniques récents et les TODOs restant
 
 ## TODO Backend (Priorités pour agent Claude)
 
+### 0b. ✅ Expansion 5.1 — Expéditions Multi-Vaisseaux & Rééquilibrage — **FAIT** (session 2026-03-08)
+- `expedition_v2_handler` (`handlers/fleet.rs`) : payload `fleet: HashMap<ship_key, count>`, tous types de vaisseaux acceptés
+- 6 outcomes pondérés (EmptySpace 10% / Floating 25% / PiratesWeak 20% / Medium 25% / Strong 15% / Discovery 5%)
+- Config par type : `ShipExpedCfg { capacity, combat_power, vulnerability }`
+- Rapport : `{ winner, result, log, loot, lost_ships, syndicate_credits_earned, mission_type: "expedition" }`
+- **Rééquilibrage récompenses** : `reward = pirate_str × 5000 × tier_mult × loss_mult × rand × recycler`
+  - `loss_mult = 1.0 + (pertes/total) × 2.0` — bonus pour pertes subies
+  - tier_mult : 0.5 / 1.0 / 2.0 (faibles/moyens/forts)
+- SC découverte : `5 + rand(0-10) + min(combat_power × 0.05, 8)` → 13-23 SC pour grosse flotte
+- `CombatModal.tsx` : section expédition ajoutée (journal, pertes par type, SC gagnés)
+- `ExpeditionZoneV2.tsx` : parsing `data.report.log` (clé correcte), badges pertes par type
+
 ### 0. ✅ Expansion 5.0 — Refactoring Architecture & Mécanique — **FAIT** (session 2026-03-09)
 - `backend/src/handlers/` créé : galaxy, ranking, reports, profile (17 handlers), shipyard
 - `backend/src/models.rs` : structs partagées extraites de main.rs
