@@ -1,7 +1,7 @@
 // ANTIGRAVITY: Modal détail d'un événement serveur PVE.
 // Affiche HP, top contributeurs, effets actifs, et bouton de contribution.
 import { useState, useEffect } from 'react';
-import { X, Swords, Trophy, Globe, Clock, Zap, Users, Send } from 'lucide-react';
+import { X, Swords, Trophy, Globe, Clock, Zap, Users, Send, AlertTriangle, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -57,22 +57,77 @@ function getProgressColor(typeKey: string): string {
   }
 }
 
-function describeEffects(effects: Record<string, any> | undefined): string[] {
-  if (!effects) return [];
-  const lines: string[] = [];
-  if (effects.production_malus_metal) lines.push(`-${Math.round((1 - effects.production_malus_metal) * 100)}% production métal`);
-  if (effects.production_malus_crystal) lines.push(`-${Math.round((1 - effects.production_malus_crystal) * 100)}% production cristal`);
-  if (effects.production_malus_deuterium) lines.push(`-${Math.round((1 - effects.production_malus_deuterium) * 100)}% production deutérium`);
-  if (effects.spy_blocked) lines.push('Espionnage bloqué dans la zone');
-  if (effects.reward_type === 'artifact_tech_boost') lines.push('Récompense : boost de technologie aléatoire');
-  if (effects.reward_type === 'resources') lines.push('Récompense : ressources proportionnelles à la contribution');
-  return lines;
+// Effets connus par type — pour l'affichage même avant démarrage
+const EVENT_TYPE_INFO: Record<string, { effects: string[]; reward: string; danger: string }> = {
+  pirate_invasion: {
+    effects: ['-30% production métal', '-20% production cristal', 'Malus commerce dans la zone'],
+    reward: 'Métal, Cristal et Deutérium proportionnels à la contribution',
+    danger: 'ÉLEVÉ — Les pirates attaquent activement les planètes de la zone',
+  },
+  radioactive_cloud: {
+    effects: ['-40% production deutérium', '-20% production métal', 'Espionnage bloqué dans la zone'],
+    reward: 'Cristal et Deutérium — récompense pour avoir dispersé le nuage',
+    danger: 'MODÉRÉ — Production perturbée tant que le nuage n\'est pas dissipé',
+  },
+  meteor_shower: {
+    effects: ['-25% production métal', '-25% production cristal', 'Risque de dommages sur les installations'],
+    reward: 'Métal récupéré des débris — proportionnel à la contribution',
+    danger: 'MODÉRÉ — Pluie de météorites sur la zone',
+  },
+  solar_storm: {
+    effects: ['-50% production d\'énergie solaire', '-30% efficacité des boucliers'],
+    reward: 'Cristal et bonus de recherche énergétique',
+    danger: 'FAIBLE — Perturbation électromagnétique temporaire',
+  },
+  ancient_artifact: {
+    effects: ['Bonus de production +20% pour les contributeurs', 'Boost de recherche technologique'],
+    reward: 'Artefact technologique aléatoire — boost permanent de recherche',
+    danger: 'NUL — Opportunité rare à ne pas manquer',
+  },
+};
+
+function describeEffects(effects: Record<string, any> | undefined, typeKey?: string): string[] {
+  // D'abord essayer depuis le JSON backend
+  if (effects && Object.keys(effects).length > 0) {
+    const lines: string[] = [];
+    if (effects.production_malus_metal) lines.push(`-${Math.round((1 - effects.production_malus_metal) * 100)}% production métal`);
+    if (effects.production_malus_crystal) lines.push(`-${Math.round((1 - effects.production_malus_crystal) * 100)}% production cristal`);
+    if (effects.production_malus_deuterium) lines.push(`-${Math.round((1 - effects.production_malus_deuterium) * 100)}% production deutérium`);
+    if (effects.spy_blocked) lines.push('Espionnage bloqué dans la zone');
+    if (effects.reward_type === 'artifact_tech_boost') lines.push('Récompense : boost de technologie aléatoire');
+    if (effects.reward_type === 'resources') lines.push('Récompense : ressources proportionnelles à la contribution');
+    if (lines.length > 0) return lines;
+  }
+  // Fallback : descriptions statiques par type
+  if (typeKey && EVENT_TYPE_INFO[typeKey]) {
+    return EVENT_TYPE_INFO[typeKey].effects;
+  }
+  return [];
+}
+
+function formatCountdown(isoDate: string): string {
+  const diff = new Date(isoDate).getTime() - Date.now();
+  if (diff <= 0) return 'Imminent';
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 export default function ServerEventModal({ event, userId, planetId, onClose }: ServerEventModalProps) {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [contribution, setContribution] = useState('');
   const [contributing, setContributing] = useState(false);
+  const [tick, setTick] = useState(0); // force re-render pour le countdown
+
+  // Ticker 1s pour rafraîchir le countdown si incoming
+  useEffect(() => {
+    if (event.status !== 'incoming') return;
+    const t = setInterval(() => setTick(n => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [event.status]);
 
   useEffect(() => {
     fetch(apiUrl(`/server-events/${event.id}`))
@@ -83,7 +138,8 @@ export default function ServerEventModal({ event, userId, planetId, onClose }: S
 
   const displayEvent = detail?.event ?? event;
   const topContributors = detail?.top_contributors ?? [];
-  const effects = describeEffects((displayEvent as any).effects);
+  const effects = describeEffects((displayEvent as any).effects, event.event_type_key);
+  const typeInfo = EVENT_TYPE_INFO[event.event_type_key];
 
   const handleContribute = async () => {
     if (!userId || !planetId) {
@@ -176,6 +232,51 @@ export default function ServerEventModal({ event, userId, planetId, onClose }: S
             </p>
           )}
         </div>
+
+        {/* Section INCOMING — countdown + préparation */}
+        {displayEvent.status === 'incoming' && (
+          <div className="px-5 pb-3 space-y-3">
+            {/* Countdown */}
+            <div className={`flex items-center gap-3 rounded-lg px-3 py-2.5 border ${
+              getAccentColor(event.event_type_key).replace('text-', 'border-').replace('-400', '-500/40')
+            } bg-black/30`}>
+              <Clock className={`w-5 h-5 flex-shrink-0 ${getAccentColor(event.event_type_key)}`} />
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wide font-semibold">Démarrage dans</p>
+                <p className={`text-2xl font-black font-mono ${getAccentColor(event.event_type_key)}`}>
+                  {formatCountdown(displayEvent.starts_at)}
+                </p>
+              </div>
+            </div>
+
+            {/* Danger level */}
+            {typeInfo && (
+              <div className="flex items-start gap-2 text-xs">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <span className="text-slate-400">
+                  <span className="text-amber-400 font-semibold">Danger : </span>
+                  {typeInfo.danger}
+                </span>
+              </div>
+            )}
+
+            {/* Récompense potentielle */}
+            {typeInfo && (
+              <div className="flex items-start gap-2 text-xs">
+                <Gift className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <span className="text-slate-400">
+                  <span className="text-emerald-400 font-semibold">Récompense : </span>
+                  {typeInfo.reward}
+                </span>
+              </div>
+            )}
+
+            {/* Note HP */}
+            <p className="text-xs text-slate-500 italic">
+              Les points de vie collectifs et la barre de progression apparaîtront au démarrage de l'événement.
+            </p>
+          </div>
+        )}
 
         {/* HP Bar (actif) */}
         {displayEvent.status === 'active' && displayEvent.hp_max > 0 && (

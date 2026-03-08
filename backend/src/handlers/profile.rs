@@ -238,9 +238,14 @@ pub async fn get_player_profile_handler(
 
         let mut max_espionage = 0;
         for planet in &viewer_planets {
-            let level = tech_tree::get_planet_tech_level(&state.db, planet.id, "espionage")
+            // "espionage_tech" est la clé active ; "espionage" est la clé legacy — prendre le max des deux
+            let level_new = tech_tree::get_planet_tech_level(&state.db, planet.id, "espionage_tech")
                 .await
                 .unwrap_or(0);
+            let level_legacy = tech_tree::get_planet_tech_level(&state.db, planet.id, "espionage")
+                .await
+                .unwrap_or(0);
+            let level = level_new.max(level_legacy);
             if level > max_espionage {
                 max_espionage = level;
             }
@@ -395,10 +400,11 @@ pub async fn get_player_profile_handler(
             tech_tree::get_planet_tech_level(&state.db, main_planet.id, "laser_tech")
                 .await
                 .unwrap_or(0);
-        let espionage =
-            tech_tree::get_planet_tech_level(&state.db, main_planet.id, "espionage")
-                .await
-                .unwrap_or(0);
+        let espionage = {
+            let a = tech_tree::get_planet_tech_level(&state.db, main_planet.id, "espionage_tech").await.unwrap_or(0);
+            let b = tech_tree::get_planet_tech_level(&state.db, main_planet.id, "espionage").await.unwrap_or(0);
+            a.max(b)
+        };
         let armour =
             tech_tree::get_planet_tech_level(&state.db, main_planet.id, "armour_tech")
                 .await

@@ -778,7 +778,7 @@ function AppContent({
             planet={planet} 
             onSwitchPlanet={switchPlanet} 
             unreadMessages={unreadMessagesCount} 
-            onOpenMessages={() => { setActiveTab('messages'); setSidebarOpen(false); }}
+            onOpenMessages={() => { setActiveTab('messages'); setSidebarOpen(false); setUnreadMessagesCount(0); }}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             onNavigateToGalaxy={() => { setActiveTab('galaxy'); setSidebarOpen(false); }}
             onNavigateToOverview={() => { setActiveTab('overview'); setSidebarOpen(false); }}
