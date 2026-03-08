@@ -39,11 +39,11 @@ use backend::entities::{
 
 pub fn router(_state: crate::AppState) -> Router<crate::AppState> {
     Router::new()
-        .route("/planets/{id}", get(get_planet_handler))
-        .route("/planets/{id}/upgrade/{type}", post(upgrade_mine_handler))
-        .route("/planets/{id}/rename", post(rename_planet_handler))
+        .route("/planets/:id", get(get_planet_handler))
+        .route("/planets/:id/upgrade/:type", post(upgrade_mine_handler))
+        .route("/planets/:id/rename", post(rename_planet_handler))
         .route(
-            "/planets/{id}/cancel-construction/{queue_id}",
+            "/planets/:id/cancel-construction/:queue_id",
             delete(cancel_construction_handler),
         )
         .route("/my-planets", get(get_my_planets_handler))
