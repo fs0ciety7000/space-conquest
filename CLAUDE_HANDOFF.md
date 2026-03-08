@@ -296,17 +296,13 @@ Protéger les routes contre le spam/abus :
 // via tower_governor ou un middleware custom. Retourner HTTP 429 si dépassé.
 ```
 
-### 2.2 Événements WebSocket — Compléter la couverture
-Événements manquants à émettre :
-- `building_complete` — quand un bâtiment termine sa construction
-- `research_complete` — quand une recherche se termine
-- `fleet_arrived` — quand une flotte d'attaque/transport arrive à destination
-- `colony_founded` — quand une colonisation réussit
-
-```rust
-// TODO CLAUDE: Dans tick_system.rs, émettre des WsEvents lors des completions
-// de file d'attente (bâtiment, vaisseau, recherche) et lors des arrivées de flottes.
-```
+### 2.2 ✅ Événements WebSocket — Couverture complète — **FAIT** (session 2026-03-09)
+- `building_complete` — tick_system renvoie `Vec<CompletedItem>`, main.rs émet `notify_construction_complete`
+- `research_complete` — `WsEvent::ResearchComplete { tech_key, level }` + `notify_research_complete()`
+- `colony_founded` — `WsEvent::ColonyFounded { planet_name, coords }` + `notify_colony_founded()` après succès
+- `transport_arrived` — déjà existant ✅
+- `fleet_arrived` (attaque) — géré via `combat_result` existant ✅
+- Frontend: interfaces TS + cases dans `useWebSocket.ts`, son dans `useSoundEffects.tsx`
 
 ### 2.3 Système d'e-mail (optionnel mais utile)
 - Reset de mot de passe par e-mail (`POST /auth/forgot-password`)
@@ -395,7 +391,7 @@ De plus, il faut que le OnboardingTour ne s'affiche plus une fois vu/complété.
 | Analytics / Dashboard | ✅ | Stable |
 | **main.rs** | 🟡 **Partiel** | handlers/ créés, planets.rs + fleet.rs restent |
 | Rate Limiting | 🟡 Manquant | Priorité sécurité |
-| WS Events complets | 🟡 Partiel | building/research_complete manquants |
+| WS Events complets | ✅ Complet | building, research, colony_founded ajoutés (session 2026-03-09) |
 | Champs de Débris | ✅ Backend fait | Frontend (GalaxyView 💫) reste à faire |
 | DetailedCombatReport | ✅ Implémenté | Frontend (ReportsTerminal) reste à faire |
 | Skeleton Loaders | 🟢 UX nice-to-have | Frontend |

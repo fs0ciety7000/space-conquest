@@ -36,6 +36,12 @@
 - Colonne `recyclers_sent` ajoutée à `fleet_mission` pour la mécanique recycleur
 - **TODO (antigravity)** : endpoint GET /galaxy/:g/system/:s/debris + mission type "recycle" dans tick_system.rs
 
+### 📡 WebSocket Events Complets
+- `research_complete { tech_key, level }` — émis par le tick quand une recherche termine via construction_queue
+- `colony_founded { planet_name, coords }` — émis après colonisation réussie
+- `tick_system.rs` : `process_construction_queue_completion()` retourne `Vec<CompletedItem>` pour le caller
+- Frontend `useWebSocket.ts` : `WsResearchComplete`, `WsColonyFounded` + handlers + sons
+
 ---
 
 ## [4.0.0] - 2026-03-06 - Biomes, Tableau des Primes, Vaisseau Amiral & Recherche d'Amis
