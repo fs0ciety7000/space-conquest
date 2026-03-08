@@ -120,3 +120,37 @@ pub struct ColonizePayload {
     pub crystal: Option<f64>,
     pub deuterium: Option<f64>,
 }
+
+// ─── Fleet / Mission payloads ─────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct AttackPayloadV2 {
+    pub target_planet_id: Uuid,
+    pub fleet: HashMap<String, i32>,
+}
+
+#[derive(Deserialize)]
+pub struct SpyPayloadV2 {
+    pub target_planet_id: Uuid,
+    pub fleet: HashMap<String, i32>,
+}
+
+#[derive(Deserialize)]
+pub struct RecyclePayload {
+    pub target_planet_id: Uuid,
+    pub recyclers: i32,
+}
+
+#[derive(Deserialize)]
+pub struct TransportPayload {
+    pub target_planet_id: Uuid,
+    pub transporters: i32,
+    pub metal: f64,
+    pub crystal: f64,
+    pub deuterium: f64,
+}
+
+#[derive(Deserialize)]
+pub struct ExpeditionPayloadV2 {
+    pub fleet: HashMap<String, i32>,
+}

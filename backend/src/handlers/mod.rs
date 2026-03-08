@@ -11,6 +11,6 @@ pub mod ranking;
 pub mod reports;
 pub mod profile;
 pub mod shipyard;
+pub mod fleet;
 // TODO (antigravity): modules à créer dans les prochaines sessions :
 // pub mod planets;  // upgrade_mine, build_queue, resource_slots, etc.
-// pub mod fleet;    // attack_v2, spy_v2, expedition_v2, transport, recycle, etc.
