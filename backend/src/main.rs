@@ -47,6 +47,13 @@ use backend::{
 // Cancel handlers for ship/defense builds
 mod cancel_handlers;
 use cancel_handlers::{cancel_ship_build_handler, cancel_defense_build_handler, cancel_research_handler};
+
+// Handler sub-modules (extracted from main.rs)
+mod handlers;
+
+// Shared serialisable structs used across handler modules
+mod models;
+
 use config::Config;
 use websocket::WsState;
 
@@ -492,6 +499,16 @@ async fn main() {
         // Analytics / Dashboard
         .route("/analytics", get(analytics::get_analytics_handler))
 
+        // ── Merge extracted handler modules (Expansion 5.0 refactor) ──────────
+        // TODO (antigravity): Ces modules ont été extraits de main.rs.
+        // Les routes dupliquées ci-dessus doivent être retirées progressivement.
+        // Priorité : /config, /ranking, /unit-costs, /galaxy/* après validation.
+        .merge(handlers::ranking::router(state.clone()))
+        .merge(handlers::reports::router(state.clone()))
+        .merge(handlers::profile::router(state.clone()))
+        .merge(handlers::galaxy::router(state.clone()))
+        .merge(handlers::shipyard::router(state.clone()))
+
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -725,6 +742,7 @@ async fn resolve_attack_mission(
     let defender_defenses = load_planet_defenses_for_combat(db, mission.target_planet_id).await;
 
     // Run combat using new dynamic system
+    let config_snap = state.config.read().unwrap().clone();
     let result = combat::resolve_pvp_combat(
         db,
         attacker_ships.clone(),
@@ -732,7 +750,10 @@ async fn resolve_attack_mission(
         defender_ships.clone(),
         defender_defenses.clone(),
         def_bonuses,
-        (def_planet.metal_amount, def_planet.crystal_amount, def_planet.deuterium_amount)
+        (def_planet.metal_amount, def_planet.crystal_amount, def_planet.deuterium_amount),
+        Some(&config_snap),
+        None, // TODO: pass attacker (weapons, shield, armour) tech levels for BonusSummary
+        None,
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -923,6 +944,7 @@ async fn resolve_attack_mission(
         ships_lost: Set(defender_total_lost),
         date: Set(now),
         detailed_report: Set(Some(def_rep_json.clone())),
+        details: Set(None),
     }.insert(db).await;
 
     // Combat log pour l'attaquant
@@ -938,6 +960,7 @@ async fn resolve_attack_mission(
         ships_lost: Set(attacker_total_lost),
         date: Set(now),
         detailed_report: Set(Some(att_rep_json.clone())),
+        details: Set(None),
     }.insert(db).await;
 
     FleetMission::delete_by_id(mission.id).exec(db).await.unwrap();
@@ -2990,6 +3013,7 @@ async fn expedition_handler(
         ships_lost: Set(lost_hunters + lost_cruisers),
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(expedition_report.clone())),
+        details: Set(None),
     };
     let _ = log_exp.insert(&state.db).await;
 
@@ -3333,6 +3357,7 @@ async fn spy_handler(
         ships_lost: Set(1), // 1 spy probe used
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(spy_report_details)),
+        details: Set(None),
     };
     let _ = spy_log_attacker.insert(&state.db).await;
 
@@ -3354,6 +3379,7 @@ async fn spy_handler(
             "attacker_player": attacker_username,
             "coordinates": format!("[{}:{}:{}]", att_planet.galaxy, att_planet.system, att_planet.position)
         }))),
+        details: Set(None),
     };
     let _ = spy_log_defender.insert(&state.db).await;
 
@@ -3522,6 +3548,7 @@ async fn spy_v2_handler(
         ships_lost: Set(1), // 1 spy probe used
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(spy_report_details)),
+        details: Set(None),
     };
     let _ = spy_log_attacker.insert(&state.db).await;
 
@@ -3543,6 +3570,7 @@ async fn spy_v2_handler(
             "attacker_player": attacker_username,
             "coordinates": format!("[{}:{}:{}]", att_planet.galaxy, att_planet.system, att_planet.position)
         }))),
+        details: Set(None),
     };
     let _ = spy_log_defender.insert(&state.db).await;
 
@@ -3960,6 +3988,7 @@ async fn colonize_handler(
         deuterium: Set(deuterium_to_transport),
         ships_count: Set(1),
         fleet_data: Set(Some(colonize_data.to_string())),
+        recyclers_sent: Set(0),
     };
     let _ = mission.insert(&state.db).await;
 
@@ -4297,7 +4326,7 @@ async fn transport_handler(
     let mission = fleet_mission::ActiveModel {
         id: Set(Uuid::new_v4()), source_planet_id: Set(source_id), target_planet_id: Set(target_id), mission_type: Set("transport".to_string()), arrival_time: Set(arrival),
         metal: Set(payload.metal), crystal: Set(payload.crystal), deuterium: Set(payload.deuterium), ships_count: Set(payload.transporters),
-        fleet_data: Set(None),
+        fleet_data: Set(None), recyclers_sent: Set(0),
     };
 
     let log = transport_log::ActiveModel {
@@ -7026,6 +7055,7 @@ async fn expedition_v2_handler(
         ships_lost: Set(ships_lost_total),
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(expedition_report.clone())),
+        details: Set(None),
     }.insert(&state.db).await;
 
     // Mise à jour missions quotidiennes & achievements

@@ -266,8 +266,16 @@ pub fn calculate_resource_production(
     energy_ratio: f64,
     config: &ServerConfigCache
 ) -> f64 {
+    // TODO (antigravity): production passive minimale même sans mines (niveau 0).
+    // Garantit que les nouveaux joueurs ne restent pas bloqués sans ressources.
+    // Configurable via server_config : production_metal_passive, _crystal_passive, _deuterium_passive
     if level == 0 {
-        return 0.0;
+        let passive = match res_type {
+            ResourceType::Metal => config.get_config("production_metal_passive", 20.0),
+            ResourceType::Crystal => config.get_config("production_crystal_passive", 10.0),
+            ResourceType::Deuterium => config.get_config("production_deuterium_passive", 5.0),
+        };
+        return passive * (config.speed_factor / 100.0) * config.mining_speed;
     }
 
     // Bonus technologie énergie (+1% par niveau)
@@ -482,6 +490,21 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
     }
 }
 
+/// Temps de recherche avec bonus du laboratoire de recherche.
+/// Réduction : -5% par niveau de lab, max -50%.
+/// TODO (antigravity): remplacer les appels get_build_time() pour les recherches par get_research_time().
+pub fn get_research_time(metal_cost: f64, crystal_cost: f64, research_lab_level: i32, config: &ServerConfigCache) -> i64 {
+    let total_resources = metal_cost + crystal_cost;
+    let base_time = (total_resources / 2500.0 * 3600.0) as i64;
+
+    // -5% par niveau de labo, plafonné à -50%
+    let time_reduction = 1.0 - (research_lab_level as f64 * 0.05).min(0.5);
+    let final_time = (base_time as f64 * time_reduction) as i64;
+
+    let speed_factor = (config.speed_factor / 100.0) * config.construction_speed;
+    std::cmp::max(10, (final_time as f64 / speed_factor) as i64)
+}
+
 // ⏱️ TEMPS DE CONSTRUCTION PROGRESSIF
 pub fn get_build_time(metal_cost: f64, crystal_cost: f64, facility_level: i32, config: &ServerConfigCache) -> i64 {
     let total_resources = metal_cost + crystal_cost;
@@ -526,6 +549,14 @@ pub fn get_transporter_capacity_with_tech(hangar_level: i32, computer_tech_level
 }
 
 pub const TRANSPORTER_CAPACITY: f64 = 10000.0; // Deprecated: utilisez get_transporter_capacity()
+
+/// Applique le cap de stockage à un montant de ressource.
+/// À appeler après chaque mise à jour de ressources (tick ou GET planet).
+/// TODO (antigravity): intégrer dans tick_system.rs + calculate_resources() callers
+pub fn apply_storage_cap(amount: f64, storage_level: i32, config: &ServerConfigCache) -> f64 {
+    let cap = get_storage_capacity(storage_level, config);
+    amount.min(cap)
+}
 
 // Capacité de stockage des ressources (exponentielle par niveau)
 pub fn get_storage_capacity(storage_level: i32, config: &ServerConfigCache) -> f64 {

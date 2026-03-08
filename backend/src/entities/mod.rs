@@ -87,3 +87,6 @@ pub mod economy_log;
 
 // Notification system
 pub mod notification;
+
+// Debris fields (Expansion 5.0)
+pub mod debris_field;
