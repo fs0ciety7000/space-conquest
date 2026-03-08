@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import {
     ChevronLeft, ChevronRight, Search,
     Crosshair, Eye, Send, Recycle, MapPin,
-    Rocket, User, List, LayoutGrid, Sparkles, X, ShieldCheck, Crown, Flag, Truck, Globe
+    Rocket, User, List, LayoutGrid, Sparkles, X, ShieldCheck, Crown, Flag, Truck, Globe,
+    AlertTriangle
 } from "lucide-react";
+import { useServerEvents } from '@/hooks/useServerEvents';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -52,6 +54,14 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const [system, setSystem] = useState(planet.system);
     const [slots, setSlots] = useState<GalaxySlot[]>([]);
     const [loading, setLoading] = useState(false);
+    const { activeEvents, incomingEvents } = useServerEvents();
+
+    // Événements actifs/incoming affectant le système courant
+    const systemEvents = [...activeEvents, ...incomingEvents].filter(e => {
+        if (!e.zone || e.zone === 'Serveur entier') return true;
+        if (e.zone.includes(`[${galaxy}:`)) return true;
+        return false;
+    });
     const [viewMode, setViewMode] = useState<'list' | 'map' | '3d'>('map');
     const [showColonizeModal, setShowColonizeModal] = useState(false);
     const [colonizePosition, setColonizePosition] = useState<number>(0);
@@ -325,6 +335,31 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
             ) : (
                 <div className="relative w-full aspect-square md:aspect-[16/9] max-w-5xl mx-auto mt-8 bg-slate-950/80 rounded-full md:rounded-3xl border border-white/5 shadow-2xl overflow-hidden group/orbit card-depth glass-card animate-slide-up hover:shadow-3xl transition-all duration-500">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-950 to-black pointer-events-none"></div>
+
+                    {/* PVE Event overlays */}
+                    {systemEvents.map(ev => (
+                        <div key={ev.id} className={`absolute inset-0 pointer-events-none z-5 ${
+                            ev.event_type_key === 'pirate_invasion' ? 'pve-overlay-invasion' :
+                            ev.event_type_key === 'radioactive_cloud' ? 'pve-overlay-radioactive' :
+                            ev.event_type_key === 'solar_storm' ? 'pve-overlay-solar' :
+                            ev.event_type_key === 'meteor_shower' ? 'pve-overlay-meteor' :
+                            ev.event_type_key === 'ancient_artifact' ? 'pve-overlay-artifact' : ''
+                        }`}>
+                            {/* Badge type + statut */}
+                            <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm border border-white/10 rounded-lg px-2 py-1">
+                                <span className="text-base">{ev.icon}</span>
+                                <div>
+                                    <p className="text-xs font-bold text-white leading-none">{ev.name}</p>
+                                    <p className="text-[10px] text-slate-400 leading-none mt-0.5">
+                                        {ev.status === 'active' ? `${ev.hp_current.toLocaleString()} PV` : 'À venir'}
+                                    </p>
+                                </div>
+                                {ev.status === 'active' && (
+                                    <AlertTriangle className="w-3 h-3 text-red-400 animate-pulse ml-1" />
+                                )}
+                            </div>
+                        </div>
+                    ))}
                     
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
                         <div className="w-24 h-24 md:w-32 md:h-32 bg-yellow-500 rounded-full blur-2xl opacity-50 animate-pulse"></div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
-import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery, Radio, Skull, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery, Radio, Skull, Plus, Trash2, RefreshCw, Swords } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -121,7 +121,7 @@ interface Announcement {
   updated_at: string;
 }
 
-type AdminTab = 'players' | 'stats' | 'users' | 'config' | 'announcements' | 'content' | 'black_market';
+type AdminTab = 'players' | 'stats' | 'users' | 'config' | 'announcements' | 'content' | 'black_market' | 'pve_events';
 
 interface ConfigCategory {
   id: string;
@@ -882,6 +882,18 @@ export default function AdminPanel() {
         >
           <Skull size={16} />
           Marché Underground
+        </Button>
+        <Button
+          variant={activeTab === 'pve_events' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('pve_events')}
+          className={`flex items-center gap-2 transition-all duration-300 ${
+            activeTab === 'pve_events'
+              ? 'bg-orange-700 hover:bg-orange-600 text-white card-depth shadow-lg'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <Swords size={16} />
+          Événements PVE
         </Button>
       </div>
 
@@ -2571,6 +2583,227 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+      {/* TAB PVE EVENTS */}
+      {activeTab === 'pve_events' && (
+        <AdminPvePanel />
+      )}
+    </div>
+  );
+}
+
+// ─── Admin PVE Panel ──────────────────────────────────────────────────────────
+
+function AdminPvePanel() {
+  const [events, setEvents] = useState<any[]>([]);
+  const [types, setTypes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    event_type_key: '',
+    affected_galaxy: '',
+    affected_system: '',
+    radius: '0',
+    starts_in_minutes: '60',
+    duration_hours: '24',
+    narrative: '',
+  });
+
+  const fetchAll = async () => {
+    setLoading(true);
+    try {
+      const [evRes, tyRes] = await Promise.all([
+        fetch(apiUrl('/admin/server-events?limit=20')),
+        fetch(apiUrl('/admin/server-event-types')),
+      ]);
+      if (evRes.ok) setEvents((await evRes.json()).events ?? []);
+      if (tyRes.ok) setTypes((await tyRes.json()).types ?? []);
+    } catch (e) {
+      toast.error('Erreur chargement PVE');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const handleCreate = async () => {
+    if (!createForm.event_type_key) { toast.error('Sélectionnez un type'); return; }
+    try {
+      const res = await fetch(apiUrl('/admin/server-events'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_type_key: createForm.event_type_key,
+          affected_galaxy: createForm.affected_galaxy ? parseInt(createForm.affected_galaxy) : null,
+          affected_system: createForm.affected_system ? parseInt(createForm.affected_system) : null,
+          radius: parseInt(createForm.radius) || 0,
+          starts_in_minutes: parseInt(createForm.starts_in_minutes) || 60,
+          duration_hours: parseInt(createForm.duration_hours) || 24,
+          narrative: createForm.narrative || null,
+        }),
+      });
+      if (res.ok) {
+        toast.success('Événement créé !');
+        fetchAll();
+      } else {
+        const err = await res.json();
+        toast.error(err.error ?? 'Erreur création');
+      }
+    } catch (e) { toast.error('Erreur réseau'); }
+  };
+
+  const handleCancel = async (id: string) => {
+    const res = await fetch(apiUrl(`/admin/server-events/${id}/cancel`), { method: 'PATCH' });
+    if (res.ok) { toast.success('Événement annulé'); fetchAll(); }
+    else toast.error('Erreur annulation');
+  };
+
+  const handleResolve = async (id: string) => {
+    const res = await fetch(apiUrl(`/admin/server-events/${id}/resolve`), { method: 'PATCH' });
+    if (res.ok) { toast.success('Événement résolu'); fetchAll(); }
+    else toast.error('Erreur résolution');
+  };
+
+  const statusColor = (s: string) => {
+    if (s === 'active') return 'text-green-400 bg-green-400/10';
+    if (s === 'incoming') return 'text-amber-400 bg-amber-400/10';
+    if (s === 'resolved') return 'text-blue-400 bg-blue-400/10';
+    return 'text-slate-400 bg-slate-400/10';
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-orange-950/40 border border-orange-700/40">
+            <Swords size={20} className="text-orange-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-white">Événements Serveur PVE</h2>
+            <p className="text-xs text-slate-500">Déclenchez des événements collectifs affectant la galaxie</p>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading}
+          className="bg-slate-900/50 border-white/10 hover:bg-slate-800">
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+        </Button>
+      </div>
+
+      {/* Formulaire création */}
+      <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 space-y-4">
+        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+          <Plus size={14} /> Créer un événement
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Type *</label>
+            <select
+              value={createForm.event_type_key}
+              onChange={e => setCreateForm(f => ({ ...f, event_type_key: e.target.value }))}
+              className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white"
+            >
+              <option value="">— sélectionner —</option>
+              {types.filter(t => t.is_active).map((t: any) => (
+                <option key={t.type_key} value={t.type_key}>{t.icon} {t.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Galaxie (vide = serveur entier)</label>
+            <Input type="number" placeholder="ex: 3" value={createForm.affected_galaxy}
+              onChange={e => setCreateForm(f => ({ ...f, affected_galaxy: e.target.value }))}
+              className="bg-slate-800 border-slate-700 text-white text-sm h-8" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Système</label>
+            <Input type="number" placeholder="ex: 42" value={createForm.affected_system}
+              onChange={e => setCreateForm(f => ({ ...f, affected_system: e.target.value }))}
+              className="bg-slate-800 border-slate-700 text-white text-sm h-8" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Rayon (systèmes)</label>
+            <Input type="number" value={createForm.radius}
+              onChange={e => setCreateForm(f => ({ ...f, radius: e.target.value }))}
+              className="bg-slate-800 border-slate-700 text-white text-sm h-8" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Démarrage dans (min)</label>
+            <Input type="number" value={createForm.starts_in_minutes}
+              onChange={e => setCreateForm(f => ({ ...f, starts_in_minutes: e.target.value }))}
+              className="bg-slate-800 border-slate-700 text-white text-sm h-8" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">Durée (heures)</label>
+            <Input type="number" value={createForm.duration_hours}
+              onChange={e => setCreateForm(f => ({ ...f, duration_hours: e.target.value }))}
+              className="bg-slate-800 border-slate-700 text-white text-sm h-8" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 mb-1 block">Narrative (optionnel)</label>
+          <Input placeholder="Message narratif affiché aux joueurs..." value={createForm.narrative}
+            onChange={e => setCreateForm(f => ({ ...f, narrative: e.target.value }))}
+            className="bg-slate-800 border-slate-700 text-white text-sm" />
+        </div>
+        <Button onClick={handleCreate} className="bg-orange-700 hover:bg-orange-600 text-white">
+          <Swords size={14} className="mr-2" /> Déclencher l'événement
+        </Button>
+      </div>
+
+      {/* Liste événements récents */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-bold text-slate-300">Événements récents</h3>
+        {events.length === 0 && !loading && (
+          <p className="text-xs text-slate-500 py-4 text-center">Aucun événement</p>
+        )}
+        {events.map((ev: any) => (
+          <div key={ev.id} className="flex items-center gap-3 bg-slate-900/50 border border-white/5 rounded-lg px-4 py-3">
+            <span className="text-xl">{ev.icon ?? '🌌'}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-white truncate">{ev.name ?? ev.event_type_key}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusColor(ev.status)}`}>
+                  {ev.status?.toUpperCase()}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Zone : {ev.zone ?? 'N/A'} — HP : {ev.hp_current?.toLocaleString() ?? 0} / {ev.hp_max?.toLocaleString() ?? 0}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              {(ev.status === 'active' || ev.status === 'incoming') && (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => handleResolve(ev.id)}
+                    className="h-7 text-xs bg-blue-950/40 border-blue-700/40 text-blue-300 hover:bg-blue-900/40">
+                    Résoudre
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleCancel(ev.id)}
+                    className="h-7 text-xs bg-red-950/40 border-red-700/40 text-red-300 hover:bg-red-900/40">
+                    Annuler
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Types d'événements */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-bold text-slate-300">Types configurés</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {types.map((t: any) => (
+            <div key={t.id} className={`flex items-center gap-3 border rounded-lg px-3 py-2 ${t.is_active ? 'bg-slate-900/50 border-white/5' : 'bg-slate-950/50 border-white/5 opacity-50'}`}>
+              <span className="text-lg">{t.icon ?? '🌌'}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">{t.name}</p>
+                <p className="text-xs text-slate-500 truncate">{t.description ?? t.type_key}</p>
+              </div>
+              <span className="text-xs text-slate-500">{t.default_duration_hours}h</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

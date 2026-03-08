@@ -1,5 +1,28 @@
 # Changelog - Space Conquest
 
+## [5.2.0] - 2026-03-08 - Expansion 5.2 : Système PVE Événements Serveur
+
+### ⚔️ PVE — Événements Collectifs Serveur (Complet)
+
+**Backend :**
+- Migration `m20260309_000002` : 4 nouvelles tables (`server_event_type`, `server_event`, `server_event_participation`, `server_event_action`) + 5 seeds (pirate_invasion ☠️, radioactive_cloud ☢️, meteor_shower ☄️, solar_storm 🌩️, ancient_artifact 🏺)
+- `message.sender_id` nullable + `is_system`, `sender_display_name`, `message_category` pour messages système
+- `backend/src/server_events.rs` : CRUD, effets production, contributions, récompenses proportionnelles, tick 30s, messages inbox
+- Routes publiques : `GET /server-events`, `GET /server-events/:id`, `POST /server-events/:id/contribute`
+- Routes admin : `GET|POST /admin/server-events`, `PATCH /admin/server-events/:id/cancel|resolve`, CRUD `/admin/server-event-types`
+- 5 nouveaux WsEvent : `ServerEventAnnounced`, `ServerEventStarted`, `ServerEventProgress`, `ServerEventResolved`, `ServerEventWarning`
+- Tick PVE `tokio::spawn` toutes les 30s
+
+**Frontend :**
+- `useServerEvents.ts` : hook fetch + écoute WS, état réactif
+- `ServerEventBanner.tsx` : bandeau fixe avec HP bar et dismiss par événement
+- `ServerEventModal.tsx` : détail (narrative, HP, top contributeurs, effets, contribution)
+- `GalaxyView.tsx` : overlays visuels par type d'événement dans la vue carte
+- `AdminPanel.tsx` : onglet "Événements PVE" (créer / résoudre / annuler / types)
+- `index.css` : animations `pve-overlay-invasion/radioactive/solar/meteor/artifact`
+
+---
+
 ## [5.1.1] - 2026-03-08 - Expansion 5.1.1 : Rééquilibrage Expéditions
 
 ### ⚖️ Expéditions — Récompenses Proportionnelles (Rééquilibrage Complet)

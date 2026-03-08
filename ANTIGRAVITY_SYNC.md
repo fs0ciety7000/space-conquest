@@ -1,7 +1,66 @@
 # ANTIGRAVITY_SYNC — Résumé des changements backend → frontend
 
-> Dernière mise à jour : Session 2026-03-08 (Expansion 5.1.1)
+> Dernière mise à jour : Session 2026-03-08 (Expansion 5.2.0)
 > Destiné à **antigravity** pour intégrer et tester les nouvelles fonctionnalités frontend.
+
+---
+
+## Expansion 5.2.0 — Session 2026-03-08 — Système PVE Événements Serveur
+
+### Migration DB requise : `m20260309_000002_system_messages_and_pve`
+
+```sql
+-- Alters message table
+ALTER TABLE message ALTER COLUMN sender_id DROP NOT NULL;
+ALTER TABLE message ADD COLUMN is_system BOOL NOT NULL DEFAULT false;
+ALTER TABLE message ADD COLUMN sender_display_name VARCHAR(100);
+ALTER TABLE message ADD COLUMN message_category VARCHAR(50) NOT NULL DEFAULT 'player';
+
+-- 4 nouvelles tables + seeds
+CREATE TABLE server_event_type (...);
+CREATE TABLE server_event (...);
+CREATE TABLE server_event_participation (...);
+CREATE TABLE server_event_action (...);
+```
+
+### Nouvelles routes API
+
+**Publiques :**
+- `GET /server-events` → `{ events: ServerEventSummary[] }`
+- `GET /server-events/:id` → `{ event: ServerEventSummary, top_contributors: [name, pts][] }`
+- `POST /server-events/:id/contribute` `{ user_id, planet_id, resources? }` → `{ success, contribution }`
+
+**Admin :**
+- `GET /admin/server-events?status=&limit=` → liste avec enrich
+- `POST /admin/server-events` → créer un événement
+- `PATCH /admin/server-events/:id/cancel` / `resolve`
+- `GET /admin/server-event-types` / `POST` / `PATCH :id` / `DELETE :id`
+
+### Nouveaux WsEvent (backend → frontend)
+
+```json
+{ "type": "server_event_announced", "payload": { "event_id", "event_type", "name", "icon", "color", "zone", "starts_in_seconds", "narrative" } }
+{ "type": "server_event_started", "payload": { "event_id", "event_type", "name", "icon", "color", "zone", "ends_at", "hp_max" } }
+{ "type": "server_event_progress", "payload": { "event_id", "hp_current", "hp_max", "top_contributors": string[], "percent" } }
+{ "type": "server_event_resolved", "payload": { "event_id", "event_type", "outcome", "rewards_distributed", "top_contributors": string[] } }
+{ "type": "server_event_warning", "payload": { "event_id", "message" } }
+```
+
+### Nouveaux composants frontend
+
+| Fichier | Rôle |
+|---------|------|
+| `src/hooks/useServerEvents.ts` | Fetch + écoute WS, état réactif |
+| `src/components/ServerEventBanner.tsx` | Bandeau fixe top de l'écran |
+| `src/components/ServerEventModal.tsx` | Modal détail + contribution |
+
+### À tester
+
+- [ ] Créer un événement pirate_invasion depuis l'admin panel → bandeau apparaît
+- [ ] Contribuer à un événement → HP bar diminue en temps réel via WS
+- [ ] Récompenses reçues dans la messagerie après résolution
+- [ ] Overlays visuels dans GalaxyView (vue carte) lors d'un événement actif
+- [ ] Messages système apparaissent dans l'inbox avec catégorie `pve`
 
 ---
 

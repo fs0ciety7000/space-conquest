@@ -270,6 +270,61 @@ pub enum WsEvent {
         price_crystal: i64,
         price_deuterium: i64,
     },
+
+    // ── PVE Events ──────────────────────────────────────────────────────────
+
+    /// Annonce d'un événement (1h avant ou dès création)
+    #[serde(rename = "server_event_announced")]
+    ServerEventAnnounced {
+        event_id: String,
+        event_type: String,
+        name: String,
+        icon: String,
+        color: String,
+        zone: String,
+        starts_in_seconds: i64,
+        narrative: String,
+    },
+
+    /// Événement maintenant actif
+    #[serde(rename = "server_event_started")]
+    ServerEventStarted {
+        event_id: String,
+        event_type: String,
+        name: String,
+        icon: String,
+        color: String,
+        zone: String,
+        ends_at: String,
+        hp_max: i32,
+    },
+
+    /// Progression de l'événement (HP réduits)
+    #[serde(rename = "server_event_progress")]
+    ServerEventProgress {
+        event_id: String,
+        hp_current: i32,
+        hp_max: i32,
+        top_contributors: Vec<String>,
+        percent: f64,
+    },
+
+    /// Événement résolu (vaincu / expiré / annulé)
+    #[serde(rename = "server_event_resolved")]
+    ServerEventResolved {
+        event_id: String,
+        event_type: String,
+        outcome: String,   // "defeated" | "expired" | "cancelled" | "admin_resolved"
+        rewards_distributed: bool,
+        top_contributors: Vec<String>,
+    },
+
+    /// Avertissement pendant un événement actif
+    #[serde(rename = "server_event_warning")]
+    ServerEventWarning {
+        event_id: String,
+        message: String,
+    },
 }
 
 /// Messages reçus du client vers le serveur

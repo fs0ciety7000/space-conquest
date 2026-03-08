@@ -1,5 +1,19 @@
 # Changelog - Space Conquest
 
+## [8.6.0] - 2026-03-08 - Événements Serveur PVE
+
+### ⚔️ Nouvelles Fonctionnalités
+
+- **Événements collectifs** : des phénomènes cosmiques frappent la galaxie ! Invasions pirates ☠️, nuages radioactifs ☢️, pluies de météorites ☄️, tempêtes solaires 🌩️ et artefacts anciens 🏺.
+- **Participation collective** : tous les joueurs de la zone contribuent ensemble pour neutraliser l'événement et réduire ses PV collectifs.
+- **Récompenses proportionnelles** : les meilleurs contributeurs reçoivent des récompenses dans leur messagerie, proportionnelles à leur contribution.
+- **Effets en zone** : les événements actifs affectent la production de ressources et peuvent bloquer l'espionnage dans la zone concernée.
+- **Bandeau d'alerte** : une barre fixe en haut de l'écran annonce les événements entrants et actifs avec leur barre de PV en temps réel.
+- **Vue galaxie** : des overlays visuels distinctifs par type d'événement (teinte rouge invasion, brume verte radioactive, éclairs jaunes tempête solaire...) s'affichent sur la carte du système.
+- **Messages système** : les récompenses et annonces importantes arrivent directement dans la messagerie, distinguées visuellement des messages joueurs.
+
+---
+
 ## [8.5.0] - 2026-03-08 - Performance & Pagination
 
 ### ⚡ Optimisations

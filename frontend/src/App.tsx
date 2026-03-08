@@ -6,6 +6,8 @@ import Facilities from './components/Facilities';
 import Shipyard from './components/Shipyard';
 import EmpireBar from './components/EmpireBar';
 import AnnouncementBanner from './components/AnnouncementBanner';
+import ServerEventBanner from './components/ServerEventBanner';
+import { useServerEvents } from './hooks/useServerEvents';
 import CombatModal from './components/CombatModal';
 import Login from './components/Login';
 import FleetDispatcher from './components/FleetDispatcher';
@@ -129,6 +131,7 @@ function AppContent({
 
   const { planet, setPlanet, fetchPlanet, currentPlanetIdRef, switchPlanet } = usePlanet();
   const { status: wsStatus, isConnected: wsConnected } = useWebSocketContext();
+  const { events: serverEvents } = useServerEvents();
 
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
   const [showCombatModal, setShowCombatModal] = useState(false);
@@ -878,6 +881,13 @@ function AppContent({
               <>
                 {/* Announcement Banner */}
                 <AnnouncementBanner />
+
+                {/* PVE Server Events Banner */}
+                <ServerEventBanner
+                  events={serverEvents}
+                  userId={userId ?? undefined}
+                  planetId={planetId ?? undefined}
+                />
 
                 <div className="p-3 md:p-4 lg:p-8">
                   {/* BuildQueue en haut si actif */}

@@ -70,6 +70,16 @@ Voici la liste exacte des branchements API à réaliser pour rendre la mise à j
    - Hookés dans `buy_from_listing_handler` (main.rs) et `buy_planet_handler` / `sell_to_npc_handler` (planet_market.rs)
    - `useWebSocket.ts` : `attack_incoming` / `spy_alert` / `sabotage_detected` / `sabotage_applied` → dispatche CustomEvent au lieu d'un toast direct ; ajout de `market_sale` et `planet_sold`
    - `useGameNotifications.ts` : handlers mis à jour avec les bons types de détail, descriptions améliorées
+
+8. ✅ Système PVE Événements Serveur — **FAIT** (session 2026-03-08)
+   - Migration `m20260309_000002` : 4 tables PVE + alters table `message` (sender_id nullable, is_system, message_category)
+   - `backend/src/server_events.rs` + `backend/src/handlers/server_events.rs` : système complet
+   - `src/hooks/useServerEvents.ts` : hook fetch + écoute WS
+   - `src/components/ServerEventBanner.tsx` + `ServerEventModal.tsx` : UI complète
+   - `src/components/GalaxyView.tsx` : overlays visuels par type d'événement
+   - `src/components/AdminPanel.tsx` : onglet "Événements PVE"
+   - `src/index.css` : 5 animations PVE overlay
+   - 5 WsEvents : `server_event_announced/started/progress/resolved/warning`
    
 ## Dépendances et Configuration
 Si non installées, les modales et graphs dépendent de :

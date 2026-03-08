@@ -41,7 +41,7 @@ use sea_orm::sea_query::extension::postgres::PgExpr;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin, admin_content,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, black_market, economy_log, notifications, analytics, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, black_market, economy_log, notifications, analytics, server_events, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -457,9 +457,24 @@ async fn main() {
         .merge(handlers::shipyard::router(state.clone()))
         .merge(handlers::fleet::router(state.clone()))
         .merge(handlers::planets::router(state.clone()))
+        .merge(handlers::server_events::router(state.clone()))
 
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .with_state(state.clone());
+
+    // PVE Events tick (toutes les 30s — transitions statut + broadcasts)
+    let state_pve = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            if let Err(e) = server_events::tick_events(&state_pve).await {
+                eprintln!("❌ PVE tick error: {:?}", e);
+            }
+        }
+    });
+    println!("⚔️  PVE Events tick démarré (intervalle: 30s)");
+
 
     // Route WebSocket séparée avec WsState
     let ws_app = Router::new()

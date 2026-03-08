@@ -90,3 +90,8 @@ pub mod notification;
 
 // Debris fields (Expansion 5.0)
 pub mod debris_field;
+// PVE Events system
+pub mod server_event_type;
+pub mod server_event;
+pub mod server_event_participation;
+pub mod server_event_action;

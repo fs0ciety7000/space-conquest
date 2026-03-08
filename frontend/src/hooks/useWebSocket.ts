@@ -374,6 +374,70 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
           break;
         }
 
+        // ── PVE Server Events ──────────────────────────────────────────────
+        case 'server_event_announced': {
+          const d = data.payload as {
+            event_id: string; event_type: string; name: string;
+            icon: string; color: string; zone: string;
+            starts_in_seconds: number; narrative: string;
+          };
+          window.dispatchEvent(new CustomEvent('server-event-announced', { detail: d }));
+          toast.info(`${d.icon} Événement à venir : ${d.name}`, {
+            description: `Zone : ${d.zone} — dans ${Math.round(d.starts_in_seconds / 60)}m`,
+            duration: 8000,
+          });
+          break;
+        }
+
+        case 'server_event_started': {
+          const d = data.payload as {
+            event_id: string; event_type: string; name: string;
+            icon: string; color: string; zone: string;
+            ends_at: string; hp_max: number;
+          };
+          window.dispatchEvent(new CustomEvent('server-event-started', { detail: d }));
+          toast.warning(`${d.icon} ${d.name} — Événement EN COURS !`, {
+            description: `Zone : ${d.zone}`,
+            duration: 10000,
+          });
+          break;
+        }
+
+        case 'server_event_progress': {
+          const d = data.payload as {
+            event_id: string; hp_current: number; hp_max: number;
+            top_contributors: string[]; percent: number;
+          };
+          window.dispatchEvent(new CustomEvent('server-event-progress', { detail: d }));
+          break;
+        }
+
+        case 'server_event_resolved': {
+          const d = data.payload as {
+            event_id: string; event_type: string; outcome: string;
+            rewards_distributed: boolean; top_contributors: string[];
+          };
+          window.dispatchEvent(new CustomEvent('server-event-resolved', { detail: d }));
+          if (d.outcome === 'victory') {
+            toast.success('🏆 Événement résolu ! Récompenses distribuées.', {
+              description: `Top : ${d.top_contributors.slice(0, 3).join(', ')}`,
+              duration: 8000,
+            });
+          } else if (d.outcome === 'cancelled') {
+            toast.info('Événement annulé par l\'administration.');
+          } else {
+            toast.error('💀 L\'événement n\'a pas pu être neutralisé.', { duration: 6000 });
+          }
+          break;
+        }
+
+        case 'server_event_warning': {
+          const d = data.payload as { event_id: string; message: string };
+          window.dispatchEvent(new CustomEvent('server-event-warning', { detail: d }));
+          toast.warning(`⚠️ ${d.message}`, { duration: 5000 });
+          break;
+        }
+
         case 'connected':
           // console.log('✅ WebSocket connecté à la planète:', data.payload?.planet_id);
           break;

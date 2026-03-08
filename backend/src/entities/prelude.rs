@@ -85,3 +85,8 @@ pub use super :: notification :: Entity as Notification ;
 
 // Debris fields (Expansion 5.0)
 pub use super :: debris_field :: Entity as DebrisField ;
+// PVE Events system
+pub use super :: server_event_type :: Entity as ServerEventType ;
+pub use super :: server_event :: Entity as ServerEvent ;
+pub use super :: server_event_participation :: Entity as ServerEventParticipation ;
+pub use super :: server_event_action :: Entity as ServerEventAction ;

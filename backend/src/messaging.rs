@@ -34,12 +34,14 @@ pub struct ConversationDisplay {
 #[derive(Serialize)]
 pub struct ThreadMessage {
     id: Uuid,
-    sender_id: Uuid,
+    sender_id: Option<Uuid>,
     sender_name: String,
     content: String,
     is_read: bool,
     created_at: chrono::NaiveDateTime,
     is_mine: bool,
+    is_system: bool,
+    message_category: String,
 }
 
 #[derive(Deserialize)]
@@ -159,7 +161,7 @@ pub async fn get_thread_messages_handler(
         .await
         .unwrap_or_default();
 
-    let sender_ids: Vec<Uuid> = messages.iter().map(|m| m.sender_id).collect();
+    let sender_ids: Vec<Uuid> = messages.iter().filter_map(|m| m.sender_id).collect();
     let users = User::find()
         .filter(user::Column::Id.is_in(sender_ids))
         .all(&state.db)
@@ -172,11 +174,13 @@ pub async fn get_thread_messages_handler(
         ThreadMessage {
             id: m.id,
             sender_id: m.sender_id,
-            sender_name: user_map.get(&m.sender_id).cloned().unwrap_or("Inconnu".into()),
+            sender_name: m.sender_display_name.clone().unwrap_or_else(|| m.sender_id.and_then(|id| user_map.get(&id)).cloned().unwrap_or("Inconnu".into())),
             content: m.content,
             is_read: m.is_read,
             created_at: m.created_at,
-            is_mine: m.sender_id == user_id,
+            is_mine: m.sender_id == Some(user_id),
+            is_system: m.is_system,
+            message_category: m.message_category.clone(),
         }
     }).collect();
 
@@ -255,12 +259,15 @@ pub async fn send_message_v2_handler(
     let new_message = message::ActiveModel {
         id: Set(Uuid::new_v4()),
         conversation_id: Set(Some(conv_id)),
-        sender_id: Set(sender_id),
+        sender_id: Set(Some(sender_id)),
         receiver_id: Set(recipient_id),
         subject: Set(payload.subject.unwrap_or_default()),
         content: Set(payload.content.clone()),
         created_at: Set(Utc::now().naive_utc()),
         is_read: Set(false),
+        is_system: Set(false),
+        sender_display_name: Set(None),
+        message_category: Set("player".to_string()),
     };
 
     new_message.insert(&state.db).await.unwrap();
@@ -552,12 +559,15 @@ pub async fn send_system_message(
     let new_message = message::ActiveModel {
         id: Set(Uuid::new_v4()),
         conversation_id: Set(Some(conv_id)),
-        sender_id: Set(sender_id),
+        sender_id: Set(Some(sender_id)),
         receiver_id: Set(receiver_id),
         subject: Set(subject.to_string()),
         content: Set(content.to_string()),
         created_at: Set(now),
         is_read: Set(false),
+        is_system: Set(false),
+        sender_display_name: Set(None),
+        message_category: Set("player".to_string()),
     };
     new_message.insert(db).await?;
     Ok(())

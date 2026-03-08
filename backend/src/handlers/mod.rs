@@ -13,3 +13,4 @@ pub mod profile;
 pub mod shipyard;
 pub mod fleet;
 pub mod planets;
+pub mod server_events;

@@ -27,6 +27,7 @@ pub mod black_market;
 pub mod economy_log;
 pub mod notifications;
 pub mod analytics;
+pub mod server_events;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::ServerConfig, server_config};
