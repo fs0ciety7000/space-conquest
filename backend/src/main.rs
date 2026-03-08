@@ -229,6 +229,7 @@ async fn main() {
     // Cloner la DB pour les tâches en arrière-plan avant de la déplacer dans AppState
     let db_cleanup = db.clone();
     let db_tick = db.clone();
+    let ws_tick = ws_state.clone(); // Pour les WS events de complétion (building_complete, research_complete)
     let db_trade = db.clone();
     let db_black_market = db.clone();
     let db_extortions = db.clone();
@@ -566,6 +567,18 @@ async fn main() {
                         println!("✅ Tick: {} research, {} ships, {} defenses, {} buildings completed",
                             stats.research_completed, stats.ships_completed,
                             stats.defenses_completed, stats.buildings_completed);
+                    }
+                    // Émettre les WS events pour les constructions/recherches terminées
+                    for item in &stats.completed_constructions {
+                        match item.category {
+                            "building" => websocket::notify_construction_complete(
+                                &ws_tick, item.planet_id, &item.item_key, item.level_or_qty
+                            ),
+                            "research" => websocket::notify_research_complete(
+                                &ws_tick, item.planet_id, &item.item_key, item.level_or_qty
+                            ),
+                            _ => {}
+                        }
                     }
                 }
                 Err(e) => eprintln!("❌ Tick error: {:?}", e),

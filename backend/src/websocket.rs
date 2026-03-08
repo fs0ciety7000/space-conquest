@@ -135,6 +135,13 @@ pub enum WsEvent {
         quantity: i32,
     },
 
+    /// Recherche technologique terminée (Expansion 5.0)
+    #[serde(rename = "research_complete")]
+    ResearchComplete {
+        tech_key: String,
+        level: i32,
+    },
+
     /// Attaque entrante détectée
     #[serde(rename = "attack_incoming")]
     AttackIncoming {
@@ -616,6 +623,14 @@ pub fn notify_ship_complete(state: &WsState, planet_id: Uuid, ship_type: &str, q
     state.broadcast_to_planet(planet_id, WsEvent::ShipComplete {
         ship_type: ship_type.to_string(),
         quantity,
+    });
+}
+
+/// Notifie qu'une recherche technologique est terminée (Expansion 5.0)
+pub fn notify_research_complete(state: &WsState, planet_id: Uuid, tech_key: &str, level: i32) {
+    state.broadcast_to_planet(planet_id, WsEvent::ResearchComplete {
+        tech_key: tech_key.to_string(),
+        level,
     });
 }
 
