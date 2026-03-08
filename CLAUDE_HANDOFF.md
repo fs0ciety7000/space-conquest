@@ -117,7 +117,9 @@ Cette section documente les changements techniques récents et les TODOs restant
 - Entité `entities/debris_field.rs` + enregistrement dans prelude
 - **TODO (antigravity)** : endpoint GET /galaxy/:g/system/:s/debris + mission type "recycle" dans tick_system.rs
 - **TODO (antigravity)** : afficher débris 💫 dans GalaxyView.tsx + RadialMenu option recycleur
-- **TODO (antigravity)** : `handlers/planets.rs` et `handlers/fleet.rs` restent à créer pour finir le refactor de main.rs
+- ✅ `handlers/planets.rs` créé (session 2026-03-09) : get_planet, upgrade_mine, rename, cancel_construction, get_my_planets
+- ✅ `handlers/fleet.rs` créé (session 2026-03-09) : attack_v2, spy_v2, recycle, transport, expedition_v2
+- `main.rs` réduit à ~5773 lignes (était ~8200). Reste : auth, colonize, build_fleet legacy, ranking, etc.
 
 ### 1. ✅ Ranking — Optimisation Performance — **FAIT** (session 2026-03-08)
 - Migration `m20260308_000002_add_score_columns_to_user` : colonnes `total_score`, `economy_score`, `military_score` + index sur `user`
@@ -619,8 +621,8 @@ ALTER TABLE planet ADD COLUMN debris_crystal FLOAT NOT NULL DEFAULT 0;
 | 🔴 Critique | Refactoring handlers/ (galaxy, ranking, etc.) | `handlers/` | ✅ **FAIT** (session 2026-03-09) |
 | 🔴 Critique | DetailedCombatReport round-by-round | `combat.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | Affichage DetailedCombatReport dans CombatModal | `CombatModal.tsx` | ✅ **FAIT** (session 2026-03-09) |
-| 🟡 Importante | handlers/planets.rs (get_planet, upgrade, build) | `handlers/planets.rs` | 🟡 À créer |
-| 🟡 Importante | handlers/fleet.rs (attack, spy, expedition) | `handlers/fleet.rs` | 🟡 À créer |
+| 🟡 Importante | handlers/planets.rs (get_planet, upgrade, build) | `handlers/planets.rs` | ✅ **FAIT** (session 2026-03-09) |
+| 🟡 Importante | handlers/fleet.rs (attack, spy, expedition) | `handlers/fleet.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | WS Events complets (building/research complete) | `tick_system.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | Afficher débris dans GalaxyView 💫 | `GalaxyView.tsx` | 🟡 À faire (antigravity) |
 | 🟡 Importante | Endpoint GET /galaxy/:g/:s/debris | `handlers/galaxy.rs` | 🟡 À faire (antigravity) |
