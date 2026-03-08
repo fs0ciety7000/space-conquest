@@ -1159,99 +1159,264 @@ async fn expedition_v2_handler(
     }
 
     let config = state.config.read().unwrap().clone();
-    let combat_chance = config.get_config("expedition_combat_chance", 0.3);
     let base_duration = config.get_config("expedition_base_duration", 600.0);
     let speed_factor = config.speed_factor;
+    let calm_bonus = config.get_config("expedition_calm_sector_bonus", 1.2);
+    let recycler_mult = config.get_config("expedition_recycler_bonus_multiplier", 2.0);
 
-    let combat_triggered = rand::random::<f64>() < combat_chance;
+    // ─── Config par type de vaisseau (capacity, combat_power, vulnerability) ─
+    struct ShipExpedCfg { capacity: f64, combat_power: f64, vulnerability: f64 }
+    let ship_cfg: HashMap<&str, ShipExpedCfg> = [
+        ("light_hunter",  ShipExpedCfg { capacity: 1.0,  combat_power: 1.0,  vulnerability: 1.0 }),
+        ("cruiser",       ShipExpedCfg { capacity: 2.5,  combat_power: 3.0,  vulnerability: 0.5 }),
+        ("battleship",    ShipExpedCfg { capacity: 3.0,  combat_power: 5.0,  vulnerability: 0.3 }),
+        ("destroyer",     ShipExpedCfg { capacity: 2.0,  combat_power: 4.0,  vulnerability: 0.4 }),
+        ("death_star",    ShipExpedCfg { capacity: 8.0,  combat_power: 20.0, vulnerability: 0.1 }),
+        ("transporter",   ShipExpedCfg { capacity: 3.5,  combat_power: 0.0,  vulnerability: 1.5 }),
+        ("spy_probe",     ShipExpedCfg { capacity: 0.1,  combat_power: 0.0,  vulnerability: 2.5 }),
+        ("recycler",      ShipExpedCfg { capacity: 0.0,  combat_power: 0.0,  vulnerability: 0.8 }),
+        ("colony_ship",   ShipExpedCfg { capacity: 1.5,  combat_power: 0.0,  vulnerability: 0.7 }),
+    ].into_iter().collect();
 
-    let mut logs = Vec::new();
-    let mut ships_lost_total = 0;
-    let mut initial_fleet = payload.fleet.clone();
-    let mut remaining_fleet = payload.fleet.clone();
+    let fleet = &payload.fleet;
+    let total_ships: i32 = fleet.values().sum();
+    let recyclers = fleet.get("recycler").copied().unwrap_or(0);
+    let recycler_bonus = 1.0 + (recyclers as f64 * recycler_mult);
+    let speed_mult = speed_factor / 100.0;
 
-    let (final_metal, final_crystal, final_deuterium, winner) = if combat_triggered {
-        logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
+    let combat_power: f64 = fleet.iter()
+        .map(|(k, &v)| v as f64 * ship_cfg.get(k.as_str()).map(|c| c.combat_power).unwrap_or(1.0))
+        .sum();
 
-        match run_dynamic_expedition_combat(&state.db, id, payload.fleet.clone()).await {
-            Ok((combat_report, metal, crystal, deuterium)) => {
-                remaining_fleet = combat_report.remaining_ships.clone();
+    let total_capacity: f64 = fleet.iter()
+        .map(|(k, &v)| v as f64 * ship_cfg.get(k.as_str()).map(|c| c.capacity).unwrap_or(1.0))
+        .sum();
 
-                for (ship_key, &initial_count) in &payload.fleet {
-                    let remaining_count = combat_report.remaining_ships.get(ship_key).copied().unwrap_or(0);
-                    ships_lost_total += initial_count - remaining_count;
-                }
+    // Loot de base pondéré par capacité
+    let base_metal   = total_capacity * (100.0 + rand::random::<f64>() * 80.0) * speed_mult;
+    let base_crystal = total_capacity * (40.0  + rand::random::<f64>() * 30.0) * speed_mult;
+    let base_deut    = if rand::random::<f64>() < 0.5 {
+        total_capacity * (20.0 + rand::random::<f64>() * 20.0) * speed_mult
+    } else { 0.0 };
 
-                logs.extend(combat_report.log);
+    let ship_names: HashMap<&str, &str> = [
+        ("light_hunter","Chasseur Léger"), ("cruiser","Croiseur"),
+        ("battleship","Cuirassé"), ("destroyer","Destructeur"),
+        ("death_star","Étoile de la Mort"), ("transporter","Transporteur"),
+        ("spy_probe","Sonde"), ("recycler","Recycleur"), ("colony_ship","Vaisseau Colonisation"),
+    ].into_iter().collect();
 
-                if let Err(e) = update_planet_ships_after_combat(
-                    &state.db,
-                    id,
-                    &payload.fleet,
-                    &combat_report.remaining_ships,
-                ).await {
-                    eprintln!("Error updating ships after combat: {}", e);
-                }
-
-                let winner = if combat_report.winner == "player" {
-                    logs.push(format!("BUTIN : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium", metal, crystal, deuterium));
-                    "victory"
-                } else if combat_report.winner == "pirates" {
-                    "defeat"
-                } else {
-                    "draw"
-                };
-
-                (metal, crystal, deuterium, winner)
-            }
-            Err(e) => {
-                eprintln!("Combat error: {}", e);
-                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Combat simulation failed"}))).into_response();
-            }
+    // Répartit n pertes selon vulnérabilité par type
+    let split_losses_fleet = |n: i32| -> HashMap<String, i32> {
+        let total_vuln: f64 = fleet.iter()
+            .map(|(k, &v)| v as f64 * ship_cfg.get(k.as_str()).map(|c| c.vulnerability).unwrap_or(1.0))
+            .sum();
+        if total_vuln <= 0.0 || n == 0 { return HashMap::new(); }
+        let mut result: HashMap<String, i32> = HashMap::new();
+        let mut remaining = n;
+        let mut entries: Vec<_> = fleet.iter().filter(|(_, &v)| v > 0).collect();
+        entries.sort_by_key(|(k, _)| k.to_string());
+        for (i, (key, &count)) in entries.iter().enumerate() {
+            if remaining <= 0 { break; }
+            let vuln = ship_cfg.get(key.as_str()).map(|c| c.vulnerability).unwrap_or(1.0);
+            let share = if i == entries.len() - 1 {
+                remaining.min(count)
+            } else {
+                ((n as f64 * count as f64 * vuln / total_vuln).round() as i32).clamp(0, count.min(remaining))
+            };
+            if share > 0 { result.insert(key.to_string(), share); remaining -= share; }
         }
-    } else {
-        logs.push("SCAN : Secteur calme.".to_string());
-        let calm_bonus = config.get_config("expedition_calm_sector_bonus", 1.2);
-
-        let total_ship_value: i32 = payload.fleet.values().sum();
-        let metal = (total_ship_value as f64 * 100.0 * calm_bonus * (speed_factor / 100.0)).floor();
-        let crystal = (metal * 0.4).floor();
-        let deuterium = (metal * 0.2).floor();
-
-        logs.push(format!("DÉCOUVERTE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium", metal, crystal, deuterium));
-
-        (metal, crystal, deuterium, "calm")
+        result
     };
+
+    let push_loss_msg = |losses: &HashMap<String, i32>, prefix: &str, logs: &mut Vec<String>| {
+        let parts: Vec<String> = losses.iter()
+            .filter(|(_, &v)| v > 0)
+            .map(|(k, &v)| format!("{} {}", v, ship_names.get(k.as_str()).copied().unwrap_or(k.as_str())))
+            .collect();
+        if !parts.is_empty() { logs.push(format!("{} : {}", prefix, parts.join(", "))); }
+    };
+
+    // ─── TIRAGE OUTCOME PONDÉRÉ ──────────────────────────────────────────────
+    // EmptySpace=10% | FloatingResources=25% | PiratesWeak=20% |
+    // PiratesMedium=25% | PiratesStrong=15% | Discovery=5%
+    let outcome_roll: f64 = rand::random();
+    let mut logs: Vec<String> = Vec::new();
+    let mut lost_ships: HashMap<String, i32> = HashMap::new();
+    let mut syndicate_credits_earned: f64 = 0.0;
+    let winner: &str;
+
+    let (final_metal, final_crystal, final_deuterium) = if outcome_roll < 0.10 {
+        // ── ESPACE VIDE (10%) ──────────────────────────────────────────────
+        winner = "calm";
+        let m = base_metal * 0.25;
+        let c = base_crystal * 0.25;
+        logs.push("SCAN : Secteur complètement désert. Aucune activité dans ce quadrant.".to_string());
+        if m > 1.0 { logs.push(format!("DECOUVERTE : Micrométéorites récupérées. +{:.0} M, +{:.0} C.", m, c)); }
+        if total_ships > 1 && rand::random::<f64>() < 0.30 {
+            let lss = split_losses_fleet(1);
+            push_loss_msg(&lss, "PERTES", &mut logs);
+            lost_ships = lss;
+        }
+        logs.push("RESULTAT : Retour sans incident notable.".to_string());
+        (m, c, 0.0)
+
+    } else if outcome_roll < 0.35 {
+        // ── RESSOURCES FLOTTANTES (25%) ────────────────────────────────────
+        winner = "calm";
+        let mult = calm_bonus * recycler_bonus;
+        let m = base_metal * mult;
+        let c = base_crystal * mult;
+        let d = base_deut * mult;
+        logs.push("SCAN : Épave ancienne détectée. Récupération en cours.".to_string());
+        if d > 0.0 { logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium.", m, c, d)); }
+        else { logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", m, c)); }
+        let total_losses = (total_ships as f64 * (rand::random::<f64>() * 0.02)).floor() as i32;
+        if total_losses > 0 {
+            let lss = split_losses_fleet(total_losses);
+            push_loss_msg(&lss, "PERTES MINIMES", &mut logs);
+            lost_ships = lss;
+        }
+        logs.push("RESULTAT : Mission accomplie.".to_string());
+        (m, c, d)
+
+    } else if outcome_roll < 0.55 {
+        // ── PIRATES FAIBLES (20%) ──────────────────────────────────────────
+        logs.push("⚠️ RADAR : Pirates amateurs détectés. La flotte engage le combat.".to_string());
+        let pirate_str = (combat_power * (0.15 + rand::random::<f64>() * 0.30)) as i32;
+        if combat_power as i32 > pirate_str || combat_power >= 3.0 {
+            winner = "victory";
+            let n = ((total_ships as f64 * (0.03 + rand::random::<f64>() * 0.07)).ceil() as i32)
+                .max(0).min(total_ships);
+            let lss = split_losses_fleet(n);
+            let m = base_metal * 0.7 * recycler_bonus;
+            let c = base_crystal * 0.7 * recycler_bonus;
+            let d = base_deut * 0.7 * recycler_bonus;
+            logs.push(format!("RESULTAT : Victoire ! Pirates dispersés (force estimée : {}).", pirate_str));
+            push_loss_msg(&lss, "PERTES", &mut logs);
+            if d > 0.0 { logs.push(format!("PILLAGE : +{:.0} M, +{:.0} C, +{:.0} D.", m, c, d)); }
+            else { logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal.", m, c)); }
+            lost_ships = lss;
+            (m, c, d)
+        } else {
+            winner = "defeat";
+            let n = ((total_ships as f64 * (0.40 + rand::random::<f64>() * 0.30)).ceil() as i32).max(1).min(total_ships);
+            let lss = split_losses_fleet(n);
+            logs.push(format!("RESULTAT : Défaite. Retraite d'urgence. (pirates : {})", pirate_str));
+            push_loss_msg(&lss, "PERTES LOURDES", &mut logs);
+            lost_ships = lss;
+            (0.0, 0.0, 0.0)
+        }
+
+    } else if outcome_roll < 0.80 {
+        // ── PIRATES MOYENS (25%) ───────────────────────────────────────────
+        logs.push("⚠️ RADAR : Escadron pirate en approche. Combat inévitable.".to_string());
+        let pirate_str = (combat_power * (0.45 + rand::random::<f64>() * 0.45)) as i32;
+        if combat_power as i32 > pirate_str {
+            winner = "victory";
+            let n = ((total_ships as f64 * (0.08 + rand::random::<f64>() * 0.14)).ceil() as i32)
+                .max(0).min(total_ships);
+            let lss = split_losses_fleet(n);
+            let m = base_metal * recycler_bonus;
+            let c = base_crystal * recycler_bonus;
+            let d = base_deut * recycler_bonus;
+            logs.push(format!("RESULTAT : Victoire acharnée. Escadron neutralisé (force : {}).", pirate_str));
+            push_loss_msg(&lss, "PERTES", &mut logs);
+            if d > 0.0 { logs.push(format!("PILLAGE : +{:.0} M, +{:.0} C, +{:.0} D.", m, c, d)); }
+            else { logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal.", m, c)); }
+            lost_ships = lss;
+            (m, c, d)
+        } else {
+            winner = "defeat";
+            let n = ((total_ships as f64 * (0.35 + rand::random::<f64>() * 0.30)).ceil() as i32).max(1).min(total_ships);
+            let lss = split_losses_fleet(n);
+            logs.push(format!("RESULTAT : Défaite. Surpassés en nombre (pirates : {}).", pirate_str));
+            push_loss_msg(&lss, "PERTES LOURDES", &mut logs);
+            lost_ships = lss;
+            (0.0, 0.0, 0.0)
+        }
+
+    } else if outcome_roll < 0.95 {
+        // ── PIRATES FORTS (15%) ────────────────────────────────────────────
+        logs.push("⚠️ RADAR : ALERTE — Flotte pirate redoutable. Combat critique.".to_string());
+        let pirate_str = (combat_power * (0.85 + rand::random::<f64>() * 0.65)) as i32;
+        if combat_power as i32 > pirate_str {
+            winner = "victory";
+            let n = ((total_ships as f64 * (0.15 + rand::random::<f64>() * 0.25)).ceil() as i32)
+                .max(0).min(total_ships);
+            let lss = split_losses_fleet(n);
+            let m = base_metal * 1.4 * recycler_bonus;
+            let c = base_crystal * 1.4 * recycler_bonus;
+            let d = base_deut * 1.4 * recycler_bonus;
+            logs.push(format!("RESULTAT : Victoire héroïque ! Flotte ennemie détruite (force : {}).", pirate_str));
+            push_loss_msg(&lss, "PERTES", &mut logs);
+            if d > 0.0 { logs.push(format!("PILLAGE : +{:.0} M, +{:.0} C, +{:.0} D.", m, c, d)); }
+            else { logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal.", m, c)); }
+            lost_ships = lss;
+            (m, c, d)
+        } else {
+            winner = "defeat";
+            let n = ((total_ships as f64 * (0.50 + rand::random::<f64>() * 0.30)).ceil() as i32).max(1).min(total_ships);
+            let lss = split_losses_fleet(n);
+            logs.push(format!("RESULTAT : DESTRUCTION MUTUELLE. Pertes catastrophiques. (pirates : {})", pirate_str));
+            push_loss_msg(&lss, "PERTES CATASTROPHIQUES", &mut logs);
+            lost_ships = lss;
+            (0.0, 0.0, 0.0)
+        }
+
+    } else {
+        // ── DÉCOUVERTE (5%) ────────────────────────────────────────────────
+        winner = "calm";
+        let m = base_metal * 0.5 * recycler_bonus;
+        let c = base_crystal * 0.5 * recycler_bonus;
+        let d = base_deut * 0.3 * recycler_bonus;
+        syndicate_credits_earned = 3.0 + (rand::random::<f64>() * 5.0).round();
+        logs.push("SCAN : Signal d'origine inconnue capté. Artefacts extraterrestres détectés.".to_string());
+        if d > 0.0 { logs.push(format!("DECOUVERTE : +{:.0} M, +{:.0} C, +{:.0} D.", m, c, d)); }
+        else { logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", m, c)); }
+        logs.push(format!("DÉCOUVERTE : +{:.1} Crédit(s) Syndicat récupérés dans l'artefact.", syndicate_credits_earned));
+        logs.push("RESULTAT : Données scientifiques transmises au Syndicat.".to_string());
+        (m, c, d)
+    };
+
+    // Déduire les vaisseaux perdus
+    for (ship_key, &count) in &lost_ships {
+        if count > 0 {
+            let _ = tech_tree::deduct_ships(&state.db, id, ship_key, count).await;
+        }
+    }
+
+    // Crédits syndicat (découverte)
+    if syndicate_credits_earned > 0.0 {
+        if let Ok(Some(owner)) = User::find_by_id(planet.owner_id).one(&state.db).await {
+            let new_total = owner.syndicate_credits + syndicate_credits_earned;
+            let mut user_active: user::ActiveModel = owner.into();
+            user_active.syndicate_credits = Set(new_total);
+            let _ = user_active.update(&state.db).await;
+        }
+    }
+
+    let total_ships_lost: i32 = lost_ships.values().sum();
 
     let expedition_report = json!({
         "winner": winner,
         "result": winner,
         "log": logs,
-        "logs": logs,
         "loot": {
             "metal": final_metal,
             "crystal": final_crystal,
             "deuterium": final_deuterium
         },
-        "loot_metal": final_metal,
-        "loot_crystal": final_crystal,
-        "loot_deuterium": final_deuterium,
-        "ships_lost": ships_lost_total,
-        "lost_missiles": 0,
-        "lost_plasmas": 0,
-        "mission_type": "expedition",
-        "attacker_initial": initial_fleet,
-        "attacker_remaining": remaining_fleet,
-        "attacker_losses": ships_lost_total,
-        "defender_initial": {},
-        "defender_remaining": {},
-        "defender_losses": 0
+        "attacker_losses": total_ships_lost,
+        "lost_ships": lost_ships,
+        "syndicate_credits_earned": syndicate_credits_earned,
+        "mission_type": "expedition"
     });
 
     let mut active: planet::ActiveModel = planet.clone().into();
     active.metal_amount = Set(planet.metal_amount + final_metal);
     active.crystal_amount = Set(planet.crystal_amount + final_crystal);
-    active.deuterium_amount = Set(planet.deuterium_amount + final_deuterium);
+    active.deuterium_amount = Set((planet.deuterium_amount - expedition_fuel_needed + final_deuterium).max(0.0));
 
     let duration = std::cmp::max(1, (base_duration / speed_factor) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
@@ -1260,6 +1425,8 @@ async fn expedition_v2_handler(
     if active.update(&state.db).await.is_err() {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update planet"}))).into_response();
     }
+
+    let updated_planet = Planet::find_by_id(id).one(&state.db).await.unwrap_or(None);
 
     let _ = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -1270,7 +1437,7 @@ async fn expedition_v2_handler(
         result: Set(winner.to_string()),
         loot_metal: Set(final_metal),
         loot_crystal: Set(final_crystal),
-        ships_lost: Set(ships_lost_total),
+        ships_lost: Set(total_ships_lost),
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(expedition_report.clone())),
         details: Set(None),
@@ -1279,37 +1446,11 @@ async fn expedition_v2_handler(
     missions::update_mission_progress(&state, planet.owner_id, "expedition", "any", 1).await;
     missions::update_achievement_progress(&state, planet.owner_id, "expeditions", 1).await;
 
-    // FLAGSHIP XP — expédition
     let flagship_xp = if winner == "victory" || winner == "calm" { 10 } else { 5 };
     award_flagship_xp(&state.db, planet.owner_id, flagship_xp).await;
 
-    // Syndicate Credits — random reward from expedition
-    let sc_chance = config.get_config("expedition_syndicate_credit_chance", 0.35);
-    let sc_min = config.get_config("expedition_syndicate_credit_min", 1.0);
-    let sc_max = config.get_config("expedition_syndicate_credit_max", 2.0);
-    let syndicate_credits_earned = if rand::random::<f64>() < sc_chance {
-        let credits = sc_min + (rand::random::<f64>() * (sc_max - sc_min)).round();
-        if let Ok(Some(owner)) = User::find_by_id(planet.owner_id).one(&state.db).await {
-            let new_total = owner.syndicate_credits + credits;
-            let mut user_active: user::ActiveModel = owner.into();
-            user_active.syndicate_credits = Set(new_total);
-            let _ = user_active.update(&state.db).await;
-        }
-        credits
-    } else {
-        0.0
-    };
-
     Json(json!({
-        "success": true,
-        "result": winner,
-        "logs": logs,
-        "loot": {
-            "metal": final_metal,
-            "crystal": final_crystal,
-            "deuterium": final_deuterium
-        },
-        "syndicate_credits_earned": syndicate_credits_earned,
-        "duration_seconds": duration
+        "planet": updated_planet,
+        "report": expedition_report
     })).into_response()
 }
