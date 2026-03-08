@@ -608,9 +608,9 @@ ALTER TABLE planet ADD COLUMN debris_crystal FLOAT NOT NULL DEFAULT 0;
 | Priorité | Item | Fichier | État |
 |----------|------|---------|------|
 | 🔴 Critique | Fix OnboardingTour localStorage | `OnboardingTour.tsx` | ✅ Déjà implémenté (vérifié) |
-| 🔴 Critique | Migrer `resolve_pvp()` → `resolve_pvp_combat()` | `game_logic.rs`, `main.rs` | 🔴 Reste à faire |
+| 🔴 Critique | Migrer `resolve_pvp()` → `resolve_pvp_combat()` | `game_logic.rs`, `main.rs` | ✅ **FAIT** (déjà implémenté) |
 | 🟡 Importante | Champ de débris post-combat | `combat.rs`, migration BDD | ✅ **FAIT** (session 2026-03-09) |
-| 🟡 Importante | Consommation deutérium missions | `missions.rs`, `FleetDispatcher.tsx` | 🟡 Reste à faire |
+| 🟡 Importante | Consommation deutérium missions | `main.rs`, `FleetDispatcher.tsx` | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | Loot capping via cargo réel | `combat.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🟢 Nice | Expéditions — outcomes diversifiés | `combat.rs` | 🟢 Reste à faire |
 | 🟢 Nice | Storage cap sur production | `game_logic.rs` | ✅ **FAIT** (session 2026-03-09) |
@@ -618,9 +618,10 @@ ALTER TABLE planet ADD COLUMN debris_crystal FLOAT NOT NULL DEFAULT 0;
 | 🟢 Nice | Production passive minimale | `game_logic.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🔴 Critique | Refactoring handlers/ (galaxy, ranking, etc.) | `handlers/` | ✅ **FAIT** (session 2026-03-09) |
 | 🔴 Critique | DetailedCombatReport round-by-round | `combat.rs` | ✅ **FAIT** (session 2026-03-09) |
+| 🟡 Importante | Affichage DetailedCombatReport dans CombatModal | `CombatModal.tsx` | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | handlers/planets.rs (get_planet, upgrade, build) | `handlers/planets.rs` | 🟡 À créer |
 | 🟡 Importante | handlers/fleet.rs (attack, spy, expedition) | `handlers/fleet.rs` | 🟡 À créer |
-| 🟡 Importante | WS Events complets (building/research complete) | `tick_system.rs` | 🟡 Reste à faire |
+| 🟡 Importante | WS Events complets (building/research complete) | `tick_system.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | Afficher débris dans GalaxyView 💫 | `GalaxyView.tsx` | 🟡 À faire (antigravity) |
 | 🟡 Importante | Endpoint GET /galaxy/:g/:s/debris | `handlers/galaxy.rs` | 🟡 À faire (antigravity) |
 

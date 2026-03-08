@@ -42,6 +42,17 @@
 - `tick_system.rs` : `process_construction_queue_completion()` retourne `Vec<CompletedItem>` pour le caller
 - Frontend `useWebSocket.ts` : `WsResearchComplete`, `WsColonyFounded` + handlers + sons
 
+### ⛽ Consommation de Deutérium par les Flottes
+- `attack_v2`, `spy_v2`, `expedition_v2` : deutérium déduit avant lancement
+- Formule : `ceil(sum(ships × fuel_consumption) × dist / 1000)`, minimum 1
+- Retourne HTTP 400 si deutérium insuffisant (message indiquant requis vs disponible)
+- Expéditions utilisent distance fixe 5000 unités
+- `FleetDispatcher.tsx` : indicateur carburant requis/disponible (vert/rouge) + bouton désactivé si insuffisant
+
+### 🖥️ Affichage DetailedCombatReport dans CombatModal
+- `handlers/reports.rs` : `get_combat_report_detail_handler` fusionne `detailed_report` (legacy) + `details` (Expansion 5.0) dans une réponse unique
+- `CombatModal.tsx` : section "Analyse Tactique Détaillée" affichant rounds, bonus tech (×armes/bouclier/blindage par camp), champ de débris généré
+
 ---
 
 ## [4.0.0] - 2026-03-06 - Biomes, Tableau des Primes, Vaisseau Amiral & Recherche d'Amis
