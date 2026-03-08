@@ -109,8 +109,8 @@ function PlanetMarker({ slot, position, onClick, onColonizeClick }: {
               <>
                 <div className="text-white">{slot.planet_name}</div>
                 <div className="text-slate-400">{slot.owner_name}</div>
-                {slot.total_points > 0 && (
-                  <div className="text-yellow-400">{slot.total_points.toLocaleString()} pts</div>
+                {(slot.total_points ?? 0) > 0 && (
+                  <div className="text-yellow-400">{slot.total_points!.toLocaleString()} pts</div>
                 )}
               </>
             ) : (
