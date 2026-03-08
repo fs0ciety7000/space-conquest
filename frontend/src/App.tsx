@@ -389,12 +389,24 @@ function AppContent({
         prevPlanetRef.current = data;
       } else if (res.status === 401) {
         handleLogout();
+      } else if (res.status === 404) {
+        // Planet no longer exists (sold/conquered) — switch to another planet
+        const myPlanetsRes = await fetch(apiUrl(`/my-planets`), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (myPlanetsRes.ok) {
+          const planets = await myPlanetsRes.json();
+          if (Array.isArray(planets) && planets.length > 0) {
+            const homeworld = planets.find((p: { is_homeworld: boolean; id: string }) => p.is_homeworld) ?? planets[0];
+            setPlanetId(homeworld.id);
+            localStorage.setItem('planet_id', homeworld.id);
+          }
+        }
       }
-    } catch (e) { 
+    } catch (e) {
         console.error(e);
-        playSound('error');
     }
-  }, [planetId, token, playSound]);
+  }, [planetId, token, playSound, setPlanetId]);
 
   // Handle messages when we hear the event emitted by WebSocketContext
   useEffect(() => {

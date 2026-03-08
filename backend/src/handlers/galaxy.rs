@@ -24,8 +24,8 @@ use uuid::Uuid;
 
 use backend::{game_logic, tech_tree, AppState};
 use backend::entities::{
-    prelude::{Planet, User, FleetMission},
-    planet, fleet_mission,
+    prelude::{DebrisField, Planet, User, FleetMission},
+    debris_field, planet, fleet_mission,
 };
 
 use crate::models::{GalaxySlot, SystemSummary, ScanNearbyPayload, ColonizePayload};
@@ -465,9 +465,35 @@ pub async fn colonize_handler(
 // Router
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /galaxy/:galaxy/:system/debris
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub async fn get_system_debris_handler(
+    Path((galaxy, system)): Path<(i32, i32)>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let debris = DebrisField::find()
+        .filter(debris_field::Column::Galaxy.eq(galaxy))
+        .filter(debris_field::Column::System.eq(system))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    let result: Vec<serde_json::Value> = debris.iter().map(|d| json!({
+        "position": d.position,
+        "metal": d.metal,
+        "crystal": d.crystal,
+        "updated_at": d.updated_at,
+    })).collect();
+
+    axum::response::Json(json!({ "debris": result }))
+}
+
 pub fn router(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
+        .route("/galaxy/:galaxy/:system/debris", get(get_system_debris_handler))
         .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
         .route("/galaxy/scan/nearby", post(scan_nearby_planets_handler))
         .route("/colonize", post(colonize_handler))

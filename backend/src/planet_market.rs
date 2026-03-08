@@ -104,7 +104,7 @@ async fn compute_suggested_price(
     let ships_metal: i64 = db.query_one(Statement::from_string(
         DbBackend::Postgres,
         format!(
-            "SELECT COALESCE(SUM((st.cost_metal + st.cost_crystal + st.cost_deuterium) * ps.count::float), 0)::BIGINT AS val \
+            "SELECT COALESCE(SUM((st.base_cost_metal + st.base_cost_crystal + st.base_cost_deuterium) * ps.count::float), 0)::BIGINT AS val \
              FROM planet_ships ps \
              JOIN ship_types st ON st.id = ps.ship_type_id \
              WHERE ps.planet_id = '{}' AND ps.count > 0",
@@ -118,7 +118,7 @@ async fn compute_suggested_price(
     let defenses_metal: i64 = db.query_one(Statement::from_string(
         DbBackend::Postgres,
         format!(
-            "SELECT COALESCE(SUM((dt.cost_metal + dt.cost_crystal + dt.cost_deuterium) * pd.count::float), 0)::BIGINT AS val \
+            "SELECT COALESCE(SUM((dt.base_cost_metal + dt.base_cost_crystal + dt.base_cost_deuterium) * pd.count::float), 0)::BIGINT AS val \
              FROM planet_defenses pd \
              JOIN defense_types dt ON dt.id = pd.defense_type_id \
              WHERE pd.planet_id = '{}' AND pd.count > 0",
@@ -590,34 +590,19 @@ pub async fn buy_planet_handler(
         "UPDATE planet_listings SET is_active = false WHERE id = '{}'", listing_id
     )).await;
 
-    let system_id = Uuid::nil();
-    let now = Utc::now().naive_utc();
-
     // 6. Send in-game message to seller
-    let _ = db.execute_unprepared(&format!(
-        "INSERT INTO message (id, sender_id, recipient_id, subject, content, sent_at, is_read) \
-         VALUES ('{}', '{}', '{}', 'Planète vendue — {}', \
-         'Votre colonie **{}** a été achetée par **{}** pour {} métal, {} cristal et {} deutérium. Ces ressources ont été créditées sur votre planète mère.', \
-         '{}', false)",
-        Uuid::new_v4(), system_id, seller_id,
-        planet_name,
-        planet_name, buyer_username,
-        price_metal, price_crystal, price_deuterium,
-        now
-    )).await;
+    let _ = crate::messaging::send_system_message(
+        db, Uuid::nil(), seller_id,
+        &format!("Planète vendue — {}", planet_name),
+        &format!("Votre colonie **{}** a été achetée par **{}** pour {} métal, {} cristal et {} deutérium. Ces ressources ont été créditées sur votre planète mère.", planet_name, buyer_username, price_metal, price_crystal, price_deuterium),
+    ).await;
 
     // 7. Send in-game message to buyer
-    let _ = db.execute_unprepared(&format!(
-        "INSERT INTO message (id, sender_id, recipient_id, subject, content, sent_at, is_read) \
-         VALUES ('{}', '{}', '{}', 'Acquisition de planète — {}', \
-         'Vous avez acquis la colonie **{}** (vendue par **{}**) pour {} métal, {} cristal et {} deutérium. La planète est désormais sous votre contrôle.', \
-         '{}', false)",
-        Uuid::new_v4(), system_id, payload.buyer_id,
-        planet_name,
-        planet_name, seller_username,
-        price_metal, price_crystal, price_deuterium,
-        now
-    )).await;
+    let _ = crate::messaging::send_system_message(
+        db, Uuid::nil(), payload.buyer_id,
+        &format!("Acquisition de planète — {}", planet_name),
+        &format!("Vous avez acquis la colonie **{}** (vendue par **{}**) pour {} métal, {} cristal et {} deutérium. La planète est désormais sous votre contrôle.", planet_name, seller_username, price_metal, price_crystal, price_deuterium),
+    ).await;
 
     // Notify seller via WebSocket
     if let Some(ref ws) = state.ws {
@@ -712,19 +697,11 @@ pub async fn sell_to_npc_handler(
     let _ = db.execute_unprepared(&format!("DELETE FROM planet WHERE id = '{}'", planet_id)).await;
 
     // Send confirmation message to seller
-    let system_id = Uuid::nil();
-    let now = Utc::now().naive_utc();
-    let _ = db.execute_unprepared(&format!(
-        "INSERT INTO message (id, sender_id, recipient_id, subject, content, sent_at, is_read) \
-         VALUES ('{}', '{}', '{}', 'Planète vendue au PNJ — {}', \
-         'Votre colonie **{}** a été vendue à un acheteur PNJ pour {} métal, {} cristal et {} deutérium (40%% de la valeur estimée). Ces ressources ont été créditées sur votre planète mère. La colonie a été libérée dans la galaxie.', \
-         '{}', false)",
-        Uuid::new_v4(), system_id, seller_id,
-        planet_name,
-        planet_name,
-        npc_metal, npc_crystal, npc_deuterium,
-        now
-    )).await;
+    let _ = crate::messaging::send_system_message(
+        db, Uuid::nil(), seller_id,
+        &format!("Planète vendue au PNJ — {}", planet_name),
+        &format!("Votre colonie **{}** a été vendue à un acheteur PNJ pour {} métal, {} cristal et {} deutérium (40% de la valeur estimée). Ces ressources ont été créditées sur votre planète mère. La colonie a été libérée dans la galaxie.", planet_name, npc_metal, npc_crystal, npc_deuterium),
+    ).await;
 
     // Notify seller via WebSocket
     if let Some(ref ws) = state.ws {

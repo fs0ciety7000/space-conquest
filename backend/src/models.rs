@@ -137,7 +137,9 @@ pub struct SpyPayloadV2 {
 
 #[derive(Deserialize)]
 pub struct RecyclePayload {
-    pub target_planet_id: Uuid,
+    pub galaxy: i32,
+    pub system: i32,
+    pub position: i32,
     pub recyclers: i32,
 }
 
