@@ -173,8 +173,8 @@ async fn get_planet_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    use backend::entities::prelude::FleetMission;
-    use backend::entities::{fleet_mission, resource_slot as rs_mod};
+    use backend::entities::prelude::{DebrisField, FleetMission};
+    use backend::entities::{debris_field, fleet_mission, resource_slot as rs_mod};
     use crate::resolve_attack_mission;
 
     let p = Planet::find_by_id(id)
@@ -565,6 +565,50 @@ async fn get_planet_handler(
             }
 
             let _ = tech_tree::add_ships(&state.db, m.source_planet_id, "transporter", m.ships_count).await;
+            let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
+        } else if m.mission_type == "recycle" {
+            // Les recycleurs reviennent à la source avec les débris collectés
+            if let Some(fleet_data_str) = &m.fleet_data {
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(fleet_data_str) {
+                    let tg = data["galaxy"].as_i64().unwrap_or(1) as i32;
+                    let ts = data["system"].as_i64().unwrap_or(1) as i32;
+                    let tp = data["position"].as_i64().unwrap_or(1) as i32;
+
+                    if let Ok(Some(debris)) = DebrisField::find()
+                        .filter(debris_field::Column::Galaxy.eq(tg))
+                        .filter(debris_field::Column::System.eq(ts))
+                        .filter(debris_field::Column::Position.eq(tp))
+                        .one(&state.db)
+                        .await
+                    {
+                        let capacity = m.recyclers_sent as f64 * 20000.0;
+                        let mut remaining = capacity;
+
+                        let take_m = f64::min(debris.metal, remaining);
+                        remaining -= take_m;
+                        let take_c = f64::min(debris.crystal, remaining);
+
+                        let new_metal = debris.metal - take_m;
+                        let new_crystal = debris.crystal - take_c;
+
+                        if new_metal <= 0.0 && new_crystal <= 0.0 {
+                            let _ = DebrisField::delete_by_id(debris.id).exec(&state.db).await;
+                        } else {
+                            let mut da: debris_field::ActiveModel = debris.into();
+                            da.metal = Set(new_metal);
+                            da.crystal = Set(new_crystal);
+                            da.updated_at = Set(chrono::Utc::now().fixed_offset());
+                            let _ = da.update(&state.db).await;
+                        }
+
+                        // Créditer les ressources collectées à la planète source
+                        active.metal_amount = Set(active.metal_amount.clone().unwrap() + take_m);
+                        active.crystal_amount = Set(active.crystal_amount.clone().unwrap() + take_c);
+                    }
+                }
+            }
+            // Retourner les recycleurs
+            let _ = tech_tree::add_ships(&state.db, id, "recycler", m.recyclers_sent).await;
             let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
         } else if m.mission_type == "colonize" {
             if let Some(fleet_data_str) = &m.fleet_data {

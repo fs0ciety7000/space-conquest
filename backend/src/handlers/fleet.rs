@@ -25,11 +25,11 @@ use uuid::Uuid;
 use backend::{combat, game_logic, missions, protection, sabotage, tech_tree, websocket, AppState};
 use backend::entities::{
     prelude::{
-        AllianceMember, CombatLog, DefenseType, Flagship, FleetMission, Friendship,
+        AllianceMember, CombatLog, DebrisField, DefenseType, Flagship, FleetMission, Friendship,
         Planet, PlanetDefense, PlanetShip, PlanetTechnology, ShipType, Technology,
         TransportLog, User,
     },
-    alliance_member, combat_log, defense_type, flagship, fleet_mission, friendship,
+    alliance_member, combat_log, debris_field, defense_type, flagship, fleet_mission, friendship,
     planet, planet_defense, planet_ship, planet_technology, ship_type, technology,
     transport_log, user,
 };
@@ -569,57 +569,103 @@ async fn recycle_handler(
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
 
-    let mut att_planet = match Planet::find_by_id(current_id).one(&state.db).await.unwrap() {
-        Some(p) => p.into_active_model(),
+    let source_planet = match Planet::find_by_id(current_id).one(&state.db).await.unwrap_or(None) {
+        Some(p) => p,
         None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète inconnue"}))).into_response(),
     };
 
-    let target_res = Planet::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap();
-    let mut target_planet = match target_res {
-        Some(p) => p.into_active_model(),
-        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Cible inconnue"}))).into_response(),
-    };
-
+    if payload.recyclers <= 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de recycleurs invalide"}))).into_response();
+    }
     let current_recyclers = tech_tree::get_planet_ship_count(&state.db, current_id, "recycler").await.unwrap_or(0);
-    if payload.recyclers > current_recyclers || payload.recyclers <= 0 {
+    if payload.recyclers > current_recyclers {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Recycleurs insuffisants"}))).into_response();
     }
 
-    let capacity = (payload.recyclers as f64) * 20000.0;
-    let debris_m = target_planet.debris_metal.clone().unwrap();
-    let debris_c = target_planet.debris_crystal.clone().unwrap();
-    let total_debris = debris_m + debris_c;
+    // Vérifier qu'il y a des débris aux coordonnées cibles
+    let debris_opt = DebrisField::find()
+        .filter(debris_field::Column::Galaxy.eq(payload.galaxy))
+        .filter(debris_field::Column::System.eq(payload.system))
+        .filter(debris_field::Column::Position.eq(payload.position))
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
 
-    if total_debris <= 0.0 {
-        return (StatusCode::OK, Json(json!({ "status": "empty", "message": "Aucun débris à recycler." }))).into_response();
+    let debris = match debris_opt {
+        Some(d) if d.metal + d.crystal > 0.0 => d,
+        _ => return (StatusCode::OK, Json(json!({ "status": "empty", "message": "Aucun débris à recycler à cette position." }))).into_response(),
+    };
+
+    // Calculer distance et carburant
+    let dist = game_logic::calculate_distance(
+        (source_planet.galaxy, source_planet.system, source_planet.position),
+        (payload.galaxy, payload.system, payload.position),
+    );
+
+    let recycler_fuel = ShipType::find()
+        .filter(ship_type::Column::ShipKey.eq("recycler"))
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .map(|s| s.fuel_consumption as f64)
+        .unwrap_or(300.0);
+
+    let fuel_needed = (payload.recyclers as f64 * recycler_fuel * dist / 1000.0).ceil().max(1.0);
+    if source_planet.deuterium_amount < fuel_needed {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
+                fuel_needed as i64, source_planet.deuterium_amount as i64)
+        }))).into_response();
     }
 
-    let mut harvested_m = 0.0;
-    let mut harvested_c = 0.0;
-    let mut remaining_capacity = capacity;
-
-    if debris_m > 0.0 {
-        let take = f64::min(debris_m, remaining_capacity);
-        harvested_m = take;
-        remaining_capacity -= take;
-        target_planet.debris_metal = Set(debris_m - take);
+    // Déduire les recycleurs et le deutérium
+    if let Err(_) = tech_tree::deduct_ships(&state.db, current_id, "recycler", payload.recyclers).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Impossible de déduire les recycleurs"}))).into_response();
     }
-    if debris_c > 0.0 && remaining_capacity > 0.0 {
-        let take = f64::min(debris_c, remaining_capacity);
-        harvested_c = take;
-        target_planet.debris_crystal = Set(debris_c - take);
+    {
+        let mut src: planet::ActiveModel = source_planet.clone().into();
+        src.deuterium_amount = Set((source_planet.deuterium_amount - fuel_needed).max(0.0));
+        let _ = src.update(&state.db).await;
     }
 
-    att_planet.metal_amount = Set(att_planet.metal_amount.unwrap() + harvested_m);
-    att_planet.crystal_amount = Set(att_planet.crystal_amount.unwrap() + harvested_c);
+    // Temps de trajet aller-retour
+    let travel_time = {
+        let config = state.config.read().unwrap();
+        let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
+        game_logic::calculate_flight_time(dist, flight_speed)
+    };
+    let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time * 2);
 
-    let _ = att_planet.update(&state.db).await;
-    let _ = target_planet.update(&state.db).await;
+    let fleet_data = json!({
+        "galaxy": payload.galaxy,
+        "system": payload.system,
+        "position": payload.position,
+        "debris_metal": debris.metal,
+        "debris_crystal": debris.crystal,
+    });
+
+    let new_mission = fleet_mission::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        source_planet_id: Set(current_id),
+        target_planet_id: Set(current_id), // retour à la base
+        mission_type: Set("recycle".to_string()),
+        arrival_time: Set(arrival),
+        metal: Set(0.0),
+        crystal: Set(0.0),
+        deuterium: Set(0.0),
+        ships_count: Set(payload.recyclers),
+        fleet_data: Set(Some(fleet_data.to_string())),
+        recyclers_sent: Set(payload.recyclers),
+    };
+    let _ = new_mission.insert(&state.db).await;
 
     (StatusCode::OK, Json(json!({
-        "status": "success",
-        "message": format!("Recyclage terminé. +{:.0} Métal, +{:.0} Cristal", harvested_m, harvested_c),
-        "harvested": { "metal": harvested_m, "crystal": harvested_c }
+        "status": "sent",
+        "message": format!("{} recycleur(s) en route. Arrivée prévue : {}", payload.recyclers,
+            arrival.format("%Y-%m-%dT%H:%M:%SZ")),
+        "arrival_time": arrival.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        "recyclers": payload.recyclers,
     }))).into_response()
 }
 

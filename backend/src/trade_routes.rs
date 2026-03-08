@@ -737,8 +737,6 @@ async fn execute_trade_route(
 
     // Send logistique notification to route owner
     {
-        use sea_orm::ConnectionTrait;
-        let system_id = Uuid::nil();
         let piracy_note = if piracy_loss_ratio > 0.0 {
             format!("\n\n⚠️ Une flotte ennemie a intercepté **{:.0}%** du cargo en route !", piracy_loss_ratio * 100.0)
         } else {
@@ -755,14 +753,9 @@ async fn execute_trade_route(
             piracy_note
         );
         let subject = format!("Logistique — {}", route_name);
-        let _ = db.execute_unprepared(&format!(
-            "INSERT INTO message (id, sender_id, recipient_id, subject, content, sent_at, is_read) \
-             VALUES ('{}', '{}', '{}', '{}', '{}', '{}', false)",
-            Uuid::new_v4(), system_id, owner_id,
-            subject.replace('\'', "''"),
-            content.replace('\'', "''"),
-            now.format("%Y-%m-%d %H:%M:%S")
-        )).await;
+        let _ = crate::messaging::send_system_message(
+            db, Uuid::nil(), owner_id, &subject, &content,
+        ).await;
     }
 
     println!(
