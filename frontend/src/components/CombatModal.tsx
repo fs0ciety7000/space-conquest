@@ -649,6 +649,66 @@ export default function CombatModal({ report, onClose, onSabotage }: CombatModal
                 )}
               </div>
 
+              {/* Pertes détaillées par type (attacker_stats / defender_stats) */}
+              {(parsedReport.details.attacker_stats || parsedReport.details.defender_stats) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(['attacker_stats', 'defender_stats'] as const).map((key) => {
+                    const stats = parsedReport.details[key];
+                    if (!stats) return null;
+                    const isAtt = key === 'attacker_stats';
+                    const lost = { ...stats.fleet_lost, ...stats.defense_lost };
+                    const lostEntries = Object.entries(lost).filter(([, v]) => (v as number) > 0);
+                    return (
+                      <div key={key} className={`rounded-xl p-4 border ${isAtt ? 'bg-red-900/10 border-red-500/20' : 'bg-blue-900/10 border-blue-500/20'}`}>
+                        <div className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isAtt ? 'text-red-400' : 'text-blue-400'}`}>
+                          {isAtt ? 'Pertes Attaquant' : 'Pertes Défenseur'}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {lostEntries.length > 0 ? lostEntries.map(([k, v]) => (
+                            <div key={k} className="flex items-center justify-between text-[10px]">
+                              <span className="text-slate-400 truncate">{getShipDisplayName(k.replace(/^def_/, ''))}</span>
+                              <span className={`font-mono font-bold ml-2 shrink-0 ${isAtt ? 'text-red-300' : 'text-blue-300'}`}>-{(v as number).toLocaleString()}</span>
+                            </div>
+                          )) : (
+                            <span className="text-slate-600 text-[10px] col-span-2">Aucune perte</span>
+                          )}
+                        </div>
+                        {stats.shields_absorbed > 0 && (
+                          <div className="mt-3 pt-2 border-t border-white/5 text-[10px] text-slate-500">
+                            Boucliers absorbés : <span className="text-slate-300 font-mono">{Math.floor(stats.shields_absorbed).toLocaleString()}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Rounds — journal round-par-round */}
+              {parsedReport.details.rounds?.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[10px] font-bold uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                    <Swords size={12} className="text-violet-400" /> Déroulement du combat
+                  </div>
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto scrollbar-thin pr-1">
+                    {parsedReport.details.rounds.map((round: any) => (
+                      <div key={round.round} className="bg-slate-900/60 border border-white/5 rounded-lg px-3 py-2 flex gap-3">
+                        <div className="shrink-0 w-6 h-6 rounded-md bg-violet-500/20 flex items-center justify-center text-[10px] font-black text-violet-400 font-mono">
+                          {round.round}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-slate-300 leading-relaxed">{round.narrative}</p>
+                          <div className="flex gap-4 mt-1">
+                            <span className="text-[10px] text-red-400 font-mono">ATT: -{round.attacker_ships_lost_this_round} vso</span>
+                            <span className="text-[10px] text-blue-400 font-mono">DEF: -{round.defender_ships_lost_this_round} vso {round.defender_defenses_lost_this_round > 0 && `/ -${round.defender_defenses_lost_this_round} déf`}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Débris générés */}
               {parsedReport.details.debris && (parsedReport.details.debris.metal > 0 || parsedReport.details.debris.crystal > 0) && (
                 <div className="bg-slate-800/40 border border-slate-600/30 rounded-xl p-4">
