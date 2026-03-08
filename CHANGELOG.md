@@ -11,8 +11,11 @@
 - `handlers/reports.rs` — rapports de combat, logs transports
 - `handlers/profile.rs` — profil utilisateur, amis, présets de flotte (17 handlers)
 - `handlers/shipyard.rs` — tech tree, vaisseaux, bâtiments, défenses, construction
-- `backend/src/models.rs` — structs partagées entre modules (PlanetInfo, RankItem, GalaxySlot, UserResponse, etc.)
+- `handlers/fleet.rs` — attack_v2, spy_v2, recycle, transport, expedition_v2 + helpers combat expédition
+- `handlers/planets.rs` — get_planet, upgrade_mine, rename, cancel_construction, get_my_planets
+- `backend/src/models.rs` — structs partagées entre modules (PlanetInfo, RankItem, GalaxySlot, + 5 payloads flotte)
 - Fusion des routers dans `main.rs` via `.merge()` avant `.with_state()`
+- `main.rs` réduit de ~8200 à ~5773 lignes (-30%)
 
 #### Améliorations game_logic.rs
 - **Production passive** : mines niveau 0 produisent métal=20, cristal=10, deutérium=5 par heure (configurable)
