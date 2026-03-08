@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { apiUrl } from "@/config/api";
 import { toast } from "sonner";
 import {
-  Package, RefreshCw, Crosshair, Skull, Zap, Shield, Virus,
+  Package, RefreshCw, Crosshair, Skull, Zap, Shield, Bug,
   ChevronRight, X, MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ const EFFECT_ICONS: Record<string, React.ReactNode> = {
   resource_boost: <Zap size={20} className="text-amber-400" />,
   stealth: <Shield size={20} className="text-slate-300" />,
   coordinate_jam: <Crosshair size={20} className="text-cyan-400" />,
-  eco_virus: <Virus size={20} className="text-green-400" />,
+  eco_virus: <Bug size={20} className="text-green-400" />,
 };
 
 const EFFECT_LABELS: Record<string, string> = {

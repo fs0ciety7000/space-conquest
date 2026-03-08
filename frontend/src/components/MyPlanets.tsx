@@ -50,6 +50,7 @@ interface Planet {
   points?: number;
   economy_points?: number;
   military_points?: number;
+  fleet_capacity?: number;
 }
 
 interface MyPlanetsProps {

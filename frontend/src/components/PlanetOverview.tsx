@@ -12,6 +12,7 @@ import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 import { getTechLevel, getBuildingLevel, getShipCount, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
 import { formatDuration } from '@/lib/utils';
+import { usePlanet } from '@/contexts/PlanetContext';
 // --- Dictionnaire de noms ---
 const getBiomeStyle = (key: string): string => {
   const styles: Record<string, string> = {
@@ -120,6 +121,7 @@ interface ResourceSlot {
 }
 
 export default function PlanetOverview({ planet, speedFactor }: { planet: any, speedFactor: number }) {
+  const { fetchPlanet } = usePlanet();
   const [tick, setTick] = useState(0);
   const [slots, setSlots] = useState<ResourceSlot[]>([]);
   const [buildQueueStatus, setBuildQueueStatus] = useState<any>(null);
@@ -236,7 +238,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         toast.success("Opération annulée", {
           description: `Remboursement de ${Math.floor(total).toLocaleString()} ressources (${Math.round(data.ratio * 100)}%).`
         });
-        onUpdate();
+        fetchPlanet();
       } else {
         toast.error("Erreur lors de l'annulation");
       }
@@ -260,7 +262,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         toast.success("Construction annulée", {
           description: `Remboursement de ${Math.floor(total).toLocaleString()} ressources (${Math.round(data.refund_ratio * 100)}%).`
         });
-        onUpdate();
+        fetchPlanet();
       } else {
         toast.error("Erreur lors de l'annulation");
       }
@@ -282,7 +284,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         toast.success("Recherche annulée", {
           description: `Remboursement de ${Math.floor(total).toLocaleString()} ressources (${Math.round(data.refund_ratio * 100)}%).`
         });
-        onUpdate();
+        fetchPlanet();
       } else {
         toast.error("Erreur lors de l'annulation");
       }
@@ -306,7 +308,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         toast.success("Construction annulée", {
           description: `Remboursement de ${Math.floor(total).toLocaleString()} ressources (${Math.round(data.refund_ratio * 100)}%).`
         });
-        onUpdate();
+        fetchPlanet();
       } else {
         toast.error("Erreur lors de l'annulation");
       }
@@ -440,7 +442,6 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         toast.error(`⚠️ ALERTE ATTAQUE !`, {
           description: `${attack.attacker_name || 'Un ennemi'} attaque avec ${attack.ships_count} vaisseaux !`,
           duration: 10000,
-          important: true,
         });
         
         // Jouer un son d'alerte si disponible

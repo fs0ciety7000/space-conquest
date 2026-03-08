@@ -258,35 +258,37 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
     return Math.floor(baseProd * (1 + (techLevel * (config.energy_tech_bonus || 0.10))));
   };
 
-  const calculateProd = (type: string, level: number, base: number, growthFactor: number) => {
-      if (type === 'solar_plant') {
-          return calculateEnergyProd(level);
-      }
+  const getCurrentProd = (type: string, level: number) => {
+    if (type === 'solar_plant') return calculateEnergyProd(level);
+    if (type === 'metal_mine') return planet.metal_production || 0;
+    if (type === 'crystal_mine') return planet.crystal_production || 0;
+    if (type === 'deuterium_mine') return planet.deuterium_production || 0;
+    return 0;
+  };
 
-      // Calcul de base
-      let prod = base * level * Math.pow(growthFactor, level);
+  const calculateNextProdDiff = (type: string, level: number, base: number, growthFactor: number) => {
+      if (type === 'solar_plant') return calculateEnergyProd(level + 1) - calculateEnergyProd(level);
+
+      // Calcul théorique pour la différence
+      let current = base * level * Math.pow(growthFactor, level);
+      let next = base * (level + 1) * Math.pow(growthFactor, level + 1);
 
       // Bonus technologie énergie (configurable)
       const techLevel = getTechLevel(planet, 'energy_tech');
       const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.10));
-      prod *= techBonus;
 
-      // Utiliser le ratio énergétique du backend (cohérent avec EmpireBar et ProductionStats)
       const energyRatio = (planet.energy_ratio || 100) / 100;
-      prod *= energyRatio;
 
-      // Compter les slots actifs pour ce type de ressource
-      const resourceKey = type === 'metal' ? 'metal' : type === 'crystal' ? 'crystal' : type === 'deuterium' ? 'deuterium' : null;
+      let slotBonus = 1.0;
+      const resourceKey = type === 'metal_mine' ? 'metal' : type === 'crystal_mine' ? 'crystal' : type === 'deuterium_mine' ? 'deuterium' : null;
       if (resourceKey) {
         const activeSlots = extraSlots.filter(s => s.is_active && s.resource_type === resourceKey);
-        const slotBonus = 1.0 + (activeSlots.length * 0.5); // +50% par slot actif
-        prod *= slotBonus;
+        slotBonus = 1.0 + (activeSlots.length * 0.5);
       }
 
-      // Appliquer le speed factor ET le mining speed multiplier
-      prod *= speedFactor * (config.mining_speed_multiplier || 1.0);
+      const multiplier = techBonus * energyRatio * slotBonus * speedFactor * (config.mining_speed_multiplier || 1.0);
 
-      return Math.floor(prod);
+      return Math.floor((next - current) * multiplier);
   };
 
   const calculateEnergyCons = (type: string, level: number) => {
@@ -358,11 +360,11 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       {buildings.map((build) => {
         // Calculs (Design Riche)
-        const currentProd = calculateProd(build.id, build.lv, build.base, build.growth);
+        const currentProd = getCurrentProd(build.id, build.lv);
+        const diffProd = calculateNextProdDiff(build.id, build.lv, build.base, build.growth);
+        const nextProd = currentProd + diffProd;
         const currentEnergy = calculateEnergyCons(build.id, build.lv);
-        const nextProd = calculateProd(build.id, build.lv + 1, build.base, build.growth);
         const nextEnergy = calculateEnergyCons(build.id, build.lv + 1);
-        const diffProd = nextProd - currentProd;
         const diffEnergy = nextEnergy - currentEnergy;
 
         const cost = getNextCost(build.id, build.lv);

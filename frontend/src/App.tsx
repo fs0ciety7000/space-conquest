@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getShipCount } from './utils/techTreeCompat';
 import ResourceDisplay from './components/ResourceDisplay';
@@ -6,43 +6,49 @@ import Facilities from './components/Facilities';
 import Shipyard from './components/Shipyard';
 import EmpireBar from './components/EmpireBar';
 import AnnouncementBanner from './components/AnnouncementBanner';
-import TechTree from './components/TechTree';
-import ExpeditionZone from './components/ExpeditionZone';
-import ExpeditionZoneV2 from './components/ExpeditionZoneV2';
 import CombatModal from './components/CombatModal';
 import Login from './components/Login';
-import Leaderboard from './components/Leaderboard';
-import AttackModalV2 from './components/AttackModalV2';
-import ReportsTerminal from './components/ReportsTerminal';
+import FleetDispatcher from './components/FleetDispatcher';
 import Defenses from './components/Defenses';
 import PlanetOverview from './components/PlanetOverview';
-import GalaxyView from './components/GalaxyView';
-import Settings from './components/Settings';
-import MyProfile from './components/MyProfile';
-import FriendsView from './components/FriendsView';
-import FleetPresetsManager from './components/FleetPresetsManager';
-import BountyBoard from './components/BountyBoard';
-import FlagshipView from './components/FlagshipView';
-import MessagesView from './components/MessagesView';
-import AdminPanel from './components/AdminPanel';
-import Changelog from './components/Changelog';
-import TransportModal from './components/TransportModal';
-import SpyModal from './components/SpyModal';
-import MyPlanets from './components/MyPlanets';
-import Marketplace from './components/Marketplace';
-import ProductionStats from './components/ProductionStats';
-import AllianceView from './components/AllianceView';
-import MissionsView from './components/MissionsView';
-import Officers from './components/Officers';
-import TradeRoutesView from './components/TradeRoutesView';
-import BuildQueueManager from './components/BuildQueueManager';
-import UndergroundMarket from './components/UndergroundMarket';
+
+// Lazy loaded views
+const TechTree = lazy(() => import('./components/TechTree'));
+const ExpeditionZoneV2 = lazy(() => import('./components/ExpeditionZoneV2'));
+const Leaderboard = lazy(() => import('./components/Leaderboard'));
+const ReportsTerminal = lazy(() => import('./components/ReportsTerminal'));
+const GalaxyView = lazy(() => import('./components/GalaxyView'));
+const Settings = lazy(() => import('./components/Settings'));
+const UniversalProfile = lazy(() => import('./components/UniversalProfile'));
+const FriendsView = lazy(() => import('./components/FriendsView'));
+const FleetPresetsManager = lazy(() => import('./components/FleetPresetsManager'));
+const BountyBoard = lazy(() => import('./components/BountyBoard'));
+const FlagshipView = lazy(() => import('./components/FlagshipView'));
+const MessagesView = lazy(() => import('./components/MessagesView'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const Changelog = lazy(() => import('./components/Changelog'));
+const MyPlanets = lazy(() => import('./components/MyPlanets'));
+const Marketplace = lazy(() => import('./components/Marketplace'));
+const ProductionStats = lazy(() => import('./components/ProductionStats'));
+const AllianceView = lazy(() => import('./components/AllianceView'));
+const MissionsView = lazy(() => import('./components/MissionsView'));
+const Officers = lazy(() => import('./components/Officers'));
+const TradeRoutesView = lazy(() => import('./components/TradeRoutesView'));
+const BuildQueueManager = lazy(() => import('./components/BuildQueueManager'));
+const UndergroundMarket = lazy(() => import('./components/UndergroundMarket'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Alliances = lazy(() => import('./components/Alliances'));
+const Achievements = lazy(() => import('./components/Achievements'));
+import PirateExtortionModal from './components/PirateExtortionModal';
 import { SabotagesDashboard } from './components/SabotagesDashboard';
 import { SabotagesSufferedDashboard } from './components/SabotagesSufferedDashboard';
 import { CasusBelliList } from './components/CasusBelliList';
 import { Sidebar, type MenuItem } from './components/Sidebar';
+import SpyModal from './components/SpyModal';
 import MaintenancePage from './components/MaintenancePage';
 import { FloatingResourceGain, useResourceGainAnimation } from './components/FloatingResourceGain';
+import GalacticTicker from './components/GalacticTicker';
+import OnboardingTour from './components/OnboardingTour';
 import { useKeyboardShortcuts, useShortcutFeedback, ShortcutsHelpModal } from './hooks/useKeyboardShortcuts';
 import { useSoundEffects, AudioUnlockPrompt } from './hooks/useSoundEffects';
 import { useWebSocket, ConnectionStatus } from './hooks/useWebSocket';
@@ -51,11 +57,15 @@ import Tutorial, { useTutorial } from './components/Tutorial';
 import { SpaceBackground, SpaceLoader } from './components/ui/space-background';
 import { apiUrl } from '@/config/api';
 import { Toaster, toast } from "sonner";
+import WebSocketOverlay from './components/WebSocketOverlay';
 import {
-  LayoutDashboard, Pickaxe, Hammer,
+  LayoutDashboard, Pickaxe, Hammer, Loader2,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck, Layers,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap, Crosshair, Star, Skull
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap, Crosshair, Star, Skull, Award
 } from "lucide-react";
+import { PlanetProvider, usePlanet } from './contexts/PlanetContext';
+import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext';
+import { useGameNotifications } from './hooks/useGameNotifications';
 
 interface CombatReport {
   winner: string;
@@ -67,7 +77,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground' | 'dashboard' | 'alliances-network' | 'achievements';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -75,14 +85,39 @@ export default function App() {
   const [userId, setUserId] = useState<string | null>(localStorage.getItem('user_id'));
   const [username, setUsername] = useState<string | null>(localStorage.getItem('username'));
 
+  return (
+    <PlanetProvider initialPlanetId={planetId} token={token}>
+      <WebSocketProvider token={token}>
+         <AppContent 
+           token={token} setToken={setToken}
+           planetId={planetId} setPlanetId={setPlanetId}
+           userId={userId} setUserId={setUserId}
+           username={username} setUsername={setUsername}
+         />
+      </WebSocketProvider>
+    </PlanetProvider>
+  );
+}
+
+function AppContent({
+  token, setToken,
+  planetId, setPlanetId,
+  userId, setUserId,
+  username, setUsername
+}: {
+  token: string | null; setToken: (t: string | null) => void;
+  planetId: string | null; setPlanetId: (p: string | null) => void;
+  userId: string | null; setUserId: (u: string | null) => void;
+  username: string | null; setUsername: (u: string | null) => void;
+}) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [speedFactor, setSpeedFactor] = useState<number>(1);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   const [messageRecipient, setMessageRecipient] = useState<string | null>(null);
+  const [initialMessageTab, setInitialMessageTab] = useState<'inbox'|'galactic'|'archived'|'notifications'>('inbox');
 
-  // Maintenance status
   const [maintenanceStatus, setMaintenanceStatus] = useState<{
     enabled: boolean;
     title: string;
@@ -92,21 +127,23 @@ export default function App() {
     autoDisableAt?: string;
   } | null>(null);
 
-  const [planet, setPlanet] = useState<any>(null);
+  const { planet, setPlanet, fetchPlanet, currentPlanetIdRef, switchPlanet } = usePlanet();
+  const { status: wsStatus, isConnected: wsConnected } = useWebSocketContext();
+
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
   const [showCombatModal, setShowCombatModal] = useState(false);
-  const [targetPlanet, setTargetPlanet] = useState<{id: string, name: string} | null>(null);
-  const [transportTarget, setTransportTarget] = useState<{id: string, name: string, galaxy: number, system: number, position: number} | null>(null);
+  const [dispatchTarget, setDispatchTarget] = useState<{id: string, name: string, galaxy?: number, system?: number, position?: number} | null>(null);
+  const [dispatchMission, setDispatchMission] = useState<'attack' | 'spy' | 'transport'>('attack');
   const [spyReport, setSpyReport] = useState<any>(null);
   const [showSabotagesDashboard, setShowSabotagesDashboard] = useState(false);
   const [showSabotagesSufferedDashboard, setShowSabotagesSufferedDashboard] = useState(false);
   const [showCasusBelliList, setShowCasusBelliList] = useState(false);
   const prevPlanetRef = useRef<any>(null);
   const processingReportRef = useRef(false);
-  const currentPlanetIdRef = useRef<string | null>(planetId);
 
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const prevUnreadCountRef = useRef<number | null>(null);
+  const [syndicateCredits, setSyndicateCredits] = useState(0);
 
   // État audio
   const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -127,58 +164,14 @@ export default function App() {
   // Animations flottantes de ressources
   const { gains, handleAnimationEnd } = useResourceGainAnimation(planet);
 
+  // Notifications temps réel avancées (Expansion 3.0)
+  useGameNotifications();
+
   // Effets sonores
   const { playSound, startMusic } = useSoundEffects({
     enabled: soundEnabled,
     musicVolume,
     sfxVolume
-  });
-
-  // WebSocket pour les mises à jour en temps réel
-  const { 
-    status: wsStatus, 
-    isConnected: wsConnected,
-    resources: wsResources 
-  } = useWebSocket(planetId, {
-    enabled: !!token && !!planetId,
-    onResourcesUpdate: (resources) => {
-      // Ne mettre à jour que energy_ratio depuis le WebSocket.
-      // metal/crystal/deuterium sont extrapolés par useRealtimeResources —
-      // les mettre à jour ici causerait un yoyo : WS (valeur haute) puis
-      // fetchPlanet (valeur DB plus basse) déclencherait une fausse "déduction".
-      setPlanet((prev: any) => {
-        if (!prev || prev.id !== currentPlanetIdRef.current) return prev;
-        if (prev.energy_ratio === resources.energy_ratio) return prev;
-        return { ...prev, energy_ratio: resources.energy_ratio };
-      });
-    },
-    onConstructionComplete: (data) => {
-      playSound('build');
-      fetchPlanet(); // Refresh planet data immediately
-    },
-    onShipComplete: (data) => {
-      playSound('build');
-      fetchPlanet(); // Refresh planet data immediately
-    },
-    onAttackIncoming: (data) => {
-      playSound('alert');
-    },
-    onCombatResult: (data) => {
-      playSound(data.result === 'victory' ? 'success' : 'combat');
-    },
-    onMessageReceived: (data) => {
-      playSound('notification');
-      setUnreadMessagesCount(prev => prev + 1);
-    },
-    onTransportArrived: (data) => {
-      playSound('success');
-    },
-    onSpyAlert: (data) => {
-      playSound('error');
-    },
-    onPlanetStatus: (data) => {
-      playSound(data.status === 'conquered' ? 'success' : 'error');
-    },
   });
 
   // Fonctions définies AVANT les hooks qui les utilisent
@@ -241,13 +234,6 @@ export default function App() {
     setPlanet(null);
   };
 
-  const switchPlanet = (newId: string) => {
-    currentPlanetIdRef.current = newId;
-    setPlanetId(newId);
-    localStorage.setItem('planet_id', newId);
-    playSound('click');
-  };
-
   const handleOpenMessage = (username: string) => {
       setMessageRecipient(username);
       setActiveTab('messages');
@@ -290,7 +276,7 @@ export default function App() {
     }
   }, []);
 
-  const fetchPlanet = useCallback(async () => {
+  const checkMessageAndReports = useCallback(async () => {
     if (!planetId || !token) return;
     try {
       const res = await fetch(apiUrl(`/planets/${planetId}`), {
@@ -400,7 +386,6 @@ export default function App() {
 
         // Discard response if user already switched to a different planet
         if (data.id && data.id !== currentPlanetIdRef.current) return;
-        setPlanet(data);
         prevPlanetRef.current = data;
       } else if (res.status === 401) {
         handleLogout();
@@ -410,6 +395,32 @@ export default function App() {
         playSound('error');
     }
   }, [planetId, token, playSound]);
+
+  // Handle messages when we hear the event emitted by WebSocketContext
+  useEffect(() => {
+    const onMessage = () => {
+       setUnreadMessagesCount(prev => prev + 1);
+       checkMessageAndReports();
+    };
+    window.addEventListener('new-message-received', onMessage);
+
+    const handleOpenMessageTab = (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        if (detail) {
+            setInitialMessageTab(detail);
+            setActiveTab('messages');
+        }
+    };
+    window.addEventListener('open-message-tab', handleOpenMessageTab);
+
+    return () => {
+      // Assuming onFocus is defined elsewhere or not needed here.
+      // If onFocus is part of this useEffect, it should be added to the dependencies.
+      // For now, I'll only remove the listeners added in this block.
+      window.removeEventListener('new-message-received', onMessage);
+      window.removeEventListener('open-message-tab', handleOpenMessageTab);
+    };
+  }, [checkMessageAndReports]);
 
   const launchExpedition = async (hunters: number, cruisers: number, recyclers: number) => {
     if (!planetId || !token) return;
@@ -442,39 +453,22 @@ export default function App() {
     }
   };
 
-  const handlePrepareAttack = (id: string, name: string) => {
-    setTargetPlanet({id, name});
+  const handlePrepareAttack = (id: string, name?: string, galaxy?: number, system?: number, position?: number) => {
+    setDispatchTarget({id, name: name || "Cible", galaxy, system, position});
+    setDispatchMission('attack');
     playSound('click');
   };
 
-  const handlePrepareTransport = (id: string, name: string, galaxy: number, system: number, position: number) => {
-      setTransportTarget({id, name, galaxy, system, position});
+  const handlePrepareTransport = (id: string, name?: string, galaxy?: number, system?: number, position?: number) => {
+      setDispatchTarget({id, name: name || "Cible", galaxy, system, position});
+      setDispatchMission('transport');
       playSound('click');
   };
 
-  const handleSpy = async (targetId: string) => {
-    try {
-        const res = await fetch(apiUrl(`/spy?current_planet_id=${planetId}`), {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target_planet_id: targetId })
-        });
-        const data = await res.json();
-        if(res.ok) {
-          setSpyReport(data.report);
-          fetchPlanet();
-          playSound('success');
-          toast.success("📡 Sonde d'espionnage envoyée", {
-            description: "Les données ont été collectées avec succès"
-          });
-      } else {
-          toast.error(data.error || "Échec de l'espionnage");
-          playSound('error');
-      }
-    } catch(e) {
-        toast.error("Erreur réseau");
-        playSound('error');
-    }
+  const handlePrepareSpy = (id: string, name?: string, galaxy?: number, system?: number, position?: number) => {
+      setDispatchTarget({id, name: name || "Cible", galaxy, system, position});
+      setDispatchMission('spy');
+      playSound('click');
   };
 
   const handleSabotage = async (action: 'disable_mine' | 'steal_tech') => {
@@ -529,44 +523,8 @@ export default function App() {
   };
 
   const handleConfirmAttack = async (hunters: number, cruisers: number, transporters: number) => {
-    if (!planetId || !targetPlanet) return;
-
-    try {
-        const res = await fetch(apiUrl(`/attack?current_planet_id=${planetId}`), {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                target_planet_id: targetPlanet.id,
-                hunters: hunters,
-                cruisers: cruisers,
-                transporters: transporters
-            })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            toast.success("⚔️ ORDRE D'ATTAQUE CONFIRMÉ", {
-                description: `Votre flotte atteindra la cible vers ${new Date(data.arrival).toLocaleTimeString()}`,
-                icon: <Rocket className="text-red-500" />
-            });
-            playSound('attack');
-            window.dispatchEvent(new Event('attack-launched'));
-            setTargetPlanet(null);
-            fetchPlanet();
-        } else {
-            toast.error(data.error || "Le haut commandement a annulé l'opération");
-            playSound('error');
-            window.dispatchEvent(new Event('error-occurred'));
-        }
-    } catch (e) {
-        toast.error("Échec de la liaison avec la flotte");
-        playSound('error');
-        window.dispatchEvent(new Event('error-occurred'));
-    }
+      // Kept for backward compatibility if any other component uses it, otherwise unused.
+      console.warn("handleConfirmAttack is deprecated, use FleetDispatcher");
   };
 
   // Générer la file de construction
@@ -590,6 +548,25 @@ export default function App() {
     });
   }
 
+  // Fetch syndicate credits from user endpoint
+  useEffect(() => {
+    if (!userId || !token) return;
+    const fetchCredits = async () => {
+      try {
+        const res = await fetch(apiUrl(`/users/${userId}`), {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSyndicateCredits(data.syndicate_credits ?? 0);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchCredits();
+    const id = setInterval(fetchCredits, 30_000);
+    return () => clearInterval(id);
+  }, [userId, token]);
+
   // Check maintenance status on mount and periodically
   useEffect(() => {
     fetchMaintenanceStatus();
@@ -602,14 +579,13 @@ export default function App() {
     fetch('/config').then(res => res.json()).then(d => setSpeedFactor(d.speed_factor))
       .catch(console.error);
     if (token && planetId) {
-      fetchPlanet();
-      // Polling pour mises à jour en temps réel des ressources
-      // WebSocket = 5s polling (fallback), pas de WebSocket = 1s polling (temps réel)
+      checkMessageAndReports();
+      // Polling pour les stats annexes / reports
       const pollingInterval = wsConnected ? 5000 : 1000;
-      const interval = setInterval(fetchPlanet, pollingInterval);
+      const interval = setInterval(checkMessageAndReports, pollingInterval);
       return () => clearInterval(interval);
     }
-  }, [token, planetId, fetchPlanet, wsConnected]);
+  }, [token, planetId, checkMessageAndReports, wsConnected]);
 
   // Show maintenance page if maintenance is enabled
   if (maintenanceStatus?.enabled) {
@@ -647,6 +623,7 @@ export default function App() {
   const isAdmin = username === 'phantomhex';
 
   const MENU_ITEMS: MenuItem[] = [
+    { id: 'dashboard', label: 'Tableau de Bord', icon: Activity, category: 'COMMANDEMENT' },
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
     { id: 'galaxy', label: 'Galaxie', icon: Globe, category: 'COMMANDEMENT' },
     { id: 'myplanets', label: 'Mes Planètes', icon: Map, category: 'COMMANDEMENT' },
@@ -670,7 +647,9 @@ export default function App() {
     { id: 'casus-belli', label: 'Casus Belli', icon: Swords, category: 'ESPIONNAGE', onClick: () => setShowCasusBelliList(true) },
 
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
-    { id: 'alliance', label: 'Alliance', icon: Shield, category: 'DONNÉES' },
+    { id: 'alliance', label: 'Mon Alliance', icon: Shield, category: 'DONNÉES' },
+    { id: 'alliances-network', label: 'Réseau Alliances', icon: Globe, category: 'DONNÉES' },
+    { id: 'achievements', label: 'Succès', icon: Award, category: 'DONNÉES' },
     { id: 'missions', label: 'Missions', icon: Telescope, category: 'DONNÉES' },
     { id: 'officers', label: 'Officiers', icon: Users, category: 'DONNÉES' },
     { id: 'stats', label: 'Statistiques', icon: Activity, category: 'DONNÉES' },
@@ -697,35 +676,37 @@ export default function App() {
          starCount={60}
        />
 
+      {/* Tutorial First-Time Onboarding */}
+      <OnboardingTour />
+
       {/* Animations flottantes de ressources */}
       <FloatingResourceGain gains={gains} onAnimationEnd={handleAnimationEnd} />
 
       {/* Modals */}
       <div className="relative z-50">
         {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
-        {targetPlanet && planetId && (
-          <AttackModalV2
+        {dispatchTarget && planetId && (
+          <FleetDispatcher
             planetId={planetId}
-            targetPlanetId={targetPlanet.id}
-            targetName={targetPlanet.name}
-            onSuccess={() => {
-              setTargetPlanet(null);
-              fetchPlanet();
+            currentPlanet={planet}
+            targetPlanet={dispatchTarget}
+            initialMission={dispatchMission}
+            onClose={() => setDispatchTarget(null)}
+            onSpySuccess={(report) => {
+                setSpyReport(report);
+                setDispatchTarget(null);
+                fetchPlanet();
+                playSound('success');
             }}
-            onCancel={() => setTargetPlanet(null)}
+            onActionSuccess={() => {
+                setDispatchTarget(null);
+                fetchPlanet();
+                if (dispatchMission === 'attack') {
+                    playSound('attack');
+                    window.dispatchEvent(new Event('attack-launched'));
+                }
+            }}
           />
-        )}
-     
-        {transportTarget && (
-            <TransportModal 
-                currentPlanet={planet} 
-                targetPlanet={transportTarget} 
-                onClose={() => setTransportTarget(null)} 
-                onConfirm={() => {
-                    fetchPlanet(); 
-                    setTransportTarget(null);
-                }} 
-            />
         )}
      
         {spyReport && (
@@ -761,6 +742,17 @@ export default function App() {
         {showShortcutsHelp && (
           <ShortcutsHelpModal onClose={() => setShowShortcutsHelp(false)} />
         )}
+
+        {userId && (
+          <PirateExtortionModal
+            userId={userId}
+            syndicateCredits={syndicateCredits}
+            onResolved={() => {
+              setSyndicateCredits(c => c); // trigger credits refresh on next poll
+              fetchPlanet();
+            }}
+          />
+        )}
       </div>
 
       {/* Prompt audio unlock si bloqué */}
@@ -790,9 +782,9 @@ export default function App() {
             menuItems={MENU_ITEMS}
             activeTab={activeTab}
             unreadMessagesCount={unreadMessagesCount}
-            onTabChange={handleTabChange}
+            onTabChange={handleTabChange as any}
             onShowShortcuts={() => setShowShortcutsHelp(true)}
-            playSound={playSound}
+            playSound={playSound as any}
             isMobile={false}
           />
 
@@ -843,9 +835,9 @@ export default function App() {
                 menuItems={MENU_ITEMS}
                 activeTab={activeTab}
                 unreadMessagesCount={unreadMessagesCount}
-                onTabChange={handleTabChange}
+                onTabChange={handleTabChange as any}
                 onShowShortcuts={() => setShowShortcutsHelp(true)}
-                playSound={playSound}
+                playSound={playSound as any}
                 isMobile={true}
                 onClose={() => setSidebarOpen(false)}
               />
@@ -866,7 +858,9 @@ export default function App() {
             {/* TechTree full screen mode - render outside container */}
             {activeTab === 'tech' ? (
               <div className="h-full w-full">
-                <TechTree planet={planet} onUpdate={fetchPlanet} />
+                <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 size={32} className="animate-spin text-indigo-500" /></div>}>
+                  <TechTree planet={planet} onUpdate={fetchPlanet} />
+                </Suspense>
               </div>
             ) : (
               <>
@@ -890,48 +884,53 @@ export default function App() {
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
                       >
-                        {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
-                        {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handleSpy} onNavigateTransport={handlePrepareTransport} />}
-                        {activeTab === 'myplanets' && <MyPlanets currentPlanetId={planet.id} onSelectPlanet={(id) => { switchPlanet(id); setActiveTab('overview'); }} onNavigateTransport={handlePrepareTransport} />}
-                        {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} />}
-                        {activeTab === 'friends' && <FriendsView userId={userId!} onSendMessage={(u) => { setMessageRecipient(u); setActiveTab('messages'); }} />}
-                        {activeTab === 'fleet-presets' && <FleetPresetsManager userId={userId!} planetId={planetId!} />}
-                        {activeTab === 'bounties' && planet && <BountyBoard userId={userId!} planetId={planetId!} planet={planet} />}
-                        {activeTab === 'flagship' && planet && <FlagshipView userId={userId!} planetId={planetId!} planet={planet} />}
-                        {activeTab === 'profile' && <MyProfile userId={userId!} username={username!} />}
-                        {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handleSpy} onTransport={handlePrepareTransport} onSendMessage={handleOpenMessage} />}
-                        {activeTab === 'alliance' && <AllianceView userId={userId!} token={token!} onOpenMessage={handleOpenMessage} />}
-                        {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
-                        {activeTab === 'officers' && <Officers />}
-                        {activeTab === 'stats' && <ProductionStats planet={planet} speedFactor={speedFactor} />}
+                        <Suspense fallback={<div className="flex h-[60vh] items-center justify-center"><Loader2 size={40} className="animate-spin text-indigo-500/50" /></div>}>
+                          {activeTab === 'dashboard' && <Dashboard userId={userId!} />}
+                          {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
+                          {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handlePrepareSpy} onNavigateTransport={handlePrepareTransport}/>}
+                          {activeTab === 'myplanets' && <MyPlanets currentPlanetId={planet.id} onSelectPlanet={(id) => { switchPlanet(id); setActiveTab('overview'); }} onNavigateTransport={handlePrepareTransport} />}
+                          {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} initialTab={initialMessageTab} />}
+                          {activeTab === 'friends' && <FriendsView userId={userId!} onSendMessage={(u) => { setMessageRecipient(u); setActiveTab('messages'); }} />}
+                          {activeTab === 'fleet-presets' && <FleetPresetsManager userId={userId!} planetId={planetId!} />}
+                          {activeTab === 'bounties' && planet && <BountyBoard userId={userId!} planetId={planetId!} planet={planet} />}
+                          {activeTab === 'flagship' && planet && <FlagshipView userId={userId!} planetId={planetId!} planet={planet} />}
+                          {activeTab === 'profile' && <UniversalProfile userId={userId!} />}
+                          {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handlePrepareSpy} onTransport={handlePrepareTransport} onSendMessage={handleOpenMessage} />}
+                          {activeTab === 'alliance' && <AllianceView userId={userId!} token={token!} onOpenMessage={handleOpenMessage} />}
+                          {activeTab === 'alliances-network' && <Alliances userId={userId!} />}
+                          {activeTab === 'achievements' && <Achievements userId={userId!} />}
+                          {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
+                          {activeTab === 'officers' && <Officers />}
+                          {activeTab === 'stats' && <ProductionStats planet={planet} speedFactor={speedFactor} />}
 
-                        {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
-                        {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}
-                        {activeTab === 'market' && <Marketplace planet={planet} userId={userId!} onUpdate={fetchPlanet} />}
-                        {activeTab === 'trade-routes' && planet && <TradeRoutesView userId={userId!} planetId={planetId!} planet={planet} />}
-                        {activeTab === 'build-queue' && planet && <BuildQueueManager planetId={planetId!} planet={planet} />}
-                        {activeTab === 'underground' && planet && <UndergroundMarket planet={planet} userId={userId!} />}
+                          {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
+                          {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}
+                          {activeTab === 'market' && <Marketplace planet={planet} userId={userId!} onUpdate={fetchPlanet} />}
+                          {activeTab === 'trade-routes' && planet && <TradeRoutesView userId={userId!} planetId={planetId!} planet={planet} />}
+                          {activeTab === 'build-queue' && planet && <BuildQueueManager planetId={planetId!} planet={planet} />}
+                          {activeTab === 'underground' && planet && <UndergroundMarket planet={planet} userId={userId!} />}
 
-                        {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
-                        {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
-                        {activeTab === 'expedition' && <ExpeditionZoneV2 planet={planet} onAction={fetchPlanet} />}
+                          {activeTab === 'shipyard' && <Shipyard planet={planet} onUpdate={fetchPlanet} />}
+                          {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
+                          {activeTab === 'expedition' && <ExpeditionZoneV2 planet={planet} onAction={fetchPlanet} />}
 
-                        {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
-                        {activeTab === 'changelog' && <Changelog />}
-                        {activeTab === 'settings' && (
-                            <Settings
-                                planet={planet}
-                                onUpdate={fetchPlanet}
-                                onLogout={handleLogout}
-                                soundEnabled={soundEnabled}
-                                onToggleSound={handleToggleSound}
-                                onStartTutorial={handleStartTutorial}
-                                musicVolume={musicVolume}
-                                sfxVolume={sfxVolume}
-                                onVolumeChange={handleVolumeChange}
-                            />
-                        )}
-                        {activeTab === 'admin' && isAdmin && <AdminPanel />}
+                          {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
+                          {activeTab === 'changelog' && <Changelog />}
+                          {activeTab === 'settings' && (
+                              <Settings
+                                  planet={planet}
+                                  onUpdate={fetchPlanet}
+                                  onLogout={handleLogout}
+                                  soundEnabled={soundEnabled}
+                                  onToggleSound={handleToggleSound}
+                                  onStartTutorial={handleStartTutorial}
+                                  musicVolume={musicVolume}
+                                  sfxVolume={sfxVolume}
+                                  onVolumeChange={handleVolumeChange}
+                              />
+                          )}
+                          {activeTab === 'admin' && isAdmin && <AdminPanel />}
+                        </Suspense>
                       </motion.div>
                     </AnimatePresence>
                 </div>
@@ -946,6 +945,7 @@ export default function App() {
       {/* Tutorial interactif */}
       <Tutorial run={showTutorial} onComplete={completeTutorial} />
 
+      <WebSocketOverlay status={wsStatus} />
       <Toaster position="top-center" theme="dark" richColors closeButton />
     </div>
   );

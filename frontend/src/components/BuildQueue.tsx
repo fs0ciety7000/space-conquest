@@ -189,7 +189,7 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
           <span>Production active</span>
         </div>
         <div>
-          Temps total: {formatTime(items[items.length - 1]?.endTime || Date.now())}
+          Temps total: {formatTimeUntilMs(items[items.length - 1]?.endTime || Date.now())}
         </div>
       </div>
     </div>

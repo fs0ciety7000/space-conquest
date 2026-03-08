@@ -317,6 +317,7 @@ const nodeTypes = {
 export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps) {
   const [techTree, setTechTree] = useState<TechInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const researchQueue = planet.research_queue || [];
 
@@ -454,10 +455,15 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
       const canAfford = metal >= cost.metal && crystal >= cost.crystal && deuterium >= cost.deuterium;
       const allRequirementsMet = tech.requirements.every(r => r.met);
 
+      // Determine if this node is a missing requirement for the selected node
+      const selectedTech = selectedNodeId ? techTree.find(t => t.tech_key === selectedNodeId) : null;
+      const isMissingReqForSelected = selectedTech && !selectedTech.requirements.every(r => r.met) && selectedTech.requirements.some(r => r.required_tech_key === tech.tech_key && !r.met);
+
       nodes.push({
         id: tech.tech_key,
         type: 'techNode',
         position: getNodePosition(tech.tech_key, techTree, depths),
+        className: isMissingReqForSelected ? 'animate-pulse ring-4 ring-red-500 rounded-2xl shadow-[0_0_20px_rgba(239,68,68,0.6)]' : '',
         data: {
           ...tech,
           isResearching,
@@ -474,7 +480,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     });
 
     return nodes;
-  }, [techTree, researchQueue, metal, crystal, deuterium]);
+  }, [techTree, researchQueue, metal, crystal, deuterium, selectedNodeId]);
 
   // Créer les edges (dépendances) dynamiquement
   const initialEdges: Edge[] = useMemo(() => {
@@ -490,16 +496,21 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
         const edgeColor = req.met ? config.hexColor : '#dc2626'; // bright red for unmet
         const edgeOpacity = req.met ? 1.0 : 0.8;
 
+        // Highlight logic
+        const isHighlighted = selectedNodeId === tech.tech_key && !req.met;
+
         edges.push({
           id: `${req.required_tech_key}-${tech.tech_key}`,
           source: req.required_tech_key,
           target: tech.tech_key,
           type: ConnectionLineType.SmoothStep,
-          animated: req.met,
+          animated: req.met || isHighlighted,
+          className: req.met ? 'animate-flow-glow' : (isHighlighted ? 'animate-pulse' : ''),
           style: {
             stroke: edgeColor,
-            strokeWidth: req.met ? 4 : 4, // Same width for both, always very visible
-            opacity: edgeOpacity,
+            strokeWidth: isHighlighted ? 6 : 4,
+            opacity: isHighlighted ? 1.0 : edgeOpacity,
+            filter: req.met ? `drop-shadow(0 0 5px ${edgeColor})` : (isHighlighted ? `drop-shadow(0 0 12px #ef4444)` : 'none'),
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
@@ -528,7 +539,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     });
 
     return edges;
-  }, [techTree]);
+  }, [techTree, selectedNodeId]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -547,6 +558,10 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     );
   }
 
+  // TODO CLAUDE: Sur mobile, le TechTree en ReactFlow est difficilement utilisable (nodes trop grands pour l'écran).
+  // Une amélioration future serait de détecter window.innerWidth < 768 et afficher une vue liste/grille des techs
+  // au lieu du graphe ReactFlow interactif lorsque l'écran est trop petit.
+  // Voir: https://reactflow.dev/docs/api/react-flow-props/#fitview
   return (
     <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden relative">
       <ReactFlow
@@ -554,6 +569,8 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+        onPaneClick={() => setSelectedNodeId(null)}
         nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -570,18 +587,29 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
           className="bg-slate-900/90 border-purple-500/30 backdrop-blur-md rounded-lg"
           showInteractive={false}
         />
-        <MiniMap
-          className="bg-slate-900/90 border border-purple-500/30 rounded-lg backdrop-blur-md"
-          nodeColor={(node) => {
-            const config = getTechConfig(node.id);
-            // Red for locked nodes, color for unlocked
-            return node.data.allRequirementsMet ? config.hexColor : '#dc2626';
-          }}
-          maskColor="rgba(15, 23, 42, 0.9)"
-          style={{
-            backgroundColor: '#0f172a',
-          }}
-        />
+        {/* Mobile pinch-to-zoom hint — visible only on touch screens */}
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 sm:hidden pointer-events-none">
+          <div className="bg-slate-900/90 border border-purple-500/30 rounded-full px-4 py-1.5 text-[10px] text-purple-300 font-bold backdrop-blur-md whitespace-nowrap">
+            👆 Pince pour zoomer · Glisser pour naviguer
+          </div>
+        </div>
+
+        {/* MiniMap — hidden on mobile (too small to be useful) */}
+        {/* TODO CLAUDE: Sur très petits écrans, envisager de remplacer le MiniMap par un bouton "Centrer" */}
+        <div className="hidden sm:block">
+          <MiniMap
+            className="bg-slate-900/90 border border-purple-500/30 rounded-lg backdrop-blur-md"
+            nodeColor={(node) => {
+              const config = getTechConfig(node.id);
+              // Red for locked nodes, color for unlocked
+              return node.data.allRequirementsMet ? config.hexColor : '#dc2626';
+            }}
+            maskColor="rgba(15, 23, 42, 0.9)"
+            style={{
+              backgroundColor: '#0f172a',
+            }}
+          />
+        </div>
       </ReactFlow>
 
       {/* Legend */}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Zap, Plus, Trash2, Edit3, Check, X, Rocket, Save, ChevronDown, ChevronUp, Info
+  Zap, Plus, Trash2, Edit3, Check, X, Rocket, Save, ChevronDown, ChevronUp, Info, Copy, MousePointerClick
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,9 +29,10 @@ interface FleetPreset {
 interface FleetPresetsManagerProps {
   userId: string;
   planetId: string;
+  onSelectPreset?: (preset: FleetPreset) => void;
 }
 
-export default function FleetPresetsManager({ userId, planetId }: FleetPresetsManagerProps) {
+export default function FleetPresetsManager({ userId, planetId, onSelectPreset }: FleetPresetsManagerProps) {
   const [presets, setPresets] = useState<FleetPreset[]>([]);
   const [shipTypes, setShipTypes] = useState<ShipType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,6 +192,31 @@ export default function FleetPresetsManager({ userId, planetId }: FleetPresetsMa
     }
   };
 
+  const handleDuplicate = async (preset: FleetPreset) => {
+    if (presets.length >= 10) {
+      toast.error("Limite de 10 presets atteinte");
+      return;
+    }
+    const name = `${preset.name} (Copie)`.slice(0, 64);
+    try {
+      const res = await fetch(apiUrl(`/users/${userId}/fleet-presets`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, composition: preset.composition }),
+      });
+      if (res.ok) {
+        const newPreset = await res.json();
+        setPresets(prev => [...prev, newPreset]);
+        toast.success(`Preset dupliqué : "${newPreset.name}"`);
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Erreur de duplication");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    }
+  };
+
   const shipLabel = (key: string) =>
     shipTypes.find(s => s.ship_key === key)?.display_name || key;
 
@@ -203,23 +229,24 @@ export default function FleetPresetsManager({ userId, planetId }: FleetPresetsMa
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-            <Zap className="text-indigo-400" size={24} />
-            Presets de Flotte
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Configurez des compositions réutilisables pour vos attaques — chargement en 1 clic depuis le modal d'attaque.
-          </p>
+    // TODO CLAUDE: Audit mobile complet — sur très petits écrans (< 375px), la grille des vaisseaux
+    // peut déborder. Envisager un scroll horizontal ou un accordiéon par catégorie de vaisseau.
+    <div className="w-full max-w-3xl mx-auto px-2 sm:px-6 py-4 sm:py-6 space-y-6">
+        <div className="flex items-start sm:items-center justify-between gap-2 flex-col xs:flex-row sm:flex-row">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+              <Zap className="text-indigo-400" size={24} />
+              Presets de Flotte
+            </h1>
+            <p className="text-xs text-slate-500 mt-1 hidden sm:block">
+              Configurez des compositions réutilisables pour vos attaques — chargement en 1 clic depuis le modal d'attaque.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-600 shrink-0">
+            <Info size={12} />
+            {presets.length}/10 presets
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-600">
-          <Info size={12} />
-          {presets.length}/10 presets
-        </div>
-      </div>
 
       {/* Create new preset */}
       {!creating ? (
@@ -311,7 +338,10 @@ export default function FleetPresetsManager({ userId, planetId }: FleetPresetsMa
                     </button>
                   )}
 
-                  <div className="flex items-center gap-1 ml-2 shrink-0">
+                  {/* Action buttons — on small screens the button row wraps gracefully */}
+                  {/* TODO CLAUDE: Sur mobile, regrouper les boutons dans un menu contextuel (dropdown/sheet)
+                      pour éviter l'overflow sur les petits écrans */}
+                  <div className="flex items-center gap-1 ml-1 sm:ml-2 shrink-0 flex-wrap justify-end">
                     {isEditing ? (
                       <>
                         <button
@@ -331,6 +361,23 @@ export default function FleetPresetsManager({ userId, planetId }: FleetPresetsMa
                       </>
                     ) : (
                       <>
+                        {onSelectPreset && (
+                          <button
+                            onClick={() => onSelectPreset(preset)}
+                            className="p-1.5 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-950/40 rounded transition-colors"
+                            title="Sélectionner"
+                          >
+                            <MousePointerClick size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDuplicate(preset)}
+                          disabled={presets.length >= 10}
+                          className="p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-indigo-950/40 rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                          title="Dupliquer"
+                        >
+                          <Copy size={14} />
+                        </button>
                         <button
                           onClick={() => startEdit(preset)}
                           className="p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-indigo-950/40 rounded transition-colors"
@@ -401,45 +448,59 @@ function ShipCompositionEditor({
   }
 
   return (
-    <div className="space-y-2">
-      <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Vaisseaux</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {shipTypes.map(ship => {
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Composition Initiale</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {shipTypes.map((ship) => {
           const count = composition[ship.ship_key] || 0;
+          // Si on voulait limiter au max de la planète, on utiliserait ship.current_count
+          // Mais un preset peut vouloir + que ce qu'on a. Disons arbitrairement max slider à 100 000 pour la forme.
+          const maxSliderValue = Math.max(10000, ship.current_count || 1000); 
+
           return (
-            <div key={ship.ship_key} className="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-lg px-3 py-2 gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <Rocket size={12} className="text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-white truncate">{ship.display_name}</div>
-                  <div className="text-[10px] text-slate-500">
-                    ATK {ship.attack} · Cargo {ship.cargo_capacity}
-                  </div>
+             <div key={ship.ship_key} className="bg-slate-900/60 border border-slate-700/50 rounded-xl p-4 transition-all hover:border-indigo-500/30 hover:shadow-lg card-depth">
+                <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700/50 text-indigo-400 shrink-0 shadow-inner">
+                           <Rocket size={18} />
+                        </div>
+                        <div>
+                           <h3 className="font-bold text-white leading-tight">{ship.display_name}</h3>
+                           <p className="text-[10px] text-slate-500 font-mono tracking-wider">ATK: {ship.attack} | CARGO: {ship.cargo_capacity}</p>
+                        </div>
+                    </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => set(ship.ship_key, count - 1)}
-                  disabled={count === 0}
-                  className="p-0.5 text-slate-500 hover:text-red-400 disabled:opacity-30 transition-colors"
-                >
-                  <span className="text-lg leading-none">−</span>
-                </button>
-                <input
-                  type="number"
-                  min="0"
-                  value={count}
-                  onChange={e => set(ship.ship_key, parseInt(e.target.value) || 0)}
-                  className="w-14 text-center bg-slate-950 border border-slate-700 text-white text-xs font-mono rounded px-1 py-0.5"
-                />
-                <button
-                  onClick={() => set(ship.ship_key, count + 1)}
-                  className="p-0.5 text-slate-500 hover:text-green-400 transition-colors"
-                >
-                  <span className="text-lg leading-none">+</span>
-                </button>
-              </div>
-            </div>
+
+                <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                         <div className="flex-1">
+                             <input 
+                               type="range" 
+                               min="0" 
+                               max={maxSliderValue}
+                               value={count} 
+                               onChange={(e) => set(ship.ship_key, parseInt(e.target.value) || 0)}
+                               className="w-full appearance-none bg-slate-800 h-2 rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-indigo-500 [&::-webkit-slider-thumb]:rounded-full cursor-pointer hover:[&::-webkit-slider-thumb]:bg-indigo-400 transition-all"
+                             />
+                         </div>
+                         <div className="shrink-0 w-24">
+                              <Input 
+                                type="number" 
+                                min="0"
+                                value={count}
+                                onChange={(e) => set(ship.ship_key, parseInt(e.target.value) || 0)}
+                                className="h-8 text-right bg-slate-950 border-slate-700 font-mono text-indigo-300 font-bold focus-visible:ring-indigo-500"
+                              />
+                         </div>
+                    </div>
+                    {/* Optional: Max buttons context */}
+                    <div className="flex gap-2 justify-end">
+                        <button onClick={() => set(ship.ship_key, 0)} className="text-[9px] uppercase font-bold text-slate-500 hover:text-white transition-colors px-2 py-1 bg-slate-800 rounded">Min</button>
+                        <button onClick={() => set(ship.ship_key, count + 10)} className="text-[9px] uppercase font-bold text-slate-400 hover:text-indigo-300 transition-colors px-2 py-1 bg-slate-800 rounded">+10</button>
+                        <button onClick={() => set(ship.ship_key, count + 100)} className="text-[9px] uppercase font-bold text-slate-400 hover:text-indigo-300 transition-colors px-2 py-1 bg-slate-800 rounded">+100</button>
+                    </div>
+                </div>
+             </div>
           );
         })}
       </div>

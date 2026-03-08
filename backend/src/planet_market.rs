@@ -619,6 +619,19 @@ pub async fn buy_planet_handler(
         now
     )).await;
 
+    // Notify seller via WebSocket
+    if let Some(ref ws) = state.ws {
+        crate::websocket::notify_planet_sold(
+            ws,
+            seller_id,
+            &planet_name,
+            &buyer_username,
+            price_metal,
+            price_crystal,
+            price_deuterium,
+        ).await;
+    }
+
     Json(json!({
         "success": true,
         "planet_id": planet_id,
@@ -712,6 +725,19 @@ pub async fn sell_to_npc_handler(
         npc_metal, npc_crystal, npc_deuterium,
         now
     )).await;
+
+    // Notify seller via WebSocket
+    if let Some(ref ws) = state.ws {
+        crate::websocket::notify_planet_sold(
+            ws,
+            seller_id,
+            &planet_name,
+            "PNJ",
+            npc_metal,
+            npc_crystal,
+            npc_deuterium,
+        ).await;
+    }
 
     Json(json!({
         "success": true,

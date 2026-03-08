@@ -16,31 +16,37 @@ interface BuyViewProps {
 export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate }: BuyViewProps) {
   const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listingPage, setListingPage] = useState(1);
+  const [listingTotal, setListingTotal] = useState(0);
+
+  const LISTING_LIMIT = 12;
 
   // Convert npc_prices array to object indexed by resource
   const npcPricesMap = stats?.npc_prices?.reduce((acc: any, price: any) => {
     acc[price.resource_type] = price;
-    // Add buy_prices for other resources to enable exchange preview
     acc[price.resource_type].buy_prices = stats?.npc_prices?.reduce((buyAcc: any, p: any) => {
-      buyAcc[p.resource_type] = p.npc_sell_price; // The price we'd pay to buy from NPC
+      buyAcc[p.resource_type] = p.npc_sell_price;
       return buyAcc;
     }, {});
     return acc;
   }, {});
 
   useEffect(() => {
-    loadListings();
+    loadListings(1, true);
   }, []);
 
-  const loadListings = async () => {
+  const loadListings = async (page: number, reset = false) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(apiUrl('/market/listings'), {
+      const res = await fetch(apiUrl(`/market/listings?page=${page}&limit=${LISTING_LIMIT}`), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setListings(data.listings || []);
+        const items = data.listings || [];
+        setListings(prev => reset ? items : [...prev, ...items]);
+        // Backend returns { listings, total, page, limit } — use total for accurate hasMore
+        setListingTotal(data.total ?? items.length);
       }
     } catch (e) {
       console.error(e);
@@ -69,7 +75,9 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
         toast.success("✅ Achat réussi !");
         onUpdate();
         onStatsUpdate();
-        loadListings();
+        // After a purchase, reset to page 1 and refresh
+        loadListings(1, true);
+        setListingPage(1);
       } else {
         const err = await res.json();
         toast.error(err.error || "Erreur lors de l'achat");
@@ -159,6 +167,21 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
                   canBuy={listing.seller_user_id !== userId}
                 />
               ))}
+            </div>
+          )}
+          {/* Show More: driven by real backend total */}
+          {listings.length < listingTotal && (
+            <div className="flex justify-center pt-4">
+              <button
+                onClick={() => {
+                  const next = listingPage + 1;
+                  setListingPage(next);
+                  loadListings(next);
+                }}
+                className="text-xs text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 px-4 py-1.5 rounded-lg hover:bg-indigo-500/10 transition-all"
+              >
+                Afficher plus ({listingTotal - listings.length} autres offres)
+              </button>
             </div>
           )}
         </div>

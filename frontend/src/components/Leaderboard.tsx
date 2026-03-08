@@ -3,7 +3,7 @@ import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
-import PlayerProfile from "./PlayerProfile";
+import UniversalProfile from "./UniversalProfile";
 
 interface PlanetInfo {
     id: string;
@@ -47,13 +47,56 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
     const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
     const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
     const [selectedPlanet, setSelectedPlanet] = useState<PlanetInfo | null>(null);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        fetch(apiUrl(`/ranking?current_planet_id=${currentPlanetId}&type=${category}`))
-            .then(res => res.json())
-            .then(setRanking)
-            .catch(console.error);
+        setRanking([]);
+        setPage(1);
+        setHasMore(true);
+        fetchLeaderboard(1, true);
     }, [currentPlanetId, category]);
+
+    const fetchLeaderboard = async (pageNum: number, isReset: boolean = false) => {
+        const LIMIT = 50;
+        setIsLoading(true);
+        try {
+            const res = await fetch(apiUrl(`/ranking?current_planet_id=${currentPlanetId}&type=${category}&page=${pageNum}&limit=${LIMIT}`));
+            const data = await res.json();
+            
+            if (data && data.data) {
+                // Backend returns { data, total, page, limit } — use total for accurate hasMore
+                if (isReset) {
+                    setRanking(data.data);
+                } else {
+                    setRanking(prev => [...prev, ...data.data]);
+                }
+                // hasMore = there are still unloaded items beyond the current page
+                setHasMore(pageNum * LIMIT < (data.total ?? 0));
+            } else if (Array.isArray(data)) {
+                // Fallback for old plain-array response (compatibility)
+                if (isReset) {
+                    setRanking(data);
+                } else {
+                    setRanking(prev => [...prev, ...data]);
+                }
+                setHasMore(false);
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const loadMore = () => {
+        if (!isLoading && hasMore) {
+            const nextPage = page + 1;
+            setPage(nextPage);
+            fetchLeaderboard(nextPage);
+        }
+    };
 
     const getRankIcon = (rank: number) => {
         if (rank === 1) return <Medal className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]" size={24} />;
@@ -285,14 +328,28 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                             ))}
                         </tbody>
                     </table>
+                    
+                    {hasMore && (
+                        <div className="flex justify-center p-6 border-t border-white/5">
+                            <Button 
+                                variant="outline" 
+                                onClick={loadMore} 
+                                disabled={isLoading}
+                                className="bg-slate-900/50 border-white/10 hover:bg-slate-800 text-slate-300 hover:text-white"
+                            >
+                                {isLoading ? "Chargement..." : "Afficher plus"}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* ✅ Modal Profil Joueur */}
             {selectedPlayer && (
-                <PlayerProfile
-                    userId={selectedPlayer}
-                    onClose={() => setSelectedPlayer(null)}
+                <UniversalProfile
+                  userId={selectedPlayer}
+                  onClose={() => setSelectedPlayer(null)}
+                  isModal
                 />
             )}
 

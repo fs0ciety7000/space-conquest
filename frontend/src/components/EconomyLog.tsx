@@ -34,7 +34,7 @@ function categoryIcon(entry: EconomyEntry) {
   if (category === "black_market") return <Skull size={14} className="text-red-400 shrink-0" />;
   if (category === "market") return <ArrowLeftRight size={14} className="text-cyan-400 shrink-0" />;
   if (action === "build") {
-    if (item_key?.includes("tech") || action === "research") return <FlaskConical size={14} className="text-purple-400 shrink-0" />;
+    if (item_key?.includes("tech")) return <FlaskConical size={14} className="text-purple-400 shrink-0" />;
     if (item_key?.includes("ship") || item_key?.includes("hunter") || item_key?.includes("cargo") || item_key?.includes("bomber") || item_key?.includes("cruiser") || item_key?.includes("battleship") || item_key?.includes("destroyer") || item_key?.includes("deathstar") || item_key?.includes("recycler") || item_key?.includes("transporter") || item_key?.includes("probe") || item_key?.includes("colony"))
       return <Rocket size={14} className="text-blue-400 shrink-0" />;
     if (item_key?.includes("laser") || item_key?.includes("cannon") || item_key?.includes("turret") || item_key?.includes("launcher") || item_key?.includes("shield") || item_key?.includes("ion") || item_key?.includes("gauss") || item_key?.includes("plasma"))

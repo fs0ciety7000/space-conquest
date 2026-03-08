@@ -13,8 +13,10 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::entities::prelude::*;
+use crate::entities::notification;
 use crate::game_logic;
-use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait};
+use sea_orm::{EntityTrait, DatabaseConnection, QueryFilter, ColumnTrait, ActiveModelTrait, Set};
+use chrono::Utc;
 
 // ============================================================================
 // TYPES ET STRUCTURES
@@ -79,6 +81,28 @@ impl WsState {
         for entry in self.connections.iter() {
             let _ = entry.value().send(event.clone());
         }
+    }
+
+    /// Persiste une notification en DB et l'envoie en temps réel via WS à l'utilisateur
+    pub async fn push_notification(&self, user_id: Uuid, notif_type: &str, title: &str, message: &str) {
+        // Persister en DB
+        let notif = notification::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            user_id: Set(user_id),
+            notif_type: Set(notif_type.to_string()),
+            title: Set(title.to_string()),
+            message: Set(message.to_string()),
+            is_read: Set(false),
+            created_at: Set(Utc::now().naive_utc()),
+        };
+        let _ = notif.insert(&self.db).await;
+
+        // Diffuser via WS
+        self.broadcast_to_user(user_id, WsEvent::Notification {
+            notif_type: notif_type.to_string(),
+            title: title.to_string(),
+            message: message.to_string(),
+        }).await;
     }
 }
 
@@ -203,6 +227,34 @@ pub enum WsEvent {
         sender_name: String,
         content: String,
         created_at: String,
+    },
+
+    /// Nouvelle notification en temps réel
+    #[serde(rename = "notification")]
+    Notification {
+        notif_type: String, // "combat" | "build" | "market" | "expedition" | "spy" | "transport"
+        title: String,
+        message: String,
+    },
+
+    /// Vente de ressources sur le marché inter-planétaire réussie (notifie le vendeur)
+    #[serde(rename = "market_sale")]
+    MarketSale {
+        resource: String,          // "metal" | "crystal" | "deuterium"
+        amount: f64,               // quantité vendue
+        payment_resource: String,  // ressource reçue en paiement
+        payment_amount: f64,       // montant reçu (après taxe)
+        buyer_name: String,
+    },
+
+    /// Planète vendue (à un joueur ou au NPC) — notifie le vendeur
+    #[serde(rename = "planet_sold")]
+    PlanetSold {
+        planet_name: String,
+        buyer_name: String,
+        price_metal: i64,
+        price_crystal: i64,
+        price_deuterium: i64,
     },
 }
 
@@ -657,4 +709,42 @@ pub fn notify_planet_status(state: &WsState, planet_id: Uuid, status: &str, plan
         planet_name: planet_name.to_string(),
         opponent: opponent.to_string(),
     });
+}
+
+/// Notifie le vendeur qu'une vente de ressources sur le marché a été réalisée
+pub async fn notify_market_sale(
+    state: &WsState,
+    seller_user_id: Uuid,
+    resource: &str,
+    amount: f64,
+    payment_resource: &str,
+    payment_amount: f64,
+    buyer_name: &str,
+) {
+    state.broadcast_to_user(seller_user_id, WsEvent::MarketSale {
+        resource: resource.to_string(),
+        amount,
+        payment_resource: payment_resource.to_string(),
+        payment_amount,
+        buyer_name: buyer_name.to_string(),
+    }).await;
+}
+
+/// Notifie le vendeur qu'une de ses planètes a été vendue
+pub async fn notify_planet_sold(
+    state: &WsState,
+    seller_user_id: Uuid,
+    planet_name: &str,
+    buyer_name: &str,
+    price_metal: i64,
+    price_crystal: i64,
+    price_deuterium: i64,
+) {
+    state.broadcast_to_user(seller_user_id, WsEvent::PlanetSold {
+        planet_name: planet_name.to_string(),
+        buyer_name: buyer_name.to_string(),
+        price_metal,
+        price_crystal,
+        price_deuterium,
+    }).await;
 }

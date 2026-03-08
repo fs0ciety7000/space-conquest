@@ -5,6 +5,7 @@ import './styles/animations.css'
 import App from './App'
 import { ThemeProvider } from './components/ThemeProvider'
 import { unregisterServiceWorkers } from '../utils/serviceWorker';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Désenregistrer les SW en dev
 if (import.meta.env.DEV) {
@@ -13,8 +14,10 @@ if (import.meta.env.DEV) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-      <App />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <App />
+      </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )

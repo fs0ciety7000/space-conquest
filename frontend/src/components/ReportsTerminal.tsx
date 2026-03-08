@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert, Trophy, BarChart3 } from "lucide-react";
+import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert, Trophy, BarChart3, Skull } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { apiUrl } from '@/config/api';
@@ -32,26 +32,109 @@ interface TransportLog {
   date: string;
 }
 
+interface ExtortionEvent {
+  id: string;
+  status: string;
+  is_target: boolean;
+  attacker_name: string;
+  target_name: string;
+  arrival_time: string;
+  resolved_at: string | null;
+}
+
 export default function ReportsTerminal({ planetId }: { planetId: string }) {
   const [combatLogs, setCombatLogs] = useState<CombatLog[]>([]);
   const [transportLogs, setTransportLogs] = useState<TransportLog[]>([]);
-  const [view, setView] = useState<'combat' | 'transport' | 'economy'>('combat');
+  const [extortionHistory, setExtortionHistory] = useState<ExtortionEvent[]>([]);
+  const [view, setView] = useState<'combat' | 'transport' | 'economy' | 'pirates'>('combat');
   const [selectedReport, setSelectedReport] = useState<any>(null);
 
+  // Pagination state — backend now returns { data, total, page, limit }
+  const [combatPage, setCombatPage] = useState(1);
+  const [combatTotal, setCombatTotal] = useState(0);
+  const [combatLoading, setCombatLoading] = useState(false);
+  const [transportPage, setTransportPage] = useState(1);
+  const [transportTotal, setTransportTotal] = useState(0);
+  const [transportLoading, setTransportLoading] = useState(false);
+
+  const LIMIT = 20;
+
+  const fetchCombatLogs = async (page: number, reset = false) => {
+    setCombatLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/planets/${planetId}/reports?page=${page}&limit=${LIMIT}`), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const json = await res.json();
+      // Handle both paginated { data, total } and legacy plain-array responses
+      if (json && json.data) {
+        setCombatLogs(prev => reset ? json.data : [...prev, ...json.data]);
+        setCombatTotal(json.total ?? 0);
+      } else if (Array.isArray(json)) {
+        setCombatLogs(prev => reset ? json : [...prev, ...json]);
+        setCombatTotal(json.length);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCombatLoading(false);
+    }
+  };
+
+  const fetchTransportLogs = async (page: number, reset = false) => {
+    setTransportLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/planets/${planetId}/transport-logs?page=${page}&limit=${LIMIT}`), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const json = await res.json();
+      // Handle both paginated { data, total } and legacy plain-array responses
+      if (json && json.data) {
+        setTransportLogs(prev => reset ? json.data : [...prev, ...json.data]);
+        setTransportTotal(json.total ?? 0);
+      } else if (Array.isArray(json)) {
+        setTransportLogs(prev => reset ? json : [...prev, ...json]);
+        setTransportTotal(json.length);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTransportLoading(false);
+    }
+  };
+
   useEffect(() => {
+    // Reset and fetch page 1 when planet changes
+    setCombatPage(1);
+    setTransportPage(1);
+    fetchCombatLogs(1, true);
+    fetchTransportLogs(1, true);
+
     const token = localStorage.getItem('token');
-    const headers = { 'Authorization': `Bearer ${token}` };
-
-    fetch(apiUrl(`/planets/${planetId}/reports`), { headers })
+    fetch(apiUrl('/black-market/extortions/history'), { headers: { 'Authorization': `Bearer ${token}` } })
       .then(res => res.json())
-      .then(setCombatLogs)
-      .catch(console.error);
-
-    fetch(apiUrl(`/planets/${planetId}/transport-logs`), { headers })
-      .then(res => res.json())
-      .then(setTransportLogs)
+      .then(data => setExtortionHistory(data.history || []))
       .catch(console.error);
   }, [planetId]);
+
+  const loadMoreCombat = () => {
+    if (!combatLoading && combatLogs.length < combatTotal) {
+      const next = combatPage + 1;
+      setCombatPage(next);
+      fetchCombatLogs(next);
+    }
+  };
+
+  const loadMoreTransport = () => {
+    if (!transportLoading && transportLogs.length < transportTotal) {
+      const next = transportPage + 1;
+      setTransportPage(next);
+      fetchTransportLogs(next);
+    }
+  };
+
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
@@ -143,6 +226,12 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                 className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'economy' ? 'bg-green-500/20 text-green-400 shadow-[0_0_10px_rgba(74,222,128,0.2)]' : 'text-slate-500 hover:text-white'}`}
             >
                 <BarChart3 size={12} /> Économie
+            </button>
+            <button
+                onClick={() => setView('pirates')}
+                className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all duration-300 hover:scale-105 card-depth flex items-center gap-2 ${view === 'pirates' ? 'bg-red-900/30 text-red-400 shadow-[0_0_10px_rgba(220,38,38,0.2)]' : 'text-slate-500 hover:text-white'}`}
+            >
+                <Skull size={12} /> Pirates
             </button>
         </div>
       </div>
@@ -364,6 +453,13 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                 })
             )
         )}
+        {view === 'combat' && combatLogs.length < combatTotal && (
+            <div className="flex justify-center py-3">
+                <button onClick={loadMoreCombat} disabled={combatLoading} className="text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-4 py-1.5 rounded-lg hover:bg-cyan-500/10 transition-all disabled:opacity-50">
+                    {combatLoading ? 'Chargement...' : `Afficher plus (${combatTotal - combatLogs.length} restants)`}
+                </button>
+            </div>
+        )}
 
         {/* VUE LOGISTIQUE */}
         {view === 'transport' && (
@@ -409,9 +505,58 @@ export default function ReportsTerminal({ planetId }: { planetId: string }) {
                 })
             )
         )}
+        {view === 'transport' && transportLogs.length < transportTotal && (
+            <div className="flex justify-center py-3">
+                <button onClick={loadMoreTransport} disabled={transportLoading} className="text-xs text-yellow-400 hover:text-yellow-300 border border-yellow-500/30 px-4 py-1.5 rounded-lg hover:bg-yellow-500/10 transition-all disabled:opacity-50">
+                    {transportLoading ? 'Chargement...' : `Afficher plus (${transportTotal - transportLogs.length} restants)`}
+                </button>
+            </div>
+        )}
 
         {/* VUE ÉCONOMIE */}
         {view === 'economy' && <EconomyLog />}
+
+        {/* VUE PIRATES */}
+        {view === 'pirates' && (
+          extortionHistory.length === 0 ? (
+            <div className="text-center text-slate-600 text-xs py-10 font-mono">Aucun événement pirate enregistré.</div>
+          ) : (
+            extortionHistory.map(ev => {
+              const statusLabels: Record<string, { label: string; color: string }> = {
+                resolved_passive: { label: "Pillage subi", color: "text-orange-400" },
+                resolved_tribute: { label: "Tribut payé", color: "text-yellow-400" },
+                resolved_retaliate: { label: "Contre-attaque", color: "text-red-400" },
+              };
+              const meta = statusLabels[ev.status] ?? { label: ev.status, color: "text-slate-400" };
+              const isAttacker = !ev.is_target;
+
+              return (
+                <div key={ev.id} className="bg-black/20 border border-red-900/20 p-3 rounded-lg flex items-center gap-4 animate-fade-in card-depth">
+                  <div className="p-2 rounded-lg bg-red-950/40 text-red-400 shrink-0">
+                    <Skull size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-black uppercase ${meta.color}`}>{meta.label}</span>
+                      {isAttacker && (
+                        <span className="text-[9px] bg-purple-900/30 text-purple-400 border border-purple-700/30 px-1.5 py-0.5 rounded font-bold uppercase">Instigateur</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {ev.is_target
+                        ? <>Attaqué par <span className="text-white font-bold">{ev.attacker_name}</span></>
+                        : <>Flotte envoyée sur <span className="text-white font-bold">{ev.target_name}</span></>
+                      }
+                    </p>
+                    <p className="text-[10px] text-slate-600 font-mono mt-0.5">
+                      {ev.resolved_at ? formatDate(ev.resolved_at) : formatDate(ev.arrival_time)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )
+        )}
 
       </div>
 

@@ -238,9 +238,18 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
 
             {/* Quantité à vendre */}
             <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">
-                Quantité de <span className={color}>{resourceLabels[resource]}</span> à vendre:
-              </label>
+              <div className="flex justify-between items-end mb-1">
+                <label className="text-[10px] uppercase font-bold text-slate-500 block">
+                  Quantité de <span className={color}>{resourceLabels[resource]}</span> à vendre:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleSellQuantityChange(availableAmount)}
+                  className={`text-[9px] font-black tracking-widest uppercase hover:text-white transition-colors ${availableAmount > 0 ? color : 'text-slate-600'}`}
+                >
+                  MAX: {availableAmount.toLocaleString()}
+                </button>
+              </div>
               <div className="relative">
                 <Input
                   type="number"

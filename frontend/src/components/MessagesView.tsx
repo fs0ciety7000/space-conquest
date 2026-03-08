@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Mail, Send, RotateCw, Plus, ArrowLeft, User, MessageCircle, Archive, ArchiveRestore, Inbox, Globe, Users } from "lucide-react";
+import { Mail, Send, RotateCw, Plus, ArrowLeft, User, MessageCircle, Archive, ArchiveRestore, Inbox, Globe, Users, Bell, ShieldAlert, Coins, Hammer, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,15 +35,16 @@ interface GlobalChatMessage {
     is_mine: boolean;
 }
 
-type ViewMode = 'inbox' | 'archived' | 'galactic';
+type ViewMode = 'inbox' | 'archived' | 'galactic' | 'notifications';
 
 interface MessagesViewProps {
     token: string;
     userId: string;
     initialRecipient?: string | null;
+    initialTab?: 'inbox' | 'archived' | 'galactic' | 'notifications';
 }
 
-export default function MessagesView({ token, userId, initialRecipient }: MessagesViewProps) {
+export default function MessagesView({ token, userId, initialRecipient, initialTab }: MessagesViewProps) {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
     const [thread, setThread] = useState<ThreadMessage[]>([]);
@@ -52,6 +53,10 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
     // Gestion des vues
     const [viewMode, setViewMode] = useState<ViewMode>('inbox');
     const showArchived = viewMode === 'archived';
+
+    // Notifications (Historique complet)
+    const [notifications, setNotifications] = useState<any[]>([]);
+    const [selectedNotif, setSelectedNotif] = useState<any | null>(null);
 
     // Chat galactique
     const [globalMessages, setGlobalMessages] = useState<GlobalChatMessage[]>([]);
@@ -75,6 +80,12 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
             setIsComposing(true);
         }
     }, [initialRecipient]);
+
+    useEffect(() => {
+        if (initialTab) {
+            setViewMode(initialTab);
+        }
+    }, [initialTab]);
 
     const fetchConversations = async () => {
         setLoading(true);
@@ -111,6 +122,24 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
             }
         } catch (e) {
             toast.error("Erreur chargement thread");
+        }
+    };
+
+    const fetchAllNotifications = async () => {
+        setLoading(true);
+        try {
+            // Pas de limite pour récupérer l'historique complet
+            const res = await fetch(apiUrl(`/users/${userId}/notifications`), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setNotifications(data.notifications || []);
+            }
+        } catch (e) {
+            toast.error("Erreur réseau");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -269,6 +298,8 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                 // Rafraîchir le chat toutes les 5 secondes
                 const interval = setInterval(fetchGlobalChat, 5000);
                 return () => clearInterval(interval);
+            } else if (viewMode === 'notifications') {
+                fetchAllNotifications();
             } else {
                 fetchConversations();
             }
@@ -331,7 +362,7 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             <span className="hidden sm:inline">Galactique</span>
                         </button>
                         <button
-                            onClick={() => { setViewMode('archived'); setSelectedConv(null); }}
+                            onClick={() => { setViewMode('archived'); setSelectedConv(null); setSelectedNotif(null); }}
                             className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
                                 viewMode === 'archived'
                                     ? 'bg-indigo-600 text-white'
@@ -340,11 +371,17 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                         >
                             <Archive size={12} className="lg:w-3.5 lg:h-3.5"/>
                             <span className="hidden sm:inline">Archives</span>
-                            {archivedConversations.length > 0 && (
-                                <span className="bg-slate-600 text-white text-[9px] lg:text-[10px] px-1 lg:px-1.5 rounded-full">
-                                    {archivedConversations.length}
-                                </span>
-                            )}
+                        </button>
+                        <button
+                            onClick={() => { setViewMode('notifications'); setSelectedConv(null); setSelectedNotif(null); setIsComposing(false); }}
+                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
+                                viewMode === 'notifications'
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
+                            }`}
+                        >
+                            <Bell size={12} className="lg:w-3.5 lg:h-3.5"/>
+                            <span className="hidden lg:inline">Alertes</span>
                         </button>
                     </div>
                 </div>
@@ -406,6 +443,44 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                                 </Button>
                             </div>
                         </div>
+                    ) : viewMode === 'notifications' ? (
+                        notifications.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-slate-500 p-6 text-center">
+                                <Bell size={32} className="mb-2 opacity-30"/>
+                                <p className="text-xs font-mono">Aucune notification</p>
+                            </div>
+                        ) : (
+                            notifications.map(notif => (
+                                <div
+                                    key={notif.id}
+                                    className={`group border-b border-white/5 transition-all duration-300 hover:bg-white/5 hover:-translate-y-0.5 hover:shadow-lg animate-fade-in ${
+                                        selectedNotif?.id === notif.id ? 'bg-indigo-900/30 border-l-4 border-l-indigo-500' : ''
+                                    }`}
+                                >
+                                    <button
+                                        onClick={() => { setSelectedNotif(notif); setSelectedConv(null); }}
+                                        className="w-full p-2 lg:p-3 text-left flex gap-3"
+                                    >
+                                        <div className="mt-1">
+                                            {notif.type === 'market' ? <Coins size={14} className="text-yellow-400" /> :
+                                             notif.type === 'combat' ? <ShieldAlert size={14} className="text-red-400" /> :
+                                             notif.type === 'build' ? <Hammer size={14} className="text-emerald-400" /> :
+                                             notif.type === 'expedition' ? <Rocket size={14} className="text-purple-400" /> :
+                                             <Bell size={14} className="text-indigo-400" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className={`font-bold text-xs lg:text-sm truncate pr-2 ${notif.read ? 'text-slate-300' : 'text-white'}`}>{notif.title}</span>
+                                                <span className="text-[9px] text-slate-600 font-mono whitespace-nowrap">
+                                                    {new Date(notif.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-400 line-clamp-2">{notif.message}</p>
+                                        </div>
+                                    </button>
+                                </div>
+                            ))
+                        )
                     ) : displayedConversations.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-slate-500 p-6 text-center">
                             {showArchived ? (
@@ -670,14 +745,54 @@ export default function MessagesView({ token, userId, initialRecipient }: Messag
                             </p>
                         </div>
                     </div>
-                ) : (
-                    // VUE VIDE
-                    <div className="flex-1 flex items-center justify-center text-slate-600">
-                        <div className="text-center">
-                            <Mail size={48} className="mx-auto mb-3 opacity-30"/>
-                            <p className="text-sm font-mono uppercase">Sélectionnez une conversation</p>
-                            <p className="text-xs text-slate-700 mt-2">ou créez-en une nouvelle</p>
+                ) : selectedNotif ? (
+                    // VUE DÉTAIL NOTIFICATION
+                    <div className="flex-1 flex flex-col p-4 md:p-8 animate-fade-in">
+                        <div className="max-w-3xl w-full mx-auto space-y-6">
+                            <Button variant="ghost" size="icon" onClick={() => setSelectedNotif(null)} className="lg:hidden hover:scale-110 transition-all duration-300 card-depth mb-4">
+                                <ArrowLeft size={18}/>
+                            </Button>
+                            
+                            <div className="flex items-center gap-4 border-b border-white/10 pb-6">
+                                <div className="p-3 lg:p-4 rounded-xl border border-white/10 bg-slate-900 shadow-lg">
+                                    {selectedNotif.type === 'market' ? <Coins size={24} className="text-yellow-400" /> :
+                                     selectedNotif.type === 'combat' ? <ShieldAlert size={24} className="text-red-400" /> :
+                                     selectedNotif.type === 'build' ? <Hammer size={24} className="text-emerald-400" /> :
+                                     selectedNotif.type === 'expedition' ? <Rocket size={24} className="text-purple-400" /> :
+                                     <Bell size={24} className="text-indigo-400" />}
+                                </div>
+                                <div>
+                                    <h2 className="text-xl lg:text-2xl font-black uppercase text-white tracking-wide">{selectedNotif.title}</h2>
+                                    <div className="text-xs text-slate-500 font-mono mt-1 flex items-center gap-4">
+                                        <span>Rapport Réglementaire</span>
+                                        <span>•</span>
+                                        <span>{new Date(selectedNotif.created_at).toLocaleString('fr-FR')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-slate-900/60 border border-white/5 rounded-xl p-6 shadow-inner whitespace-pre-wrap leading-relaxed text-sm lg:text-base text-slate-300">
+                                {selectedNotif.message}
+                            </div>
+                            
+                            <div className="flex justify-end pt-4">
+                                <Button 
+                                    onClick={() => setSelectedNotif(null)}
+                                    className="bg-slate-800 hover:bg-slate-700 text-white border border-white/10 font-bold uppercase tracking-wider text-xs px-6"
+                                >
+                                    Fermer
+                                </Button>
+                            </div>
                         </div>
+                    </div>
+                ) : (
+                    // NO SELECTION & NOT GALACTIC
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-6 text-center animate-fade-in">
+                        <MessageCircle size={48} className="mb-4 opacity-20"/>
+                        <h3 className="text-lg font-bold text-slate-400 mb-2">Messagerie Royale</h3>
+                        <p className="text-sm max-w-sm">
+                            Sélectionnez une conversation, une transmission galactique ou une notification à consulter.
+                        </p>
                     </div>
                 )}
             </div>

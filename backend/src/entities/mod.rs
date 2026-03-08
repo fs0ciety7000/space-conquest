@@ -84,3 +84,6 @@ pub mod pirate_extortion;
 
 // Economy log
 pub mod economy_log;
+
+// Notification system
+pub mod notification;

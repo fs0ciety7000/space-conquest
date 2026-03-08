@@ -80,6 +80,8 @@ mod m20260307_000006_black_market;
 mod m20260307_000007_black_market_seed;
 mod m20260307_000008_economy_log;
 mod m20260307_000009_sc_chance_update;
+mod m20260308_000001_create_notifications;
+mod m20260308_000002_add_score_columns_to_user;
 
 pub struct Migrator;
 
@@ -167,6 +169,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260307_000007_black_market_seed::Migration),
             Box::new(m20260307_000008_economy_log::Migration),
             Box::new(m20260307_000009_sc_chance_update::Migration),
+            Box::new(m20260308_000001_create_notifications::Migration),
+            Box::new(m20260308_000002_add_score_columns_to_user::Migration),
         ]
     }
 }

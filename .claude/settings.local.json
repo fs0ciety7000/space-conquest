@@ -11,7 +11,9 @@
       "Bash(cargo build:*)",
       "Bash(~/.cargo/bin/cargo check)",
       "Bash(source $HOME/.cargo/env)",
-      "Bash(cargo test combat::tests::test_simultaneous_damage_defender_fires_back)"
+      "Bash(cargo test combat::tests::test_simultaneous_damage_defender_fires_back)",
+      "Bash(grep -n \"notification\" /var/home/phantomhex/Documents/code/space-conquest/migration/src/*.rs)",
+      "Bash(npx tsc --noEmit)"
     ]
   }
 }

@@ -79,3 +79,6 @@ pub use super :: pirate_extortion :: Entity as PirateExtortion ;
 
 // Economy log
 pub use super :: economy_log :: Entity as EconomyLog ;
+
+// Notification system
+pub use super :: notification :: Entity as Notification ;

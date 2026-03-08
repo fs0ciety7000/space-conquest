@@ -156,7 +156,16 @@ export default function CreateListingModal({ planet, userId, onClose, onSuccess 
 
             {/* Quantity */}
             <div>
-              <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 block">Quantité</label>
+              <div className="flex justify-between items-end mb-2">
+                <label className="text-[10px] uppercase font-bold text-slate-500 block">Quantité</label>
+                <button
+                  type="button"
+                  onClick={() => setQuantity(availableAmount)}
+                  className={`text-[9px] font-black tracking-widest uppercase hover:text-white transition-colors ${availableAmount > 0 ? sourceColor : 'text-slate-600'}`}
+                >
+                  MAX: {availableAmount.toLocaleString()}
+                </button>
+              </div>
               <Input
                 type="number"
                 min={1}

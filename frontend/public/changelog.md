@@ -1,5 +1,76 @@
 # Changelog - Space Conquest
 
+## [8.5.0] - 2026-03-08 - Performance & Pagination
+
+### ⚡ Optimisations
+
+- **Classement SQL** : le classement utilise désormais une pagination SQL directe au lieu de charger tous les joueurs en mémoire. Les scores sont recalculés toutes les 5 minutes en arrière-plan.
+- **Rapports paginés** : les rapports de combat et de transport supportent maintenant `?page&limit`. Chargement à la demande, plus léger.
+- **Marché paginé** : les annonces du marché retournent maintenant `total` pour un vrai "afficher plus" côté frontend.
+
+---
+
+## [8.4.0] - 2026-03-08 - Alertes Temps Réel : Marché, Planète, Attaque, Espionnage, Sabotage
+
+### ✨ Nouvelles Fonctionnalités
+
+- **Alerte Vente Marché** : le vendeur reçoit désormais une notification en temps réel (toast + notification persistante) lorsque son annonce de ressources est achetée par un autre joueur.
+- **Alerte Planète Vendue** : notification instantanée lors de la vente d'une planète (à un joueur ou au PNJ).
+- **Alerte Attaque Imminente améliorée** : flash rouge sur l'écran + toast durée infinie lors d'une attaque entrante (coordonnées, nombre de vaisseaux, heure d'arrivée).
+- **Alerte Espionnage améliorée** : toast contextualisé indiquant l'origine de la sonde détectée.
+- **Alerte Sabotage améliorée** : distinction entre sabotage identifié (attaquant nommé) et sabotage silencieux ("Agents inconnus"), avec détail de la cible (mine ou recherche).
+
+### 🔧 Architecture
+
+- Le hook `useGameNotifications` devient la source unique des toasts "alertes critiques" — plus de duplication entre `useWebSocket` et le hook.
+- Nouveaux types WS backend : `market_sale` et `planet_sold` avec payloads complets.
+
+---
+
+## [8.3.0] - 2026-03-08 - Succès & Hall of Fame
+
+### ✨ Nouvelles Fonctionnalités
+
+- **Hall of Fame** : vue Succès entièrement branchée sur le backend (`GET /achievements?user_id=X`).
+  - Icônes et couleurs issues de la base de données.
+  - Barre de progression réelle, rareté traduite (Commun → Légendaire), date de déverrouillage.
+  - Les succès non débloqués sont en niveaux de gris et révèlent leur contenu au survol.
+
+---
+
+## [8.2.0] - 2026-03-08 - Réseau d'Alliances
+
+### ✨ Nouvelles Fonctionnalités
+
+- **Réseau d'Alliances** : vue alliances branchée sur le backend (`GET /alliances?search=&per_page=30`).
+  - Recherche en temps réel avec debounce 300 ms.
+  - Affiche : chef d'alliance, membres, score global, politique de recrutement.
+  - Bouton "Rejoindre" ou "Voir" selon la politique (ouverte / sur invitation).
+
+---
+
+## [8.1.0] - 2026-03-08 - Tableau de Bord Analytique
+
+### ✨ Nouvelles Fonctionnalités
+
+- **Tableau de Bord** : vue analytique entièrement branchée sur le backend (`GET /analytics?user_id=X`).
+  - Graphique de production journalière (métal, cristal, deutérium) sur 7 jours (capacité actuelle × 24h).
+  - Cartes de stats : Score Total, Efficacité Énergétique (ratio solaire moyen), Score Militaire, Victoires sur 7 jours.
+
+---
+
+## [8.0.0] - 2026-03-08 - Centre de Notifications
+
+### ✨ Nouvelles Fonctionnalités
+
+- **Centre de Notifications** : cloche dans la barre d'empire affichant les dernières notifications du jeu (combats, constructions, marché, expéditions).
+  - Les notifications non lues sont mises en évidence avec un badge rouge.
+  - Bouton "Tout marquer lu" (appel API + mise à jour locale instantanée).
+  - Les nouvelles notifications arrivent en temps réel via WebSocket sans rechargement.
+- **Persistance** : les notifications sont stockées en base de données et survivent aux reconnexions.
+
+---
+
 ## [7.4.0] - 2026-03-07 - Routes Commerciales & Marché Underground : Corrections & Améliorations
 
 ### ✨ Nouvelles Fonctionnalités

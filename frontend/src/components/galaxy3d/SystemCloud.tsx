@@ -42,7 +42,6 @@ export default function SystemCloud({
       };
 
       return {
-        system: systemNum,
         position,
         ...data
       };
@@ -54,14 +53,7 @@ export default function SystemCloud({
       {systems.map((sys) => (
         <SystemMarker
           key={sys.system}
-          system={sys.system}
-          position={sys.position}
-          planetCount={sys.planetCount}
-          hasMe={sys.hasMe}
-          hasCurrentPlanet={sys.hasCurrentPlanet}
-          hasEnemies={sys.hasEnemies}
-          hasDebris={sys.hasDebris}
-          isProtected={sys.isProtected}
+          {...sys} // Spreading sys which includes system, planetCount, hasMe, etc.
           onClick={() => onSystemClick(sys.system)}
         />
       ))}

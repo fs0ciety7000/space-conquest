@@ -22,6 +22,13 @@ pub struct Model {
     pub display_name: Option<String>,
     #[sea_orm(column_type = "Double", default_value = 0.0)]
     pub syndicate_credits: f64,
+    /// Score total en cache — recalculé toutes les 5 min par le job background
+    #[sea_orm(default_value = 0)]
+    pub total_score: i32,
+    #[sea_orm(default_value = 0)]
+    pub economy_score: i32,
+    #[sea_orm(default_value = 0)]
+    pub military_score: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

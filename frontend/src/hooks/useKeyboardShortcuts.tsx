@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages';
+type TabType = 'overview' | 'galaxy' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'underground';
 
 interface ShortcutConfig {
   key: string;
@@ -20,6 +20,7 @@ const SHORTCUTS: ShortcutConfig[] = [
   { key: 'e', tab: 'expedition', description: 'Expéditions' },
   { key: 'l', tab: 'ranking', description: 'Classement (Leaderboard)' },
   { key: 'p', tab: 'reports', description: 'Raпorts' },
+  { key: 'u', tab: 'underground', description: 'Marché Underground' },
   { key: 's', tab: 'settings', description: 'Paramètres (Settings)' },
 ];
 

@@ -1,0 +1,493 @@
+import { useState, useEffect } from "react";
+import { Crosshair, Rocket, AlertTriangle, X, Minus, Plus, BookmarkPlus, Trash2, Zap, ChevronDown, ChevronUp, Check, Truck, Eye, ArrowRight, ShieldAlert, Navigation } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { apiUrl } from '@/config/api';
+import { getTransporterCapacity } from '@/lib/gameRules';
+import { getShipCount } from '@/utils/techTreeCompat';
+
+interface ShipType {
+  ship_key: string;
+  display_name: string;
+  current_count: number;
+  attack: number;
+  shield: number;
+  hull: number;
+  cargo_capacity: number;
+}
+
+interface FleetPreset {
+  id: string;
+  name: string;
+  composition: { [key: string]: number };
+}
+
+type MissionType = 'attack' | 'spy' | 'transport' | 'recycle';
+
+interface FleetDispatcherProps {
+  planetId: string;
+  currentPlanet: any;
+  targetPlanet: { id: string; name: string; galaxy?: number; system?: number; position?: number };
+  initialMission: MissionType;
+  onClose: () => void;
+  onSpySuccess: (report: any) => void;
+  onActionSuccess: () => void;
+}
+
+export default function FleetDispatcher({
+  planetId,
+  currentPlanet,
+  targetPlanet,
+  initialMission,
+  onClose,
+  onSpySuccess,
+  onActionSuccess
+}: FleetDispatcherProps) {
+  const [mission, setMission] = useState<MissionType>(initialMission);
+  const [isLaunching, setIsLaunching] = useState(false);
+  const [flightTime, setFlightTime] = useState(0);
+
+  // === FLOTTE (Attaque & Transport) ===
+  const [shipSelection, setShipSelection] = useState<{ [key: string]: number }>({});
+  const [availableShips, setAvailableShips] = useState<ShipType[]>([]);
+
+  // === PRESETS ===
+  const [presets, setPresets] = useState<FleetPreset[]>([]);
+  const [showPresets, setShowPresets] = useState(false);
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [presetName, setPresetName] = useState("");
+
+  // === RESSOURCES (Transport) ===
+  const [metal, setMetal] = useState(0);
+  const [crystal, setCrystal] = useState(0);
+  const [deuterium, setDeuterium] = useState(0);
+
+  const userId = localStorage.getItem('user_id');
+
+  // Load available ships
+  useEffect(() => {
+    const fetchShipTypes = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const response = await fetch(apiUrl(`/planets/${planetId}/ship-types`), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const ships = (data.ship_types || []).filter((s: ShipType) => s.current_count > 0);
+          setAvailableShips(ships);
+        }
+      } catch (e) {
+        toast.error("Erreur lors du chargement de la flotte");
+      }
+    };
+    if (planetId) fetchShipTypes();
+  }, [planetId]);
+
+  // Load presets
+  useEffect(() => {
+    if (!userId) return;
+    fetch(apiUrl(`/users/${userId}/fleet-presets`))
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setPresets(data))
+      .catch(() => {});
+  }, [userId]);
+
+  // Flight time calculation
+  useEffect(() => {
+      const g1 = currentPlanet.galaxy || 1;
+      const s1 = currentPlanet.system || 1;
+      const p1 = currentPlanet.position || 1;
+      const g2 = targetPlanet.galaxy || g1;
+      const s2 = targetPlanet.system || s1;
+      const p2 = targetPlanet.position || p1;
+      
+      let dist = 5.0;
+      if (g1 !== g2) dist = Math.abs(g1 - g2) * 20000;
+      else if (s1 !== s2) dist = Math.abs(s1 - s2) * 2000 + 2700;
+      else if (p1 !== p2) dist = Math.abs(p1 - p2) * 5 + 1000;
+      
+      const speedFactor = 500; // TODO: fetch from backend
+      const baseTime = 10 + Math.sqrt(dist) / 2;
+      const seconds = Math.max(5, Math.floor((baseTime * 100) / speedFactor));
+      setFlightTime(seconds);
+  }, [currentPlanet, targetPlanet]);
+
+  // Calculations
+  const totalPower = availableShips.reduce((sum, ship) => sum + (ship.attack * (shipSelection[ship.ship_key] || 0)), 0);
+  const totalCargo = availableShips.reduce((sum, ship) => sum + (ship.cargo_capacity * (shipSelection[ship.ship_key] || 0)), 0);
+  const totalShips = Object.values(shipSelection).reduce((sum, count) => sum + count, 0);
+  const targetLoad = metal + crystal + deuterium;
+
+  const handleShipCountChange = (shipKey: string, count: number) => {
+    const ship = availableShips.find(s => s.ship_key === shipKey);
+    if (!ship) return;
+    const validCount = Math.max(0, Math.min(count, ship.current_count));
+    setShipSelection(prev => ({ ...prev, [shipKey]: validCount }));
+  };
+
+  const setMaxResource = (type: 'metal' | 'crystal' | 'deuterium') => {
+      const remainingSpace = totalCargo - targetLoad;
+      const currentVal = type === 'metal' ? metal : type === 'crystal' ? crystal : deuterium;
+      const spaceForThisResource = remainingSpace + currentVal;
+      const stock = type === 'metal' ? currentPlanet.metal_amount : type === 'crystal' ? currentPlanet.crystal_amount : currentPlanet.deuterium_amount;
+      
+      const amount = Math.min(stock, spaceForThisResource);
+      
+      if(type === 'metal') setMetal(Math.floor(amount));
+      if(type === 'crystal') setCrystal(Math.floor(amount));
+      if(type === 'deuterium') setDeuterium(Math.floor(amount));
+  };
+
+  const loadPreset = (preset: FleetPreset) => {
+    const newSelection: { [key: string]: number } = {};
+    availableShips.forEach(ship => {
+      const desired = preset.composition[ship.ship_key] || 0;
+      newSelection[ship.ship_key] = Math.min(desired, ship.current_count);
+    });
+    setShipSelection(newSelection);
+    toast.success(`Preset "${preset.name}" chargé`);
+  };
+
+  const savePreset = async () => {
+    if (!userId || !presetName.trim()) return;
+    setSavingPreset(true);
+    const composition = Object.entries(shipSelection)
+      .filter(([_, v]) => v > 0)
+      .reduce((acc, [k, v]) => ({ ...acc, [k]: v }), {});
+
+    if (Object.keys(composition).length === 0) {
+      toast.error("Sélectionnez au moins un vaisseau");
+      setSavingPreset(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(apiUrl(`/users/${userId}/fleet-presets`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: presetName.trim(), composition }),
+      });
+      if (res.ok) {
+        const preset = await res.json();
+        setPresets(prev => [...prev, preset]);
+        setPresetName("");
+        setShowSaveForm(false);
+        toast.success(`Preset "${preset.name}" sauvegardé !`);
+      } else {
+        toast.error("Erreur de sauvegarde");
+      }
+    } catch {
+        toast.error("Erreur réseau");
+    } finally {
+      setSavingPreset(false);
+    }
+  };
+
+  const deletePreset = async (preset: FleetPreset, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!userId) return;
+    try {
+      const res = await fetch(apiUrl(`/users/${userId}/fleet-presets/${preset.id}`), { method: 'DELETE' });
+      if (res.ok) {
+        setPresets(prev => prev.filter(p => p.id !== preset.id));
+        toast.success(`Preset "${preset.name}" supprimé`);
+      }
+    } catch {}
+  };
+
+  const handleLaunch = async () => {
+    const token = localStorage.getItem('token');
+    setIsLaunching(true);
+
+    try {
+        if (mission === 'spy') {
+            const res = await fetch(apiUrl(`/spy?current_planet_id=${planetId}`), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_planet_id: targetPlanet.id })
+            });
+            const data = await res.json();
+            if(res.ok) {
+                toast.success("📡 Sonde d'espionnage envoyée");
+                onSpySuccess(data.report);
+            } else {
+                toast.error(data.error || "Échec de l'espionnage");
+            }
+        } 
+        else if (mission === 'attack') {
+            const fleet = Object.entries(shipSelection)
+              .filter(([_, count]) => count > 0)
+              .reduce((acc, [key, count]) => ({ ...acc, [key]: count }), {});
+
+            if (Object.keys(fleet).length === 0) {
+              toast.error("Sélectionnez au moins un vaisseau");
+              return setIsLaunching(false);
+            }
+
+            const res = await fetch(apiUrl(`/attack/v2?current_planet_id=${planetId}`), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_planet_id: targetPlanet.id, fleet })
+            });
+            
+            if (res.ok) {
+                toast.success("Flotte d'attaque en route !");
+                onActionSuccess();
+            } else {
+                const err = await res.json();
+                toast.error(err.error || "Erreur lors de l'attaque");
+            }
+        }
+        else if (mission === 'transport') {
+            // Note: Le backend attend `transporters` (nombre de vaisseaux). 
+            // Pour l'instant, on va utiliser les vaisseaux sélectionnés s'il gère les flottes mixtes pour le transport,
+            // ou bien on va juste extraire le nombre de transporteurs de shipSelection.
+            // On suppose que l'API /transport accepte transporters = nombre de vaisseaux de transport (petit_transporteur / grand_transporteur combiné ?)
+            // L'API actuelle de TransportModal envoyait simplement = `transporters` (quantité générique).
+            // Adaptons pour l'API existante : on utilise targetLoad et on prend le nombre total de vaisseaux sélectionnés.
+            
+            if (totalShips === 0) {
+                toast.error("Sélectionnez des vaisseaux de transport");
+                return setIsLaunching(false);
+            }
+            if (targetLoad <= 0) {
+                toast.error("Soute vide, sélectionnez des ressources");
+                return setIsLaunching(false);
+            }
+            if (targetLoad > totalCargo) {
+                toast.error("Surcharge de la soute");
+                return setIsLaunching(false);
+            }
+
+            const res = await fetch(apiUrl(`/transport?current_planet_id=${currentPlanet.id}`), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    target_planet_id: targetPlanet.id,
+                    transporters: totalShips, // FIXME: L'API devrait accepter une flotte complète
+                    metal,
+                    crystal,
+                    deuterium
+                })
+            });
+            if(res.ok) {
+                toast.success("Flotte logistique lancée !");
+                onActionSuccess();
+            } else {
+                const err = await res.json();
+                toast.error(err.error || "Erreur de transport");
+            }
+        }
+    } catch (e) {
+        toast.error("Erreur réseau");
+    } finally {
+        setIsLaunching(false);
+    }
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="p-0 bg-slate-950 border-slate-800 text-white shadow-2xl overflow-hidden max-w-2xl sm:rounded-2xl flex flex-col max-h-[90vh]">
+        
+        {/* HEADER */}
+        <div className={`p-6 border-b flex justify-between items-start transition-colors duration-500 ${
+            mission === 'attack' ? 'bg-red-950/40 border-red-900/50' : 
+            mission === 'spy' ? 'bg-blue-950/40 border-blue-900/50' : 
+            'bg-emerald-950/40 border-emerald-900/50'
+        }`}>
+            <div className="flex gap-4 items-center">
+                <div className={`p-3 rounded-xl border ${
+                    mission === 'attack' ? 'bg-red-900/40 border-red-500/50 text-red-400 animate-pulse' : 
+                    mission === 'spy' ? 'bg-blue-900/40 border-blue-500/50 text-blue-400' : 
+                    'bg-emerald-900/40 border-emerald-500/50 text-emerald-400'
+                }`}>
+                    {mission === 'attack' && <Crosshair size={28} />}
+                    {mission === 'spy' && <Eye size={28} />}
+                    {mission === 'transport' && <Truck size={28} />}
+                </div>
+                <div>
+                    <h2 className="text-xl font-black uppercase tracking-widest text-white">Dispatcher de flotte</h2>
+                    <div className="flex items-center gap-2 mt-1 text-xs font-mono">
+                        <span className="text-slate-400">{currentPlanet.name}</span>
+                        <ArrowRight size={12} className={mission === 'attack' ? 'text-red-500' : 'text-slate-500'} />
+                        <span className="text-white font-bold">{targetPlanet.name}</span>
+                        {targetPlanet.galaxy && (
+                            <span className="text-[10px] text-slate-500 ml-1">[{targetPlanet.galaxy}:{targetPlanet.system}:{targetPlanet.position}]</span>
+                        )}
+                        <span className="ml-2 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px]">ETA: {flightTime}s</span>
+                    </div>
+                </div>
+            </div>
+            <button onClick={onClose} className="text-slate-500 hover:text-white transition-all hover:scale-110">
+                <X size={20} />
+            </button>
+        </div>
+
+        {/* TABS */}
+        <div className="flex bg-slate-900/50 border-b border-white/5 p-2 gap-2 shrink-0">
+            <Button 
+                variant="ghost" 
+                onClick={() => setMission('attack')}
+                className={`flex-1 h-10 text-xs font-bold uppercase tracking-wider ${mission === 'attack' ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30' : 'text-slate-400 hover:bg-white/5'}`}
+            >
+                <Crosshair size={14} className="mr-2"/> Attaque
+            </Button>
+            <Button 
+                variant="ghost" 
+                onClick={() => setMission('spy')}
+                className={`flex-1 h-10 text-xs font-bold uppercase tracking-wider ${mission === 'spy' ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' : 'text-slate-400 hover:bg-white/5'}`}
+            >
+                <Eye size={14} className="mr-2"/> Espionnage
+            </Button>
+            <Button 
+                variant="ghost" 
+                onClick={() => setMission('transport')}
+                className={`flex-1 h-10 text-xs font-bold uppercase tracking-wider ${mission === 'transport' ? 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30' : 'text-slate-400 hover:bg-white/5'}`}
+            >
+                <Truck size={14} className="mr-2"/> Transport
+            </Button>
+        </div>
+
+        {/* CONTENT */}
+        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+            
+            {mission === 'spy' ? (
+                <div className="py-8 flex flex-col items-center justify-center text-center space-y-4">
+                    <div className="w-24 h-24 rounded-full bg-blue-900/20 border-2 border-dashed border-blue-500/30 flex items-center justify-center relative">
+                        <div className="absolute inset-0 rounded-full border border-blue-400/20 animate-ping"></div>
+                        <Navigation size={40} className="text-blue-400 animate-pulse" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-white mb-2 uppercase tracking-wide">Lancement Sonde</h3>
+                        <p className="text-sm text-slate-400 max-w-sm">
+                            Envoyer une sonde d'espionnage furtive vers {targetPlanet.name}. Vous recevrez un rapport détaillé sur les infrastructures et la flotte en stationnement.
+                        </p>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {/* Presets Panel */}
+                    {(mission === 'attack' || mission === 'transport') && userId && (
+                        <div className="bg-slate-900/60 border border-indigo-900/40 rounded-xl overflow-hidden shrink-0">
+                            <button onClick={() => setShowPresets(!showPresets)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors">
+                                <div className="flex items-center gap-2 text-indigo-400 text-xs font-black uppercase tracking-widest">
+                                    <Zap size={13} /> Presets de flotte ({presets.length}/10)
+                                </div>
+                                {showPresets ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
+                            </button>
+
+                            {showPresets && (
+                                <div className="px-4 pb-4 space-y-3">
+                                    <div className="flex flex-wrap gap-2">
+                                        {presets.map(preset => (
+                                            <div key={preset.id} className="flex items-center gap-1 bg-indigo-950/50 border border-indigo-800/40 rounded-lg overflow-hidden">
+                                                <button onClick={() => loadPreset(preset)} className="px-3 py-1.5 text-xs font-bold text-indigo-300 hover:text-white transition-colors">
+                                                    {preset.name}
+                                                </button>
+                                                <button onClick={(e) => deletePreset(preset, e)} className="px-1.5 py-1.5 text-slate-600 hover:text-red-400 transition-colors">
+                                                    <Trash2 size={11} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {!showSaveForm ? (
+                                        <button onClick={() => setShowSaveForm(true)} disabled={presets.length >= 10} className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-slate-500 hover:text-indigo-400">
+                                            <BookmarkPlus size={13} /> Mémoriser la sélection
+                                        </button>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <Input value={presetName} onChange={e => setPresetName(e.target.value)} placeholder="Nom..." className="h-8 text-xs bg-slate-950 border-indigo-900/50 text-white flex-1" />
+                                            <Button size="sm" onClick={savePreset} disabled={savingPreset || !presetName.trim()} className="bg-indigo-600 hover:bg-indigo-500 px-3"><Check size={14}/></Button>
+                                            <Button size="sm" onClick={() => setShowSaveForm(false)} variant="ghost" className="px-3"><X size={14}/></Button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Ship Selection List */}
+                    <div className="space-y-3">
+                        <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">Flotte engagée</h3>
+                        {availableShips.length === 0 ? (
+                            <p className="text-center text-slate-500 text-sm py-4">Aucun vaisseau disponible</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {availableShips.map((ship) => {
+                                    const selected = shipSelection[ship.ship_key] || 0;
+                                    return (
+                                        <div key={ship.ship_key} className="bg-slate-900/50 border border-white/5 px-4 py-3 rounded-lg flex items-center justify-between">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-white mb-0.5">{ship.display_name}</span>
+                                                <span className="text-[10px] text-slate-500 font-mono">Dispo: {ship.current_count} • Cargo: {ship.cargo_capacity}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => handleShipCountChange(ship.ship_key, selected - 1)} className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded"><Minus size={12} /></button>
+                                                <Input type="number" min="0" max={ship.current_count} value={selected} onChange={(e) => handleShipCountChange(ship.ship_key, parseInt(e.target.value) || 0)} className="w-16 h-8 bg-black border-slate-800 text-white text-center font-mono text-sm" />
+                                                <button onClick={() => handleShipCountChange(ship.ship_key, selected + 1)} className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded"><Plus size={12} /></button>
+                                                <button onClick={() => handleShipCountChange(ship.ship_key, ship.current_count)} className="px-2 py-1.5 bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-400 font-bold text-[10px] rounded">MAX</button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Cargo Load for Transport */}
+                    {mission === 'transport' && (
+                        <div className="space-y-3 pt-4 border-t border-white/5">
+                            <div className="flex justify-between items-center text-xs font-black uppercase tracking-wider text-slate-400">
+                                <span>Cargaison</span>
+                                <span className={targetLoad > totalCargo ? 'text-red-500' : 'text-emerald-400'}>{targetLoad} / {totalCargo} fret</span>
+                            </div>
+                            
+                            <div className="space-y-2">
+                                {[
+                                    { key: 'metal', label: 'Métal', value: metal, setter: setMetal, color: 'text-slate-300' },
+                                    { key: 'crystal', label: 'Cristal', value: crystal, setter: setCrystal, color: 'text-blue-300' },
+                                    { key: 'deuterium', label: 'Deutérium', value: deuterium, setter: setDeuterium, color: 'text-emerald-300' }
+                                ].map((res) => (
+                                    <div key={res.key} className="flex items-center gap-3">
+                                        <div className={`w-20 text-[10px] font-bold uppercase ${res.color}`}>{res.label}</div>
+                                        <Input 
+                                            type="number" 
+                                            min="0"
+                                            value={res.value} 
+                                            onChange={(e) => res.setter(Math.max(0, parseInt(e.target.value) || 0))} 
+                                            className={`flex-1 h-8 bg-black border-slate-800 text-right font-mono text-sm ${targetLoad > totalCargo ? 'border-red-500/50 text-red-100' : 'text-white'}`}
+                                        />
+                                        <button onClick={() => setMaxResource(res.key as any)} className="px-3 py-1.5 bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-400 font-bold text-[10px] rounded">MAX</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+
+        {/* FOOTER ACTIONS */}
+        <div className="p-4 bg-slate-900/90 border-t border-white/5 flex gap-4 shrink-0">
+            <Button onClick={onClose} variant="ghost" className="flex-1 border border-white/5 font-bold uppercase tracking-widest text-slate-400">Annuler</Button>
+            <Button 
+                onClick={handleLaunch} 
+                disabled={isLaunching || (mission !== 'spy' && totalShips === 0)}
+                className={`flex-[2] font-black uppercase tracking-widest shadow-lg hover:-translate-y-1 transition-all ${
+                    mission === 'attack' ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/20' : 
+                    mission === 'spy' ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20' : 
+                    'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                }`}
+            >
+                {isLaunching ? "LANCEMENT..." : "ORDRE D'EXÉCUTION"}
+            </Button>
+        </div>
+
+      </DialogContent>
+    </Dialog>
+  );
+}

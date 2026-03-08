@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { getTechLevel, getShipCount, getBuildingLevel } from '@/utils/techTreeCompat';
 
 interface PlanetData {
-  id?: string;
+  id: string;
+  name: string;
   metal_amount: number;
   crystal_amount: number;
   deuterium_amount: number;
@@ -16,6 +17,7 @@ interface PlanetData {
     crystal?: string;
     deuterium?: string;
   };
+  [key: string]: any;
 }
 
 interface RealtimeResources {

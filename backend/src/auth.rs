@@ -194,6 +194,9 @@ pub async fn register_handler(
         last_login: Set(Some(now)),
         display_name: Set(None),
         syndicate_credits: Set(0.0),
+        total_score: Set(0),
+        economy_score: Set(0),
+        military_score: Set(0),
     };
 
     if new_user.insert(&state.db).await.is_err() {

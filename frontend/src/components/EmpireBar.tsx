@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { GalaxyMiniMap } from "./GalaxyMiniMap";
+import NotificationCenter from "./NotificationCenter";
 
 interface EmpireBarProps {
   planet: any;
@@ -199,42 +200,10 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const energyConsumption = planet.energy_consumption ?? 0;
   const energyRatio = planet.energy_ratio ?? 100; // percentage
 
-  // Calculs production avec tous les bonus (tech, énergie, slots, speed)
-  const calculateProduction = (level: number, baseFactor: number, growthFactor: number, resourceType: 'metal' | 'crystal' | 'deuterium') => {
-    if (level === 0) return 0;
-
-    // Protection contre NaN - s'assurer que les valeurs sont des nombres
-    const safeBaseFactor = Number(baseFactor) || 0;
-    const safeGrowthFactor = Number(growthFactor) || 1;
-    if (safeBaseFactor === 0) return 0;
-
-    // Production de base
-    let prod = safeBaseFactor * level * Math.pow(safeGrowthFactor, level);
-
-    // Bonus technologie énergie (configurable)
-    const techLevel = getTechLevel(planet, 'energy_tech');
-    const techBonus = 1.0 + (techLevel * (config.energy_tech_bonus || 0.01));
-    prod *= techBonus;
-
-    // Ratio énergétique
-    const energyRatioDecimal = (energyRatio) / 100;
-    prod *= energyRatioDecimal;
-
-    // Bonus slots (+50% par slot actif du même type)
-    const activeSlots = slots.filter(s => s.is_active && s.resource_type === resourceType);
-    const slotBonus = 1.0 + (activeSlots.length * 0.5);
-    prod *= slotBonus;
-
-    // Speed factor ET mining speed multiplier
-    prod *= speedFactor * (config.mining_speed_multiplier || 1.0);
-
-    return Math.floor(prod);
-  };
-
-  // Only calculate production if config is loaded (using relational tables)
-  const prodMetal = configLoaded ? calculateProduction(getBuildingLevel(planet, 'metal_mine'), config.production_metal_base || 30, config.production_metal_growth || 1.1, 'metal') : 0;
-  const prodCrystal = configLoaded ? calculateProduction(getBuildingLevel(planet, 'crystal_mine'), config.production_crystal_base || 20, config.production_crystal_growth || 1.1, 'crystal') : 0;
-  const prodDeut = configLoaded ? calculateProduction(getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05, 'deuterium') : 0;
+  // Use backend production fields directly
+  const prodMetal = planet.metal_production || 0;
+  const prodCrystal = planet.crystal_production || 0;
+  const prodDeut = planet.deuterium_production || 0;
 
   // Calcul de la capacité de stockage (600k base, x1.6 par niveau)
   const storageLevel = getBuildingLevel(planet, 'resource_storage');
@@ -591,6 +560,11 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         </DropdownMenu>
 
         <div className="h-8 w-px bg-white/10 hidden sm:block"></div>
+
+       {/*  - Section Notifications */}
+       {planet.owner_id && (
+         <NotificationCenter userId={planet.owner_id} />
+       )}
 
        {/*  - Section Messagerie */}
 <button

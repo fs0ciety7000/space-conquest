@@ -59,6 +59,7 @@ const getShipTheme = (type: string) => {
 export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const [qty, setQty] = useState<Record<string, number>>({});
   const [shipTypes, setShipTypes] = useState<ShipTypeInfo[]>([]);
+  const [buildQueue, setBuildQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [speedFactor, setSpeedFactor] = useState(1);
   const [constructionSpeed, setConstructionSpeed] = useState(1);
@@ -77,15 +78,20 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
     const fetchShipTypes = async () => {
       const token = localStorage.getItem('token');
       try {
-        const response = await fetch(apiUrl(`/planets/${planet.id}/ship-types`), {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
+        const [shipsRes, queueRes] = await Promise.all([
+           fetch(apiUrl(`/planets/${planet.id}/ship-types`), { headers: { 'Authorization': `Bearer ${token}` } }),
+           fetch(apiUrl(`/planets/${planet.id}/build-queue`), { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+        if (shipsRes.ok) {
+          const data = await shipsRes.json();
           setShipTypes(data.ship_types || []);
         }
+        if (queueRes.ok) {
+          const queueData = await queueRes.json();
+          setBuildQueue(queueData.queue || []);
+        }
       } catch (e) {
-        console.error("Failed to fetch ship types:", e);
+        console.error("Failed to fetch ship types & queue:", e);
       } finally {
         setLoading(false);
       }
@@ -270,14 +276,43 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
             )}
 
             <CardContent className="p-5 relative z-10 flex flex-col h-full">
-              {/* Image du vaisseau */}
-              <GameImage
-                src={getShipImage(ship.ship_key)}
-                alt={ship.display_name}
-                className="w-full h-40 mb-4"
-                fallbackIcon={<ShipIcon className={`${theme.color} w-20 h-20`} />}
-                loading="lazy"
-              />
+              {/* Image du vaisseau (ou hologramme si en construction) */}
+              <div className="relative mb-4 h-40 w-full rounded-xl overflow-hidden group/hologram cursor-crosshair">
+                 <GameImage
+                   src={getShipImage(ship.ship_key)}
+                   alt={ship.display_name}
+                   className={`w-full h-full object-cover transition-all duration-700 ${buildQueue.some(q => q.item_key === ship.ship_key && q.category === 'ships') ? 'opacity-30 saturate-0 brightness-150' : 'group-hover/hologram:scale-110'}`}
+                   fallbackIcon={<ShipIcon className={`${theme.color} w-20 h-20 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2`} />}
+                   loading="lazy"
+                 />
+                 
+                 {/* Holographic Assembly Overlay */}
+                 {buildQueue.some(q => q.item_key === ship.ship_key && q.category === 'ships') && (() => {
+                     const buildingItem = buildQueue.find(q => q.item_key === ship.ship_key && q.category === 'ships');
+                     return (
+                         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-cyan-950/40 backdrop-blur-[2px]">
+                            {/* Scanning beam animation */}
+                            <div className="absolute top-0 inset-x-0 h-1 bg-cyan-400/80 shadow-[0_0_15px_rgba(34,211,238,1)] animate-scan"></div>
+                            
+                            {/* Grid background */}
+                            <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.1)_1px,transparent_1px)] bg-[size:10px_10px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,black_40%,transparent_100%)]"></div>
+                            
+                            <div className="relative p-3 rounded-full border border-cyan-500/50 bg-black/50 shadow-[0_0_30px_rgba(34,211,238,0.2)] mb-2 animate-pulse">
+                               <Hammer size={24} className="text-cyan-400" />
+                            </div>
+                            
+                            <div className="text-center relative z-10">
+                                <span className="text-[10px] uppercase font-black tracking-widest text-cyan-400 bg-black/60 px-2 py-0.5 rounded border border-cyan-500/30">
+                                  ASSEMBLAGE: {buildingItem.quantity}
+                                </span>
+                                <div className="text-[9px] font-mono text-cyan-200/70 mt-1 uppercase tracking-wider animate-pulse">
+                                  CALIBRATION MATRICE...
+                                </div>
+                            </div>
+                         </div>
+                     );
+                 })()}
+              </div>
 
               <div className="flex justify-between items-start mb-4">
                 <div className="flex gap-4 items-center">

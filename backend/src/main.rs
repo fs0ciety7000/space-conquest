@@ -41,7 +41,7 @@ use sea_orm::sea_query::extension::postgres::PgExpr;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin, admin_content,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, black_market, economy_log, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, black_market, economy_log, notifications, analytics, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -224,10 +224,13 @@ async fn main() {
     let db_tick = db.clone();
     let db_trade = db.clone();
     let db_black_market = db.clone();
+    let db_extortions = db.clone();
+    let db_score_refresh = db.clone();
     let config_trade = std::sync::Arc::new(std::sync::RwLock::new(
         backend::ServerConfigCache::load_from_db(&db).await
     ));
     let config_tick = config_trade.clone();
+    let config_score_refresh = config_trade.clone();
 
     let state = AppState {
         db,
@@ -471,6 +474,7 @@ async fn main() {
         .route("/black-market/inventory", get(black_market::get_inventory_handler))
         .route("/black-market/activate", post(black_market::activate_item_handler))
         .route("/black-market/extortions", get(black_market::list_extortions_handler))
+        .route("/black-market/extortions/history", get(black_market::extortion_history_handler))
         .route("/black-market/extortions/:id/resolve", post(black_market::resolve_extortion_handler))
         // Admin routes for black market item management
         .route("/admin/black-market/items", get(black_market::admin_list_items_handler))
@@ -480,6 +484,13 @@ async fn main() {
 
         // ── Economy Log ─────────────────────────────────────────────────────
         .route("/economy/log", get(economy_log::get_economy_log_handler))
+
+        // Notifications
+        .route("/users/:user_id/notifications", get(notifications::get_notifications_handler))
+        .route("/users/:user_id/notifications/read", post(notifications::mark_all_read_handler))
+
+        // Analytics / Dashboard
+        .route("/analytics", get(analytics::get_analytics_handler))
 
         .layer(TraceLayer::new_for_http())
         .with_state(state);
@@ -568,6 +579,27 @@ async fn main() {
         }
     });
     println!("💰 Black market price fluctuation started (interval: 6h)");
+
+    // Pirate extortion auto-resolve (every 60 seconds)
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            black_market::process_due_extortions(&db_extortions).await;
+        }
+    });
+    println!("☠️  Pirate extortion auto-resolve started (interval: 60s)");
+
+    // Score cache refresh (every 5 minutes)
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            let config = config_score_refresh.read().unwrap().clone();
+            game_logic::refresh_all_user_scores(&db_score_refresh, &config).await;
+        }
+    });
+    println!("📊 Score cache refresh started (interval: 5min)");
 
     println!("🚀 SPEED_GAME Backend opérationnel sur http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -914,41 +946,39 @@ async fn resolve_attack_mission(
     // NOTIFICATIONS WEBSOCKET
     // ═══════════════════════════════════════════════════════════════════════════
     if let Some(ws) = ws_state {
+        let def_combat_result = if result.winner == "defender" { "victory" } else { "defeat" };
+        let att_combat_result = if result.winner == "attacker" { "victory" } else { "defeat" };
+
         // Notifier le défenseur du résultat du combat
-        websocket::notify_combat_result(
-            ws,
-            mission.target_planet_id,
-            if result.winner == "defender" { "victory" } else { "defeat" },
-            &att_user.username,
-        );
+        websocket::notify_combat_result(ws, mission.target_planet_id, def_combat_result, &att_user.username);
 
         // Notifier l'attaquant du résultat du combat
-        websocket::notify_combat_result(
-            ws,
-            mission.source_planet_id,
-            if result.winner == "attacker" { "victory" } else { "defeat" },
-            &def_user.username,
-        );
+        websocket::notify_combat_result(ws, mission.source_planet_id, att_combat_result, &def_user.username);
+
+        // Persister notifications en DB + WS Notification event
+        let (def_title, def_msg) = if def_combat_result == "victory" {
+            ("Victoire au combat", format!("Vous avez repoussé l'attaque de {}.", att_user.username))
+        } else {
+            ("Défaite au combat", format!("{} a attaqué votre planète {}.", att_user.username, def_planet.name))
+        };
+        ws.push_notification(def_user.id, "combat", &def_title, &def_msg).await;
+
+        let (att_title, att_msg) = if att_combat_result == "victory" {
+            ("Victoire au combat", format!("Vous avez vaincu {} sur {}.", def_user.username, def_planet.name))
+        } else {
+            ("Défaite au combat", format!("Votre attaque contre {} a échoué.", def_user.username))
+        };
+        ws.push_notification(att_user.id, "combat", &att_title, &att_msg).await;
 
         // Notifier en cas de conquête
         if planet_conquered {
             // Notifier le défenseur de la perte de sa planète
-            websocket::notify_planet_status(
-                ws,
-                mission.target_planet_id,
-                "lost",
-                &def_planet.name,
-                &att_user.username,
-            );
-            
+            websocket::notify_planet_status(ws, mission.target_planet_id, "lost", &def_planet.name, &att_user.username);
+            ws.push_notification(def_user.id, "combat", "Planète perdue", &format!("Votre planète {} a été conquise par {}.", def_planet.name, att_user.username)).await;
+
             // Notifier l'attaquant de sa conquête
-            websocket::notify_planet_status(
-                ws,
-                mission.source_planet_id,
-                "conquered",
-                &def_planet.name,
-                &def_user.username,
-            );
+            websocket::notify_planet_status(ws, mission.source_planet_id, "conquered", &def_planet.name, &def_user.username);
+            ws.push_notification(att_user.id, "combat", "Planète conquise", &format!("Vous avez conquis la planète {} de {}.", def_planet.name, def_user.username)).await;
         }
     }
 
@@ -1175,86 +1205,104 @@ async fn get_ranking_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
+    use sea_orm::ConnectionTrait;
 
     let current_planet_id = params.get("current_planet_id")
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or_default();
 
     let sort_type = params.get("type").map(|s| s.as_str()).unwrap_or("general");
+    let page: u64 = params.get("page").and_then(|s| s.parse().ok()).unwrap_or(1);
+    let limit: u64 = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(50);
+    let offset = (page - 1) * limit;
 
-    let planets = Planet::find().all(&state.db).await.unwrap_or_default();
-    let users = User::find().all(&state.db).await.unwrap_or_default();
+    let db = &state.db;
 
-    // Créer un map utilisateur -> nom
-    let user_map: HashMap<Uuid, String> = users.iter()
-        .map(|u| (u.id, u.username.clone()))
-        .collect();
-
-    // Trouver l'owner_id de la planète actuelle pour "is_me"
-    let current_owner_id = planets.iter()
-        .find(|p| p.id == current_planet_id)
+    // Trouver l'owner_id de la planète courante (pour is_me)
+    let current_owner_id: Option<Uuid> = Planet::find_by_id(current_planet_id)
+        .one(db).await.ok().flatten()
         .map(|p| p.owner_id);
 
-    // Grouper les planètes par propriétaire
-    let mut user_planets: HashMap<Uuid, Vec<planet::Model>> = HashMap::new();
-    for planet in planets {
-        user_planets.entry(planet.owner_id).or_insert_with(Vec::new).push(planet);
-    }
+    // Colonne de tri
+    let order_col = match sort_type {
+        "economy"  => "economy_score",
+        "military" => "military_score",
+        _          => "total_score",
+    };
 
-    // Créer les RankItems (un par joueur)
+    // Total d'utilisateurs (pour la pagination)
+    let total_row = db.query_one(sea_orm::Statement::from_string(
+        sea_orm::DatabaseBackend::Postgres,
+        r#"SELECT COUNT(*) AS cnt FROM "user""#.to_owned(),
+    )).await.ok().flatten();
+    let total: u64 = total_row
+        .and_then(|r| r.try_get::<i64>("", "cnt").ok())
+        .unwrap_or(0) as u64;
+
+    // Récupérer la page de joueurs triée par score (SQL ORDER BY + LIMIT + OFFSET)
+    let user_rows = db.query_all(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        &format!(
+            r#"SELECT id, username, display_name, total_score, economy_score, military_score,
+                      avatar_url, protection_until
+               FROM "user"
+               ORDER BY {} DESC
+               LIMIT $1 OFFSET $2"#,
+            order_col
+        ),
+        [limit.into(), offset.into()],
+    )).await.unwrap_or_default();
+
     let config = state.config.read().unwrap().clone();
     let mut ranked_users: Vec<RankItem> = Vec::new();
 
-    for (owner_id, planets) in user_planets.into_iter() {
-        let mut total_score = 0;
-        let mut total_economy = 0;
-        let mut total_military = 0;
+    for (idx, row) in user_rows.iter().enumerate() {
+        let owner_id: Uuid = row.try_get("", "id").unwrap_or_default();
+        let username: String = row.try_get("", "username").unwrap_or_default();
+        let display_name: String = row.try_get::<Option<String>>("", "display_name")
+            .ok().flatten().unwrap_or_else(|| username.clone());
+        let total_score: i32 = row.try_get("", "total_score").unwrap_or(0);
+        let economy_score: i32 = row.try_get("", "economy_score").unwrap_or(0);
+        let military_score: i32 = row.try_get("", "military_score").unwrap_or(0);
+        let avatar_url: Option<String> = row.try_get("", "avatar_url").ok().flatten();
+        let protection_until: Option<String> = row.try_get::<Option<chrono::NaiveDateTime>>("", "protection_until")
+            .ok().flatten().map(|dt| dt.to_string());
+
+        // Planètes de cet utilisateur (pour la page courante seulement)
+        let user_planets = Planet::find()
+            .filter(planet::Column::OwnerId.eq(owner_id))
+            .all(db).await.unwrap_or_default();
+
         let mut planet_infos: Vec<PlanetInfo> = Vec::new();
+        let galaxy = user_planets.first().map(|p| p.galaxy);
 
-        for p in &planets {
-            let (total, economy, military) = game_logic::calculate_planet_points(p, &state.db, &config).await;
-            total_score += total;
-            total_economy += economy;
-            total_military += military;
-
+        for p in &user_planets {
+            let (pt, pe, pm) = game_logic::calculate_planet_points(p, db, &config).await;
             planet_infos.push(PlanetInfo {
                 id: p.id,
                 name: p.name.clone(),
-                total_score: total,
-                economy_score: economy,
-                military_score: military,
+                total_score: pt,
+                economy_score: pe,
+                military_score: pm,
                 galaxy: p.galaxy,
                 system: p.system,
                 position: p.position,
             });
         }
 
-        let username = user_map.get(&owner_id).cloned().unwrap_or("Inconnu".to_string());
         let is_me = current_owner_id.map(|id| id == owner_id).unwrap_or(false);
         let rank_badge = game_logic::get_rank_badge(total_score);
-
-        // Get protection data, galaxy, avatar, and display_name from user
-        let (protection_until, galaxy, avatar_url, display_name) = users.iter()
-            .find(|u| u.id == owner_id)
-            .map(|u| (
-                u.protection_until.map(|dt| dt.to_string()),
-                planets.first().map(|p| p.galaxy),
-                u.avatar_url.clone(),
-                u.display_name.clone().unwrap_or_else(|| u.username.clone()),
-            ))
-            .unwrap_or((None, None, None, username.clone()));
-
         let is_online = state.ws.as_ref()
             .map(|ws| ws.is_user_online(owner_id))
             .unwrap_or(false);
 
         ranked_users.push(RankItem {
-            rank: 0,
+            rank: (offset as usize) + idx + 1,
             username,
             display_name,
             total_score,
-            economy_score: total_economy,
-            military_score: total_military,
+            economy_score,
+            military_score,
             is_me,
             owner_id,
             planets: planet_infos,
@@ -1266,21 +1314,13 @@ async fn get_ranking_handler(
         });
     }
 
-    // Tri selon le type demandé
-    match sort_type {
-        "economy" => ranked_users.sort_by(|a, b| b.economy_score.cmp(&a.economy_score)),
-        "military" => ranked_users.sort_by(|a, b| b.military_score.cmp(&a.military_score)),
-        _ => ranked_users.sort_by(|a, b| b.total_score.cmp(&a.total_score)),
-    }
-
-    // Assigner les rangs
-    for (i, item) in ranked_users.iter_mut().enumerate() {
-        item.rank = i + 1;
-    }
-
-    Json(ranked_users)
+    Json(json!({
+        "data": ranked_users,
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }))
 }
-
 
 /// Helper function to get building level from planet_buildings table with fallback to legacy column
 async fn get_building_level(db: &DatabaseConnection, planet_id: Uuid, building_key: &str) -> i32 {
@@ -1597,11 +1637,21 @@ async fn get_planet_handler(
         // ═══════════════════════════════════════════════════════════════════════
         if let Some(ref ws) = state.ws {
             if is_ship_or_defense {
-                // C'est un vaisseau ou une défense
                 websocket::notify_ship_complete(ws, p.id, &item.building_type, item.level);
+                ws.push_notification(
+                    p.owner_id,
+                    "build",
+                    "Production terminée",
+                    &format!("{}x {} prêts au combat.", item.level, item.building_type),
+                ).await;
             } else {
-                // C'est un bâtiment ou une technologie
                 websocket::notify_construction_complete(ws, p.id, &item.building_type, item.level);
+                ws.push_notification(
+                    p.owner_id,
+                    "build",
+                    "Construction terminée",
+                    &format!("{} niveau {} opérationnel.", item.building_type, item.level),
+                ).await;
             }
         }
 
@@ -3080,15 +3130,28 @@ async fn scout_expedition_handler(
 async fn get_reports_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
-) -> Json<Vec<combat_log::Model>> {
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let page: u64 = params.get("page").and_then(|s| s.parse().ok()).unwrap_or(1);
+    let limit: u64 = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(20);
+    let offset = (page - 1) * limit;
+
+    let total = CombatLog::find()
+        .filter(combat_log::Column::PlanetId.eq(id))
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
     let logs = CombatLog::find()
         .filter(combat_log::Column::PlanetId.eq(id))
         .order_by_desc(combat_log::Column::Date)
-        .limit(50)
+        .limit(limit)
+        .offset(offset)
         .all(&state.db)
         .await
         .unwrap_or_default();
-    Json(logs)
+
+    Json(json!({ "data": logs, "total": total, "page": page, "limit": limit }))
 }
 
 // Récupérer le rapport détaillé d'un combat
@@ -3118,15 +3181,27 @@ async fn get_combat_report_detail_handler(
 async fn get_transport_logs_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
-) -> Json<Vec<serde_json::Value>> {
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let page: u64 = params.get("page").and_then(|s| s.parse().ok()).unwrap_or(1);
+    let limit: u64 = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(20);
+    let offset = (page - 1) * limit;
+
+    let filter = Condition::any()
+        .add(transport_log::Column::TargetPlanetId.eq(id))
+        .add(transport_log::Column::SourcePlanetId.eq(id));
+
+    let total = TransportLog::find()
+        .filter(filter.clone())
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
     let logs = TransportLog::find()
-        .filter(
-            Condition::any()
-                .add(transport_log::Column::TargetPlanetId.eq(id))
-                .add(transport_log::Column::SourcePlanetId.eq(id))
-        )
+        .filter(filter)
         .order_by_desc(transport_log::Column::Date)
-        .limit(50)
+        .limit(limit)
+        .offset(offset)
         .all(&state.db)
         .await
         .unwrap_or_default();
@@ -3137,7 +3212,6 @@ async fn get_transport_logs_handler(
         } else {
             log.target_owner_name.clone()
         };
-
         json!({
             "id": log.id,
             "target_planet_id": log.target_planet_id,
@@ -3152,7 +3226,7 @@ async fn get_transport_logs_handler(
         })
     }).collect();
 
-    Json(logs_json)
+    Json(json!({ "data": logs_json, "total": total, "page": page, "limit": limit }))
 }
 
 async fn spy_handler(
@@ -4876,6 +4950,7 @@ struct MarketListingsQuery {
     resource_type: Option<String>,
     target_resource: Option<String>,
     limit: Option<u64>,
+    page: Option<u64>,
     user_id: Option<Uuid>,
 }
 
@@ -4919,27 +4994,44 @@ async fn get_market_listings_handler(
         active_listing.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
 
-    // Build query
-    let mut query_builder = MarketListing::find()
+    // Build base filter
+    let mut base = MarketListing::find()
         .filter(market_listing::Column::IsActive.eq(true))
         .filter(market_listing::Column::ExpiresAt.gt(now))
         .order_by_asc(market_listing::Column::PricePerUnit);
 
-    if let Some(resource_type) = query.resource_type {
-        query_builder = query_builder.filter(market_listing::Column::ResourceType.eq(resource_type));
+    if let Some(ref resource_type) = query.resource_type {
+        base = base.filter(market_listing::Column::ResourceType.eq(resource_type.clone()));
     }
-
-    if let Some(target_resource) = query.target_resource {
-        query_builder = query_builder.filter(market_listing::Column::TargetResource.eq(target_resource));
+    if let Some(ref target_resource) = query.target_resource {
+        base = base.filter(market_listing::Column::TargetResource.eq(target_resource.clone()));
     }
-
     if let Some(user_id) = query.user_id {
-        query_builder = query_builder.filter(market_listing::Column::SellerUserId.eq(user_id));
+        base = base.filter(market_listing::Column::SellerUserId.eq(user_id));
     }
 
-    let limit = query.limit.unwrap_or(50);
-    let listings = query_builder
+    let limit = query.limit.unwrap_or(12);
+    let page = query.page.unwrap_or(1);
+    let offset = (page - 1) * limit;
+
+    // Count total matching listings
+    let mut count_q = MarketListing::find()
+        .filter(market_listing::Column::IsActive.eq(true))
+        .filter(market_listing::Column::ExpiresAt.gt(now));
+    if let Some(ref resource_type) = query.resource_type {
+        count_q = count_q.filter(market_listing::Column::ResourceType.eq(resource_type.clone()));
+    }
+    if let Some(ref target_resource) = query.target_resource {
+        count_q = count_q.filter(market_listing::Column::TargetResource.eq(target_resource.clone()));
+    }
+    if let Some(user_id) = query.user_id {
+        count_q = count_q.filter(market_listing::Column::SellerUserId.eq(user_id));
+    }
+    let total = count_q.count(db).await.unwrap_or(0);
+
+    let listings = base
         .limit(limit)
+        .offset(offset)
         .all(db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -4970,6 +5062,9 @@ async fn get_market_listings_handler(
 
     Ok(Json(json!({
         "listings": enriched_listings,
+        "total": total,
+        "page": page,
+        "limit": limit,
     })))
 }
 
@@ -5307,6 +5402,23 @@ async fn buy_from_listing_handler(
     // 6. Update server stats
     let totals = market::calculate_server_resource_totals(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     market::update_server_resource_stats(db, &totals).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 7. Notify seller via WebSocket
+    if let Some(ref ws) = state.ws {
+        let buyer_name = User::find_by_id(payload.buyer_user_id)
+            .one(db).await.ok().flatten()
+            .map(|u| u.username)
+            .unwrap_or_else(|| "Joueur inconnu".to_string());
+        websocket::notify_market_sale(
+            ws,
+            listing.seller_user_id,
+            &listing.resource_type,
+            payload.quantity as f64,
+            &listing.target_resource,
+            seller_receives,
+            &buyer_name,
+        ).await;
+    }
 
     Ok(Json(json!({
         "message": "Purchase successful",

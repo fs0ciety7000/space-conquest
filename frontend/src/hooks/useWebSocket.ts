@@ -1,3 +1,7 @@
+// ANTIGRAVITY: Hook WebSocket principal. Gère la connexion, les reconnexions et le dispatch
+// des événements jeu. Architecture : les événements "alertes" (attack, spy, sabotage, market, planet)
+// sont réacheminés via CustomEvent → useGameNotifications.ts qui affiche les toasts enrichis.
+// Les événements "état" (resources_update, construction_complete, etc.) restent gérés ici.
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { config } from '@/config/api';
@@ -235,10 +239,7 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
         case 'attack_incoming':
           const attackData = (data as WsAttackIncoming).payload;
           callbacks.onAttackIncoming?.(attackData);
-          toast.error('⚠️ ATTAQUE ENTRANTE !', {
-            description: `${attackData.attacker_name} depuis ${attackData.source_coords}`,
-            duration: 10000,
-          });
+          window.dispatchEvent(new CustomEvent('incoming-attack-alert', { detail: attackData }));
           break;
 
         case 'combat_result':
@@ -274,33 +275,39 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
         case 'spy_alert':
           const spyData = (data as WsSpyAlert).payload;
           callbacks.onSpyAlert?.(spyData);
-          toast.warning('🕵️ Espionnage détecté !', {
-            description: `Depuis ${spyData.from}`,
-          });
+          window.dispatchEvent(new CustomEvent('spy-alert-advanced', { detail: spyData }));
           break;
 
         case 'sabotage_detected':
           const sabotageData = (data as WsSabotageDetected).payload;
-          const effectLabel = sabotageData.effect_type === 'disable_mine'
-            ? 'Mine désactivée'
-            : 'Données volées';
-          toast.error('🚨 SABOTAGE DÉTECTÉ !', {
-            description: `${sabotageData.attacker_name} a tenté de saboter ${sabotageData.planet_name} ! ${effectLabel}. Casus Belli accordé !`,
-            duration: 10000,
-            important: true,
-          });
           window.dispatchEvent(new Event('sabotage-detected'));
+          window.dispatchEvent(new CustomEvent('sabotage-alert-advanced', { detail: sabotageData }));
           break;
 
         case 'sabotage_applied': {
           const appliedData = (data as WsSabotageApplied).payload;
-          const appliedLabel = appliedData.effect_type === 'disable_mine'
-            ? 'Production -50% pendant 1h'
-            : 'Recherche ralentie (7j)';
-          toast.warning('⚠️ SABOTAGE SUBI', {
-            description: `${appliedData.planet_name} : ${appliedLabel}`,
-            duration: 8000,
-          });
+          // attacker_name is unknown for silent sabotage — use placeholder
+          window.dispatchEvent(new CustomEvent('sabotage-alert-advanced', {
+            detail: { ...appliedData, attacker_name: 'Agents inconnus' },
+          }));
+          break;
+        }
+
+        case 'market_sale': {
+          const saleData = data.payload as {
+            resource: string; amount: number;
+            payment_resource: string; payment_amount: number; buyer_name: string;
+          };
+          window.dispatchEvent(new CustomEvent('market-sale', { detail: saleData }));
+          break;
+        }
+
+        case 'planet_sold': {
+          const soldData = data.payload as {
+            planet_name: string; buyer_name: string;
+            price_metal: number; price_crystal: number; price_deuterium: number;
+          };
+          window.dispatchEvent(new CustomEvent('planet-sold', { detail: soldData }));
           break;
         }
 
@@ -327,6 +334,13 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
             });
           }
           break;
+
+        case 'notification': {
+          const notifPayload = data.payload as { notif_type: string; title: string; message: string };
+          // Dispatcher un custom event pour que NotificationCenter puisse l'ajouter
+          window.dispatchEvent(new CustomEvent('new-notification', { detail: notifPayload }));
+          break;
+        }
 
         case 'connected':
           // console.log('✅ WebSocket connecté à la planète:', data.payload?.planet_id);

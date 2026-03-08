@@ -806,38 +806,51 @@ function FleetComposition({ title, initialFleet, remainingFleet, color }: {
 
   return (
     <div className={`${c.bg} border ${c.border} p-5 rounded-2xl relative overflow-hidden`}>
-      <div className="space-y-3">
-        <h4 className={`text-sm font-bold ${c.title} uppercase tracking-wide mb-3`}>{title}</h4>
-        <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-thin">
+      <div className="space-y-4">
+        <h4 className={`text-sm font-bold ${c.title} uppercase tracking-wide`}>{title}</h4>
+        <div className="space-y-3 max-h-72 overflow-y-auto scrollbar-thin pr-2">
           {ships.map(([shipKey, initialCount]) => {
             const remainingCount = remainingFleet[shipKey] || 0;
             const lostCount = initialCount - remainingCount;
             const lossPercentage = Math.round((lostCount / initialCount) * 100);
+            const remainPercentage = 100 - lossPercentage;
 
             return (
-              <div key={shipKey} className={`${c.item} p-3 rounded-lg flex items-center justify-between`}>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+              <div key={shipKey} className={`${c.item} p-3 rounded-xl flex flex-col gap-2`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
                     <Rocket size={14} className="text-slate-400" />
-                    <span className="text-sm font-semibold text-white">{getShipDisplayName(shipKey)}</span>
+                    <span className="text-sm font-bold text-white tracking-wide">{getShipDisplayName(shipKey)}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className="text-slate-400">
-                      Initial: <span className="text-white font-mono">{initialCount.toLocaleString()}</span>
-                    </span>
-                    {lostCount > 0 && (
-                      <>
-                        <span className="text-slate-600">•</span>
-                        <span className={c.loss}>
-                          Pertes: <span className="font-mono font-bold">-{lostCount.toLocaleString()}</span> ({lossPercentage}%)
-                        </span>
-                      </>
-                    )}
+                  <div className="text-right">
+                    <div className="text-lg font-black font-mono text-white leading-none">{remainingCount.toLocaleString()}</div>
+                    <div className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">Restants</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-2xl font-black font-mono text-white">{remainingCount.toLocaleString()}</div>
-                  <div className="text-[10px] text-slate-500 uppercase tracking-wider">Restants</div>
+
+                {/* Progress Bar */}
+                <div className="relative h-2 w-full bg-slate-900 rounded-full overflow-hidden flex">
+                    {/* Remaining */}
+                    <div 
+                      className={`h-full ${remainPercentage > 0 ? (color === 'red' ? 'bg-red-500' : 'bg-blue-500') : ''} transition-all duration-1000 ease-out`} 
+                      style={{ width: `${remainPercentage}%` }} 
+                    />
+                    {/* Lost */}
+                    <div 
+                      className={`h-full ${lostCount > 0 ? 'bg-red-900/80 animate-pulse' : ''} transition-all duration-1000 ease-out`} 
+                      style={{ width: `${lossPercentage}%` }} 
+                    />
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] font-mono">
+                    <span className="text-slate-400">
+                      Init: {initialCount.toLocaleString()}
+                    </span>
+                    {lostCount > 0 && (
+                      <span className={`${c.loss} font-bold`}>
+                        Perte: -{lostCount.toLocaleString()} ({lossPercentage}%)
+                      </span>
+                    )}
                 </div>
               </div>
             );

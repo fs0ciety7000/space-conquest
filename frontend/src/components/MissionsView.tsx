@@ -126,7 +126,36 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
     load();
   }, [fetchMissions, fetchAchievements]);
 
-  const handleClaimMission = async (missionId: string) => {
+  // --- PARICLES SYSTEM ---
+  const [particles, setParticles] = useState<{ id: string; x: number; y: number; color: string }[]>([]);
+
+  const spawnParticles = (e: React.MouseEvent | HTMLElement, color: string = 'bg-amber-400') => {
+      let x, y;
+      if ('clientX' in e) {
+          x = e.clientX;
+          y = e.clientY;
+      } else {
+          const rect = e.getBoundingClientRect();
+          x = rect.left + rect.width / 2;
+          y = rect.top + rect.height / 2;
+      }
+
+      const newParticles = Array.from({ length: 15 }).map((_, i) => ({
+          id: `particle-${Date.now()}-${i}`,
+          x,
+          y,
+          color
+      }));
+      setParticles(prev => [...prev, ...newParticles]);
+
+      // Remove after animation
+      setTimeout(() => {
+          setParticles(prev => prev.filter(p => !newParticles.find(n => n.id === p.id)));
+      }, 1000);
+  };
+  // -----------------------
+
+  const handleClaimMission = async (missionId: string, event: React.MouseEvent) => {
     try {
       const res = await fetch(apiUrl(`/missions/${missionId}/claim?user_id=${userId}&planet_id=${planetId}`), {
         method: 'POST',
@@ -134,6 +163,7 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
       });
       const data = await res.json();
       if (res.ok) {
+        spawnParticles(event, 'bg-amber-400');
         toast.success('🎁 Récompense réclamée !', {
           description: `+${data.rewards.metal.toLocaleString()} métal, +${data.rewards.crystal.toLocaleString()} cristal`
         });
@@ -146,7 +176,7 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
     }
   };
 
-  const handleClaimDailyReward = async () => {
+  const handleClaimDailyReward = async (event: React.MouseEvent) => {
     try {
       const res = await fetch(apiUrl(`/streak/claim?user_id=${userId}&planet_id=${planetId}`), {
         method: 'POST',
@@ -154,6 +184,7 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
       });
       const data = await res.json();
       if (res.ok) {
+        spawnParticles(event, 'bg-orange-500');
         toast.success('🔥 Récompense de streak réclamée !', {
           description: `+${data.rewards.metal.toLocaleString()} métal, +${data.rewards.crystal.toLocaleString()} cristal`
         });
@@ -217,7 +248,41 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 relative">
+      {/* PARTICLES */}
+      {particles.map(p => {
+         const angle = Math.random() * Math.PI * 2;
+         const velocity = 50 + Math.random() * 100;
+         const tx = Math.cos(angle) * velocity;
+         const ty = Math.sin(angle) * velocity;
+         
+         return (
+             <div 
+                 key={p.id}
+                 className={`fixed w-2 h-2 rounded-full ${p.color} shadow-[0_0_10px_currentColor] pointer-events-none z-[100]`}
+                 style={{
+                     left: p.x,
+                     top: p.y,
+                     // Approximated animation using CSS variables and an inline custom style 
+                     // since pure inline keyframes aren't well supported in React style objects
+                     // We'll use a hack with transition
+                     transform: `translate(-50%, -50%)`,
+                     transition: 'all 1s cubic-bezier(0, 0, 0.2, 1)',
+                     // Use a setTimeout effect trick or simply let it jump via initial vs next tick rendering
+                 }}
+                 ref={(el) => {
+                     if (el) {
+                         // Force a reflow then apply translation to trigger CSS transition
+                         requestAnimationFrame(() => {
+                            el.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(0)`;
+                            el.style.opacity = '0';
+                         });
+                     }
+                 }}
+             />
+         );
+      })}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -415,7 +480,7 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
 
                     {isCompleted && !isClaimed && (
                       <Button
-                        onClick={() => handleClaimMission(mission.id)}
+                        onClick={(e) => handleClaimMission(mission.id, e)}
                         className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 animate-bounce"
                       >
                         <Gift size={14} className="mr-2" /> Réclamer

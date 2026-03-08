@@ -4,9 +4,10 @@ import { toast } from "sonner";
 import {
   Skull, ShoppingCart, TrendingUp, TrendingDown, Minus,
   Lock, RefreshCw, Coins, AlertTriangle, Zap, Info,
-  ChevronRight,
+  ChevronRight, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Inventory from "./Inventory";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,8 @@ export default function UndergroundMarket({
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<BlackMarketItem | null>(null);
+  const [tab, setTab] = useState<'catalogue' | 'inventory'>('catalogue');
+  const [inventoryKey, setInventoryKey] = useState(0);
 
   const token = localStorage.getItem("token");
 
@@ -132,6 +135,7 @@ export default function UndergroundMarket({
           description: `Crédits restants: ${json.remaining_credits?.toFixed(0)} SC`,
         });
         load();
+        setInventoryKey(k => k + 1);
         onInventoryChange?.();
       } else if (res.status === 402) {
         toast.error("Crédits insuffisants", {
@@ -240,7 +244,37 @@ export default function UndergroundMarket({
         </div>
       </div>
 
-      {/* Items grid */}
+      {/* Tab switcher */}
+      <div className="flex gap-1 p-1 rounded-xl border border-slate-800/50 bg-slate-950/60 w-fit">
+        <button
+          onClick={() => setTab('catalogue')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+            tab === 'catalogue'
+              ? 'bg-red-950/60 border border-red-800/50 text-red-300'
+              : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <Skull size={13} /> Catalogue
+        </button>
+        <button
+          onClick={() => setTab('inventory')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+            tab === 'inventory'
+              ? 'bg-red-950/60 border border-red-800/50 text-red-300'
+              : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <Package size={13} /> Mon Inventaire
+        </button>
+      </div>
+
+      {/* Inventory tab */}
+      {tab === 'inventory' && (
+        <Inventory key={inventoryKey} userId={userId} planet={planet} />
+      )}
+
+      {/* Catalogue tab */}
+      {tab === 'catalogue' && (<>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {data.items.map((item) => {
           const colorClass = EFFECT_COLORS[item.effect_type] || "text-slate-400 border-slate-600/40 bg-slate-900/20";
@@ -271,25 +305,27 @@ export default function UndergroundMarket({
                 <p className="text-slate-500 text-xs leading-relaxed mb-4 line-clamp-2">{item.description}</p>
 
                 {/* Price row */}
-                <div className="flex items-end justify-between">
+                <div className="flex items-end justify-between mt-auto">
                   <div>
                     <p className="text-[9px] uppercase text-slate-600 font-bold mb-0.5">Prix actuel</p>
                     <div className="flex items-baseline gap-2">
-                      <span className={`text-2xl font-black font-mono ${canAfford ? "text-yellow-400" : "text-red-400"}`}>
+                       <span className={`text-2xl font-black font-mono ${isUnimplemented ? "text-slate-600" : canAfford ? "text-yellow-400" : "text-red-400"}`}>
                         {item.current_price.toFixed(0)}
                       </span>
-                      <span className="text-yellow-600 text-xs font-bold">SC</span>
+                      <span className={`text-xs font-bold ${isUnimplemented ? "text-slate-700" : "text-yellow-600"}`}>SC</span>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <PriceIndicator pct={item.price_change_pct} />
-                      <span className="text-[9px] text-slate-700">base: {item.base_price.toFixed(0)}</span>
-                    </div>
+                    {!isUnimplemented && (
+                        <div className="flex items-center gap-2 mt-0.5">
+                        <PriceIndicator pct={item.price_change_pct} />
+                        <span className="text-[9px] text-slate-700">base: {item.base_price.toFixed(0)}</span>
+                        </div>
+                    )}
                   </div>
 
                   {isUnimplemented ? (
-                    <span className="text-xs font-black uppercase tracking-wider px-3 py-2 rounded-md bg-slate-800/40 border border-slate-700/30 text-slate-500 cursor-not-allowed">
-                      Bientôt
-                    </span>
+                    <div className="text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-900/50 border border-slate-700/50 text-slate-500 cursor-not-allowed flex items-center gap-1.5 opacity-80 backdrop-blur-sm">
+                      <Lock size={12} className="text-slate-600" /> Bientôt
+                    </div>
                   ) : (
                   <Button
                     onClick={(e) => { e.stopPropagation(); handleBuy(item); }}
@@ -340,6 +376,7 @@ export default function UndergroundMarket({
           Ils ne peuvent pas être échangés avec d'autres ressources.
         </p>
       </div>
+      </>)}
     </div>
   );
 }

@@ -277,7 +277,7 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
                     boxShadow: '0 0 20px rgba(99, 102, 241, 0.2)',
                   }}
                   labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                  formatter={(value: number) => [value.toLocaleString(), '']}
+                  formatter={(value: any) => [value.toLocaleString(), '']}
                 />
                 <Area type="monotone" dataKey="metal" name="Métal" stroke="#f97316" strokeWidth={2} fill="url(#gradientMetal)" />
                 <Area type="monotone" dataKey="crystal" name="Cristal" stroke="#06b6d4" strokeWidth={2} fill="url(#gradientCrystal)" />
@@ -322,7 +322,7 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
                       border: '1px solid rgba(168, 85, 247, 0.3)',
                       borderRadius: '12px',
                     }}
-                    formatter={(value: number) => [value.toLocaleString() + '/h', '']}
+                    formatter={(value: any) => [value.toLocaleString() + '/h', '']}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -647,7 +647,7 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
                           border: '1px solid rgba(99, 102, 241, 0.3)',
                           borderRadius: '8px',
                         }}
-                        formatter={(value: number) => [value.toLocaleString(), 'Pillé']}
+                        formatter={(value: any) => [value.toLocaleString(), 'Pillé']}
                       />
                       <Bar dataKey="value" radius={[4, 4, 0, 0]} />
                     </BarChart>

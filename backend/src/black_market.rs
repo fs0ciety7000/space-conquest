@@ -563,6 +563,64 @@ pub async fn list_extortions_handler(
     Json(json!({ "extortions": result })).into_response()
 }
 
+// ── GET /black-market/extortions/history ──────────────────────────────────────
+
+/// Returns all resolved extortions where the caller was either the target or the attacker.
+pub async fn extortion_history_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    use sea_orm::QueryOrder;
+
+    let user_id = match extract_user_id(&headers) {
+        Some(id) => id,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Non authentifié"}))).into_response(),
+    };
+
+    let all = PirateExtortion::find()
+        .filter(
+            sea_orm::Condition::any()
+                .add(pirate_extortion::Column::TargetUserId.eq(user_id))
+                .add(pirate_extortion::Column::AttackerId.eq(user_id)),
+        )
+        .filter(pirate_extortion::Column::Status.ne("incoming"))
+        .order_by_desc(pirate_extortion::Column::ResolvedAt)
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    // Collect all attacker and target user IDs to batch-fetch names
+    let user_ids: Vec<Uuid> = all.iter().flat_map(|e| [e.attacker_id, e.target_user_id]).collect();
+    let mut name_map: std::collections::HashMap<Uuid, String> = std::collections::HashMap::new();
+    for uid in user_ids {
+        if !name_map.contains_key(&uid) {
+            if let Ok(Some(u)) = User::find_by_id(uid).one(&state.db).await {
+                name_map.insert(uid, u.username);
+            }
+        }
+    }
+
+    let result: Vec<Value> = all
+        .iter()
+        .map(|e| {
+            let is_target = e.target_user_id == user_id;
+            let attacker_name = name_map.get(&e.attacker_id).cloned().unwrap_or_else(|| "Inconnu".to_string());
+            let target_name = name_map.get(&e.target_user_id).cloned().unwrap_or_else(|| "Inconnu".to_string());
+            json!({
+                "id": e.id,
+                "status": e.status,
+                "is_target": is_target,
+                "attacker_name": attacker_name,
+                "target_name": target_name,
+                "arrival_time": e.arrival_time.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+                "resolved_at": e.resolved_at.map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+            })
+        })
+        .collect();
+
+    Json(json!({ "history": result })).into_response()
+}
+
 // ── POST /black-market/extortions/:id/resolve ─────────────────────────────────
 
 #[derive(Deserialize)]
@@ -723,6 +781,53 @@ pub async fn resolve_extortion_handler(
         "status": new_status,
         "details": response_extra,
     })).into_response()
+}
+
+// ── Background tick: auto-resolve arrived extortions ─────────────────────────
+
+/// Called from the main tick loop. Finds all `pirate_extortion` rows whose
+/// `arrival_time` has passed and whose `status` is still `"incoming"`, then
+/// applies the passive outcome (20 % resource loot) automatically.
+pub async fn process_due_extortions(db: &sea_orm::DatabaseConnection) {
+    let now = Utc::now().naive_utc();
+
+    let due = PirateExtortion::find()
+        .filter(pirate_extortion::Column::Status.eq("incoming"))
+        .filter(pirate_extortion::Column::ArrivalTime.lte(now))
+        .all(db)
+        .await
+        .unwrap_or_default();
+
+    for extortion in due {
+        let target_planet = match crate::entities::prelude::Planet::find_by_id(extortion.target_planet_id)
+            .one(db)
+            .await
+        {
+            Ok(Some(p)) => p,
+            _ => continue,
+        };
+
+        // Apply 20 % passive loot
+        let loot_pct = 0.20_f64;
+        let loot_metal = target_planet.metal_amount * loot_pct;
+        let loot_crystal = target_planet.crystal_amount * loot_pct;
+        let loot_deuterium = target_planet.deuterium_amount * loot_pct;
+
+        let mut planet_active: crate::entities::planet::ActiveModel = target_planet.into();
+        planet_active.metal_amount = Set((planet_active.metal_amount.clone().unwrap() - loot_metal).max(0.0));
+        planet_active.crystal_amount = Set((planet_active.crystal_amount.clone().unwrap() - loot_crystal).max(0.0));
+        planet_active.deuterium_amount = Set((planet_active.deuterium_amount.clone().unwrap() - loot_deuterium).max(0.0));
+        let _ = planet_active.update(db).await;
+
+        // Mark extortion as passively resolved
+        let mut ext_active: pirate_extortion::ActiveModel = extortion.into();
+        ext_active.status = Set("resolved_passive".to_string());
+        ext_active.resolved_at = Set(Some(now));
+        let _ = ext_active.update(db).await;
+
+        println!("☠️  Extortion auto-resolved (passive loot): -{:.0} M / -{:.0} C / -{:.0} D",
+            loot_metal, loot_crystal, loot_deuterium);
+    }
 }
 
 // ── Admin CRUD ────────────────────────────────────────────────────────────────

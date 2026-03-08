@@ -1266,3 +1266,45 @@ pub fn calculate_energy_production_with_slots(
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
     base_production * tech_bonus * slot_bonus
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCORE CACHE — Refresh périodique des scores sur la table user
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Recalcule et persiste les scores (total, économie, militaire) de tous les joueurs.
+/// Appelé toutes les 5 minutes par un job tokio dans main.rs.
+/// Permet une pagination SQL directe sur /ranking via ORDER BY total_score DESC.
+pub async fn refresh_all_user_scores(db: &sea_orm::DatabaseConnection, config: &ServerConfigCache) {
+    use sea_orm::{EntityTrait, ConnectionTrait, Statement};
+    use crate::entities::prelude::Planet;
+
+    let planets = match Planet::find().all(db).await {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+
+    // Grouper par owner
+    let mut by_user: std::collections::HashMap<uuid::Uuid, Vec<planet::Model>> = std::collections::HashMap::new();
+    for p in planets {
+        by_user.entry(p.owner_id).or_default().push(p);
+    }
+
+    for (user_id, user_planets) in by_user {
+        let mut total = 0i32;
+        let mut economy = 0i32;
+        let mut military = 0i32;
+
+        for p in &user_planets {
+            let (t, e, m) = calculate_planet_points(p, db, config).await;
+            total += t;
+            economy += e;
+            military += m;
+        }
+
+        let _ = db.execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"UPDATE "user" SET total_score = $1, economy_score = $2, military_score = $3 WHERE id = $4"#,
+            [total.into(), economy.into(), military.into(), user_id.into()],
+        )).await;
+    }
+}
