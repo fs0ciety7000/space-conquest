@@ -45,6 +45,14 @@ export interface WsShipComplete extends WsEvent {
   };
 }
 
+export interface WsColonyFounded extends WsEvent {
+  type: 'colony_founded';
+  payload: {
+    planet_name: string;
+    coords: string;
+  };
+}
+
 export interface WsResearchComplete extends WsEvent {
   type: 'research_complete';
   payload: {
@@ -242,6 +250,15 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
             description: `${shipData.quantity}x ${shipData.ship_type}`,
           });
           window.dispatchEvent(new Event('build-complete'));
+          break;
+
+        case 'colony_founded':
+          const colonyData = (data as WsColonyFounded).payload;
+          toast.success('🌍 Nouvelle colonie !', {
+            description: `${colonyData.planet_name} fondée en ${colonyData.coords}`,
+            duration: 6000,
+          });
+          window.dispatchEvent(new Event('colony-founded'));
           break;
 
         case 'research_complete':

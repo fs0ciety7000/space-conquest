@@ -1869,6 +1869,12 @@ async fn get_planet_handler(
                         }
 
                         println!("🌍 Colonisation réussie: {} en [{}:{}:{}]", colony_name, target_galaxy, target_system, target_position);
+
+                        // Notifier le joueur via WS (Expansion 5.0)
+                        if let Some(ref ws) = state.ws {
+                            let coords_str = format!("[{}:{}:{}]", target_galaxy, target_system, target_position);
+                            websocket::notify_colony_founded(ws, owner_id, &colony_name, &coords_str).await;
+                        }
                     } else {
                         // L'emplacement est maintenant occupé - le vaisseau de colonisation est perdu
                         println!("❌ Colonisation échouée: [{}:{}:{}] est maintenant occupé", target_galaxy, target_system, target_position);

@@ -174,6 +174,13 @@ pub enum WsEvent {
         deuterium: f64,
     },
 
+    /// Colonie fondée avec succès (Expansion 5.0)
+    #[serde(rename = "colony_founded")]
+    ColonyFounded {
+        planet_name: String,
+        coords: String,
+    },
+
     /// Alerte espionnage
     #[serde(rename = "spy_alert")]
     SpyAlert {
@@ -682,6 +689,14 @@ pub fn notify_transport_arrived(
         crystal,
         deuterium,
     });
+}
+
+/// Notifie qu'une colonisation a réussi (Expansion 5.0)
+pub async fn notify_colony_founded(state: &WsState, owner_id: Uuid, planet_name: &str, coords: &str) {
+    state.broadcast_to_user(owner_id, WsEvent::ColonyFounded {
+        planet_name: planet_name.to_string(),
+        coords: coords.to_string(),
+    }).await;
 }
 
 /// Notifie une alerte espionnage
