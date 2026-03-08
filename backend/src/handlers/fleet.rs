@@ -1182,7 +1182,6 @@ async fn expedition_v2_handler(
     let total_ships: i32 = fleet.values().sum();
     let recyclers = fleet.get("recycler").copied().unwrap_or(0);
     let recycler_bonus = 1.0 + (recyclers as f64 * recycler_mult);
-    let speed_mult = speed_factor / 100.0;
 
     let combat_power: f64 = fleet.iter()
         .map(|(k, &v)| v as f64 * ship_cfg.get(k.as_str()).map(|c| c.combat_power).unwrap_or(1.0))
@@ -1192,11 +1191,19 @@ async fn expedition_v2_handler(
         .map(|(k, &v)| v as f64 * ship_cfg.get(k.as_str()).map(|c| c.capacity).unwrap_or(1.0))
         .sum();
 
-    // Loot de base pondéré par capacité
-    let base_metal   = total_capacity * (100.0 + rand::random::<f64>() * 80.0) * speed_mult;
-    let base_crystal = total_capacity * (40.0  + rand::random::<f64>() * 30.0) * speed_mult;
-    let base_deut    = if rand::random::<f64>() < 0.5 {
-        total_capacity * (20.0 + rand::random::<f64>() * 20.0) * speed_mult
+    // ─── RÉCOMPENSES BASÉES SUR LA PUISSANCE, PAS LE SPEED_FACTOR ──────────
+    // Valeur par unité de combat_power pirate vaincu (ressources pillées)
+    // Cela assure que plus les pirates sont forts → plus la récompense est grande.
+    // Pour les outcomes pacifiques, on utilise la capacité de transport.
+    let value_per_cp   = 5000.0_f64;   // ressources par point de combat_power pirate vaincu
+    let value_per_cap  = 800.0_f64;    // ressources par unité de capacité (outcomes calmes)
+    let rand_variance  = || 0.75 + rand::random::<f64>() * 0.5; // multiplicateur ×0.75–1.25
+
+    // Base calme (floating resources, empty space)
+    let base_calm_metal   = (total_capacity.max(5.0) * value_per_cap * calm_bonus * rand_variance()).floor();
+    let base_calm_crystal = (base_calm_metal * (0.40 + rand::random::<f64>() * 0.15)).floor();
+    let base_calm_deut    = if rand::random::<f64>() < 0.5 {
+        (base_calm_metal * (0.15 + rand::random::<f64>() * 0.10)).floor()
     } else { 0.0 };
 
     let ship_names: HashMap<&str, &str> = [
@@ -1246,11 +1253,24 @@ async fn expedition_v2_handler(
     let mut syndicate_credits_earned: f64 = 0.0;
     let winner: &str;
 
+    // ── Formule de récompense au combat ─────────────────────────────────────
+    // reward_metal = pirate_str × value_per_cp × tier_mult × loss_mult × rand × recycler
+    // loss_mult = 1.0 + (pertes / total_ships) × 2.0  — plus tu perds, plus tu gagnes
+    // Crystal ≈ 45-60% du métal | Deutérium ≈ 20-30% (selon tirage)
+    let combat_reward = |pirate_str: i32, tier_mult: f64, n_losses: i32| -> (f64, f64, f64) {
+        let loss_mult = 1.0 + (n_losses as f64 / total_ships as f64) * 2.0;
+        let m = (pirate_str as f64 * value_per_cp * tier_mult * loss_mult
+            * rand_variance() * recycler_bonus).floor();
+        let c = (m * (0.45 + rand::random::<f64>() * 0.15)).floor();
+        let d = if rand::random::<f64>() < 0.55 { (m * (0.18 + rand::random::<f64>() * 0.12) * rand_variance()).floor() } else { 0.0 };
+        (m, c, d)
+    };
+
     let (final_metal, final_crystal, final_deuterium) = if outcome_roll < 0.10 {
         // ── ESPACE VIDE (10%) ──────────────────────────────────────────────
         winner = "calm";
-        let m = base_metal * 0.25;
-        let c = base_crystal * 0.25;
+        let m = (base_calm_metal * 0.25).floor();
+        let c = (base_calm_crystal * 0.25).floor();
         logs.push("SCAN : Secteur complètement désert. Aucune activité dans ce quadrant.".to_string());
         if m > 1.0 { logs.push(format!("DECOUVERTE : Micrométéorites récupérées. +{:.0} M, +{:.0} C.", m, c)); }
         if total_ships > 1 && rand::random::<f64>() < 0.30 {
@@ -1264,10 +1284,9 @@ async fn expedition_v2_handler(
     } else if outcome_roll < 0.35 {
         // ── RESSOURCES FLOTTANTES (25%) ────────────────────────────────────
         winner = "calm";
-        let mult = calm_bonus * recycler_bonus;
-        let m = base_metal * mult;
-        let c = base_crystal * mult;
-        let d = base_deut * mult;
+        let m = (base_calm_metal * recycler_bonus).floor();
+        let c = (base_calm_crystal * recycler_bonus).floor();
+        let d = (base_calm_deut * recycler_bonus).floor();
         logs.push("SCAN : Épave ancienne détectée. Récupération en cours.".to_string());
         if d > 0.0 { logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium.", m, c, d)); }
         else { logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", m, c)); }
@@ -1281,7 +1300,7 @@ async fn expedition_v2_handler(
         (m, c, d)
 
     } else if outcome_roll < 0.55 {
-        // ── PIRATES FAIBLES (20%) ──────────────────────────────────────────
+        // ── PIRATES FAIBLES (20%) — tier_mult = 0.5 ───────────────────────
         logs.push("⚠️ RADAR : Pirates amateurs détectés. La flotte engage le combat.".to_string());
         let pirate_str = (combat_power * (0.15 + rand::random::<f64>() * 0.30)) as i32;
         if combat_power as i32 > pirate_str || combat_power >= 3.0 {
@@ -1289,9 +1308,7 @@ async fn expedition_v2_handler(
             let n = ((total_ships as f64 * (0.03 + rand::random::<f64>() * 0.07)).ceil() as i32)
                 .max(0).min(total_ships);
             let lss = split_losses_fleet(n);
-            let m = base_metal * 0.7 * recycler_bonus;
-            let c = base_crystal * 0.7 * recycler_bonus;
-            let d = base_deut * 0.7 * recycler_bonus;
+            let (m, c, d) = combat_reward(pirate_str.max(1), 0.5, n);
             logs.push(format!("RESULTAT : Victoire ! Pirates dispersés (force estimée : {}).", pirate_str));
             push_loss_msg(&lss, "PERTES", &mut logs);
             if d > 0.0 { logs.push(format!("PILLAGE : +{:.0} M, +{:.0} C, +{:.0} D.", m, c, d)); }
@@ -1309,7 +1326,7 @@ async fn expedition_v2_handler(
         }
 
     } else if outcome_roll < 0.80 {
-        // ── PIRATES MOYENS (25%) ───────────────────────────────────────────
+        // ── PIRATES MOYENS (25%) — tier_mult = 1.0 ────────────────────────
         logs.push("⚠️ RADAR : Escadron pirate en approche. Combat inévitable.".to_string());
         let pirate_str = (combat_power * (0.45 + rand::random::<f64>() * 0.45)) as i32;
         if combat_power as i32 > pirate_str {
@@ -1317,9 +1334,7 @@ async fn expedition_v2_handler(
             let n = ((total_ships as f64 * (0.08 + rand::random::<f64>() * 0.14)).ceil() as i32)
                 .max(0).min(total_ships);
             let lss = split_losses_fleet(n);
-            let m = base_metal * recycler_bonus;
-            let c = base_crystal * recycler_bonus;
-            let d = base_deut * recycler_bonus;
+            let (m, c, d) = combat_reward(pirate_str.max(1), 1.0, n);
             logs.push(format!("RESULTAT : Victoire acharnée. Escadron neutralisé (force : {}).", pirate_str));
             push_loss_msg(&lss, "PERTES", &mut logs);
             if d > 0.0 { logs.push(format!("PILLAGE : +{:.0} M, +{:.0} C, +{:.0} D.", m, c, d)); }
@@ -1337,7 +1352,7 @@ async fn expedition_v2_handler(
         }
 
     } else if outcome_roll < 0.95 {
-        // ── PIRATES FORTS (15%) ────────────────────────────────────────────
+        // ── PIRATES FORTS (15%) — tier_mult = 2.0 ─────────────────────────
         logs.push("⚠️ RADAR : ALERTE — Flotte pirate redoutable. Combat critique.".to_string());
         let pirate_str = (combat_power * (0.85 + rand::random::<f64>() * 0.65)) as i32;
         if combat_power as i32 > pirate_str {
@@ -1345,9 +1360,7 @@ async fn expedition_v2_handler(
             let n = ((total_ships as f64 * (0.15 + rand::random::<f64>() * 0.25)).ceil() as i32)
                 .max(0).min(total_ships);
             let lss = split_losses_fleet(n);
-            let m = base_metal * 1.4 * recycler_bonus;
-            let c = base_crystal * 1.4 * recycler_bonus;
-            let d = base_deut * 1.4 * recycler_bonus;
+            let (m, c, d) = combat_reward(pirate_str.max(1), 2.0, n);
             logs.push(format!("RESULTAT : Victoire héroïque ! Flotte ennemie détruite (force : {}).", pirate_str));
             push_loss_msg(&lss, "PERTES", &mut logs);
             if d > 0.0 { logs.push(format!("PILLAGE : +{:.0} M, +{:.0} C, +{:.0} D.", m, c, d)); }
@@ -1367,14 +1380,16 @@ async fn expedition_v2_handler(
     } else {
         // ── DÉCOUVERTE (5%) ────────────────────────────────────────────────
         winner = "calm";
-        let m = base_metal * 0.5 * recycler_bonus;
-        let c = base_crystal * 0.5 * recycler_bonus;
-        let d = base_deut * 0.3 * recycler_bonus;
-        syndicate_credits_earned = 3.0 + (rand::random::<f64>() * 5.0).round();
+        let m = (base_calm_metal * recycler_bonus).floor();
+        let c = (base_calm_crystal * recycler_bonus).floor();
+        let d = (base_calm_deut * 0.5 * recycler_bonus).floor();
+        // SC : base + aléatoire + bonus puissance flotte (capped)
+        syndicate_credits_earned = (5.0 + (rand::random::<f64>() * 10.0).round()
+            + (combat_power * 0.05_f64).min(8.0)).floor();
         logs.push("SCAN : Signal d'origine inconnue capté. Artefacts extraterrestres détectés.".to_string());
         if d > 0.0 { logs.push(format!("DECOUVERTE : +{:.0} M, +{:.0} C, +{:.0} D.", m, c, d)); }
         else { logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", m, c)); }
-        logs.push(format!("DÉCOUVERTE : +{:.1} Crédit(s) Syndicat récupérés dans l'artefact.", syndicate_credits_earned));
+        logs.push(format!("DÉCOUVERTE : +{:.0} Crédit(s) Syndicat récupérés dans l'artefact.", syndicate_credits_earned));
         logs.push("RESULTAT : Données scientifiques transmises au Syndicat.".to_string());
         (m, c, d)
     };
