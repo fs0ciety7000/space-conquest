@@ -1,5 +1,30 @@
 # Changelog - Space Conquest
 
+## [5.1.0] - 2026-03-08 - Expansion 5.1 : Expéditions Multi-Vaisseaux & Bug-fixes
+
+### 🚀 Expéditions — Support Tous Types de Vaisseaux
+
+- `expedition_handler` refactorisé : accepte n'importe quelle composition `fleet: HashMap<ship_key, count>`
+- Config par type : `capacity` (loot), `combat_power` (vs pirates), `vulnerability` (répartition pertes)
+- Comparaison pirates basée sur `combat_power` pondérée (fini `total_ships`)
+- Rapport JSON : `lost_ships: HashMap<String, i32>` par type (fin des champs legacy `lost_hunters`/`lost_cruisers`)
+- `ExpeditionZoneV2.tsx` : fix parsing `data.report.*`, affichage pertes par type dans le rapport
+
+### 🐛 Fix — Sell Planet (Infinite Loading + Logout)
+
+- `PlanetContext.fetchPlanet()` : sur 404, récupère `/my-planets` et switche vers la homeworld au lieu de vider l'état
+- `App.tsx` `checkMessageAndReports` : sur 404, appelle `switchPlanet()` (PlanetContext) **et** `setPlanetId()` (état App) pour maintenir les deux états synchronisés
+- Résout la boucle infinie SpaceLoader après vente de planète
+- Résout le logout forcé au refresh après vente de planète
+
+### 🖥️ CombatModal — Rapport Détaillé Round-by-Round
+
+- Section "Pertes détaillées par type" depuis `details.attacker_stats`/`details.defender_stats`
+- Section "Déroulement du combat" avec chaque round (narrative + pertes ATT/DEF)
+- `getShipDisplayName()` pour nommer correctement les défenses (préfixe `def_` retiré)
+
+---
+
 ## [5.0.0] - 2026-03-09 - Expansion 5.0 : Refactoring Architecture & Champs de Débris
 
 ### 🏗️ Architecture Backend (PRIORITÉ 1 — Refactoring)

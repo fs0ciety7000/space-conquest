@@ -391,11 +391,13 @@ De plus, il faut que le OnboardingTour ne s'affiche plus une fois vu/complété.
 | Marché Noir / Pirates | ✅ | Stable |
 | Routes commerciales | ✅ | Stable |
 | Analytics / Dashboard | ✅ | Stable |
-| **main.rs** | 🟡 **Partiel** | handlers/ créés, planets.rs + fleet.rs restent |
+| **main.rs** | ✅ Complet | handlers/ créés, planets.rs + fleet.rs faits |
 | Rate Limiting | 🟡 Manquant | Priorité sécurité |
-| WS Events complets | ✅ Complet | building, research, colony_founded ajoutés (session 2026-03-09) |
+| WS Events complets | ✅ Complet | building, research, colony_founded ajoutés |
 | Champs de Débris | ✅ Backend fait | Frontend (GalaxyView 💫) reste à faire |
-| DetailedCombatReport | ✅ Implémenté | Frontend (ReportsTerminal) reste à faire |
+| DetailedCombatReport | ✅ Complet | CombatModal: rounds + pertes par type ✅ |
+| Expéditions multi-vaisseaux | ✅ Complet | 6 outcomes, lost_ships par type, ExpeditionZoneV2 |
+| Fix sell-planet | ✅ Résolu | PlanetContext + App 404 → homeworld switch |
 | Skeleton Loaders | 🟢 UX nice-to-have | Frontend |
 | Galaxy Search | 🟢 UX nice-to-have | Frontend |
 | Favoris planètes | 🟢 UX nice-to-have | Frontend |
@@ -614,13 +616,13 @@ ALTER TABLE planet ADD COLUMN debris_crystal FLOAT NOT NULL DEFAULT 0;
 | 🟡 Importante | Champ de débris post-combat | `combat.rs`, migration BDD | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | Consommation deutérium missions | `main.rs`, `FleetDispatcher.tsx` | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | Loot capping via cargo réel | `combat.rs` | ✅ **FAIT** (session 2026-03-09) |
-| 🟢 Nice | Expéditions — outcomes diversifiés | `combat.rs` | 🟢 Reste à faire |
+| 🟢 Nice | Expéditions — outcomes diversifiés + multi-ship | `main.rs` | ✅ **FAIT** (session 2026-03-08) |
 | 🟢 Nice | Storage cap sur production | `game_logic.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🟢 Nice | Bonus research lab sur temps recherche | `game_logic.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🟢 Nice | Production passive minimale | `game_logic.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🔴 Critique | Refactoring handlers/ (galaxy, ranking, etc.) | `handlers/` | ✅ **FAIT** (session 2026-03-09) |
 | 🔴 Critique | DetailedCombatReport round-by-round | `combat.rs` | ✅ **FAIT** (session 2026-03-09) |
-| 🟡 Importante | Affichage DetailedCombatReport dans CombatModal | `CombatModal.tsx` | ✅ **FAIT** (session 2026-03-09) |
+| 🟡 Importante | Affichage DetailedCombatReport dans CombatModal | `CombatModal.tsx` | ✅ **FAIT** (sessions 2026-03-09/08) |
 | 🟡 Importante | handlers/planets.rs (get_planet, upgrade, build) | `handlers/planets.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | handlers/fleet.rs (attack, spy, expedition) | `handlers/fleet.rs` | ✅ **FAIT** (session 2026-03-09) |
 | 🟡 Importante | WS Events complets (building/research complete) | `tick_system.rs` | ✅ **FAIT** (session 2026-03-09) |

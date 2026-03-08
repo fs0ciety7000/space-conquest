@@ -1,11 +1,63 @@
 # ANTIGRAVITY_SYNC — Résumé des changements backend → frontend
 
-> Généré par Claude Code — Session 2026-03-08
+> Dernière mise à jour : Session 2026-03-08 (Expansion 5.1)
 > Destiné à **antigravity** pour intégrer et tester les nouvelles fonctionnalités frontend.
 
 ---
 
-## Ce qui a été implémenté (session complète)
+## Expansion 5.1 — Session 2026-03-08
+
+### 1. Fix Sell-Planet (Infinite Loading + Logout) ✅
+
+**Problème :** Après la vente d'une planète, l'UI restait bloquée sur le SpaceLoader, et un refresh forçait le logout.
+
+**Cause racine :** `PlanetContext.fetchPlanet()` vidait tout l'état sur 404 sans switcher vers une autre planète. L'App avait son propre `planetId` state qui n'était pas mis à jour en sync.
+
+**Changements frontend :**
+- `src/contexts/PlanetContext.tsx` — `fetchPlanet()` : sur 404, fetch `/my-planets` → switch vers homeworld (ou première planète). Plus de `localStorage.removeItem` sauf si zéro planète.
+- `src/App.tsx` — `checkMessageAndReports()` : sur 404, appelle `switchPlanet(homeworld.id)` **ET** `setPlanetId(homeworld.id)` pour garder les deux états synchronisés.
+
+**À tester :**
+- [ ] Vendre une planète depuis le marché → l'UI switche automatiquement vers la homeworld
+- [ ] Refresh après vente → pas de logout, affiche la homeworld
+- [ ] Si l'utilisateur n'a plus de planète → affiche un état vide gracieux (pas de crash)
+
+---
+
+### 2. Expéditions — Support Tous Types de Vaisseaux ✅
+
+**Changements backend :**
+- `expedition_handler` : payload `{ fleet: HashMap<ship_key, count> }` (tous types acceptés)
+- Réponse : `lost_ships: { "light_hunter": 3, "transporter": 1, ... }` remplace `lost_hunters`/`lost_cruisers`
+- 6 outcomes pondérés : EmptySpace (10%), FloatingResources (25%), PiratesWeak (20%), PiratesMedium (25%), PiratesStrong (15%), Discovery (5%)
+
+**Changements frontend — `ExpeditionZoneV2.tsx` :**
+- Fix critique : la réponse est `data.report.log` / `data.report.result` (pas `data.logs` / `data.result`)
+- Affichage des pertes par type dans le rapport : badges rouges `"-3 light hunter"`, `"-1 transporter"`, etc.
+- Le sélecteur de vaisseaux charge depuis `/planets/:id/ship-types` — tous les types disponibles sont affichables
+- Payload envoyé : `{ fleet: { light_hunter: 5, cruiser: 2, recycler: 1 } }`
+
+**À tester :**
+- [ ] Lancer une expédition avec mix de vaisseaux → rapport affiche les bons résultats
+- [ ] Outcome "Espace vide" et "Découverte" (credits syndicat) s'affichent correctement
+- [ ] Pertes affichées par type dans le rapport de combat
+
+---
+
+### 3. CombatModal — Rapport Détaillé ✅
+
+**Changements frontend — `CombatModal.tsx` :**
+- Section "Pertes détaillées par type" : affiche `fleet_lost` + `defense_lost` par type pour les deux camps
+- Section "Déroulement du combat" : rounds avec narrative, pertes ATT/DEF par round
+- Conditionnel : affiché uniquement si `parsedReport.details` est non-null (rapport Expansion 5.0+)
+
+**À tester :**
+- [ ] Ouvrir un rapport de combat récent → section "Analyse Tactique" visible avec rounds
+- [ ] Anciens rapports (sans `details`) → section absente, rapport legacy toujours affiché
+
+---
+
+## Ce qui a été implémenté (sessions précédentes)
 
 ### 1. Système de Notifications (v8.0) ✅
 
