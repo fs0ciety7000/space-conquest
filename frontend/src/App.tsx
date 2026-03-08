@@ -787,7 +787,7 @@ function AppContent({
           />
       </div>
 
-      <div className="flex flex-1 w-full h-full overflow-hidden relative z-30 pt-[60px] md:pt-[72px]">
+      <div className="flex flex-1 w-full h-full overflow-hidden relative z-30 main-layout">
         {/* Sidebar Desktop */}
         <aside className="w-64 bg-slate-950/80 backdrop-blur-xl border-r border-indigo-500/10 flex-col h-full overflow-y-auto hidden md:flex scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent relative">
           {/* Ligne lumineuse décorative */}

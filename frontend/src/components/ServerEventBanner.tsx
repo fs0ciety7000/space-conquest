@@ -1,7 +1,7 @@
 // ANTIGRAVITY: Bandeau d'alertes PVE en haut de l'écran.
 // Affiche les événements incoming et actifs avec progression HP.
 // Clic → ouvre ServerEventModal pour les détails + contribution.
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, AlertTriangle, Swords, ChevronDown, ChevronUp } from 'lucide-react';
 import type { ServerEventSummary } from '@/hooks/useServerEvents';
 import ServerEventModal from './ServerEventModal';
@@ -50,7 +50,29 @@ export default function ServerEventBanner({ events, userId, planetId }: ServerEv
   const [selectedEvent, setSelectedEvent] = useState<ServerEventSummary | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 
+  const bannerRef = useRef<HTMLDivElement>(null);
   const visible = events.filter(e => !dismissed.has(e.id) && (e.status === 'active' || e.status === 'incoming'));
+
+  // Publie la hauteur réelle du banner via CSS variable → le layout peut se décaler
+  useEffect(() => {
+    const el = bannerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--pve-banner-height', `${el.offsetHeight}px`);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.setProperty('--pve-banner-height', '0px');
+    };
+  }, []);
+
+  // Reset à 0 si aucun événement visible
+  useEffect(() => {
+    if (visible.length === 0) {
+      document.documentElement.style.setProperty('--pve-banner-height', '0px');
+    }
+  }, [visible.length]);
 
   if (visible.length === 0) return null;
 
@@ -61,7 +83,7 @@ export default function ServerEventBanner({ events, userId, planetId }: ServerEv
 
   return (
     <>
-      <div className="fixed top-[60px] md:top-[72px] left-0 right-0 z-40 pointer-events-none">
+      <div ref={bannerRef} className="fixed top-[60px] md:top-[72px] left-0 right-0 z-40 pointer-events-none">
         <div className="pointer-events-auto">
           {/* Header barre avec toggle */}
           <div

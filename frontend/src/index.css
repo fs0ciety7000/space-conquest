@@ -902,3 +902,16 @@ body.pve-active-artifact::before {
     radial-gradient(ellipse at bottom right, rgba(139, 92, 246, 0.10) 0%, transparent 45%),
     radial-gradient(ellipse at center,       rgba(168, 85, 247, 0.04) 0%, transparent 60%);
 }
+
+
+/* ── Layout décalage PVE banner ──────────────────────────────────────────── */
+/* Appliqué sur le conteneur principal pour pousser le contenu sous le banner fixe */
+.main-layout {
+  padding-top: calc(60px + var(--pve-banner-height, 0px));
+  transition: padding-top 0.2s ease;
+}
+@media (min-width: 768px) {
+  .main-layout {
+    padding-top: calc(72px + var(--pve-banner-height, 0px));
+  }
+}
