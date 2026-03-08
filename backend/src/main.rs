@@ -47,6 +47,13 @@ use backend::{
 // Cancel handlers for ship/defense builds
 mod cancel_handlers;
 use cancel_handlers::{cancel_ship_build_handler, cancel_defense_build_handler, cancel_research_handler};
+
+// Handler sub-modules (extracted from main.rs)
+mod handlers;
+
+// Shared serialisable structs used across handler modules
+mod models;
+
 use config::Config;
 use websocket::WsState;
 
@@ -222,6 +229,7 @@ async fn main() {
     // Cloner la DB pour les tâches en arrière-plan avant de la déplacer dans AppState
     let db_cleanup = db.clone();
     let db_tick = db.clone();
+    let ws_tick = ws_state.clone(); // Pour les WS events de complétion (building_complete, research_complete)
     let db_trade = db.clone();
     let db_black_market = db.clone();
     let db_extortions = db.clone();
@@ -492,6 +500,16 @@ async fn main() {
         // Analytics / Dashboard
         .route("/analytics", get(analytics::get_analytics_handler))
 
+        // ── Merge extracted handler modules (Expansion 5.0 refactor) ──────────
+        // TODO (antigravity): Ces modules ont été extraits de main.rs.
+        // Les routes dupliquées ci-dessus doivent être retirées progressivement.
+        // Priorité : /config, /ranking, /unit-costs, /galaxy/* après validation.
+        .merge(handlers::ranking::router(state.clone()))
+        .merge(handlers::reports::router(state.clone()))
+        .merge(handlers::profile::router(state.clone()))
+        .merge(handlers::galaxy::router(state.clone()))
+        .merge(handlers::shipyard::router(state.clone()))
+
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -549,6 +567,18 @@ async fn main() {
                         println!("✅ Tick: {} research, {} ships, {} defenses, {} buildings completed",
                             stats.research_completed, stats.ships_completed,
                             stats.defenses_completed, stats.buildings_completed);
+                    }
+                    // Émettre les WS events pour les constructions/recherches terminées
+                    for item in &stats.completed_constructions {
+                        match item.category {
+                            "building" => websocket::notify_construction_complete(
+                                &ws_tick, item.planet_id, &item.item_key, item.level_or_qty
+                            ),
+                            "research" => websocket::notify_research_complete(
+                                &ws_tick, item.planet_id, &item.item_key, item.level_or_qty
+                            ),
+                            _ => {}
+                        }
                     }
                 }
                 Err(e) => eprintln!("❌ Tick error: {:?}", e),
@@ -725,6 +755,7 @@ async fn resolve_attack_mission(
     let defender_defenses = load_planet_defenses_for_combat(db, mission.target_planet_id).await;
 
     // Run combat using new dynamic system
+    let config_snap = state.config.read().unwrap().clone();
     let result = combat::resolve_pvp_combat(
         db,
         attacker_ships.clone(),
@@ -732,7 +763,10 @@ async fn resolve_attack_mission(
         defender_ships.clone(),
         defender_defenses.clone(),
         def_bonuses,
-        (def_planet.metal_amount, def_planet.crystal_amount, def_planet.deuterium_amount)
+        (def_planet.metal_amount, def_planet.crystal_amount, def_planet.deuterium_amount),
+        Some(&config_snap),
+        None, // TODO: pass attacker (weapons, shield, armour) tech levels for BonusSummary
+        None,
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -923,6 +957,7 @@ async fn resolve_attack_mission(
         ships_lost: Set(defender_total_lost),
         date: Set(now),
         detailed_report: Set(Some(def_rep_json.clone())),
+        details: Set(None),
     }.insert(db).await;
 
     // Combat log pour l'attaquant
@@ -938,6 +973,7 @@ async fn resolve_attack_mission(
         ships_lost: Set(attacker_total_lost),
         date: Set(now),
         detailed_report: Set(Some(att_rep_json.clone())),
+        details: Set(None),
     }.insert(db).await;
 
     FleetMission::delete_by_id(mission.id).exec(db).await.unwrap();
@@ -1833,6 +1869,12 @@ async fn get_planet_handler(
                         }
 
                         println!("🌍 Colonisation réussie: {} en [{}:{}:{}]", colony_name, target_galaxy, target_system, target_position);
+
+                        // Notifier le joueur via WS (Expansion 5.0)
+                        if let Some(ref ws) = state.ws {
+                            let coords_str = format!("[{}:{}:{}]", target_galaxy, target_system, target_position);
+                            websocket::notify_colony_founded(ws, owner_id, &colony_name, &coords_str).await;
+                        }
                     } else {
                         // L'emplacement est maintenant occupé - le vaisseau de colonisation est perdu
                         println!("❌ Colonisation échouée: [{}:{}:{}] est maintenant occupé", target_galaxy, target_system, target_position);
@@ -2550,6 +2592,7 @@ async fn attack_v2_handler(
 
     // Verify planet has all requested ships
     let mut total_ships = 0;
+    let mut total_fuel_per_unit: f64 = 0.0;
     for (ship_key, &count) in &payload.fleet {
         if count <= 0 {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
@@ -2583,6 +2626,22 @@ async fn attack_v2_handler(
         }
 
         total_ships += count;
+        total_fuel_per_unit += (count as f64) * (ship.fuel_consumption as f64);
+    }
+
+    // Distance for fuel calculation (same formula used for travel time below)
+    let dist = game_logic::calculate_distance(
+        (att_planet.galaxy, att_planet.system, att_planet.position),
+        (target_planet.galaxy, target_planet.system, target_planet.position)
+    );
+
+    // Deuterium fuel check — cost = fuel_per_unit * distance / 1000 (minimum 1)
+    let fuel_needed = (total_fuel_per_unit * dist / 1000.0).ceil().max(1.0);
+    if att_planet.deuterium_amount < fuel_needed {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
+                fuel_needed as i64, att_planet.deuterium_amount as i64)
+        }))).into_response();
     }
 
     // Deduct ships from attacker
@@ -2592,10 +2651,12 @@ async fn attack_v2_handler(
         }
     }
 
-    let dist = game_logic::calculate_distance(
-        (att_planet.galaxy, att_planet.system, att_planet.position),
-        (target_planet.galaxy, target_planet.system, target_planet.position)
-    );
+    // Deduct deuterium fuel cost
+    {
+        let mut att_active: planet::ActiveModel = att_planet.clone().into();
+        att_active.deuterium_amount = Set((att_planet.deuterium_amount - fuel_needed).max(0.0));
+        let _ = att_active.update(&state.db).await;
+    }
     let travel_time = {
         let config = state.config.read().unwrap();
         let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
@@ -2990,6 +3051,7 @@ async fn expedition_handler(
         ships_lost: Set(lost_hunters + lost_cruisers),
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(expedition_report.clone())),
+        details: Set(None),
     };
     let _ = log_exp.insert(&state.db).await;
 
@@ -3333,6 +3395,7 @@ async fn spy_handler(
         ships_lost: Set(1), // 1 spy probe used
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(spy_report_details)),
+        details: Set(None),
     };
     let _ = spy_log_attacker.insert(&state.db).await;
 
@@ -3354,6 +3417,7 @@ async fn spy_handler(
             "attacker_player": attacker_username,
             "coordinates": format!("[{}:{}:{}]", att_planet.galaxy, att_planet.system, att_planet.position)
         }))),
+        details: Set(None),
     };
     let _ = spy_log_defender.insert(&state.db).await;
 
@@ -3403,7 +3467,8 @@ async fn spy_v2_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "No ships selected"}))).into_response();
     }
 
-    // Verify planet has all requested ships and deduct them
+    // Verify planet has all requested ships
+    let mut total_fuel_spy: f64 = 0.0;
     for (ship_key, &count) in &payload.fleet {
         if count <= 0 {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
@@ -3436,10 +3501,34 @@ async fn spy_v2_handler(
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Not enough {}", ship.display_name)}))).into_response();
         }
 
-        // Deduct ships
+        total_fuel_spy += (count as f64) * (ship.fuel_consumption as f64);
+    }
+
+    // Deuterium fuel check
+    let spy_dist = game_logic::calculate_distance(
+        (att_planet.galaxy, att_planet.system, att_planet.position),
+        (def_planet.galaxy, def_planet.system, def_planet.position),
+    );
+    let spy_fuel_needed = (total_fuel_spy * spy_dist / 1000.0).ceil().max(1.0);
+    if att_planet.deuterium_amount < spy_fuel_needed {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
+                spy_fuel_needed as i64, att_planet.deuterium_amount as i64)
+        }))).into_response();
+    }
+
+    // Deduct ships
+    for (ship_key, &count) in &payload.fleet {
         if let Err(_) = tech_tree::deduct_ships(&state.db, att_planet.id, ship_key, count).await {
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to deduct {}", ship_key)}))).into_response();
         }
+    }
+
+    // Deduct deuterium fuel cost
+    {
+        let mut att_active: planet::ActiveModel = att_planet.clone().into();
+        att_active.deuterium_amount = Set((att_planet.deuterium_amount - spy_fuel_needed).max(0.0));
+        let _ = att_active.update(&state.db).await;
     }
 
     // Load relational data for both planets
@@ -3522,6 +3611,7 @@ async fn spy_v2_handler(
         ships_lost: Set(1), // 1 spy probe used
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(spy_report_details)),
+        details: Set(None),
     };
     let _ = spy_log_attacker.insert(&state.db).await;
 
@@ -3543,6 +3633,7 @@ async fn spy_v2_handler(
             "attacker_player": attacker_username,
             "coordinates": format!("[{}:{}:{}]", att_planet.galaxy, att_planet.system, att_planet.position)
         }))),
+        details: Set(None),
     };
     let _ = spy_log_defender.insert(&state.db).await;
 
@@ -3960,6 +4051,7 @@ async fn colonize_handler(
         deuterium: Set(deuterium_to_transport),
         ships_count: Set(1),
         fleet_data: Set(Some(colonize_data.to_string())),
+        recyclers_sent: Set(0),
     };
     let _ = mission.insert(&state.db).await;
 
@@ -4297,7 +4389,7 @@ async fn transport_handler(
     let mission = fleet_mission::ActiveModel {
         id: Set(Uuid::new_v4()), source_planet_id: Set(source_id), target_planet_id: Set(target_id), mission_type: Set("transport".to_string()), arrival_time: Set(arrival),
         metal: Set(payload.metal), crystal: Set(payload.crystal), deuterium: Set(payload.deuterium), ships_count: Set(payload.transporters),
-        fleet_data: Set(None),
+        fleet_data: Set(None), recyclers_sent: Set(0),
     };
 
     let log = transport_log::ActiveModel {
@@ -6862,6 +6954,7 @@ async fn expedition_v2_handler(
     }
 
     // Verify planet has these ships
+    let mut expedition_fuel_per_unit: f64 = 0.0;
     for (ship_key, &count) in &payload.fleet {
         if count <= 0 {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid count for {}", ship_key)}))).into_response();
@@ -6893,6 +6986,23 @@ async fn expedition_v2_handler(
         if count > planet_ship_count {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Not enough {}", ship.display_name)}))).into_response();
         }
+
+        expedition_fuel_per_unit += (count as f64) * (ship.fuel_consumption as f64);
+    }
+
+    // Deuterium fuel check — expeditions use a fixed base distance of 5000 units
+    let expedition_fuel_needed = (expedition_fuel_per_unit * 5000.0 / 1000.0).ceil().max(1.0);
+    if planet.deuterium_amount < expedition_fuel_needed {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Deutérium insuffisant pour l'expédition ({} requis, {} disponible)",
+                expedition_fuel_needed as i64, planet.deuterium_amount as i64)
+        }))).into_response();
+    }
+    // Deduct deuterium fuel cost before combat
+    {
+        let mut planet_active: planet::ActiveModel = planet.clone().into();
+        planet_active.deuterium_amount = Set((planet.deuterium_amount - expedition_fuel_needed).max(0.0));
+        let _ = planet_active.update(&state.db).await;
     }
 
     // Get config
@@ -7026,6 +7136,7 @@ async fn expedition_v2_handler(
         ships_lost: Set(ships_lost_total),
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(expedition_report.clone())),
+        details: Set(None),
     }.insert(&state.db).await;
 
     // Mise à jour missions quotidiennes & achievements

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use rand::Rng;
 use std::collections::HashMap;
 use sea_orm::DatabaseConnection;
+use crate::ServerConfigCache;
 
 // --- STRUCTURES DE DONNÉES ---
 
@@ -339,6 +340,15 @@ pub async fn resolve_expedition_combat(
 /// - Planetary defenses included in the defender fleet
 /// - Simultaneous damage (both sides fire at the same time each round)
 /// - loss_ratio clamped to 1.0 to prevent negative ship counts
+/// Résout un combat PvP complet avec support du rapport détaillé et du loot capping.
+///
+/// # Paramètres
+/// - `config` : configuration serveur (pour le loot capping via cargo capacity)
+/// - `attacker_tech_levels` : (weapons, shield, armour) niveaux de tech pour BonusSummary
+/// - `defender_tech_levels` : idem pour le défenseur
+///
+/// TODO (antigravity): Si tu veux afficher le BonusSummary dans le frontend,
+/// passe les niveaux de tech via `attacker_tech_levels` et `defender_tech_levels`.
 pub async fn resolve_pvp_combat(
     db: &DatabaseConnection,
     attacker_ships: HashMap<String, i32>,
@@ -347,6 +357,9 @@ pub async fn resolve_pvp_combat(
     defender_defenses: HashMap<String, i32>, // keys: "def_{defense_key}"
     defender_bonuses: CombatBonuses,
     defender_resources: (f64, f64, f64),
+    config: Option<&ServerConfigCache>,
+    attacker_tech_levels: Option<(i32, i32, i32)>, // (weapons, shield, armour)
+    defender_tech_levels: Option<(i32, i32, i32)>,
 ) -> Result<PvpCombatReport, sea_orm::DbErr> {
     let mut logs = Vec::new();
 
@@ -378,11 +391,21 @@ pub async fn resolve_pvp_combat(
 
     let max_rounds = 6;
     let mut winner = "draw";
+    let mut rounds_played: u8 = 0;
+    let mut total_att_damage: f64 = 0.0;
+    let mut total_def_damage: f64 = 0.0;
+    let mut round_logs: Vec<RoundLog> = Vec::new();
+
+    // Snapshots pour calculer les pertes par round
+    let mut prev_att_ships: i32 = attacker_ships.values().sum();
+    let mut prev_def_ships: i32 = defender_ships.values().sum();
+    let mut prev_def_defs: i32 = defender_defenses.values().sum();
 
     for round in 1..=max_rounds {
         if attacker_fleet.is_destroyed() || defender_fleet.is_destroyed() {
             break;
         }
+        rounds_played = round;
 
         logs.push(format!("--- ROUND {} ---", round));
 
@@ -398,10 +421,41 @@ pub async fn resolve_pvp_combat(
         defender_fleet.take_damage(attacker_damage, &stats_cache, defender_bonuses.shield_mult, defender_bonuses.armour_mult);
         attacker_fleet.take_damage(defender_damage, &stats_cache, attacker_bonuses.shield_mult, attacker_bonuses.armour_mult);
 
+        total_att_damage += attacker_damage;
+        total_def_damage += defender_damage;
+
         logs.push(format!(
             "ATT inflige {:.0} dmg | DEF inflige {:.0} dmg",
             attacker_damage, defender_damage
         ));
+
+        // Calcul des pertes par round pour le rapport détaillé
+        let curr_att_ships: i32 = attacker_fleet.get_all_ships().values().filter(|&&v| v > 0).sum();
+        let curr_def_all: HashMap<String, i32> = defender_fleet.get_all_ships().clone();
+        let curr_def_ships: i32 = curr_def_all.iter().filter(|(k, _)| !k.starts_with("def_")).map(|(_, v)| v).sum();
+        let curr_def_defs: i32 = curr_def_all.iter().filter(|(k, _)| k.starts_with("def_")).map(|(_, v)| v).sum();
+
+        let att_lost_this_round = (prev_att_ships - curr_att_ships).max(0);
+        let def_ships_lost_this_round = (prev_def_ships - curr_def_ships).max(0);
+        let def_defs_lost_this_round = (prev_def_defs - curr_def_defs).max(0);
+
+        round_logs.push(RoundLog {
+            round: round as u8,
+            attacker_damage,
+            defender_damage,
+            attacker_ships_lost_this_round: att_lost_this_round,
+            defender_ships_lost_this_round: def_ships_lost_this_round,
+            defender_defenses_lost_this_round: def_defs_lost_this_round,
+            narrative: format!(
+                "Tour {} : ATT inflige {:.0} dmg (perd {} vaisseaux) | DEF inflige {:.0} dmg (perd {} vaisseaux, {} défenses)",
+                round, attacker_damage, att_lost_this_round,
+                defender_damage, def_ships_lost_this_round, def_defs_lost_this_round
+            ),
+        });
+
+        prev_att_ships = curr_att_ships;
+        prev_def_ships = curr_def_ships;
+        prev_def_defs = curr_def_defs;
 
         if attacker_fleet.is_destroyed() && defender_fleet.is_destroyed() {
             logs.push("Destruction mutuelle !".to_string());
@@ -423,14 +477,134 @@ pub async fn resolve_pvp_combat(
         _          => "MATCH NUL",
     }));
 
+    // ── Loot capping via cargo capacity ────────────────────────────────────────
+    // TODO (antigravity): le loot est maintenant plafonné par la capacité cargo
+    // des vaisseaux survivants de l'attaquant. Metal en priorité, puis crystal, deuterium.
     let (loot_metal, loot_crystal, loot_deuterium) = if winner == "attacker" {
-        (
-            defender_resources.0 * 0.5,
-            defender_resources.1 * 0.5,
-            defender_resources.2 * 0.5,
-        )
+        let raw_metal = defender_resources.0 * 0.5;
+        let raw_crystal = defender_resources.1 * 0.5;
+        let raw_deuterium = defender_resources.2 * 0.5;
+
+        if let Some(cfg) = config {
+            // Calculer la capacité cargo totale des survivants attaquants
+            let cargo_cap: f64 = attacker_fleet.get_all_ships()
+                .iter()
+                .filter(|(k, _)| !k.starts_with("def_"))
+                .map(|(k, count)| crate::game_logic::get_ship_cargo_capacity(k, cfg) * (*count as f64))
+                .sum();
+
+            // Loot proportionnel : métal en priorité
+            let loot_m = raw_metal.min(cargo_cap);
+            let remaining_cap = (cargo_cap - loot_m).max(0.0);
+            let loot_c = raw_crystal.min(remaining_cap);
+            let remaining_cap2 = (remaining_cap - loot_c).max(0.0);
+            let loot_d = raw_deuterium.min(remaining_cap2);
+            (loot_m, loot_c, loot_d)
+        } else {
+            (raw_metal, raw_crystal, raw_deuterium)
+        }
     } else {
         (0.0, 0.0, 0.0)
+    };
+
+    // ── Calcul des débris (30% métal + cristal des vaisseaux perdus) ───────────
+    // Note: les défenses détruites NE génèrent PAS de débris
+    let (debris_metal, debris_crystal) = if let Some(cfg) = config {
+        let debris_factor_metal = cfg.get_config("debris_factor_metal", 0.30);
+        let debris_factor_crystal = cfg.get_config("debris_factor_crystal", 0.30);
+
+        let calc_debris = |initial: &HashMap<String, i32>, remaining: &HashMap<String, i32>| -> (f64, f64) {
+            let mut dm = 0.0f64;
+            let mut dc = 0.0f64;
+            for (ship_key, &initial_count) in initial {
+                if ship_key.starts_with("def_") { continue; } // Les défenses ne génèrent pas de débris
+                let remaining_count = remaining.get(ship_key).copied().unwrap_or(0);
+                let lost = (initial_count - remaining_count).max(0) as f64;
+                let (cost_m, cost_c) = crate::game_logic::get_unit_cost(ship_key, cfg);
+                dm += lost * cost_m * debris_factor_metal;
+                dc += lost * cost_c * debris_factor_crystal;
+            }
+            (dm, dc)
+        };
+
+        let (att_dm, att_dc) = calc_debris(&attacker_ships, attacker_fleet.get_all_ships());
+        let (def_dm, def_dc) = calc_debris(&defender_ships, defender_fleet.get_all_ships());
+        (att_dm + def_dm, att_dc + def_dc)
+    } else {
+        (0.0, 0.0)
+    };
+
+    // ── Rapport détaillé ────────────────────────────────────────────────────────
+    let details = {
+        let (att_weapons, att_shield, att_armour) = attacker_tech_levels.unwrap_or((0, 0, 0));
+        let (def_weapons, def_shield, def_armour) = defender_tech_levels.unwrap_or((0, 0, 0));
+
+        let make_lost_map = |initial: &HashMap<String, i32>, remaining: &HashMap<String, i32>| -> HashMap<String, i32> {
+            initial.iter()
+                .map(|(k, &ic)| (k.clone(), (ic - remaining.get(k).copied().unwrap_or(0)).max(0)))
+                .collect()
+        };
+
+        let attacker_remaining_map: HashMap<String, i32> = attacker_fleet.get_all_ships().clone();
+        let defender_remaining_map: HashMap<String, i32> = defender_fleet.get_all_ships().clone();
+
+        let attacker_fleet_lost = make_lost_map(&attacker_ships, &attacker_remaining_map);
+        let defender_fleet_lost = make_lost_map(&defender_ships, &defender_remaining_map);
+        let defender_def_lost = make_lost_map(&defender_defenses, &defender_remaining_map);
+
+        let att_ships_lost: i32 = attacker_fleet_lost.values().sum();
+        let def_ships_lost: i32 = defender_fleet_lost.values().sum();
+        let def_defs_lost: i32 = defender_def_lost.values().sum();
+
+        Some(DetailedCombatReport {
+            winner: winner.to_string(),
+            rounds_played: rounds_played,
+            attacker_stats: CombatantStats {
+                fleet_initial: attacker_ships.clone(),
+                defense_initial: HashMap::new(),
+                fleet_remaining: attacker_remaining_map.iter().filter(|(k, _)| !k.starts_with("def_")).map(|(k,v)|(k.clone(),*v)).collect(),
+                defense_remaining: HashMap::new(),
+                fleet_lost: attacker_fleet_lost,
+                defense_lost: HashMap::new(),
+                total_ships_lost: att_ships_lost,
+                total_defenses_lost: 0,
+                total_damage_dealt: total_att_damage,
+                total_damage_taken: total_def_damage,
+                shields_absorbed: 0.0, // TODO: track shield absorption per round
+            },
+            defender_stats: CombatantStats {
+                fleet_initial: defender_ships.clone(),
+                defense_initial: defender_defenses.clone(),
+                fleet_remaining: defender_remaining_map.iter().filter(|(k, _)| !k.starts_with("def_")).map(|(k,v)|(k.clone(),*v)).collect(),
+                defense_remaining: defender_remaining_map.iter().filter(|(k, _)| k.starts_with("def_")).map(|(k,v)|(k.clone(),*v)).collect(),
+                fleet_lost: defender_fleet_lost,
+                defense_lost: defender_def_lost,
+                total_ships_lost: def_ships_lost,
+                total_defenses_lost: def_defs_lost,
+                total_damage_dealt: total_def_damage,
+                total_damage_taken: total_att_damage,
+                shields_absorbed: 0.0,
+            },
+            loot: ResourceTriple { metal: loot_metal, crystal: loot_crystal, deuterium: loot_deuterium },
+            debris: ResourcePair { metal: debris_metal, crystal: debris_crystal },
+            rounds: round_logs,
+            attacker_bonuses: BonusSummary {
+                weapons_mult: attacker_bonuses.weapons_mult,
+                shield_mult: attacker_bonuses.shield_mult,
+                armour_mult: attacker_bonuses.armour_mult,
+                weapons_tech_level: att_weapons,
+                shield_tech_level: att_shield,
+                armour_tech_level: att_armour,
+            },
+            defender_bonuses: BonusSummary {
+                weapons_mult: defender_bonuses.weapons_mult,
+                shield_mult: defender_bonuses.shield_mult,
+                armour_mult: defender_bonuses.armour_mult,
+                weapons_tech_level: def_weapons,
+                shield_tech_level: def_shield,
+                armour_tech_level: def_armour,
+            },
+        })
     };
 
     Ok(PvpCombatReport {
@@ -442,7 +616,8 @@ pub async fn resolve_pvp_combat(
         defender_defenses_initial: defender_defenses.clone(),
         defender_remaining: defender_fleet.get_all_ships().clone(),
         loot: (loot_metal, loot_crystal, loot_deuterium),
-        debris: (0.0, 0.0),
+        debris: (debris_metal, debris_crystal),
+        details,
     })
 }
 
@@ -512,6 +687,7 @@ pub fn simulate_pvp_combat(
         defender_remaining: defender_fleet.get_all_ships().clone(),
         loot: (loot_metal, loot_crystal, loot_deuterium),
         debris: (0.0, 0.0),
+        details: None, // simulate_pvp_combat is used for tests/sim — no detailed report
     }
 }
 
@@ -526,6 +702,78 @@ pub struct PvpCombatReport {
     pub defender_remaining: HashMap<String, i32>, // ships + "def_" defenses mixed
     pub loot: (f64, f64, f64),
     pub debris: (f64, f64),
+    /// Rapport enrichi — rempli si config allow_detailed_report = 1 (défaut: toujours)
+    /// TODO (antigravity): afficher dans ReportsTerminal si Some — voir CLAUDE_HANDOFF.md section Expansion 5.0
+    pub details: Option<DetailedCombatReport>,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RAPPORT DE COMBAT DÉTAILLÉ — Expansion 5.0
+// TODO (antigravity): Le frontend ReportsTerminal.tsx doit afficher ce rapport
+// quand `details` est Some. Voir CLAUDE_HANDOFF.md pour la maquette UI complète.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailedCombatReport {
+    pub winner: String,
+    pub rounds_played: u8,
+    pub attacker_stats: CombatantStats,
+    pub defender_stats: CombatantStats,
+    pub loot: ResourceTriple,
+    /// 30% métal + 30% cristal des vaisseaux détruits (les deux camps)
+    pub debris: ResourcePair,
+    pub rounds: Vec<RoundLog>,
+    pub attacker_bonuses: BonusSummary,
+    pub defender_bonuses: BonusSummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CombatantStats {
+    pub fleet_initial: HashMap<String, i32>,
+    pub defense_initial: HashMap<String, i32>,
+    pub fleet_remaining: HashMap<String, i32>,
+    pub defense_remaining: HashMap<String, i32>,
+    pub fleet_lost: HashMap<String, i32>,
+    pub defense_lost: HashMap<String, i32>,
+    pub total_ships_lost: i32,
+    pub total_defenses_lost: i32,
+    pub total_damage_dealt: f64,
+    pub total_damage_taken: f64,
+    pub shields_absorbed: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoundLog {
+    pub round: u8,
+    pub attacker_damage: f64,
+    pub defender_damage: f64,
+    pub attacker_ships_lost_this_round: i32,
+    pub defender_ships_lost_this_round: i32,
+    pub defender_defenses_lost_this_round: i32,
+    pub narrative: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BonusSummary {
+    pub weapons_mult: f64,
+    pub shield_mult: f64,
+    pub armour_mult: f64,
+    pub weapons_tech_level: i32,
+    pub shield_tech_level: i32,
+    pub armour_tech_level: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceTriple {
+    pub metal: f64,
+    pub crystal: f64,
+    pub deuterium: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourcePair {
+    pub metal: f64,
+    pub crystal: f64,
 }
 
 // =============================================================================

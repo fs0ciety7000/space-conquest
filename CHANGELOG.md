@@ -1,5 +1,60 @@
 # Changelog - Space Conquest
 
+## [5.0.0] - 2026-03-09 - Expansion 5.0 : Refactoring Architecture & Champs de Débris
+
+### 🏗️ Architecture Backend (PRIORITÉ 1 — Refactoring)
+
+#### Extraction des handlers en modules
+- `backend/src/handlers/` — nouveau répertoire de modules par domaine
+- `handlers/galaxy.rs` — galaxy view, scan, colonisation
+- `handlers/ranking.rs` — config, classement, coûts unitaires
+- `handlers/reports.rs` — rapports de combat, logs transports
+- `handlers/profile.rs` — profil utilisateur, amis, présets de flotte (17 handlers)
+- `handlers/shipyard.rs` — tech tree, vaisseaux, bâtiments, défenses, construction
+- `backend/src/models.rs` — structs partagées entre modules (PlanetInfo, RankItem, GalaxySlot, UserResponse, etc.)
+- Fusion des routers dans `main.rs` via `.merge()` avant `.with_state()`
+
+#### Améliorations game_logic.rs
+- **Production passive** : mines niveau 0 produisent métal=20, cristal=10, deutérium=5 par heure (configurable)
+- **Bonus labo** : `get_research_time()` — réduction 5% par niveau de labo (max -50%)
+- **Helper stockage** : `apply_storage_cap(amount, storage_level, config)` — cap automatique
+
+### ⚔️ Combat — Rapport Détaillé & Champs de Débris
+
+#### DetailedCombatReport (Expansion 5.0)
+- Nouveau struct `DetailedCombatReport` dans `combat.rs` avec suivi round-by-round
+- `CombatantStats`, `RoundLog`, `BonusSummary`, `ResourceTriple`, `ResourcePair`
+- Chaque combat PvP génère un rapport structuré : dégâts par round, bonus tech, pertes détaillées
+- Stocké dans `combat_log.details` (colonne JSONB)
+- Butin limité par capacité de cargo des vaisseaux survivants de l'attaquant
+
+#### Champs de Débris
+- Nouvelle table `debris_field` (galaxy, system, position, metal, crystal, updated_at)
+- 30% métal + 30% cristal des vaisseaux détruits (les deux camps, défenses exclues)
+- Migration `m20260309_000001_create_debris_field`
+- Entité SeaORM `entities/debris_field.rs`
+- Colonne `recyclers_sent` ajoutée à `fleet_mission` pour la mécanique recycleur
+- **TODO (antigravity)** : endpoint GET /galaxy/:g/system/:s/debris + mission type "recycle" dans tick_system.rs
+
+### 📡 WebSocket Events Complets
+- `research_complete { tech_key, level }` — émis par le tick quand une recherche termine via construction_queue
+- `colony_founded { planet_name, coords }` — émis après colonisation réussie
+- `tick_system.rs` : `process_construction_queue_completion()` retourne `Vec<CompletedItem>` pour le caller
+- Frontend `useWebSocket.ts` : `WsResearchComplete`, `WsColonyFounded` + handlers + sons
+
+### ⛽ Consommation de Deutérium par les Flottes
+- `attack_v2`, `spy_v2`, `expedition_v2` : deutérium déduit avant lancement
+- Formule : `ceil(sum(ships × fuel_consumption) × dist / 1000)`, minimum 1
+- Retourne HTTP 400 si deutérium insuffisant (message indiquant requis vs disponible)
+- Expéditions utilisent distance fixe 5000 unités
+- `FleetDispatcher.tsx` : indicateur carburant requis/disponible (vert/rouge) + bouton désactivé si insuffisant
+
+### 🖥️ Affichage DetailedCombatReport dans CombatModal
+- `handlers/reports.rs` : `get_combat_report_detail_handler` fusionne `detailed_report` (legacy) + `details` (Expansion 5.0) dans une réponse unique
+- `CombatModal.tsx` : section "Analyse Tactique Détaillée" affichant rounds, bonus tech (×armes/bouclier/blindage par camp), champ de débris généré
+
+---
+
 ## [4.0.0] - 2026-03-06 - Biomes, Tableau des Primes, Vaisseau Amiral & Recherche d'Amis
 
 ### ✨ Nouvelles Fonctionnalités

@@ -9,6 +9,19 @@ use chrono::Utc;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait};
 use crate::entities::{prelude::*, planet_technology, planet_ship, planet_defense, construction_queue, building_type, technology, planet_building, planet};
 use crate::protection;
+use uuid::Uuid;
+
+/// Un élément dont la construction/recherche/construction s'est terminée lors d'un tick.
+/// Utilisé par main.rs pour émettre les WS events correspondants.
+#[derive(Debug, Clone)]
+pub struct CompletedItem {
+    pub planet_id: Uuid,
+    /// tech_key, building_key, ship_type ou defense_type
+    pub item_key: String,
+    /// "research" | "building" | "ship" | "defense"
+    pub category: &'static str,
+    pub level_or_qty: i32,
+}
 
 /// Process all completed research tasks
 ///
@@ -143,8 +156,8 @@ pub async fn process_defense_building_completion(db: &DatabaseConnection) -> Res
 /// This function checks all items in construction_queue (where end_time <= now)
 /// and completes those constructions, updating planet_buildings or planet_technologies.
 ///
-/// Returns the number of constructions completed
-pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> Result<usize, sea_orm::DbErr> {
+/// Returns the list of completed items (for WS event emission by the caller)
+pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> Result<Vec<CompletedItem>, sea_orm::DbErr> {
     let now = Utc::now().naive_utc();
 
     // Find all constructions that should be completed (end_time <= now)
@@ -153,7 +166,7 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
         .all(db)
         .await?;
 
-    let mut count = 0;
+    let mut completed: Vec<CompletedItem> = Vec::new();
 
     for item in finished_constructions {
         let planet_id = item.planet_id;
@@ -195,7 +208,12 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
                 new_tech.insert(db).await?;
             }
 
-            count += 1;
+            completed.push(CompletedItem {
+                planet_id,
+                item_key: building_type_str.clone(),
+                category: "research",
+                level_or_qty: target_level,
+            });
             println!("✅ Technology construction completed: Planet {:?} -> {} -> Level {}",
                 planet_id, building_type_str, target_level);
         } else {
@@ -240,7 +258,12 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
                         new_building.insert(db).await?;
                     }
 
-                    count += 1;
+                    completed.push(CompletedItem {
+                        planet_id,
+                        item_key: building_type_str.clone(),
+                        category: "building",
+                        level_or_qty: target_level,
+                    });
                     println!("✅ Building construction completed: Planet {:?} -> {} -> Level {}",
                         planet_id, building_type_str, target_level);
                 }
@@ -255,7 +278,7 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
         construction_to_delete.delete(db).await?;
     }
 
-    Ok(count)
+    Ok(completed)
 }
 
 /// Update all users' total points
@@ -289,7 +312,9 @@ pub async fn process_tick(db: &DatabaseConnection, config: &crate::ServerConfigC
     let research_completed = process_research_completion(db).await?;
     let ships_completed = process_ship_building_completion(db).await?;
     let defenses_completed = process_defense_building_completion(db).await?;
-    let buildings_completed = process_construction_queue_completion(db).await?;
+    let completed_constructions = process_construction_queue_completion(db).await?;
+    let buildings_completed = completed_constructions.iter().filter(|c| c.category == "building").count();
+    let tech_completed_queue = completed_constructions.iter().filter(|c| c.category == "research").count();
 
     // Auto-start pending build queue items when slots free up
     crate::build_queue::process_build_queue(db, config).await;
@@ -298,11 +323,12 @@ pub async fn process_tick(db: &DatabaseConnection, config: &crate::ServerConfigC
     let points_updated = update_all_user_points(db).await.unwrap_or(0);
 
     Ok(TickStats {
-        research_completed,
+        research_completed: research_completed + tech_completed_queue,
         ships_completed,
         defenses_completed,
         buildings_completed,
         points_updated,
+        completed_constructions,
     })
 }
 
@@ -313,6 +339,8 @@ pub struct TickStats {
     pub defenses_completed: usize,
     pub buildings_completed: usize,
     pub points_updated: usize,
+    /// Liste des bâtiments et recherches terminés via construction_queue (pour WS events)
+    pub completed_constructions: Vec<CompletedItem>,
 }
 
 #[cfg(test)]

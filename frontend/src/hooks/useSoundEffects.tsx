@@ -193,15 +193,18 @@ export function useAutoSounds(soundEnabled: boolean) {
 
     // Sons automatiques sur certains événements
     const handleBuildComplete = () => playSound('success');
+    const handleResearchComplete = () => playSound('success');
     const handleAttackLaunched = () => playSound('attack');
     const handleError = () => playSound('error');
 
     window.addEventListener('build-complete', handleBuildComplete);
+    window.addEventListener('research-complete', handleResearchComplete);
     window.addEventListener('attack-launched', handleAttackLaunched);
     window.addEventListener('error-occurred', handleError);
 
     return () => {
       window.removeEventListener('build-complete', handleBuildComplete);
+      window.removeEventListener('research-complete', handleResearchComplete);
       window.removeEventListener('attack-launched', handleAttackLaunched);
       window.removeEventListener('error-occurred', handleError);
     };

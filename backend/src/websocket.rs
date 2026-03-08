@@ -135,6 +135,13 @@ pub enum WsEvent {
         quantity: i32,
     },
 
+    /// Recherche technologique terminée (Expansion 5.0)
+    #[serde(rename = "research_complete")]
+    ResearchComplete {
+        tech_key: String,
+        level: i32,
+    },
+
     /// Attaque entrante détectée
     #[serde(rename = "attack_incoming")]
     AttackIncoming {
@@ -165,6 +172,13 @@ pub enum WsEvent {
         metal: f64,
         crystal: f64,
         deuterium: f64,
+    },
+
+    /// Colonie fondée avec succès (Expansion 5.0)
+    #[serde(rename = "colony_founded")]
+    ColonyFounded {
+        planet_name: String,
+        coords: String,
     },
 
     /// Alerte espionnage
@@ -619,6 +633,14 @@ pub fn notify_ship_complete(state: &WsState, planet_id: Uuid, ship_type: &str, q
     });
 }
 
+/// Notifie qu'une recherche technologique est terminée (Expansion 5.0)
+pub fn notify_research_complete(state: &WsState, planet_id: Uuid, tech_key: &str, level: i32) {
+    state.broadcast_to_planet(planet_id, WsEvent::ResearchComplete {
+        tech_key: tech_key.to_string(),
+        level,
+    });
+}
+
 /// Notifie une attaque entrante
 pub fn notify_attack_incoming(
     state: &WsState,
@@ -667,6 +689,14 @@ pub fn notify_transport_arrived(
         crystal,
         deuterium,
     });
+}
+
+/// Notifie qu'une colonisation a réussi (Expansion 5.0)
+pub async fn notify_colony_founded(state: &WsState, owner_id: Uuid, planet_name: &str, coords: &str) {
+    state.broadcast_to_user(owner_id, WsEvent::ColonyFounded {
+        planet_name: planet_name.to_string(),
+        coords: coords.to_string(),
+    }).await;
 }
 
 /// Notifie une alerte espionnage

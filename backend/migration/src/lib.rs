@@ -82,6 +82,7 @@ mod m20260307_000008_economy_log;
 mod m20260307_000009_sc_chance_update;
 mod m20260308_000001_create_notifications;
 mod m20260308_000002_add_score_columns_to_user;
+mod m20260309_000001_create_debris_field;
 
 pub struct Migrator;
 
@@ -171,6 +172,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260307_000009_sc_chance_update::Migration),
             Box::new(m20260308_000001_create_notifications::Migration),
             Box::new(m20260308_000002_add_score_columns_to_user::Migration),
+            Box::new(m20260309_000001_create_debris_field::Migration),
         ]
     }
 }

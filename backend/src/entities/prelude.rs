@@ -82,3 +82,6 @@ pub use super :: economy_log :: Entity as EconomyLog ;
 
 // Notification system
 pub use super :: notification :: Entity as Notification ;
+
+// Debris fields (Expansion 5.0)
+pub use super :: debris_field :: Entity as DebrisField ;

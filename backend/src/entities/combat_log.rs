@@ -19,6 +19,10 @@ pub struct Model {
     pub date: DateTime,
     #[sea_orm(column_type = "Json", nullable)]
     pub detailed_report: Option<serde_json::Value>,
+    /// Rapport de combat détaillé structuré (Expansion 5.0 — DetailedCombatReport sérialisé)
+    /// Remplace/complète detailed_report avec des données round-by-round
+    #[sea_orm(column_type = "Json", nullable)]
+    pub details: Option<serde_json::Value>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
