@@ -553,6 +553,49 @@ export default function CombatModal({ report, onClose, onSabotage }: CombatModal
             </section>
           )}
 
+          {/* JOURNAL D'EXPÉDITION */}
+          {isExpedition && parsedReport.log && parsedReport.log.length > 0 && (
+            <section className="space-y-4">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/20">
+                  <Rocket size={14} className="text-purple-400" />
+                </div>
+                Journal d'expédition
+              </h3>
+              <div className="bg-black/60 border border-white/10 rounded-xl p-4 font-mono space-y-1.5 max-h-64 overflow-y-auto">
+                {parsedReport.log.map((line: string, i: number) => (
+                  <div key={i} className="text-[11px] text-slate-300 leading-relaxed">
+                    <span className="text-slate-600 mr-2">&gt;</span>{line}
+                  </div>
+                ))}
+              </div>
+
+              {/* Pertes par type */}
+              {parsedReport.lost_ships && Object.entries(parsedReport.lost_ships).some(([, v]) => (v as number) > 0) && (
+                <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-4">
+                  <div className="text-[10px] font-bold uppercase text-red-400 mb-3 tracking-widest">Pertes de la flotte</div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(parsedReport.lost_ships)
+                      .filter(([, v]) => (v as number) > 0)
+                      .map(([k, v]) => (
+                        <span key={k} className="text-[10px] font-mono text-red-300 bg-red-950/40 px-2.5 py-1 rounded-lg border border-red-900/50">
+                          -{v as number} {getShipDisplayName(k)}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Crédits Syndicat */}
+              {parsedReport.syndicate_credits_earned > 0 && (
+                <div className="bg-yellow-950/20 border border-yellow-500/20 rounded-xl p-4 flex items-center justify-between">
+                  <div className="text-[10px] font-bold uppercase text-yellow-400 tracking-widest">Crédits Syndicat découverts</div>
+                  <div className="text-xl font-mono font-black text-yellow-300">+{parsedReport.syndicate_credits_earned.toFixed(1)} SC</div>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* COMPOSITION DES FLOTTES */}
           {(parsedReport.attacker_initial || parsedReport.defender_initial) && (
             <section className="space-y-4">
