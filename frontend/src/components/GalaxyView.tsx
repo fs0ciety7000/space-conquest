@@ -167,7 +167,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
         }
     };
 
-    const handleRecycle = async (targetId: string) => {
+    const handleRecycle = async (slot: GalaxySlot) => {
         const token = localStorage.getItem('token');
         const availableRecyclers = planet.ships?.recycler ?? 0;
 
@@ -178,22 +178,25 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
             return;
         }
 
-        // Envoyer tous les recycleurs disponibles (max 50 pour éviter les surcharges)
         const recyclersToSend = Math.min(availableRecyclers, 50);
 
         try {
             const res = await fetch(apiUrl(`/recycle?current_planet_id=${planet.id}`), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ target_planet_id: targetId, recyclers: recyclersToSend })
+                body: JSON.stringify({
+                    galaxy: slot.planet_galaxy,
+                    system,
+                    position: slot.position,
+                    recyclers: recyclersToSend,
+                })
             });
+            const data = await res.json();
             if (res.ok) {
-                const data = await res.json();
-                toast.success("Recyclage terminé", { description: data.message });
+                toast.success(`${recyclersToSend} recycleur(s) en route`, { description: data.message });
                 fetchSystem();
             } else {
-                const error = await res.json();
-                toast.error("Échec recyclage", { description: error.error || "Erreur inconnue" });
+                toast.error("Échec recyclage", { description: data.error || "Erreur inconnue" });
             }
         } catch (e) {
             toast.error("Erreur réseau");
@@ -248,7 +251,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
 
         // Action générique: Recyclage de débris
         if (slot.debris_metal > 0 || slot.debris_crystal > 0) {
-            items.push({ id: 'recycle', label: 'Recycler', icon: Recycle, color: 'text-green-500', onClick: () => handleRecycle(slot.planet_id || "") });
+            items.push({ id: 'recycle', label: 'Recycler', icon: Recycle, color: 'text-green-500', onClick: () => handleRecycle(slot) });
         }
 
         return items;
@@ -362,13 +365,18 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                                     <span className="absolute -bottom-5 text-[9px] font-mono text-slate-500 font-bold">{slot.position}</span>
                                                     {slot.is_me && <Crown size={14} className="text-white absolute -top-2" />}
                                                     {slot.is_my_planet && !slot.is_me && <div className="absolute -top-1 w-2 h-2 rounded-full bg-emerald-400 border-2 border-slate-900 shadow-[0_0_10px_rgba(52,211,153,0.8)]"></div>}
-                                                    {hasDebris && <div className="absolute -right-2 top-0 w-3 h-3 rounded-full bg-slate-500 border border-slate-400 animate-pulse flex items-center justify-center"><span className="text-[6px]">♦</span></div>}
+                                                    {hasDebris && <div className="absolute -right-2 top-0 w-3 h-3 rounded-full bg-amber-500/80 border border-amber-300 animate-pulse flex items-center justify-center shadow-[0_0_6px_rgba(251,191,36,0.6)]"><span className="text-[6px]">💫</span></div>}
                                                 </button>
                                             </div>
                                         </TooltipTrigger>
                                         <TooltipContent className="bg-slate-900 border-slate-700 text-white font-mono text-xs">
                                             <p className="font-bold">{slot.planet_id ? slot.planet_name : `Emplacement ${slot.position}`}</p>
                                             {slot.owner_name && <p className="text-slate-400">{slot.owner_name}</p>}
+                                            {hasDebris && (
+                                                <p className="text-amber-400 mt-1">
+                                                    💫 Débris — M: {Math.floor(slot.debris_metal).toLocaleString()} / C: {Math.floor(slot.debris_crystal).toLocaleString()}
+                                                </p>
+                                            )}
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
@@ -547,7 +555,7 @@ interface ListViewProps {
     onNavigateSpy: (id: string, name: string, position: number) => void;
     onNavigateTransport: (id: string, name: string, position: number) => void;
     handleColonize: (position: number) => void;
-    handleRecycle: (id: string) => void;
+    handleRecycle: (slot: GalaxySlot) => void;
     getPlanetStyle: (name: string) => string;
 }
 
@@ -609,6 +617,10 @@ function ListView({ slots, onNavigateAttack, onNavigateSpy, onNavigateTransport,
 
                             {/* Colonisation */}
                             {!slot.planet_id && <Button size="sm" variant="ghost" className="h-7 text-[10px] uppercase text-emerald-400 hover:text-emerald-300" onClick={() => handleColonize(slot.position)}>Coloniser</Button>}
+                            {/* Recyclage débris */}
+                            {(slot.debris_metal > 0 || slot.debris_crystal > 0) && (
+                                <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-amber-500/20 hover:text-amber-400 transition-colors" title={`Débris: ${Math.floor(slot.debris_metal).toLocaleString()}M / ${Math.floor(slot.debris_crystal).toLocaleString()}C`} onClick={() => handleRecycle(slot)}><Recycle size={14}/></Button>
+                            )}
                         </td>
                     </tr>
                 ))}

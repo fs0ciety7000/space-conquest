@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
+import type { LucideProps } from 'lucide-react';
 import { Eye, Crosshair, Truck, Rocket, X } from 'lucide-react';
 
 interface RadialMenuItem {
     id: string;
     label: string;
-    icon: React.ElementType;
+    icon: React.ComponentType<LucideProps>;
     color: string;
     onClick: () => void;
     disabled?: boolean;
@@ -88,6 +89,7 @@ export default function RadialMenu({ items, onClose, position }: RadialMenuProps
                     const itemX = isOpen ? Math.cos(angle) * radius : 0;
                     const itemY = isOpen ? Math.sin(angle) * radius : 0;
 
+                    const Icon = item.icon;
                     return (
                         <button
                             key={item.id}
@@ -115,7 +117,7 @@ export default function RadialMenu({ items, onClose, position }: RadialMenuProps
                             }}
                             title={item.label}
                         >
-                            <item.icon size={18} className={item.disabled ? 'text-slate-600' : ''} />
+                            <Icon size={18} className={item.disabled ? 'text-slate-600' : ''} />
                             
                             {/* Tooltip on hover */}
                             {!item.disabled && (

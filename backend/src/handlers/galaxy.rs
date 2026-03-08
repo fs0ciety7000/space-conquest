@@ -51,11 +51,23 @@ pub async fn get_galaxy_handler(
         .await
         .unwrap_or_default();
 
+    // Charger les champs de débris pour ce système depuis debris_field
+    let debris_fields = DebrisField::find()
+        .filter(debris_field::Column::Galaxy.eq(galaxy_id))
+        .filter(debris_field::Column::System.eq(system_id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
     let mut slots: Vec<GalaxySlot> = Vec::new();
 
     for pos in 1..=15 {
+        let (dm, dc) = debris_fields.iter()
+            .find(|d| d.position == pos)
+            .map(|d| (d.metal, d.crystal))
+            .unwrap_or((0.0, 0.0));
+
         if let Some(p) = planets.iter().find(|p| p.position == pos) {
-            // Fetch owner data for protection info
             let (protection_until, total_points, actual_owner_name) =
                 if let Ok(Some(owner)) = User::find_by_id(p.owner_id).one(&state.db).await {
                     (
@@ -73,8 +85,8 @@ pub async fn get_galaxy_handler(
                 planet_name: Some(p.name.clone()),
                 owner_name: Some(actual_owner_name),
                 owner_id: Some(p.owner_id),
-                debris_metal: p.debris_metal,
-                debris_crystal: p.debris_crystal,
+                debris_metal: dm,
+                debris_crystal: dc,
                 is_me: p.id == current_id,
                 is_my_planet: p.owner_id == my_owner_id,
                 protection_until,
@@ -88,8 +100,8 @@ pub async fn get_galaxy_handler(
                 planet_name: None,
                 owner_name: None,
                 owner_id: None,
-                debris_metal: 0.0,
-                debris_crystal: 0.0,
+                debris_metal: dm,
+                debris_crystal: dc,
                 is_me: false,
                 is_my_planet: false,
                 protection_until: None,

@@ -349,7 +349,6 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
           toast.success('⚔️ CASUS BELLI ACCORDÉ !', {
             description: `Vous pouvez attaquer ${cbData.target_name} sans pénalité ! Raison: ${cbData.reason}`,
             duration: 8000,
-            important: true,
           });
           window.dispatchEvent(new Event('casus-belli-granted'));
           break;
