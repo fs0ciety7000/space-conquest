@@ -264,69 +264,28 @@ async fn main() {
         .route("/login", post(auth::login_handler))
         .route("/auth/forgot-password", post(auth::forgot_password_handler))
         .route("/auth/reset-password", post(auth::reset_password_handler))
-        .route("/config", get(get_game_config_handler))
         // Maintenance
         .route("/maintenance/status", get(maintenance::get_maintenance_status_handler))
-        // Planets (handlers moved to handlers/planets.rs — legacy routes below kept for old clients)
-        .route("/planets/:id/build-fleet/:type/:qty", post(build_fleet_handler))
+        // Planets legacy routes
         .route("/planets/:id/expedition", post(expedition_handler))
         .route("/planets/:id/expedition/scout", post(scout_expedition_handler))
-        // Tech Tree (Expansion 2.0)
-        .route("/planets/:id/tech-tree", get(get_tech_tree_handler))
-        .route("/planets/:id/ship-types", get(get_ship_types_handler))
-        .route("/planets/:id/building-types", get(get_building_types_handler))
-        .route("/planets/:id/defense-types", get(get_defense_types_handler))
-        .route("/planets/:id/research/:tech_key", post(start_research_handler))
-        .route("/planets/:id/build-ships/:ship_key/:quantity", post(build_ships_handler))
-        .route("/planets/:id/build-defenses/:defense_key/:quantity", post(build_defenses_handler))
+        // Cancel builds (cancel_handlers module)
         .route("/planets/:id/cancel-ship-build/:ship_key", delete(cancel_ship_build_handler))
         .route("/planets/:id/cancel-defense-build/:defense_key", delete(cancel_defense_build_handler))
         .route("/planets/:id/cancel-research/:tech_key", delete(cancel_research_handler))
-        .route("/tech/:tech_key", get(get_tech_details_handler))
-        .route("/ship/:ship_key", get(get_ship_details_handler))
-        // Actions
+        // Actions legacy v1
         .route("/attack", post(attack_handler))
         .route("/spy", post(spy_handler))
-        .route("/colonize", post(colonize_handler))
-
-        //UNITS
-        .route("/unit-costs", get(get_unit_costs_handler))
-        // Galaxy & Ranking
-        .route("/ranking", get(get_ranking_handler))
-        .route("/galaxy/:galaxy/:system", get(get_galaxy_handler))
-        .route("/galaxy/:galaxy/scan", get(get_galaxy_scan_handler))
-        .route("/galaxy/scan/nearby", post(scan_nearby_planets_handler))
         // Messagerie V2 (via module)
-        // Dans la section des routes de messagerie
-.route("/conversations", get(messaging::get_conversations_handler))
-.route("/conversations/:id/messages", get(messaging::get_thread_messages_handler))
-.route("/conversations/:id/read", post(messaging::mark_conversation_read_handler))
-.route("/conversations/:id/archive", post(messaging::toggle_archive_conversation_handler)) // ✅ AJOUT
-.route("/conversations/:id", delete(messaging::delete_conversation_handler))
-.route("/send-message-v2", post(messaging::send_message_v2_handler))
-// Chat Galactique
-.route("/global-chat", get(messaging::get_global_chat_handler))
-.route("/global-chat", post(messaging::send_global_chat_handler))
-
-.route("/users/:id", get(get_user_handler))
-.route("/users/:id/username", patch(update_username_handler))
-.route("/users/:id/avatar", post(upload_avatar_handler).layer(DefaultBodyLimit::max(20 * 1024 * 1024)))
-.route("/users/:id/bio", put(update_bio_handler))
-.route("/users/:id/display-name", put(update_display_name_handler))
-.route("/players/search", get(search_players_handler))
-.route("/players/online-count", get(get_online_count_handler))
-.route("/players/:user_id/profile", get(get_player_profile_handler))
-// Friendships
-.route("/users/:id/friends", get(get_friends_handler))
-.route("/friends/request", post(send_friend_request_handler))
-.route("/friends/:friendship_id/accept", post(accept_friend_request_handler))
-.route("/friends/:friendship_id/decline", post(decline_friend_request_handler))
-.route("/friends/:friendship_id", delete(remove_friend_handler))
-// Fleet presets
-.route("/users/:id/fleet-presets", get(get_fleet_presets_handler))
-.route("/users/:id/fleet-presets", post(create_fleet_preset_handler))
-.route("/users/:id/fleet-presets/:preset_id", put(update_fleet_preset_handler))
-.route("/users/:id/fleet-presets/:preset_id", delete(delete_fleet_preset_handler))
+        .route("/conversations", get(messaging::get_conversations_handler))
+        .route("/conversations/:id/messages", get(messaging::get_thread_messages_handler))
+        .route("/conversations/:id/read", post(messaging::mark_conversation_read_handler))
+        .route("/conversations/:id/archive", post(messaging::toggle_archive_conversation_handler))
+        .route("/conversations/:id", delete(messaging::delete_conversation_handler))
+        .route("/send-message-v2", post(messaging::send_message_v2_handler))
+        // Chat Galactique
+        .route("/global-chat", get(messaging::get_global_chat_handler))
+        .route("/global-chat", post(messaging::send_global_chat_handler))
 // Bounty board
 .route("/bounties", get(get_bounties_handler))
 .route("/bounties", post(create_bounty_handler))
