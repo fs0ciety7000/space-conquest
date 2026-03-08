@@ -1563,7 +1563,7 @@ async fn attack_handler(
 async fn expedition_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
-    Json(payload): Json<ExpeditionPayload>,
+    Json(payload): Json<ExpeditionPayloadV2>,
 ) -> impl IntoResponse {
 
     let p_res = Planet::find_by_id(id).one(&state.db).await;
@@ -1584,33 +1584,57 @@ async fn expedition_handler(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to load planet data"}))).into_response(),
     };
 
-    // Validation du nombre de vaisseaux
-    let hunters = payload.hunters;
-    let cruisers = payload.cruisers;
-    let recyclers = payload.recyclers;
-    if hunters + cruisers <= 0 {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nombre de vaisseaux invalide"}))).into_response();
+    // ─── Statistiques par type de vaisseau pour les expéditions ───────────
+    // (capacity = contribution au loot, combat_power = force vs pirates, vulnerability = ratio de pertes)
+    struct ShipExpedConfig { capacity: f64, combat_power: f64, vulnerability: f64 }
+    let ship_cfg: HashMap<&str, ShipExpedConfig> = [
+        ("light_hunter",  ShipExpedConfig { capacity: 1.0,  combat_power: 1.0,  vulnerability: 1.0 }),
+        ("cruiser",       ShipExpedConfig { capacity: 2.5,  combat_power: 3.0,  vulnerability: 0.5 }),
+        ("battleship",    ShipExpedConfig { capacity: 3.0,  combat_power: 5.0,  vulnerability: 0.3 }),
+        ("destroyer",     ShipExpedConfig { capacity: 2.0,  combat_power: 4.0,  vulnerability: 0.4 }),
+        ("death_star",    ShipExpedConfig { capacity: 8.0,  combat_power: 20.0, vulnerability: 0.1 }),
+        ("transporter",   ShipExpedConfig { capacity: 3.5,  combat_power: 0.0,  vulnerability: 1.5 }),
+        ("spy_probe",     ShipExpedConfig { capacity: 0.1,  combat_power: 0.0,  vulnerability: 2.5 }),
+        ("recycler",      ShipExpedConfig { capacity: 0.0,  combat_power: 0.0,  vulnerability: 0.8 }),
+        ("colony_ship",   ShipExpedConfig { capacity: 1.5,  combat_power: 0.0,  vulnerability: 0.7 }),
+    ].into_iter().collect();
+
+    // Validation: tous les types de vaisseaux envoyés doivent exister en quantité suffisante
+    let fleet = &payload.fleet;
+    if fleet.values().all(|&v| v <= 0) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Flotte vide"}))).into_response();
     }
-    if !planet_data.has_ships("light_hunter", hunters) {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de chasseurs"}))).into_response();
+    for (ship_key, &count) in fleet.iter() {
+        if count < 0 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Quantité invalide"}))).into_response();
+        }
+        if count > 0 && !planet_data.has_ships(ship_key, count) {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Pas assez de {}", ship_key)}))).into_response();
+        }
     }
-    if !planet_data.has_ships("cruiser", cruisers) {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de croiseurs"}))).into_response();
-    }
-    if !planet_data.has_ships("recycler", recyclers) {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de recycleurs"}))).into_response();
+
+    // Compteurs backwards-compat (utilisés dans les configs loot)
+    let hunters  = fleet.get("light_hunter").copied().unwrap_or(0);
+    let cruisers = fleet.get("cruiser").copied().unwrap_or(0);
+    let recyclers = fleet.get("recycler").copied().unwrap_or(0);
+
+    // Puissance de combat effective (pour comparer aux pirates)
+    let combat_power: f64 = fleet.iter()
+        .map(|(k, &v)| v as f64 * ship_cfg.get(k.as_str()).map(|c| c.combat_power).unwrap_or(1.0))
+        .sum();
+    if combat_power <= 0.0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucun vaisseau de combat dans la flotte"}))).into_response();
     }
 
     let mut active: planet::ActiveModel = p.clone().into();
     let mut logs: Vec<String> = Vec::new();
     let winner;
-    let mut lost_hunters = 0;
-    let mut lost_cruisers = 0;
+    let mut lost_ships: HashMap<String, i32> = HashMap::new();
+    let mut syndicate_credits_earned: f64 = 0.0;
 
     // Clone config pour éviter de tenir le guard pendant les await
     let config_clone = state.config.read().unwrap().clone();
 
-    let combat_chance = config_clone.get_config("expedition_combat_chance", 0.3);
     let hunter_metal_min = config_clone.get_config("expedition_hunter_metal_min", 50.0);
     let hunter_metal_range = config_clone.get_config("expedition_hunter_metal_range", 50.0);
     let hunter_crystal_min = config_clone.get_config("expedition_hunter_crystal_min", 20.0);
@@ -1631,224 +1655,264 @@ async fn expedition_handler(
     let speed_factor = config_clone.speed_factor;
     let base_duration = config_clone.get_config("expedition_base_duration", 600.0);
 
-    let combat_triggered = rand::thread_rng().gen_bool(combat_chance);
-
     let base_metal_per_hunter = hunter_metal_min + rand::thread_rng().gen_range(0.0..=hunter_metal_range);
     let base_crystal_per_hunter = hunter_crystal_min + rand::thread_rng().gen_range(0.0..=hunter_crystal_range);
     let base_deut_per_hunter = hunter_deut_min + rand::thread_rng().gen_range(0.0..=hunter_deut_range);
     let base_metal_per_cruiser = cruiser_metal_min + rand::thread_rng().gen_range(0.0..=cruiser_metal_range);
     let base_crystal_per_cruiser = cruiser_crystal_min + rand::thread_rng().gen_range(0.0..=cruiser_crystal_range);
     let base_deut_per_cruiser = cruiser_deut_min + rand::thread_rng().gen_range(0.0..=cruiser_deut_range);
-
     let found_deuterium = rand::thread_rng().gen_bool(deuterium_chance);
 
-    let total_ships = hunters + cruisers;
+    let total_ships: i32 = fleet.values().sum();
     let recycler_bonus = 1.0 + (recyclers as f64 * recycler_multiplier);
+    let speed_mult = speed_factor / 100.0;
 
-    let (loot_metal, loot_crystal, loot_deuterium) = if combat_triggered {
-        logs.push("⚠️ RADAR : Signature hostile détectée.".to_string());
-        let laser_tech = planet_data.tech_level("laser_tech");
-        let combat_res = game_logic::simulate_combat(total_ships, laser_tech, &config_clone);
+    // ─── BASE LOOT : pondéré par capacité de chaque type de vaisseau ────────
+    // Les hunters/cruisers utilisent les configs existantes, les autres types
+    // utilisent un coefficient relatif basé sur la capacité définie dans ship_cfg.
+    let base_loot_per_capacity_unit_metal = base_metal_per_hunter; // référence = 1 chasseur
+    let base_loot_per_capacity_unit_crystal = base_crystal_per_hunter;
+    let base_loot_per_capacity_unit_deut = base_deut_per_hunter;
 
-        if combat_res.victory {
-            winner = "victory";
-            // Gains proportionnels au nombre et type de vaisseaux + bonus recycleur
-            let speed_multiplier = speed_factor / 100.0;
-            let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * recycler_bonus * speed_multiplier;
-            let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * recycler_bonus * speed_multiplier;
-            let deuterium = if found_deuterium {
-                (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * recycler_bonus * speed_multiplier
+    let total_capacity: f64 = fleet.iter()
+        .map(|(k, &v)| v as f64 * ship_cfg.get(k.as_str()).map(|c| c.capacity).unwrap_or(1.0))
+        .sum();
+
+    let base_metal = total_capacity * base_loot_per_capacity_unit_metal * speed_mult;
+    let base_crystal = total_capacity * base_loot_per_capacity_unit_crystal * speed_mult;
+    let base_deut = if found_deuterium {
+        total_capacity * base_loot_per_capacity_unit_deut * speed_mult
+    } else { 0.0 };
+
+    // ─── HELPER : répartit n pertes sur toute la flotte selon vulnérabilité ─
+    // Returns HashMap<ship_key, losses>
+    let ship_names: HashMap<&str, &str> = [
+        ("light_hunter", "Chasseur Léger"), ("cruiser", "Croiseur"),
+        ("battleship", "Cuirassé"), ("destroyer", "Destructeur"),
+        ("death_star", "Étoile de la Mort"), ("transporter", "Transporteur"),
+        ("spy_probe", "Sonde d'Espionnage"), ("recycler", "Recycleur"),
+        ("colony_ship", "Vaisseau de Colonisation"),
+    ].into_iter().collect();
+
+    let split_losses_fleet = |n: i32| -> HashMap<String, i32> {
+        let total_vuln: f64 = fleet.iter()
+            .map(|(k, &v)| v as f64 * ship_cfg.get(k.as_str()).map(|c| c.vulnerability).unwrap_or(1.0))
+            .sum();
+        if total_vuln <= 0.0 || n == 0 { return HashMap::new(); }
+        let mut result: HashMap<String, i32> = HashMap::new();
+        let mut remaining = n;
+        let mut entries: Vec<_> = fleet.iter().filter(|(_, &v)| v > 0).collect();
+        entries.sort_by_key(|(k, _)| k.to_string()); // deterministic order
+        for (i, (key, &count)) in entries.iter().enumerate() {
+            if remaining <= 0 { break; }
+            let vuln = ship_cfg.get(key.as_str()).map(|c| c.vulnerability).unwrap_or(1.0);
+            let share = if i == entries.len() - 1 {
+                remaining.min(count)
             } else {
-                0.0
+                ((n as f64 * count as f64 * vuln / total_vuln).round() as i32)
+                    .clamp(0, count.min(remaining))
             };
+            if share > 0 {
+                result.insert(key.to_string(), share);
+                remaining -= share;
+            }
+        }
+        result
+    };
 
-            logs.push(format!("RESULTAT : {}", combat_res.message));
-            if deuterium > 0.0 {
-                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium récupérés.", metal, crystal, deuterium));
+    let push_loss_msg = |losses: &HashMap<String, i32>, prefix: &str, logs: &mut Vec<String>| {
+        if losses.is_empty() { return; }
+        let parts: Vec<String> = losses.iter()
+            .filter(|(_, &v)| v > 0)
+            .map(|(k, &v)| format!("{} {}", v, ship_names.get(k.as_str()).copied().unwrap_or(k.as_str())))
+            .collect();
+        if !parts.is_empty() {
+            logs.push(format!("{} : {}", prefix, parts.join(", ")));
+        }
+    };
+
+    // ─── TIRAGE DE L'OUTCOME PONDÉRÉ ──────────────────────────────────────
+    // Weights: EmptySpace=10% | FloatingResources=25% | PiratesWeak=20% |
+    //          PiratesMedium=25% | PiratesStrong=15% | Discovery=5%
+    let outcome_roll: f64 = rand::thread_rng().gen();
+
+    let (loot_metal, loot_crystal, loot_deuterium) = if outcome_roll < 0.10 {
+        // ── ESPACE VIDE (10%) ────────────────────────────────────────────────
+        winner = "calm";
+        let m = base_metal * 0.25;
+        let c = base_crystal * 0.25;
+        logs.push("SCAN : Secteur complètement désert. Aucune activité dans ce quadrant.".to_string());
+        if m > 1.0 {
+            logs.push(format!("DECOUVERTE : Micrométéorites récupérées. +{:.0} M, +{:.0} C.", m, c));
+        }
+        // 30% chance de perdre 1 vaisseau (usure)
+        if total_ships > 1 && rand::thread_rng().gen_bool(0.30) {
+            let losses = split_losses_fleet(1);
+            push_loss_msg(&losses, "PERTES", &mut logs);
+            lost_ships = losses;
+        }
+        logs.push("RESULTAT : Retour sans incident notable.".to_string());
+        active.metal_amount = Set(p.metal_amount + m);
+        active.crystal_amount = Set(p.crystal_amount + c);
+        (m, c, 0.0)
+
+    } else if outcome_roll < 0.35 {
+        // ── RESSOURCES FLOTTANTES (25%) ─────────────────────────────────────
+        winner = "calm";
+        let mult = calm_bonus * recycler_bonus;
+        let m = base_metal * mult;
+        let c = base_crystal * mult;
+        let d = base_deut * mult;
+        logs.push("SCAN : Épave ancienne détectée. Récupération en cours.".to_string());
+        if d > 0.0 {
+            logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium.", m, c, d));
+        } else {
+            logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", m, c));
+        }
+        // Pertes minimales 0-2%
+        let total_losses = (total_ships as f64 * rand::thread_rng().gen_range(0.0..0.02)).floor() as i32;
+        if total_losses > 0 {
+            let losses = split_losses_fleet(total_losses);
+            push_loss_msg(&losses, "PERTES MINIMES", &mut logs);
+            lost_ships = losses;
+        }
+        logs.push("RESULTAT : Mission accomplie.".to_string());
+        active.metal_amount = Set(p.metal_amount + m);
+        active.crystal_amount = Set(p.crystal_amount + c);
+        if d > 0.0 { active.deuterium_amount = Set(p.deuterium_amount + d); }
+        (m, c, d)
+
+    } else if outcome_roll < 0.55 {
+        // ── PIRATES FAIBLES (20%) ────────────────────────────────────────────
+        logs.push("⚠️ RADAR : Pirates amateurs détectés. La flotte engage le combat.".to_string());
+        let pirate_str = (combat_power * rand::thread_rng().gen_range(0.15..0.45)) as i32;
+        if combat_power as i32 > pirate_str || combat_power >= 3.0 {
+            winner = "victory";
+            let n = ((total_ships as f64 * rand::thread_rng().gen_range(0.03..0.10)).ceil() as i32)
+                .max(if total_ships == 1 { 1 } else { 0 }).min(total_ships);
+            let losses = split_losses_fleet(n);
+            let m = base_metal * 0.7 * recycler_bonus;
+            let c = base_crystal * 0.7 * recycler_bonus;
+            let d = base_deut * 0.7 * recycler_bonus;
+            logs.push(format!("RESULTAT : Victoire ! Pirates dispersés (force estimée : {}).", pirate_str));
+            push_loss_msg(&losses, "PERTES", &mut logs);
+            if d > 0.0 {
+                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium.", m, c, d));
             } else {
-                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal récupérés.", metal, crystal));
+                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal.", m, c));
             }
-
-            // RÈGLE SPÉCIALE: Si 1 seul vaisseau, on le perd toujours (victoire ou non)
-            if total_ships == 1 {
-                if hunters == 1 {
-                    lost_hunters = 1;
-                    logs.push("PERTES : 1 Chasseur (expédition risquée avec flotte minimale)".to_string());
-                }
-                if cruisers == 1 {
-                    lost_cruisers = 1;
-                    logs.push("PERTES : 1 Croiseur (expédition risquée avec flotte minimale)".to_string());
-                }
-            } else {
-                // Répartir les pertes : les croiseurs sont plus résistants (configurable)
-                // On distribue les pertes en tenant compte de la résistance de chaque type
-                let hunter_vulnerability = hunters as f64 * hunter_vuln_mult;
-                let cruiser_vulnerability = cruisers as f64 * cruiser_vuln_mult;
-                let total_vulnerability = hunter_vulnerability + cruiser_vulnerability;
-
-                if total_vulnerability > 0.0 {
-                    let hunter_loss_ratio = hunter_vulnerability / total_vulnerability;
-                    lost_hunters = (combat_res.ships_lost as f64 * hunter_loss_ratio).ceil() as i32;
-                    lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_loss_ratio)).floor() as i32;
-
-                    // Assurer qu'on ne perd pas plus que ce qu'on a
-                    if lost_hunters > hunters { lost_hunters = hunters; }
-                    if lost_cruisers > cruisers { lost_cruisers = cruisers; }
-
-                    // Log des pertes
-                    if lost_hunters > 0 || lost_cruisers > 0 {
-                        let mut loss_msg = "PERTES : ".to_string();
-                        if lost_hunters > 0 { loss_msg.push_str(&format!("{} Chasseur(s)", lost_hunters)); }
-                        if lost_hunters > 0 && lost_cruisers > 0 { loss_msg.push_str(", "); }
-                        if lost_cruisers > 0 { loss_msg.push_str(&format!("{} Croiseur(s)", lost_cruisers)); }
-                        logs.push(loss_msg);
-                    }
-                }
-            }
-
-            active.metal_amount = Set(p.metal_amount + metal);
-            active.crystal_amount = Set(p.crystal_amount + crystal);
-            if deuterium > 0.0 {
-                active.deuterium_amount = Set(p.deuterium_amount + deuterium);
-            }
-            (metal, crystal, deuterium)
+            active.metal_amount = Set(p.metal_amount + m);
+            active.crystal_amount = Set(p.crystal_amount + c);
+            if d > 0.0 { active.deuterium_amount = Set(p.deuterium_amount + d); }
+            lost_ships = losses;
+            (m, c, d)
         } else {
             winner = "defeat";
-            logs.push(format!("RESULTAT : {}", combat_res.message));
-
-            // RÈGLE SPÉCIALE: Si 1 seul vaisseau, on le perd toujours
-            if total_ships == 1 {
-                if hunters == 1 {
-                    lost_hunters = 1;
-                    logs.push("PERTES TOTALES : 1 Chasseur (destruction complète)".to_string());
-                }
-                if cruisers == 1 {
-                    lost_cruisers = 1;
-                    logs.push("PERTES TOTALES : 1 Croiseur (destruction complète)".to_string());
-                }
-            } else {
-                // En cas de défaite, pertes très lourdes avec même distribution
-                let hunter_vulnerability = hunters as f64 * hunter_vuln_mult;
-                let cruiser_vulnerability = cruisers as f64 * cruiser_vuln_mult;
-                let total_vulnerability = hunter_vulnerability + cruiser_vulnerability;
-
-                if total_vulnerability > 0.0 {
-                    let hunter_loss_ratio = hunter_vulnerability / total_vulnerability;
-                    lost_hunters = (combat_res.ships_lost as f64 * hunter_loss_ratio).ceil() as i32;
-                    lost_cruisers = (combat_res.ships_lost as f64 * (1.0 - hunter_loss_ratio)).floor() as i32;
-
-                    // Assurer qu'on ne perd pas plus que ce qu'on a
-                    if lost_hunters > hunters { lost_hunters = hunters; }
-                    if lost_cruisers > cruisers { lost_cruisers = cruisers; }
-
-                    // Log des pertes (défaite = pertes lourdes)
-                    if lost_hunters > 0 || lost_cruisers > 0 {
-                        let mut loss_msg = "PERTES LOURDES : ".to_string();
-                        if lost_hunters > 0 { loss_msg.push_str(&format!("{} Chasseur(s)", lost_hunters)); }
-                        if lost_hunters > 0 && lost_cruisers > 0 { loss_msg.push_str(", "); }
-                        if lost_cruisers > 0 { loss_msg.push_str(&format!("{} Croiseur(s)", lost_cruisers)); }
-                        logs.push(loss_msg);
-                    }
-                }
-            }
-
+            let n = ((total_ships as f64 * rand::thread_rng().gen_range(0.40..0.70)).ceil() as i32).max(1).min(total_ships);
+            let losses = split_losses_fleet(n);
+            logs.push(format!("RESULTAT : Défaite. Retraite d'urgence. (pirates : {})", pirate_str));
+            push_loss_msg(&losses, "PERTES LOURDES", &mut logs);
+            lost_ships = losses;
             (0.0, 0.0, 0.0)
         }
+
+    } else if outcome_roll < 0.80 {
+        // ── PIRATES MOYENS (25%) ─────────────────────────────────────────────
+        logs.push("⚠️ RADAR : Escadron pirate en approche. Combat inévitable.".to_string());
+        let pirate_str = (combat_power * rand::thread_rng().gen_range(0.45..0.90)) as i32;
+        if combat_power as i32 > pirate_str {
+            winner = "victory";
+            let n = ((total_ships as f64 * rand::thread_rng().gen_range(0.08..0.22)).ceil() as i32)
+                .max(if total_ships == 1 { 1 } else { 0 }).min(total_ships);
+            let losses = split_losses_fleet(n);
+            let m = base_metal * recycler_bonus;
+            let c = base_crystal * recycler_bonus;
+            let d = base_deut * recycler_bonus;
+            logs.push(format!("RESULTAT : Victoire acharnée. Escadron neutralisé (force : {}).", pirate_str));
+            push_loss_msg(&losses, "PERTES", &mut logs);
+            if d > 0.0 {
+                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium.", m, c, d));
+            } else {
+                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal.", m, c));
+            }
+            active.metal_amount = Set(p.metal_amount + m);
+            active.crystal_amount = Set(p.crystal_amount + c);
+            if d > 0.0 { active.deuterium_amount = Set(p.deuterium_amount + d); }
+            lost_ships = losses;
+            (m, c, d)
+        } else {
+            winner = "defeat";
+            let n = ((total_ships as f64 * rand::thread_rng().gen_range(0.35..0.65)).ceil() as i32).max(1).min(total_ships);
+            let losses = split_losses_fleet(n);
+            logs.push(format!("RESULTAT : Défaite. Surpassés en nombre (pirates : {}).", pirate_str));
+            push_loss_msg(&losses, "PERTES LOURDES", &mut logs);
+            lost_ships = losses;
+            (0.0, 0.0, 0.0)
+        }
+
+    } else if outcome_roll < 0.95 {
+        // ── PIRATES FORTS (15%) ──────────────────────────────────────────────
+        logs.push("⚠️ RADAR : ALERTE — Flotte pirate redoutable. Combat critique.".to_string());
+        let pirate_str = (combat_power * rand::thread_rng().gen_range(0.85..1.50)) as i32;
+        if combat_power as i32 > pirate_str {
+            winner = "victory";
+            let n = ((total_ships as f64 * rand::thread_rng().gen_range(0.15..0.40)).ceil() as i32)
+                .max(if total_ships == 1 { 1 } else { 0 }).min(total_ships);
+            let losses = split_losses_fleet(n);
+            let m = base_metal * 1.4 * recycler_bonus;
+            let c = base_crystal * 1.4 * recycler_bonus;
+            let d = base_deut * 1.4 * recycler_bonus;
+            logs.push(format!("RESULTAT : Victoire héroïque ! Flotte ennemie détruite (force : {}).", pirate_str));
+            push_loss_msg(&losses, "PERTES", &mut logs);
+            if d > 0.0 {
+                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium.", m, c, d));
+            } else {
+                logs.push(format!("PILLAGE : +{:.0} Métal, +{:.0} Cristal.", m, c));
+            }
+            active.metal_amount = Set(p.metal_amount + m);
+            active.crystal_amount = Set(p.crystal_amount + c);
+            if d > 0.0 { active.deuterium_amount = Set(p.deuterium_amount + d); }
+            lost_ships = losses;
+            (m, c, d)
+        } else {
+            winner = "defeat";
+            let n = ((total_ships as f64 * rand::thread_rng().gen_range(0.50..0.80)).ceil() as i32).max(1).min(total_ships);
+            let losses = split_losses_fleet(n);
+            logs.push(format!("RESULTAT : DESTRUCTION MUTUELLE. Pertes catastrophiques. (pirates : {})", pirate_str));
+            push_loss_msg(&losses, "PERTES CATASTROPHIQUES", &mut logs);
+            lost_ships = losses;
+            (0.0, 0.0, 0.0)
+        }
+
     } else {
+        // ── DÉCOUVERTE (5%) ───────────────────────────────────────────────────
         winner = "calm";
-        // Gains proportionnels au nombre et type de vaisseaux (bonus pour secteur calme configurable) + bonus recycleur
-        let speed_multiplier = speed_factor / 100.0;
-        let metal = (base_metal_per_hunter * hunters as f64 + base_metal_per_cruiser * cruisers as f64) * recycler_bonus * calm_bonus * speed_multiplier;
-        let crystal = (base_crystal_per_hunter * hunters as f64 + base_crystal_per_cruiser * cruisers as f64) * recycler_bonus * calm_bonus * speed_multiplier;
-        let deuterium = if found_deuterium {
-            (base_deut_per_hunter * hunters as f64 + base_deut_per_cruiser * cruisers as f64) * recycler_bonus * calm_bonus * speed_multiplier
+        let m = base_metal * 0.5 * recycler_bonus;
+        let c = base_crystal * 0.5 * recycler_bonus;
+        let d = base_deut * 0.3 * recycler_bonus;
+        syndicate_credits_earned = rand::thread_rng().gen_range(3.0_f64..8.0_f64);
+        logs.push("SCAN : Signal d'origine inconnue capté. Artefacts extraterrestres détectés.".to_string());
+        if d > 0.0 {
+            logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium.", m, c, d));
         } else {
-            0.0
-        };
-
-        logs.push("SCAN : Secteur calme.".to_string());
-        if deuterium > 0.0 {
-            logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal, +{:.0} Deutérium.", metal, crystal, deuterium));
-        } else {
-            logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", metal, crystal));
+            logs.push(format!("DECOUVERTE : +{:.0} Métal, +{:.0} Cristal.", m, c));
         }
-
-        // RÈGLE SPÉCIALE: Même en secteur calme, il y a toujours un risque minimal
-        if total_ships == 1 {
-            // 1 vaisseau = toujours perdu
-            if hunters == 1 {
-                lost_hunters = 1;
-                logs.push("PERTES : 1 Chasseur (usure lors de l'exploration)".to_string());
-            }
-            if cruisers == 1 {
-                lost_cruisers = 1;
-                logs.push("PERTES : 1 Croiseur (usure lors de l'exploration)".to_string());
-            }
-        } else {
-            // Plusieurs vaisseaux = pertes minimales (1-5%, minimum 1)
-            let mut rng = rand::thread_rng();
-            let base_loss_rate: f64 = rng.gen_range(0.01..0.05);
-            let variation: f64 = rng.gen_range(-0.005..0.005);
-            let loss_rate = (base_loss_rate + variation).clamp(0.005, 0.06);
-
-            let total_losses = ((total_ships as f64 * loss_rate).ceil() as i32).max(1); // Minimum 1 perte
-
-            // Répartir les pertes selon la vulnérabilité
-            let hunter_vulnerability = hunters as f64 * 1.0;
-            let cruiser_vulnerability = cruisers as f64 * 0.5;
-            let total_vulnerability = hunter_vulnerability + cruiser_vulnerability;
-
-            if total_vulnerability > 0.0 {
-                let hunter_loss_ratio = hunter_vulnerability / total_vulnerability;
-                lost_hunters = (total_losses as f64 * hunter_loss_ratio).ceil() as i32;
-                lost_cruisers = (total_losses as f64 * (1.0 - hunter_loss_ratio)).floor() as i32;
-
-                // Si on a calculé 0 pertes mais qu'on doit en avoir au moins 1, donner au type le plus nombreux
-                if lost_hunters == 0 && lost_cruisers == 0 {
-                    if hunters > cruisers {
-                        lost_hunters = 1;
-                    } else {
-                        lost_cruisers = 1;
-                    }
-                }
-
-                // Assurer qu'on ne perd pas plus que ce qu'on a
-                if lost_hunters > hunters { lost_hunters = hunters; }
-                if lost_cruisers > cruisers { lost_cruisers = cruisers; }
-
-                // Log des pertes minimales
-                if lost_hunters > 0 || lost_cruisers > 0 {
-                    let mut loss_msg = "PERTES MINIMES : ".to_string();
-                    if lost_hunters > 0 { loss_msg.push_str(&format!("{} Chasseur(s)", lost_hunters)); }
-                    if lost_hunters > 0 && lost_cruisers > 0 { loss_msg.push_str(", "); }
-                    if lost_cruisers > 0 { loss_msg.push_str(&format!("{} Croiseur(s)", lost_cruisers)); }
-                    loss_msg.push_str(" (usure normale)");
-                    logs.push(loss_msg);
-                }
-            }
-        }
-
-        active.metal_amount = Set(p.metal_amount + metal);
-        active.crystal_amount = Set(p.crystal_amount + crystal);
-        if deuterium > 0.0 {
-            active.deuterium_amount = Set(p.deuterium_amount + deuterium);
-        }
-        (metal, crystal, deuterium)
+        logs.push(format!("DÉCOUVERTE : +{:.1} Crédit(s) Syndicat récupérés dans l'artefact.", syndicate_credits_earned));
+        logs.push("RESULTAT : Données scientifiques transmises au Syndicat.".to_string());
+        active.metal_amount = Set(p.metal_amount + m);
+        active.crystal_amount = Set(p.crystal_amount + c);
+        if d > 0.0 { active.deuterium_amount = Set(p.deuterium_amount + d); }
+        (m, c, d)
     };
     
     // Deduct lost ships from relational tables (combat losses)
-    if lost_hunters > 0 {
-        if let Err(_) = tech_tree::deduct_ships(&state.db, id, "light_hunter", lost_hunters).await {
-            eprintln!("Failed to deduct lost hunters from expedition");
+    for (ship_key, &count) in &lost_ships {
+        if count > 0 {
+            if let Err(e) = tech_tree::deduct_ships(&state.db, id, ship_key, count).await {
+                eprintln!("Failed to deduct {} {} from expedition: {}", count, ship_key, e);
+            }
         }
     }
-    if lost_cruisers > 0 {
-        if let Err(_) = tech_tree::deduct_ships(&state.db, id, "cruiser", lost_cruisers).await {
-            eprintln!("Failed to deduct lost cruisers from expedition");
-        }
-    }
-    // Les recycleurs ne participent pas au combat, ils ne sont pas perdus
-    // Mais ils sont temporairement indisponibles pendant l'expédition
 
     let duration = std::cmp::max(1, (base_duration / speed_factor) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
@@ -1859,9 +1923,21 @@ async fn expedition_handler(
     
     let updated_planet = Planet::find_by_id(id).one(&state.db).await.unwrap().unwrap();
 
+    // Crédits syndicat pour l'outcome "découverte"
+    if syndicate_credits_earned > 0.0 {
+        use sea_orm::{ConnectionTrait, Statement, DbBackend};
+        let _ = state.db.execute(Statement::from_string(
+            DbBackend::Postgres,
+            format!(
+                "UPDATE \"user\" SET syndicate_credits = syndicate_credits + {} WHERE id = '{}'",
+                syndicate_credits_earned, p.owner_id
+            ),
+        )).await;
+    }
+
     // Créer le rapport détaillé pour l'expédition
-    // Pour les expéditions: winner = "victory", "defeat" ou "calm"
-    // On utilise la même valeur pour result (cohérent avec combat_log.result)
+    // winner = "victory" | "defeat" | "calm"
+    let total_ships_lost: i32 = lost_ships.values().sum();
     let expedition_report = json!({
         "winner": winner,
         "result": winner,
@@ -1871,10 +1947,9 @@ async fn expedition_handler(
             "crystal": loot_crystal,
             "deuterium": loot_deuterium
         },
-        "attacker_losses": lost_hunters + lost_cruisers,
-        "defender_losses": 0,
-        "lost_missiles": 0,
-        "lost_plasmas": 0,
+        "attacker_losses": total_ships_lost,
+        "lost_ships": lost_ships,
+        "syndicate_credits_earned": syndicate_credits_earned,
         "mission_type": "expedition"
     });
 
@@ -1887,7 +1962,7 @@ async fn expedition_handler(
         result: Set(winner.to_string()),
         loot_metal: Set(loot_metal),
         loot_crystal: Set(loot_crystal),
-        ships_lost: Set(lost_hunters + lost_cruisers),
+        ships_lost: Set(total_ships_lost),
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(expedition_report.clone())),
         details: Set(None),
@@ -1937,27 +2012,27 @@ async fn scout_expedition_handler(
 
     // Simulation du scan (aléatoire mais basé sur la force de la flotte)
     let mut rng = rand::thread_rng();
-    let base_danger = rng.gen_range(0..100);
+    let base_danger = rand::thread_rng().gen_range(0..100);
 
     let (danger_level, color, probability, recommendation) = if base_danger < 30 {
         (
             "FAIBLE",
             "green",
-            rng.gen_range(85..95),
+            rand::thread_rng().gen_range(85..95),
             "Secteur relativement sûr. Expédition recommandée."
         )
     } else if base_danger < 70 {
         (
             "MOYEN",
             "orange",
-            rng.gen_range(60..85),
+            rand::thread_rng().gen_range(60..85),
             "Présence hostile possible. Envoyez une flotte suffisante."
         )
     } else {
         (
             "ÉLEVÉ",
             "red",
-            rng.gen_range(30..60),
+            rand::thread_rng().gen_range(30..60),
             "ATTENTION : Zone très hostile détectée. Risque élevé de pertes."
         )
     };
@@ -2463,9 +2538,9 @@ fn generate_colony_name() -> String {
     let prefixes = ["Néo", "Alpha", "Terra", "Nova", "Proxima", "Sector", "Base", "Outpost"];
     let suffixes = ["Prime", "Secundus", "X", "Y", "Z", "Major", "Minor", "Delta", "Omicron"];
     let mut rng = rand::thread_rng();
-    let prefix = prefixes[rng.gen_range(0..prefixes.len())];
-    let suffix = suffixes[rng.gen_range(0..suffixes.len())];
-    let num = rng.gen_range(1..999);
+    let prefix = prefixes[rand::thread_rng().gen_range(0..prefixes.len())];
+    let suffix = suffixes[rand::thread_rng().gen_range(0..suffixes.len())];
+    let num = rand::thread_rng().gen_range(1..999);
     format!("{} {} {}", prefix, suffix, num)
 }
 

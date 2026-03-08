@@ -13,7 +13,17 @@
       "Bash(source $HOME/.cargo/env)",
       "Bash(cargo test combat::tests::test_simultaneous_damage_defender_fires_back)",
       "Bash(grep -n \"notification\" /var/home/phantomhex/Documents/code/space-conquest/migration/src/*.rs)",
-      "Bash(npx tsc --noEmit)"
+      "Bash(npx tsc --noEmit)",
+      "Bash(git checkout -b feat/expansion-5)",
+      "Bash(ls /var/home/phantomhex/Documents/code/space-conquest/backend/src/models*)",
+      "Bash(grep -n \"^// ========== HELPER FUNCTIONS FOR DYNAMIC\\\\|^async fn tick_handler$\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs)",
+      "Bash(git pull --rebase origin main)",
+      "Bash(git stash)",
+      "Bash(git stash pop)",
+      "Bash(grep -v \"^--$\")",
+      "Bash(git checkout main)",
+      "Bash(git merge feat/expansion-5)",
+      "Bash(git checkout feat/expansion-5)"
     ]
   }
 }

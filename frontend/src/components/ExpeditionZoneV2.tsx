@@ -126,29 +126,31 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
 
       if (res.ok) {
         const data = await res.json();
+        const report = data.report || data;
 
         // Show combat report
-        if (data.logs && data.logs.length > 0) {
+        if (report.log && report.log.length > 0) {
           setCombatReport({
-            result: data.result,
-            logs: data.logs,
-            loot: data.loot,
-            syndicate_credits_earned: data.syndicate_credits_earned || 0,
+            result: report.result || report.winner,
+            logs: report.log,
+            loot: report.loot,
+            lost_ships: report.lost_ships || {},
+            syndicate_credits_earned: report.syndicate_credits_earned || 0,
           });
 
-          const scNote = data.syndicate_credits_earned > 0 ? ` • +${data.syndicate_credits_earned} SC` : '';
-          // Toast based on result
-          if (data.result === "victory") {
-            toast.success("🎉 Expédition réussie !", {
-              description: `Butin: ${Math.floor(data.loot.metal)} métal, ${Math.floor(data.loot.crystal)} cristal, ${Math.floor(data.loot.deuterium || 0)} deutérium${scNote}`
+          const scNote = report.syndicate_credits_earned > 0 ? ` • +${report.syndicate_credits_earned} SC` : '';
+          const result = report.result || report.winner;
+          if (result === "victory") {
+            toast.success("Expédition réussie !", {
+              description: `Butin: ${Math.floor(report.loot.metal)} métal, ${Math.floor(report.loot.crystal)} cristal, ${Math.floor(report.loot.deuterium || 0)} deutérium${scNote}`
             });
-          } else if (data.result === "defeat") {
-            toast.error("💀 Défaite...", {
-              description: `Votre flotte a été détruite${scNote}`
+          } else if (result === "defeat") {
+            toast.error("Défaite...", {
+              description: `Votre flotte a subi de lourdes pertes${scNote}`
             });
-          } else if (data.result === "calm") {
-            toast.success("🌌 Secteur calme", {
-              description: `Ressources collectées: ${Math.floor(data.loot.metal)} métal, ${Math.floor(data.loot.crystal || 0)} cristal, ${Math.floor(data.loot.deuterium || 0)} deutérium${scNote}`
+          } else if (result === "calm") {
+            toast.success("Secteur calme", {
+              description: `Ressources collectées: ${Math.floor(report.loot.metal)} métal, ${Math.floor(report.loot.crystal || 0)} cristal, ${Math.floor(report.loot.deuterium || 0)} deutérium${scNote}`
             });
           }
         }
@@ -331,6 +333,18 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
                     </div>
                   ))}
                 </div>
+                {combatReport.lost_ships && Object.entries(combatReport.lost_ships).some(([, v]) => (v as number) > 0) && (
+                  <div className="mt-4 pt-4 border-t border-red-900/30">
+                    <div className="text-[9px] text-red-400 uppercase font-bold mb-2">Pertes</div>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(combatReport.lost_ships).filter(([, v]) => (v as number) > 0).map(([k, v]) => (
+                        <span key={k} className="text-[9px] font-mono text-red-300 bg-red-950/30 px-2 py-0.5 rounded border border-red-900/50">
+                          -{v as number} {k.replace(/_/g, ' ')}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {combatReport.loot && (
                   <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-3 gap-4">
                     <div className="text-center">
