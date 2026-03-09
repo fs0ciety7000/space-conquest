@@ -39,7 +39,6 @@ const TradeRoutesView = lazy(() => import('./components/TradeRoutesView'));
 const BuildQueueManager = lazy(() => import('./components/BuildQueueManager'));
 const UndergroundMarket = lazy(() => import('./components/UndergroundMarket'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
-const Alliances = lazy(() => import('./components/Alliances'));
 const Achievements = lazy(() => import('./components/Achievements'));
 import PirateExtortionModal from './components/PirateExtortionModal';
 import { SabotagesDashboard } from './components/SabotagesDashboard';
@@ -79,7 +78,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground' | 'dashboard' | 'alliances-network' | 'achievements';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground' | 'dashboard' | 'achievements';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -672,8 +671,7 @@ function AppContent({
     { id: 'casus-belli', label: 'Casus Belli', icon: Swords, category: 'ESPIONNAGE', onClick: () => setShowCasusBelliList(true) },
 
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
-    { id: 'alliance', label: 'Mon Alliance', icon: Shield, category: 'DONNÉES' },
-    { id: 'alliances-network', label: 'Réseau Alliances', icon: Globe, category: 'DONNÉES' },
+    { id: 'alliance', label: 'Alliances', icon: Shield, category: 'DONNÉES' },
     { id: 'achievements', label: 'Succès', icon: Award, category: 'DONNÉES' },
     { id: 'missions', label: 'Missions', icon: Telescope, category: 'DONNÉES' },
     { id: 'officers', label: 'Officiers', icon: Users, category: 'DONNÉES' },
@@ -929,7 +927,6 @@ function AppContent({
                           {activeTab === 'profile' && <UniversalProfile userId={userId!} />}
                           {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handlePrepareSpy} onTransport={handlePrepareTransport} onSendMessage={handleOpenMessage} />}
                           {activeTab === 'alliance' && <AllianceView userId={userId!} token={token!} onOpenMessage={handleOpenMessage} />}
-                          {activeTab === 'alliances-network' && <Alliances userId={userId!} onNavigate={(tab) => setActiveTab(tab as TabType)} />}
                           {activeTab === 'achievements' && <Achievements userId={userId!} />}
                           {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
                           {activeTab === 'officers' && <Officers />}
