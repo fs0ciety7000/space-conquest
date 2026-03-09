@@ -130,7 +130,7 @@ export default function ZACManager({ planetId }: ZACManagerProps) {
             <div className="text-[10px] text-slate-500">
               {isZACActive
                 ? `${totalZAC} vaisseaux assignés en défense`
-                : "Tous les vaisseaux défendent (par défaut)"}
+                : "ZAC vide — seules les défenses planétaires combattent"}
             </div>
           </div>
         </div>
@@ -156,7 +156,7 @@ export default function ZACManager({ planetId }: ZACManagerProps) {
             <Info size={12} className="shrink-0 mt-0.5 text-indigo-400" />
             <span>
               Assignez des vaisseaux à la ZAC. En cas d'attaque, seuls ces vaisseaux (et vos défenses planétaires)
-              participent au combat. Laissez vide pour que toute la flotte défende.
+              participent au combat. Si la ZAC est vide, seules les défenses planétaires défendent — les vaisseaux restent au hangar.
             </span>
           </div>
 

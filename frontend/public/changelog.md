@@ -12,7 +12,7 @@
 ### ⚔️ Zone Aérienne de Combat (ZAC)
 
 - **Nouvelle installation** : la ZAC vous permet de pré-assigner des vaisseaux à la défense de chaque planète. Accessible directement depuis la vue Planète (colonne droite).
-- **Défense ciblée** : uniquement les vaisseaux assignés à la ZAC (+ toutes vos défenses planétaires) participent au combat en cas d'attaque. Si la ZAC est vide, toute la flotte défend (comportement par défaut).
+- **Défense ciblée** : uniquement les vaisseaux assignés à la ZAC (+ toutes vos défenses planétaires) participent au combat en cas d'attaque. Si la ZAC est vide, seules les défenses planétaires combattent — les vaisseaux restent au hangar.
 - **Interface intuitive** : slider par type de vaisseau avec barre de progression, boutons "Tout assigner" / "Tout retirer", badge **ACTIVE** visible en un coup d'œil.
 - **Validation serveur** : impossible d'assigner plus de vaisseaux que vous n'en possédez — les quantités ZAC sont plafonnées aux vaisseaux réellement présents au moment de l'attaque.
 
