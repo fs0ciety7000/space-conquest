@@ -7,6 +7,7 @@ interface BeginnerProtectionBadgeProps {
   totalPoints?: number;
   size?: 'sm' | 'md' | 'lg';
   showPoints?: boolean;
+  createdAt?: string | null; // "Zone Débutant" uniquement si compte < 7 jours
 }
 
 export default function BeginnerProtectionBadge({
@@ -15,6 +16,7 @@ export default function BeginnerProtectionBadge({
   totalPoints,
   size = 'md',
   showPoints = false,
+  createdAt,
 }: BeginnerProtectionBadgeProps) {
   const [isProtected, setIsProtected] = useState(false);
   const [isBeginnerZone, setIsBeginnerZone] = useState(false);
@@ -54,7 +56,8 @@ export default function BeginnerProtectionBadge({
   useEffect(() => {
     // Check if in beginner zone (galaxy 1 by default)
     if (galaxy !== undefined) {
-      setIsBeginnerZone(galaxy <= 1);
+      const isNewAccount = createdAt ? (Date.now() - new Date(createdAt).getTime()) < 7 * 24 * 3600 * 1000 : false;
+      setIsBeginnerZone(galaxy <= 1 && isNewAccount);
     }
   }, [galaxy]);
 

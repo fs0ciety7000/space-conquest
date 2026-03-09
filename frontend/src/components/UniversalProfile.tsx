@@ -393,6 +393,7 @@ export default function UniversalProfile({ userId, onClose, isModal = false }: U
                   protectionUntil={profile.protection_until}
                   galaxy={profile.galaxy}
                   totalPoints={typeof profile.total_points === 'number' ? profile.total_points : 0}
+                  createdAt={profile.created_at}
                   size="md"
                   showPoints={false}
                 />
@@ -552,41 +553,54 @@ export default function UniversalProfile({ userId, onClose, isModal = false }: U
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-black/40 p-4 rounded-xl border border-white/5">
-                  <div className="text-[10px] font-bold uppercase text-slate-500 mb-3 flex items-center gap-2">
-                    <Building size={12} /> Infrastructure
+              {(() => {
+                const BUILDINGS: { key: string; label: string }[] = [
+                  { key: 'metal_mine',     label: 'Mine de Métal' },
+                  { key: 'crystal_mine',   label: 'Mine de Cristal' },
+                  { key: 'deuterium_mine', label: 'Mine de Deutérium' },
+                  { key: 'solar_plant',    label: 'Centrale Solaire' },
+                  { key: 'shipyard',       label: 'Chantier Spatial' },
+                  { key: 'research_lab',   label: 'Laboratoire' },
+                  { key: 'hangar',         label: 'Hangar' },
+                ];
+                const TECHS: { key: string; label: string }[] = [
+                  { key: 'energy',       label: 'Énergie' },
+                  { key: 'laser',        label: 'Laser' },
+                  { key: 'weapons',      label: 'Armement' },
+                  { key: 'shield',       label: 'Bouclier' },
+                  { key: 'armour',       label: 'Blindage' },
+                  { key: 'plasma',       label: 'Plasma' },
+                  { key: 'espionage',    label: 'Espionnage' },
+                  { key: 'computer',     label: 'Informatique' },
+                  { key: 'hyperspace',   label: 'Hyperespace' },
+                  { key: 'astrophysics', label: 'Astrophysique' },
+                  { key: 'graviton',     label: 'Graviton' },
+                ];
+                return (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-black/40 p-4 rounded-xl border border-white/5">
+                      <div className="text-[10px] font-bold uppercase text-slate-500 mb-3 flex items-center gap-2">
+                        <Building size={12} /> Infrastructure
+                      </div>
+                      <div className="space-y-2">
+                        {BUILDINGS.map(({ key, label }) => (
+                          <BuildingLevel key={key} label={label} level={profile.top_buildings?.[key]} />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-black/40 p-4 rounded-xl border border-white/5">
+                      <div className="text-[10px] font-bold uppercase text-slate-500 mb-3 flex items-center gap-2">
+                        <Atom size={12} /> Technologies
+                      </div>
+                      <div className="space-y-2">
+                        {TECHS.map(({ key, label }) => (
+                          <BuildingLevel key={key} label={label} level={profile.top_techs?.[key]} />
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <BuildingLevel label="Mine de Métal" level={profile.top_buildings?.metal_mine} />
-                    <BuildingLevel label="Mine de Cristal" level={profile.top_buildings?.crystal_mine} />
-                    <BuildingLevel label="Mine de Deutérium" level={profile.top_buildings?.deuterium_mine} />
-                    <BuildingLevel label="Centrale Solaire" level={profile.top_buildings?.solar_plant} />
-                    <BuildingLevel label="Chantier Spatial" level={profile.top_buildings?.shipyard} />
-                    <BuildingLevel label="Laboratoire" level={profile.top_buildings?.research_lab} />
-                    <BuildingLevel label="Hangar" level={profile.top_buildings?.hangar} />
-                  </div>
-                </div>
-
-                <div className="bg-black/40 p-4 rounded-xl border border-white/5">
-                  <div className="text-[10px] font-bold uppercase text-slate-500 mb-3 flex items-center gap-2">
-                    <Atom size={12} /> Technologies
-                  </div>
-                  <div className="space-y-2">
-                    <BuildingLevel label="Énergie" level={profile.top_techs?.energy} />
-                    <BuildingLevel label="Laser" level={profile.top_techs?.laser} />
-                    <BuildingLevel label="Armement" level={profile.top_techs?.weapons} />
-                    <BuildingLevel label="Bouclier" level={profile.top_techs?.shield} />
-                    <BuildingLevel label="Blindage" level={profile.top_techs?.armour} />
-                    <BuildingLevel label="Plasma" level={profile.top_techs?.plasma} />
-                    <BuildingLevel label="Espionnage" level={profile.top_techs?.espionage} />
-                    <BuildingLevel label="Informatique" level={profile.top_techs?.computer} />
-                    <BuildingLevel label="Hyperespace" level={profile.top_techs?.hyperspace} />
-                    <BuildingLevel label="Astrophysique" level={profile.top_techs?.astrophysics} />
-                    <BuildingLevel label="Graviton" level={profile.top_techs?.graviton} />
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </CardContent>
           </Card>
         )}
