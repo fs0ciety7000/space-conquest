@@ -560,8 +560,11 @@ export default function UniversalProfile({ userId, onClose, isModal = false }: U
                   <div className="space-y-2">
                     <BuildingLevel label="Mine de Métal" level={profile.top_buildings?.metal_mine} />
                     <BuildingLevel label="Mine de Cristal" level={profile.top_buildings?.crystal_mine} />
+                    <BuildingLevel label="Mine de Deutérium" level={profile.top_buildings?.deuterium_mine} />
+                    <BuildingLevel label="Centrale Solaire" level={profile.top_buildings?.solar_plant} />
                     <BuildingLevel label="Chantier Spatial" level={profile.top_buildings?.shipyard} />
                     <BuildingLevel label="Laboratoire" level={profile.top_buildings?.research_lab} />
+                    <BuildingLevel label="Hangar" level={profile.top_buildings?.hangar} />
                   </div>
                 </div>
 
@@ -572,8 +575,15 @@ export default function UniversalProfile({ userId, onClose, isModal = false }: U
                   <div className="space-y-2">
                     <BuildingLevel label="Énergie" level={profile.top_techs?.energy} />
                     <BuildingLevel label="Laser" level={profile.top_techs?.laser} />
-                    <BuildingLevel label="Espionnage" level={profile.top_techs?.espionage} />
+                    <BuildingLevel label="Armement" level={profile.top_techs?.weapons} />
+                    <BuildingLevel label="Bouclier" level={profile.top_techs?.shield} />
                     <BuildingLevel label="Blindage" level={profile.top_techs?.armour} />
+                    <BuildingLevel label="Plasma" level={profile.top_techs?.plasma} />
+                    <BuildingLevel label="Espionnage" level={profile.top_techs?.espionage} />
+                    <BuildingLevel label="Informatique" level={profile.top_techs?.computer} />
+                    <BuildingLevel label="Hyperespace" level={profile.top_techs?.hyperspace} />
+                    <BuildingLevel label="Astrophysique" level={profile.top_techs?.astrophysics} />
+                    <BuildingLevel label="Graviton" level={profile.top_techs?.graviton} />
                   </div>
                 </div>
               </div>

@@ -392,47 +392,42 @@ pub async fn get_player_profile_handler(
 
     // Fetch main planet's tech levels using tech_tree system
     let main_planet_techs = if let Some((main_planet, _, _, _)) = main_planet_with_points {
-        let energy =
-            tech_tree::get_planet_tech_level(&state.db, main_planet.id, "energy_tech")
-                .await
-                .unwrap_or(0);
-        let laser =
-            tech_tree::get_planet_tech_level(&state.db, main_planet.id, "laser_tech")
-                .await
-                .unwrap_or(0);
-        let espionage = {
-            let a = tech_tree::get_planet_tech_level(&state.db, main_planet.id, "espionage_tech").await.unwrap_or(0);
-            let b = tech_tree::get_planet_tech_level(&state.db, main_planet.id, "espionage").await.unwrap_or(0);
-            a.max(b)
-        };
-        let armour =
-            tech_tree::get_planet_tech_level(&state.db, main_planet.id, "armour_tech")
-                .await
-                .unwrap_or(0);
-        Some((energy, laser, espionage, armour))
+        let levels = tech_tree::get_all_planet_tech_levels(&state.db, main_planet.id)
+            .await
+            .unwrap_or_default();
+        let get = |k: &str| levels.get(k).copied().unwrap_or(0);
+        Some(serde_json::json!({
+            "energy":    get("energy_tech"),
+            "laser":     get("laser_tech"),
+            "espionage": get("espionage_tech").max(get("espionage")),
+            "armour":    get("armour_tech"),
+            "weapons":   get("weapons_tech"),
+            "shield":    get("shield_tech"),
+            "plasma":    get("plasma_tech"),
+            "computer":  get("computer_tech"),
+            "hyperspace": get("hyperspace_tech"),
+            "astrophysics": get("astrophysics"),
+            "graviton":  get("graviton_tech"),
+        }))
     } else {
         None
     };
 
     // Fetch main planet building levels for top_buildings
     let main_planet_buildings = if let Some((main_planet, _, _, _)) = main_planet_with_points {
-        let metal =
-            tech_tree::get_planet_building_level(&state.db, main_planet.id, "metal")
-                .await
-                .unwrap_or(0);
-        let crystal =
-            tech_tree::get_planet_building_level(&state.db, main_planet.id, "crystal")
-                .await
-                .unwrap_or(0);
-        let shipyard =
-            tech_tree::get_planet_building_level(&state.db, main_planet.id, "shipyard")
-                .await
-                .unwrap_or(0);
-        let research =
-            tech_tree::get_planet_building_level(&state.db, main_planet.id, "research")
-                .await
-                .unwrap_or(0);
-        Some((metal, crystal, shipyard, research))
+        let levels = tech_tree::get_all_planet_building_levels(&state.db, main_planet.id)
+            .await
+            .unwrap_or_default();
+        let get = |k: &str| levels.get(k).copied().unwrap_or(0);
+        Some((
+            get("metal_mine"),
+            get("crystal_mine"),
+            get("deuterium_mine"),
+            get("solar_plant"),
+            get("shipyard"),
+            get("research_lab"),
+            get("hangar"),
+        ))
     } else {
         None
     };
@@ -520,35 +515,35 @@ pub async fn get_player_profile_handler(
 
         // Bâtiments (niveau 15+)
         "top_buildings": if show_buildings || show_all {
-            main_planet_buildings.map(|(metal, crystal, shipyard, research)| json!({
+            main_planet_buildings.map(|(metal, crystal, deuterium, solar, shipyard, research, hangar)| json!({
                 "metal_mine": metal,
                 "crystal_mine": crystal,
+                "deuterium_mine": deuterium,
+                "solar_plant": solar,
                 "shipyard": shipyard,
                 "research_lab": research,
+                "hangar": hangar,
             }))
         } else {
             Some(json!({
                 "metal_mine": "███",
                 "crystal_mine": "███",
+                "deuterium_mine": "███",
+                "solar_plant": "███",
                 "shipyard": "███",
                 "research_lab": "███",
+                "hangar": "███",
             }))
         },
 
         // Technologies (niveau 18+) - Uses tech_tree system
         "top_techs": if show_techs || show_all {
-            main_planet_techs.map(|(energy, laser, espionage, armour)| json!({
-                "energy": energy,
-                "laser": laser,
-                "espionage": espionage,
-                "armour": armour,
-            }))
+            main_planet_techs
         } else {
             Some(json!({
-                "energy": "███",
-                "laser": "███",
-                "espionage": "███",
-                "armour": "███",
+                "energy": "███", "laser": "███", "espionage": "███", "armour": "███",
+                "weapons": "███", "shield": "███", "plasma": "███", "computer": "███",
+                "hyperspace": "███", "astrophysics": "███", "graviton": "███",
             }))
         },
 
