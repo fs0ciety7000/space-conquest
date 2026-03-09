@@ -1,5 +1,12 @@
 # Changelog - Space Conquest
 
+## [8.7.1] - 2026-03-09 - Alliances unifiées
+
+### 🔧 Interface
+- **Alliances fusionnées** : les tabs "Mon Alliance" et "Réseau Alliances" ne font plus doublon — un seul tab **Alliances** regroupe la recherche de guildes, la gestion de la vôtre, les candidatures et invitations.
+
+---
+
 ## [8.7.0] - 2026-03-09 - ZAC & Journal de Combat Détaillé
 
 ### ⚔️ Zone Aérienne de Combat (ZAC)
