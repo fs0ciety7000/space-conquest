@@ -84,6 +84,7 @@ mod m20260308_000001_create_notifications;
 mod m20260308_000002_add_score_columns_to_user;
 mod m20260309_000001_create_debris_field;
 mod m20260309_000002_system_messages_and_pve;
+mod m20260309_000003_planet_combat_zone;
 
 pub struct Migrator;
 
@@ -175,6 +176,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260308_000002_add_score_columns_to_user::Migration),
             Box::new(m20260309_000001_create_debris_field::Migration),
             Box::new(m20260309_000002_system_messages_and_pve::Migration),
+            Box::new(m20260309_000003_planet_combat_zone::Migration),
         ]
     }
 }

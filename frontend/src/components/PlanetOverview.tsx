@@ -13,6 +13,7 @@ import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 import { getTechLevel, getBuildingLevel, getShipCount, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
 import { formatDuration } from '@/lib/utils';
 import { usePlanet } from '@/contexts/PlanetContext';
+import ZACManager from '@/components/ZACManager';
 // --- Dictionnaire de noms ---
 const getBiomeStyle = (key: string): string => {
   const styles: Record<string, string> = {
@@ -1083,6 +1084,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 </div>
             </CardContent>
         </Card>
+
+        {/* ZAC — Zone Aérienne de Combat */}
+        <ZACManager planetId={planet.id} />
 
         </div>{/* end right column wrapper */}
       </div>

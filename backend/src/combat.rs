@@ -396,11 +396,6 @@ pub async fn resolve_pvp_combat(
     let mut total_def_damage: f64 = 0.0;
     let mut round_logs: Vec<RoundLog> = Vec::new();
 
-    // Snapshots pour calculer les pertes par round
-    let mut prev_att_ships: i32 = attacker_ships.values().sum();
-    let mut prev_def_ships: i32 = defender_ships.values().sum();
-    let mut prev_def_defs: i32 = defender_defenses.values().sum();
-
     for round in 1..=max_rounds {
         if attacker_fleet.is_destroyed() || defender_fleet.is_destroyed() {
             break;
@@ -408,6 +403,10 @@ pub async fn resolve_pvp_combat(
         rounds_played = round;
 
         logs.push(format!("--- ROUND {} ---", round));
+
+        // Snapshot avant le round pour calculer les pertes par type
+        let att_before: HashMap<String, i32> = attacker_fleet.get_all_ships().clone();
+        let def_before: HashMap<String, i32> = defender_fleet.get_all_ships().clone();
 
         // Bug fix: calculate BOTH sides' damage before applying (simultaneous fire)
         let attacker_damage = attacker_fleet.calculate_damage_to_fleet(
@@ -429,15 +428,46 @@ pub async fn resolve_pvp_combat(
             attacker_damage, defender_damage
         ));
 
-        // Calcul des pertes par round pour le rapport détaillé
-        let curr_att_ships: i32 = attacker_fleet.get_all_ships().values().filter(|&&v| v > 0).sum();
-        let curr_def_all: HashMap<String, i32> = defender_fleet.get_all_ships().clone();
-        let curr_def_ships: i32 = curr_def_all.iter().filter(|(k, _)| !k.starts_with("def_")).map(|(_, v)| v).sum();
-        let curr_def_defs: i32 = curr_def_all.iter().filter(|(k, _)| k.starts_with("def_")).map(|(_, v)| v).sum();
+        // Pertes par type ce round
+        let att_after = attacker_fleet.get_all_ships();
+        let def_after = defender_fleet.get_all_ships();
 
-        let att_lost_this_round = (prev_att_ships - curr_att_ships).max(0);
-        let def_ships_lost_this_round = (prev_def_ships - curr_def_ships).max(0);
-        let def_defs_lost_this_round = (prev_def_defs - curr_def_defs).max(0);
+        let attacker_unit_losses: HashMap<String, i32> = att_before.iter()
+            .filter_map(|(k, &before)| {
+                let after = att_after.get(k).copied().unwrap_or(0);
+                let lost = (before - after).max(0);
+                if lost > 0 { Some((k.clone(), lost)) } else { None }
+            })
+            .collect();
+
+        let defender_unit_losses: HashMap<String, i32> = def_before.iter()
+            .filter_map(|(k, &before)| {
+                let after = def_after.get(k).copied().unwrap_or(0);
+                let lost = (before - after).max(0);
+                if lost > 0 { Some((k.clone(), lost)) } else { None }
+            })
+            .collect();
+
+        // Générer les événements narratifs par type d'unité
+        let mut events: Vec<String> = Vec::new();
+        for (k, &lost) in &attacker_unit_losses {
+            let name = stats_cache.get(k).map(|s| s.display_name.as_str()).unwrap_or(k.as_str());
+            events.push(format!("⚔️ Attaquant: {} {} détruits", lost, name));
+        }
+        for (k, &lost) in &defender_unit_losses {
+            let name = stats_cache.get(k).map(|s| s.display_name.as_str()).unwrap_or(k.as_str());
+            if k.starts_with("def_") {
+                events.push(format!("🛡️ Défenseur: {} {} neutralisés", lost, name));
+            } else {
+                events.push(format!("🛡️ Défenseur: {} {} détruits", lost, name));
+            }
+        }
+
+        let att_lost_this_round: i32 = attacker_unit_losses.values().sum();
+        let def_ships_lost_this_round: i32 = defender_unit_losses.iter()
+            .filter(|(k, _)| !k.starts_with("def_")).map(|(_, v)| v).sum();
+        let def_defs_lost_this_round: i32 = defender_unit_losses.iter()
+            .filter(|(k, _)| k.starts_with("def_")).map(|(_, v)| v).sum();
 
         round_logs.push(RoundLog {
             round: round as u8,
@@ -451,11 +481,10 @@ pub async fn resolve_pvp_combat(
                 round, attacker_damage, att_lost_this_round,
                 defender_damage, def_ships_lost_this_round, def_defs_lost_this_round
             ),
+            attacker_unit_losses,
+            defender_unit_losses,
+            events,
         });
-
-        prev_att_ships = curr_att_ships;
-        prev_def_ships = curr_def_ships;
-        prev_def_defs = curr_def_defs;
 
         if attacker_fleet.is_destroyed() && defender_fleet.is_destroyed() {
             logs.push("Destruction mutuelle !".to_string());
@@ -751,6 +780,12 @@ pub struct RoundLog {
     pub defender_ships_lost_this_round: i32,
     pub defender_defenses_lost_this_round: i32,
     pub narrative: String,
+    /// Pertes par type de vaisseau pour l'attaquant ce round (ship_key → count)
+    pub attacker_unit_losses: HashMap<String, i32>,
+    /// Pertes par type (vaisseaux + défenses "def_*") pour le défenseur ce round
+    pub defender_unit_losses: HashMap<String, i32>,
+    /// Événements narratifs détaillés (ex: "5 Croiseurs détruits", "3 Tourelles Plasma neutralisées")
+    pub events: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

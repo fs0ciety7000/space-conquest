@@ -52,6 +52,7 @@ use cancel_handlers::{cancel_ship_build_handler, cancel_defense_build_handler, c
 mod handlers;
 use handlers::fleet::{
     load_planet_ships_for_combat, load_planet_tech_bonuses, load_planet_defenses_for_combat,
+    load_zac_ships_for_combat,
     set_planet_ships, set_planet_defenses_after_combat, add_ships_to_planet,
 };
 
@@ -705,10 +706,23 @@ async fn resolve_attack_mission(
         ships
     };
 
-    // Load defender ships from database
-    let defender_ships = load_planet_ships_for_combat(db, mission.target_planet_id)
+    // Load defender ships — utilise la ZAC si configurée, sinon tous les vaisseaux
+    let all_defender_ships = load_planet_ships_for_combat(db, mission.target_planet_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let zac_ships = load_zac_ships_for_combat(db, mission.target_planet_id).await;
+    let defender_ships = if zac_ships.is_empty() {
+        all_defender_ships
+    } else {
+        // Plafonner les quantités ZAC aux vaisseaux réellement présents
+        zac_ships.into_iter()
+            .filter_map(|(k, count)| {
+                let available = all_defender_ships.get(&k).copied().unwrap_or(0);
+                let effective = count.min(available);
+                if effective > 0 { Some((k, effective)) } else { None }
+            })
+            .collect()
+    };
 
     // Load technology bonuses (weapons/shield/armour) for both sides
     let mut att_bonuses = load_planet_tech_bonuses(db, att_planet.id).await;

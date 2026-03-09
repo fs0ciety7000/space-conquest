@@ -85,6 +85,8 @@ pub use super :: notification :: Entity as Notification ;
 
 // Debris fields (Expansion 5.0)
 pub use super :: debris_field :: Entity as DebrisField ;
+// Zone Aérienne de Combat (ZAC)
+pub use super :: planet_combat_zone :: Entity as PlanetCombatZone ;
 // PVE Events system
 pub use super :: server_event_type :: Entity as ServerEventType ;
 pub use super :: server_event :: Entity as ServerEvent ;

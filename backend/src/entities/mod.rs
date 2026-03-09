@@ -90,6 +90,9 @@ pub mod notification;
 
 // Debris fields (Expansion 5.0)
 pub mod debris_field;
+
+// Zone Aérienne de Combat (ZAC)
+pub mod planet_combat_zone;
 // PVE Events system
 pub mod server_event_type;
 pub mod server_event;

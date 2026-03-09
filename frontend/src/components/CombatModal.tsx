@@ -733,19 +733,49 @@ export default function CombatModal({ report, onClose, onSabotage }: CombatModal
                   <div className="text-[10px] font-bold uppercase text-slate-500 tracking-widest flex items-center gap-2">
                     <Swords size={12} className="text-violet-400" /> Déroulement du combat
                   </div>
-                  <div className="space-y-1.5 max-h-60 overflow-y-auto scrollbar-thin pr-1">
+                  <div className="space-y-2 max-h-96 overflow-y-auto scrollbar-thin pr-1">
                     {parsedReport.details.rounds.map((round: any) => (
-                      <div key={round.round} className="bg-slate-900/60 border border-white/5 rounded-lg px-3 py-2 flex gap-3">
-                        <div className="shrink-0 w-6 h-6 rounded-md bg-violet-500/20 flex items-center justify-center text-[10px] font-black text-violet-400 font-mono">
-                          {round.round}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-slate-300 leading-relaxed">{round.narrative}</p>
-                          <div className="flex gap-4 mt-1">
-                            <span className="text-[10px] text-red-400 font-mono">ATT: -{round.attacker_ships_lost_this_round} vso</span>
-                            <span className="text-[10px] text-blue-400 font-mono">DEF: -{round.defender_ships_lost_this_round} vso {round.defender_defenses_lost_this_round > 0 && `/ -${round.defender_defenses_lost_this_round} déf`}</span>
+                      <div key={round.round} className="bg-slate-900/60 border border-white/5 rounded-lg overflow-hidden">
+                        {/* Round header */}
+                        <div className="flex items-center gap-3 px-3 py-2 bg-violet-500/5 border-b border-white/5">
+                          <div className="shrink-0 w-6 h-6 rounded-md bg-violet-500/20 flex items-center justify-center text-[10px] font-black text-violet-400 font-mono">
+                            {round.round}
+                          </div>
+                          <div className="flex gap-4 flex-1">
+                            <span className="text-[10px] text-orange-400 font-mono">
+                              ATT ⚡ {Math.floor(round.attacker_damage).toLocaleString()} dmg
+                            </span>
+                            <span className="text-[10px] text-cyan-400 font-mono">
+                              DEF ⚡ {Math.floor(round.defender_damage).toLocaleString()} dmg
+                            </span>
+                          </div>
+                          <div className="flex gap-3">
+                            {round.attacker_ships_lost_this_round > 0 && (
+                              <span className="text-[10px] text-red-400 font-mono">-{round.attacker_ships_lost_this_round} ATT</span>
+                            )}
+                            {(round.defender_ships_lost_this_round + round.defender_defenses_lost_this_round) > 0 && (
+                              <span className="text-[10px] text-blue-400 font-mono">
+                                -{round.defender_ships_lost_this_round + round.defender_defenses_lost_this_round} DEF
+                              </span>
+                            )}
                           </div>
                         </div>
+                        {/* Per-unit events */}
+                        {round.events?.length > 0 ? (
+                          <div className="px-3 py-2 space-y-0.5">
+                            {round.events.map((ev: string, i: number) => (
+                              <p key={i} className={`text-[10px] leading-relaxed font-mono ${
+                                ev.startsWith('⚔️') ? 'text-red-400/80' : 'text-blue-400/80'
+                              }`}>
+                                {ev}
+                              </p>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2">
+                            <p className="text-[10px] text-slate-400 font-mono">{round.narrative}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

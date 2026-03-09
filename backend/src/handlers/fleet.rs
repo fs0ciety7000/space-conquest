@@ -9,7 +9,7 @@ use axum::{
     extract::{Path, State, Query},
     http::StatusCode,
     response::{IntoResponse, Json},
-    routing::post,
+    routing::{get, post, put, delete},
     Router,
 };
 use chrono::{Duration, Utc};
@@ -27,12 +27,12 @@ use backend::entities::{
     prelude::{
         AllianceMember, CombatLog, DebrisField, DefenseType, Flagship, FlagshipModule,
         FlagshipModuleType, FleetMission, Friendship,
-        Planet, PlanetDefense, PlanetShip, PlanetTechnology, ShipType, Technology,
+        Planet, PlanetCombatZone, PlanetDefense, PlanetShip, PlanetTechnology, ShipType, Technology,
         TransportLog, User,
     },
     alliance_member, combat_log, debris_field, defense_type, flagship, flagship_module,
     flagship_module_type, fleet_mission, friendship,
-    planet, planet_defense, planet_ship, planet_technology, ship_type, technology,
+    planet, planet_combat_zone, planet_defense, planet_ship, planet_technology, ship_type, technology,
     transport_log, user,
 };
 
@@ -49,6 +49,10 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/recycle", post(recycle_handler))
         .route("/transport", post(transport_handler))
         .route("/planets/:id/expedition-v2", post(expedition_v2_handler))
+        // ZAC — Zone Aérienne de Combat
+        .route("/planets/:id/combat-zone", get(get_combat_zone_handler))
+        .route("/planets/:id/combat-zone", put(set_combat_zone_handler))
+        .route("/planets/:id/combat-zone", delete(clear_combat_zone_handler))
         .with_state(state)
 }
 
@@ -1511,4 +1515,133 @@ async fn expedition_v2_handler(
         "planet": updated_planet,
         "report": expedition_report
     })).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ZAC — Zone Aérienne de Combat
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// GET /planets/:id/combat-zone
+/// Retourne les vaisseaux assignés à la ZAC pour une planète.
+/// Inclut également le total disponible par type depuis planet_ships.
+async fn get_combat_zone_handler(
+    Path(planet_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let db = &state.db;
+
+    // ZAC entries
+    let zac_entries = PlanetCombatZone::find()
+        .filter(planet_combat_zone::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await
+        .unwrap_or_default();
+
+    let zac_map: HashMap<String, i32> = zac_entries.iter()
+        .map(|e| (e.ship_key.clone(), e.assigned_count))
+        .collect();
+
+    // Total fleet on planet
+    let fleet = load_planet_ships_for_combat(db, planet_id).await.unwrap_or_default();
+
+    Json(json!({
+        "combat_zone": zac_map,
+        "fleet": fleet,
+    })).into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct ZacPayload {
+    assignments: HashMap<String, i32>,
+}
+
+/// PUT /planets/:id/combat-zone
+/// Remplace intégralement les assignations ZAC pour la planète.
+/// assignments: { ship_key: count } — count 0 supprime l'entrée.
+async fn set_combat_zone_handler(
+    Path(planet_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(payload): Json<ZacPayload>,
+) -> impl IntoResponse {
+    let db = &state.db;
+
+    // Vérifier que la planète existe
+    if Planet::find_by_id(planet_id).one(db).await.ok().flatten().is_none() {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response();
+    }
+
+    // Charger la flotte disponible pour valider les quantités
+    let fleet = load_planet_ships_for_combat(db, planet_id).await.unwrap_or_default();
+
+    for (ship_key, &count) in &payload.assignments {
+        let available = fleet.get(ship_key).copied().unwrap_or(0);
+        if count < 0 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Negative count for {}", ship_key)}))).into_response();
+        }
+        if count > available {
+            return (StatusCode::BAD_REQUEST, Json(json!({
+                "error": format!("Not enough {}: {} requested but only {} available", ship_key, count, available)
+            }))).into_response();
+        }
+    }
+
+    // Supprimer toutes les anciennes entrées ZAC pour cette planète
+    PlanetCombatZone::delete_many()
+        .filter(planet_combat_zone::Column::PlanetId.eq(planet_id))
+        .exec(db)
+        .await
+        .ok();
+
+    // Insérer les nouvelles assignations (count > 0 uniquement)
+    for (ship_key, &count) in &payload.assignments {
+        if count > 0 {
+            let _ = planet_combat_zone::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                planet_id: Set(planet_id),
+                ship_key: Set(ship_key.clone()),
+                assigned_count: Set(count),
+                updated_at: Set(Utc::now().fixed_offset()),
+            }.insert(db).await;
+        }
+    }
+
+    let updated: HashMap<String, i32> = payload.assignments.iter()
+        .filter(|(_, &v)| v > 0)
+        .map(|(k, &v)| (k.clone(), v))
+        .collect();
+
+    Json(json!({ "combat_zone": updated })).into_response()
+}
+
+/// DELETE /planets/:id/combat-zone
+/// Vide la ZAC — tous les vaisseaux de la planète défendront (comportement par défaut).
+async fn clear_combat_zone_handler(
+    Path(planet_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    PlanetCombatZone::delete_many()
+        .filter(planet_combat_zone::Column::PlanetId.eq(planet_id))
+        .exec(&state.db)
+        .await
+        .ok();
+
+    Json(json!({ "message": "Combat zone cleared" })).into_response()
+}
+
+/// Charge les vaisseaux assignés à la ZAC pour la défense.
+/// Retourne HashMap vide si aucune assignation → l'appelant doit alors utiliser TOUS les vaisseaux.
+pub(crate) async fn load_zac_ships_for_combat(
+    db: &sea_orm::DatabaseConnection,
+    planet_id: Uuid,
+) -> HashMap<String, i32> {
+    let entries = PlanetCombatZone::find()
+        .filter(planet_combat_zone::Column::PlanetId.eq(planet_id))
+        .all(db)
+        .await
+        .unwrap_or_default();
+
+    entries.into_iter()
+        .filter(|e| e.assigned_count > 0)
+        .map(|e| (e.ship_key, e.assigned_count))
+        .collect()
 }
