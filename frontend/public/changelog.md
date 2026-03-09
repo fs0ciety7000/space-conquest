@@ -1,5 +1,27 @@
 # Changelog - Space Conquest
 
+## [8.7.0] - 2026-03-09 - ZAC & Journal de Combat Détaillé
+
+### ⚔️ Zone Aérienne de Combat (ZAC)
+
+- **Nouvelle installation** : la ZAC vous permet de pré-assigner des vaisseaux à la défense de chaque planète. Accessible directement depuis la vue Planète (colonne droite).
+- **Défense ciblée** : uniquement les vaisseaux assignés à la ZAC (+ toutes vos défenses planétaires) participent au combat en cas d'attaque. Si la ZAC est vide, toute la flotte défend (comportement par défaut).
+- **Interface intuitive** : slider par type de vaisseau avec barre de progression, boutons "Tout assigner" / "Tout retirer", badge **ACTIVE** visible en un coup d'œil.
+- **Validation serveur** : impossible d'assigner plus de vaisseaux que vous n'en possédez — les quantités ZAC sont plafonnées aux vaisseaux réellement présents au moment de l'attaque.
+
+### 📋 Journal de Combat Par Unité
+
+- **Rapport détaillé round par round** : chaque round du rapport de combat affiche désormais le détail des pertes par type d'unité (vaisseaux et défenses).
+- **Événements narratifs** : `⚔️ Attaquant: 5 Croiseurs détruits`, `🛡️ Défenseur: 3 Tourelles Plasma neutralisées` — chaque élimination est retranscrite.
+- **Affichage enrichi** : dégâts échangés, pertes totales attaquant/défenseur, et liste complète des événements par camp (rouge = attaquant, bleu = défenseur).
+
+### 🛡️ Vaisseau Amiral — Bonus Actifs
+
+- Les statistiques du Vaisseau Amiral (attaque, bouclier, blindage des modules équipés) sont désormais appliquées comme **multiplicateurs de combat** sur toutes vos planètes.
+- Les deux camps (attaquant et défenseur) bénéficient du bonus de leur propre vaisseau amiral.
+
+---
+
 ## [8.6.0] - 2026-03-08 - Événements Serveur PVE
 
 ### ⚔️ Nouvelles Fonctionnalités
