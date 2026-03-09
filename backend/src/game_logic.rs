@@ -990,9 +990,6 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
     let tech_levels = tech_tree::get_all_planet_tech_levels(db, p.id)
         .await
         .unwrap_or_default();
-    let ship_counts = tech_tree::get_all_planet_ship_counts(db, p.id)
-        .await
-        .unwrap_or_default();
     let defense_counts = tech_tree::get_all_planet_defense_counts(db, p.id)
         .await
         .unwrap_or_default();
@@ -1035,23 +1032,10 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
         research += level * level * base;
     }
 
-    // Points militaire (flotte) — basé sur les stats réelles de combat
+    // Points militaire — défenses uniquement (vaisseaux exclus : trop volatils)
     // Formule: (attack + shield/2 + hull/10) / 1000 par unité
-    use crate::entities::prelude::{ShipType, DefenseType};
+    use crate::entities::prelude::DefenseType;
     use sea_orm::EntityTrait;
-
-    let all_ship_types = ShipType::find().all(db).await.unwrap_or_default();
-    let ship_stats: std::collections::HashMap<String, (i32, i32, i32)> = all_ship_types
-        .iter()
-        .map(|s| (s.ship_key.clone(), (s.attack, s.shield, s.hull)))
-        .collect();
-
-    let mut fleet_points: i64 = 0;
-    for (ship_key, count) in &ship_counts {
-        let (atk, shd, hul) = ship_stats.get(ship_key.as_str()).copied().unwrap_or((10, 5, 100));
-        let unit_value = (atk as i64) + (shd as i64 / 2) + (hul as i64 / 10);
-        fleet_points += (*count as i64) * unit_value / 1000;
-    }
 
     let all_defense_types = DefenseType::find().all(db).await.unwrap_or_default();
     let defense_stats: std::collections::HashMap<String, (i32, i32, i32)> = all_defense_types
@@ -1065,7 +1049,7 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
         let unit_value = (atk as i64) + (shd as i64 / 2) + (hul as i64 / 10);
         defense_points += (*count as i64) * unit_value / 1000;
     }
-    let military = (fleet_points + defense_points) as i32;
+    let military = defense_points as i32;
 
     // Points production (basé sur la production horaire)
     let energy_tech_level = *tech_levels.get("energy_tech").unwrap_or(&0);
@@ -1306,8 +1290,9 @@ pub fn calculate_energy_production_with_slots(
 /// Appelé toutes les 5 minutes par un job tokio dans main.rs.
 /// Permet une pagination SQL directe sur /ranking via ORDER BY total_score DESC.
 pub async fn refresh_all_user_scores(db: &sea_orm::DatabaseConnection, config: &ServerConfigCache) {
-    use sea_orm::{EntityTrait, ConnectionTrait, Statement};
-    use crate::entities::prelude::Planet;
+    use sea_orm::{EntityTrait, ConnectionTrait, Statement, QueryFilter, ColumnTrait};
+    use crate::entities::prelude::{Planet, CombatLog};
+    use crate::entities::combat_log;
 
     let planets = match Planet::find().all(db).await {
         Ok(p) => p,
@@ -1330,6 +1315,26 @@ pub async fn refresh_all_user_scores(db: &sea_orm::DatabaseConnection, config: &
             total += t;
             economy += e;
             military += m;
+        }
+
+        // Score combat : victories × 100 − defeats × 25 (min 0)
+        // Reflète le ratio V/D sur toute la durée de vie du compte
+        let planet_ids: Vec<uuid::Uuid> = user_planets.iter().map(|p| p.id).collect();
+        if !planet_ids.is_empty() {
+            if let Ok(logs) = CombatLog::find()
+                .filter(combat_log::Column::PlanetId.is_in(planet_ids))
+                .all(db).await
+            {
+                let victories = logs.iter()
+                    .filter(|l| l.result == "victory" || l.result == "player")
+                    .count() as i32;
+                let defeats = logs.iter()
+                    .filter(|l| l.result == "defeat" || l.result == "defender")
+                    .count() as i32;
+                let combat_score = (victories * 100 - defeats * 25).max(0);
+                military += combat_score;
+                total += combat_score;
+            }
         }
 
         let _ = db.execute(Statement::from_sql_and_values(

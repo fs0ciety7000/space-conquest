@@ -374,6 +374,27 @@ pub async fn get_player_profile_handler(
             (0, 0, 0, 0)
         };
 
+    // Score combat all-time : victoires × 100 − défaites × 25 (min 0)
+    // Ajouté au score militaire pour récompenser l'activité PvP
+    let (all_time_victories, all_time_defeats, combat_score) = if !planet_ids.is_empty() {
+        let all_logs = CombatLog::find()
+            .filter(combat_log::Column::PlanetId.is_in(planet_ids.clone()))
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+        let v = all_logs.iter()
+            .filter(|l| l.result == "victory" || l.result == "player")
+            .count() as i32;
+        let d = all_logs.iter()
+            .filter(|l| l.result == "defeat" || l.result == "defender")
+            .count() as i32;
+        (v, d, (v * 100 - d * 25).max(0))
+    } else {
+        (0, 0, 0)
+    };
+    total_military += combat_score;
+    total_points += combat_score;
+
     // Planète principale (= la plus ancienne, planète mère)
     let mut planet_points_list = Vec::new();
     for p in &planets {
@@ -501,6 +522,21 @@ pub async fn get_player_profile_handler(
                 "victories": "███",
                 "defeats": "███",
                 "win_rate": "███"
+            })
+        },
+
+        // Statistiques de combat all-time + contribution au score
+        "combat_stats_alltime": if show_military || show_all {
+            json!({
+                "victories": all_time_victories,
+                "defeats": all_time_defeats,
+                "combat_score": combat_score
+            })
+        } else {
+            json!({
+                "victories": "███",
+                "defeats": "███",
+                "combat_score": "███"
             })
         },
 

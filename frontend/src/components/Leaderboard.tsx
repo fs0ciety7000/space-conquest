@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe, UserCircle, Truck, X } from "lucide-react";
+import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe, UserCircle, Truck, X, Info, ChevronDown, ChevronUp, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
@@ -50,6 +50,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
+    const [showFormula, setShowFormula] = useState(false);
 
     useEffect(() => {
         setRanking([]);
@@ -152,6 +153,92 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                     </div>
                 </div>
                 
+                {/* Formule de calcul du score */}
+                <div className="mb-6 rounded-xl border border-indigo-500/20 bg-indigo-950/20 overflow-hidden">
+                    <button
+                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-indigo-500/10 transition-colors"
+                        onClick={() => setShowFormula(v => !v)}
+                    >
+                        <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-400">
+                            <Info size={14} /> Formule de calcul des points
+                        </span>
+                        {showFormula ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
+                    </button>
+                    {showFormula && (
+                        <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] border-t border-indigo-500/20 pt-4">
+                            {/* Économie */}
+                            <div>
+                                <div className="text-emerald-400 font-black uppercase tracking-widest mb-2 flex items-center gap-1">
+                                    <TrendingUp size={12} /> Score Économie
+                                </div>
+                                <div className="space-y-1 text-slate-400">
+                                    <p className="font-bold text-slate-300">Bâtiments (par planète) :</p>
+                                    <p>Mine de Métal : <span className="font-mono text-emerald-400">niv² × 10</span></p>
+                                    <p>Mine de Cristal : <span className="font-mono text-emerald-400">niv² × 15</span></p>
+                                    <p>Mine de Deutérium : <span className="font-mono text-emerald-400">niv² × 25</span></p>
+                                    <p>Centrale Solaire : <span className="font-mono text-emerald-400">niv² × 5</span></p>
+                                    <p>Chantier Spatial : <span className="font-mono text-emerald-400">niv² × 40</span></p>
+                                    <p>Laboratoire : <span className="font-mono text-emerald-400">niv² × 50</span></p>
+                                    <p>Hangar : <span className="font-mono text-emerald-400">niv² × 35</span></p>
+                                    <p className="font-bold text-slate-300 mt-2">Technologies :</p>
+                                    <p>Énergie/Laser/Info : <span className="font-mono text-emerald-400">niv² × 40–50</span></p>
+                                    <p>Armement/Bouclier/Blindage : <span className="font-mono text-emerald-400">niv² × 70–85</span></p>
+                                    <p>Plasma/Hyperspatiale : <span className="font-mono text-emerald-400">niv² × 90–100</span></p>
+                                    <p>Graviton : <span className="font-mono text-emerald-400">niv² × 150</span></p>
+                                    <p className="font-bold text-slate-300 mt-2">Production horaire :</p>
+                                    <p>Métal ÷ 1000 × 1</p>
+                                    <p>Cristal ÷ 1000 × 1.5</p>
+                                    <p>Deutérium ÷ 1000 × 2</p>
+                                    <p className="font-bold text-slate-300 mt-2">Ressources stockées :</p>
+                                    <p>Métal ÷ 50 000 × 1</p>
+                                    <p>Cristal ÷ 50 000 × 1.5</p>
+                                    <p>Deutérium ÷ 50 000 × 2</p>
+                                </div>
+                            </div>
+                            {/* Militaire */}
+                            <div>
+                                <div className="text-red-400 font-black uppercase tracking-widest mb-2 flex items-center gap-1">
+                                    <ShieldAlert size={12} /> Score Militaire
+                                </div>
+                                <div className="space-y-1 text-slate-400">
+                                    <p className="font-bold text-slate-300">Défenses planétaires :</p>
+                                    <p>Valeur unitaire :</p>
+                                    <p className="font-mono text-red-300 pl-2">(attaque + bouclier/2 + blindage/10) ÷ 1000</p>
+                                    <p className="mt-1 text-slate-500 italic">Multiplié par le nombre d'unités présentes.</p>
+                                    <p className="font-bold text-slate-300 mt-3 flex items-center gap-1"><Swords size={11} /> Score de Combat (all-time) :</p>
+                                    <p>Par victoire PvP : <span className="font-mono text-emerald-400">+100 pts</span></p>
+                                    <p>Par défaite PvP : <span className="font-mono text-red-400">−25 pts</span></p>
+                                    <p className="text-slate-500 italic">Plancher à 0 — ne peut pas être négatif.</p>
+                                </div>
+                            </div>
+                            {/* Vaisseaux & Mise à jour */}
+                            <div>
+                                <div className="text-slate-400 font-black uppercase tracking-widest mb-2 flex items-center gap-1">
+                                    <Info size={12} /> Informations
+                                </div>
+                                <div className="space-y-2 text-slate-400">
+                                    <div className="bg-slate-900/60 rounded-lg p-3 border border-white/5">
+                                        <p className="font-bold text-slate-300 mb-1">Vaisseaux</p>
+                                        <p>Non inclus dans le classement — les flottes en mission ne font pas baisser votre rang.</p>
+                                        <p className="text-slate-500 mt-1 italic">Visibles sur la fiche profil (Puissance de Flotte).</p>
+                                    </div>
+                                    <div className="bg-slate-900/60 rounded-lg p-3 border border-white/5">
+                                        <p className="font-bold text-slate-300 mb-1">Mise à jour</p>
+                                        <p>Les scores sont recalculés toutes les <span className="text-indigo-300 font-bold">5 minutes</span>.</p>
+                                    </div>
+                                    <div className="bg-indigo-900/20 rounded-lg p-3 border border-indigo-500/20">
+                                        <p className="font-bold text-indigo-300 mb-1">Score Total</p>
+                                        <p className="font-mono text-white">= Économie + Militaire</p>
+                                        <p className="font-mono text-white">= (Bâtiments + Technos</p>
+                                        <p className="font-mono text-white pl-2">+ Production + Stocks)</p>
+                                        <p className="font-mono text-white">+ (Défenses + Combat)</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 {/* Tableau */}
                 <div className="overflow-x-auto rounded-lg border border-white/5 bg-slate-950/30 card-depth animate-slide-up">
                     <table className="w-full text-left border-collapse">

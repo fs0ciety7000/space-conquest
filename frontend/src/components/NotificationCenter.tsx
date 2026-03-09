@@ -108,15 +108,12 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
         >
           <Bell size={18} className={`transition-colors ${unreadCount > 0 ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
           {unreadCount > 0 && (
-              <>
-                  <span className="absolute top-0 right-0 flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500 border-2 border-slate-950"></span>
-                  </span>
-                  <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center border-2 border-slate-950">
-                      {unreadCount}
-                  </span>
-              </>
+            <span className="absolute -top-1 -right-1 flex items-center justify-center">
+              <span className="animate-ping absolute h-full w-full rounded-full bg-indigo-400 opacity-75" />
+              <span className="relative bg-indigo-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center border-2 border-slate-950 leading-none">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            </span>
           )}
         </button>
       </DropdownMenuTrigger>

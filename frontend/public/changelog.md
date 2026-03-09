@@ -1,5 +1,36 @@
 # Changelog - Space Conquest
 
+## [8.7.3] - 2026-03-09 - Formule de score & pastilles de notifications
+
+### 🎯 Interface
+
+- **Formule de score visible** : la page Classement affiche désormais un panneau dépliable **"Formule de calcul des points"** détaillant chaque composante (bâtiments, technos, défenses, combat) avec les coefficients exacts.
+- **Pastilles de notifications corrigées** : les badges sur la cloche (notifications) et l'enveloppe (messages) dans l'EmpireBar affichent correctement l'animation `pulse` + le compteur. Affichage `9+` au-delà de 9 éléments non lus.
+
+---
+
+## [8.7.2] - 2026-03-09 - Refonte du Classement
+
+### 🏆 Nouveau Système de Score
+
+- **Stabilité du classement** : les vaisseaux sont retirés du calcul de score de classement. Les flottes en mission ne font plus chuter votre rang !
+- **Défenses toujours comptées** : les défenses planétaires restent incluses dans le score militaire — construire des défenses fait monter votre rang.
+- **Bonus de combat** : chaque **victoire** en combat PvP rapporte **+100 points de classement**. Chaque **défaite** coûte **−25 points** (plancher à 0). Le ratio V/D est ainsi récompensé sur toute la durée de vie du compte.
+- **Transparence** : la fiche profil d'un joueur affiche désormais une section **Historique de Combat** avec victoires, défaites et score de combat all-time (visible dès espionnage niveau 7).
+- **Flotte visible mais hors classement** : le nombre de vaisseaux reste affiché sur le profil comme "Puissance de flotte" — il n'influence plus le rang.
+
+### 📊 Détail des composantes du score
+
+| Composante | Incluse classement |
+|---|---|
+| Bâtiments (niveau²) | ✅ |
+| Technologies (niveau²) | ✅ |
+| Défenses planétaires | ✅ |
+| Victoires PvP (×100 pts) | ✅ |
+| Vaisseaux courants | ❌ (affiché "Flotte" sur profil) |
+
+---
+
 ## [8.7.1] - 2026-03-09 - Alliances unifiées
 
 ### 🔧 Interface

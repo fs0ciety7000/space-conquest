@@ -530,6 +530,31 @@ export default function UniversalProfile({ userId, onClose, isModal = false }: U
           <StatCard icon={Target} label="Missions" value={profile.completed_missions} color="text-green-400" classified={isClassified(profile.completed_missions)} />
         </div>
 
+        {/* Historique de Combat */}
+        {profile.combat_stats_alltime && !isClassified(profile.combat_stats_alltime?.victories) && (
+          <Card className="bg-slate-900/50 border border-white/10 mb-6">
+            <CardContent className="p-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-rose-400 mb-3 flex items-center gap-2">
+                <Swords size={14} /> Historique de Combat
+              </h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
+                  <div className="text-2xl font-black text-emerald-400">{profile.combat_stats_alltime.victories}</div>
+                  <div className="text-[10px] text-slate-500 uppercase font-bold mt-1">Victoires</div>
+                </div>
+                <div className="text-center bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                  <div className="text-2xl font-black text-red-400">{profile.combat_stats_alltime.defeats}</div>
+                  <div className="text-[10px] text-slate-500 uppercase font-bold mt-1">Défaites</div>
+                </div>
+                <div className="text-center bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                  <div className="text-2xl font-black text-amber-400">{profile.combat_stats_alltime.combat_score.toLocaleString()}</div>
+                  <div className="text-[10px] text-slate-500 uppercase font-bold mt-1">Score Combat</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {profile.main_planet && (
           <Card className="bg-gradient-to-br from-slate-900 to-slate-950 border border-white/10 mb-6">
             <CardContent className="p-6">
