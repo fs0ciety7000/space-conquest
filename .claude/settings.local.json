@@ -23,7 +23,16 @@
       "Bash(grep -v \"^--$\")",
       "Bash(git checkout main)",
       "Bash(git merge feat/expansion-5)",
-      "Bash(git checkout feat/expansion-5)"
+      "Bash(git checkout feat/expansion-5)",
+      "Bash(sed -i 's/mod m20260309_000001_create_debris_field;/mod m20260309_000001_create_debris_field;\\\\nmod m20260309_000002_system_messages_and_pve;/' /var/home/phantomhex/Documents/code/space-conquest/migration/src/lib.rs)",
+      "Bash(sed -i 's/Box::new\\(m20260309_000001_create_debris_field::Migration\\),/Box::new\\(m20260309_000001_create_debris_field::Migration\\),\\\\n            Box::new\\(m20260309_000002_system_messages_and_pve::Migration\\),/' /var/home/phantomhex/Documents/code/space-conquest/migration/src/lib.rs)",
+      "Bash(/var/home/phantomhex/Documents/code/space-conquest/backend/src/entities/prelude.rs:*)",
+      "Bash(/var/home/phantomhex/Documents/code/space-conquest/backend/src/entities/mod.rs:*)",
+      "Bash(sed -i 's/^async fn get_top_contributors\\(/pub async fn get_top_contributors_public\\(\\\\n    db: \\\\&DatabaseConnection,\\\\n    event_id: Uuid,\\\\n    limit: u64,\\\\n\\) -> Vec<\\(String, i32\\)> {\\\\n    get_top_contributors\\(db, event_id, limit\\).await\\\\n}\\\\n\\\\nasync fn get_top_contributors\\(/' /var/home/phantomhex/Documents/code/space-conquest/backend/src/server_events.rs)",
+      "Bash(sed -i 's/^fn format_zone\\(/pub fn format_zone_public\\(event: \\\\&server_event::Model\\) -> String {\\\\n    format_zone\\(event\\)\\\\n}\\\\n\\\\nfn format_zone\\(/' /var/home/phantomhex/Documents/code/space-conquest/backend/src/server_events.rs)",
+      "Bash(sed -i '/let state_pve_tick = state.clone\\(\\); \\\\/\\\\/ Pour le tick PVE events/d' /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs)",
+      "Bash(sed -i '/^    let state = state;$/d' /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs)",
+      "Bash(python3:*)"
     ]
   }
 }
