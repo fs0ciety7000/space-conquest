@@ -711,8 +711,18 @@ async fn resolve_attack_mission(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Load technology bonuses (weapons/shield/armour) for both sides
-    let att_bonuses = load_planet_tech_bonuses(db, att_planet.id).await;
-    let def_bonuses = load_planet_tech_bonuses(db, mission.target_planet_id).await;
+    let mut att_bonuses = load_planet_tech_bonuses(db, att_planet.id).await;
+    let mut def_bonuses = load_planet_tech_bonuses(db, mission.target_planet_id).await;
+
+    // Flagship bonuses — appliqués sur toutes les planètes de l'utilisateur
+    let att_flagship = handlers::fleet::load_flagship_combat_bonus(db, att_user.id).await;
+    let def_flagship = handlers::fleet::load_flagship_combat_bonus(db, def_user.id).await;
+    att_bonuses.weapons_mult *= att_flagship.weapons_mult;
+    att_bonuses.shield_mult  *= att_flagship.shield_mult;
+    att_bonuses.armour_mult  *= att_flagship.armour_mult;
+    def_bonuses.weapons_mult *= def_flagship.weapons_mult;
+    def_bonuses.shield_mult  *= def_flagship.shield_mult;
+    def_bonuses.armour_mult  *= def_flagship.armour_mult;
 
     // Load defender planetary defenses (participate in combat, keyed "def_{defense_key}")
     let defender_defenses = load_planet_defenses_for_combat(db, mission.target_planet_id).await;

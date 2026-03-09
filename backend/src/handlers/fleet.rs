@@ -25,11 +25,13 @@ use uuid::Uuid;
 use backend::{combat, game_logic, missions, protection, sabotage, tech_tree, websocket, AppState};
 use backend::entities::{
     prelude::{
-        AllianceMember, CombatLog, DebrisField, DefenseType, Flagship, FleetMission, Friendship,
+        AllianceMember, CombatLog, DebrisField, DefenseType, Flagship, FlagshipModule,
+        FlagshipModuleType, FleetMission, Friendship,
         Planet, PlanetDefense, PlanetShip, PlanetTechnology, ShipType, Technology,
         TransportLog, User,
     },
-    alliance_member, combat_log, debris_field, defense_type, flagship, fleet_mission, friendship,
+    alliance_member, combat_log, debris_field, defense_type, flagship, flagship_module,
+    flagship_module_type, fleet_mission, friendship,
     planet, planet_defense, planet_ship, planet_technology, ship_type, technology,
     transport_log, user,
 };
@@ -1029,6 +1031,47 @@ pub(crate) async fn load_planet_tech_bonuses(
         weapons_mult: 1.0 + weapons_level as f64 * 0.1,
         shield_mult: 1.0 + shield_level as f64 * 0.1,
         armour_mult: 1.0 + armour_level as f64 * 0.1,
+    }
+}
+
+/// Charge les bonus du vaisseau amiral d'un utilisateur et les convertit en CombatBonuses.
+/// Scaling : total_stat / 10000 → multiplicateur additionnel (ex: 500 → +5%)
+pub(crate) async fn load_flagship_combat_bonus(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+) -> combat::CombatBonuses {
+    let fs = match Flagship::find()
+        .filter(flagship::Column::UserId.eq(user_id))
+        .one(db)
+        .await
+        .unwrap_or(None)
+    {
+        Some(f) => f,
+        None => return combat::CombatBonuses { weapons_mult: 1.0, shield_mult: 1.0, armour_mult: 1.0 },
+    };
+
+    let modules = FlagshipModule::find()
+        .filter(flagship_module::Column::FlagshipId.eq(fs.id))
+        .all(db)
+        .await
+        .unwrap_or_default();
+
+    let mut total_attack = fs.base_attack;
+    let mut total_shield = fs.base_shield;
+    let mut total_hull = fs.base_hull;
+
+    for m in &modules {
+        if let Ok(Some(mtype)) = FlagshipModuleType::find_by_id(m.module_type_id).one(db).await {
+            total_attack += mtype.bonus_attack;
+            total_shield += mtype.bonus_shield;
+            total_hull += mtype.bonus_hull;
+        }
+    }
+
+    combat::CombatBonuses {
+        weapons_mult: 1.0 + total_attack as f64 / 10000.0,
+        shield_mult:  1.0 + total_shield as f64 / 10000.0,
+        armour_mult:  1.0 + total_hull   as f64 / 10000.0,
     }
 }
 

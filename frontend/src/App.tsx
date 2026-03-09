@@ -119,6 +119,7 @@ function AppContent({
 
   const [messageRecipient, setMessageRecipient] = useState<string | null>(null);
   const [initialMessageTab, setInitialMessageTab] = useState<'inbox'|'galactic'|'archived'|'notifications'>('inbox');
+  const [reportsInitialView, setReportsInitialView] = useState<'combat'|'transport'|'economy'|'pirates'>('combat');
 
   const [maintenanceStatus, setMaintenanceStatus] = useState<{
     enabled: boolean;
@@ -429,8 +430,13 @@ function AppContent({
     window.addEventListener('open-message-tab', handleOpenMessageTab);
 
     const handleNavigateTab = (e: Event) => {
-      const tab = (e as CustomEvent<string>).detail;
-      if (tab) { setActiveTab(tab as TabType); setSidebarOpen(false); }
+      const detail = (e as CustomEvent<string | { tab: string; subTab?: string }>).detail;
+      if (!detail) return;
+      const tab = typeof detail === 'string' ? detail : detail.tab;
+      const subTab = typeof detail === 'object' ? detail.subTab : undefined;
+      setActiveTab(tab as TabType);
+      setSidebarOpen(false);
+      if (tab === 'reports' && subTab) setReportsInitialView(subTab as 'combat'|'transport'|'economy'|'pirates');
     };
     window.addEventListener('navigate-tab', handleNavigateTab);
 
@@ -940,7 +946,7 @@ function AppContent({
                           {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
                           {activeTab === 'expedition' && <ExpeditionZoneV2 planet={planet} onAction={fetchPlanet} />}
 
-                          {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} />}
+                          {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} initialView={reportsInitialView} />}
                           {activeTab === 'changelog' && <Changelog />}
                           {activeTab === 'settings' && (
                               <Settings

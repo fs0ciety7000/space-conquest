@@ -27,18 +27,20 @@ interface NotificationCenterProps {
 export default function NotificationCenter({ userId }: NotificationCenterProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'all' | 'military' | 'economy' | 'system'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'military' | 'logistics' | 'economy' | 'system'>('all');
 
   const getCategory = (type: string) => {
     if (['combat', 'spy_alert', 'spy_report', 'sabotage'].includes(type)) return 'military';
+    if (['transport', 'expedition'].includes(type)) return 'logistics';
     if (['market', 'build', 'planet_sold'].includes(type)) return 'economy';
     return 'system';
   };
 
   const navigateForNotif = (type: string) => {
     const cat = getCategory(type);
-    if (cat === 'military') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'reports' }));
-    else if (cat === 'economy') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'reports' }));
+    if (cat === 'military') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'reports', subTab: 'combat' } }));
+    else if (cat === 'logistics') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'reports', subTab: 'transport' } }));
+    else if (cat === 'economy') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'reports', subTab: 'economy' } }));
     else window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'messages' }));
   };
 
@@ -151,17 +153,25 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
           >
             Militaire
           </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveTab('logistics')}
+            className={`flex-1 h-7 text-[10px] uppercase font-bold tracking-wider rounded-md transition-all ${activeTab === 'logistics' ? 'bg-cyan-600/20 text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Logistique
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setActiveTab('economy')}
             className={`flex-1 h-7 text-[10px] uppercase font-bold tracking-wider rounded-md transition-all ${activeTab === 'economy' ? 'bg-emerald-600/20 text-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Économie
           </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setActiveTab('system')}
             className={`flex-1 h-7 text-[10px] uppercase font-bold tracking-wider rounded-md transition-all ${activeTab === 'system' ? 'bg-purple-600/20 text-purple-400' : 'text-slate-500 hover:text-slate-300'}`}
           >

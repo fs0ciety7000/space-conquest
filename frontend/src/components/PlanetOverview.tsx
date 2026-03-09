@@ -342,9 +342,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     return Math.floor(prod);
   };
 
-  const prodMetal = calculateProduction('metal', getBuildingLevel(planet, 'metal_mine'), config.production_metal_base, config.production_metal_growth);
-  const prodCrystal = calculateProduction('crystal', getBuildingLevel(planet, 'crystal_mine'), config.production_crystal_base, config.production_crystal_growth);
-  const prodDeut = calculateProduction('deuterium', getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base, config.production_deuterium_growth);
+  // Utiliser les valeurs de production du backend (GET /planets/:id)
+  // calculateProduction() est un calcul frontend qui diverge du backend
+  const prodMetal = planet.metal_production ?? calculateProduction('metal', getBuildingLevel(planet, 'metal_mine'), config.production_metal_base, config.production_metal_growth);
+  const prodCrystal = planet.crystal_production ?? calculateProduction('crystal', getBuildingLevel(planet, 'crystal_mine'), config.production_crystal_base, config.production_crystal_growth);
+  const prodDeut = planet.deuterium_production ?? calculateProduction('deuterium', getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base, config.production_deuterium_growth);
 
   // Energy data from backend
   const energyProd = planet.energy_production || 0;

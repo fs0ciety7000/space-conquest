@@ -42,12 +42,17 @@ interface ExtortionEvent {
   resolved_at: string | null;
 }
 
-export default function ReportsTerminal({ planetId }: { planetId: string }) {
+export default function ReportsTerminal({ planetId, initialView }: { planetId: string; initialView?: 'combat' | 'transport' | 'economy' | 'pirates' }) {
   const [combatLogs, setCombatLogs] = useState<CombatLog[]>([]);
   const [transportLogs, setTransportLogs] = useState<TransportLog[]>([]);
   const [extortionHistory, setExtortionHistory] = useState<ExtortionEvent[]>([]);
-  const [view, setView] = useState<'combat' | 'transport' | 'economy' | 'pirates'>('combat');
+  const [view, setView] = useState<'combat' | 'transport' | 'economy' | 'pirates'>(initialView ?? 'combat');
   const [selectedReport, setSelectedReport] = useState<any>(null);
+
+  // Réagir aux changements de initialView (navigation depuis notifications)
+  useEffect(() => {
+    if (initialView) setView(initialView);
+  }, [initialView]);
 
   // Pagination state — backend now returns { data, total, page, limit }
   const [combatPage, setCombatPage] = useState(1);
