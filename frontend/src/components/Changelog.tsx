@@ -15,7 +15,7 @@ export default function Changelog() {
 
   const loadChangelog = async () => {
     try {
-      const res = await fetch('/changelog.md');
+      const res = await fetch(`/changelog.md?v=${Date.now()}`);
       if (res.ok) {
         const text = await res.text();
         setContent(text);
