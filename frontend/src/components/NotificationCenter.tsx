@@ -35,6 +35,13 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
     return 'system';
   };
 
+  const navigateForNotif = (type: string) => {
+    const cat = getCategory(type);
+    if (cat === 'military') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'reports' }));
+    else if (cat === 'economy') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'reports' }));
+    else window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'messages' }));
+  };
+
   const fetchNotifications = useCallback(async () => {
     if (!userId) return;
     try {
@@ -169,7 +176,7 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
                 </div>
             ) : (
                 notifications.filter(n => activeTab === 'all' || getCategory(n.type) === activeTab).map((notif) => (
-                    <DropdownMenuItem key={notif.id} className={`flex flex-col items-start p-3 lg:p-4 cursor-pointer focus:bg-white/5 transition-colors border-b border-white/5 last:border-0 ${!notif.read ? 'bg-indigo-900/10' : ''}`}>
+                    <DropdownMenuItem key={notif.id} className={`flex flex-col items-start p-3 lg:p-4 cursor-pointer focus:bg-white/5 transition-colors border-b border-white/5 last:border-0 ${!notif.read ? 'bg-indigo-900/10' : ''}`} onClick={() => navigateForNotif(notif.type)}>
                         <div className="flex items-start gap-3 w-full">
                             <div className="mt-0.5 p-1.5 rounded-lg bg-slate-900 border border-white/5 shadow-inner">
                                 {getIcon(notif.type)}

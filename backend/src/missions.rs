@@ -401,7 +401,6 @@ pub async fn get_user_displayed_achievements_handler(
     let user_achievements = UserAchievement::find()
         .filter(user_achievement::Column::UserId.eq(target_user_id))
         .filter(user_achievement::Column::Unlocked.eq(true))
-        .filter(user_achievement::Column::Displayed.eq(true))
         .all(&state.db)
         .await
         .unwrap_or_default();

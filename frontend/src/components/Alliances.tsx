@@ -42,11 +42,21 @@ const getDeterministicIndex = (str: string, max: number) => {
   return Math.abs(hash) % max;
 };
 
-export default function Alliances({ userId: _userId, onNavigate }: AlliancesProps) {
+export default function Alliances({ userId, onNavigate }: AlliancesProps) {
   const [alliances, setAlliances] = useState<AllianceItem[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
+  const [myAllianceId, setMyAllianceId] = useState<string | null>(null);
+
+  // Charger le statut d'alliance de l'utilisateur
+  useEffect(() => {
+    if (!userId) return;
+    fetch(apiUrl(`/alliances/my?user_id=${userId}`))
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.has_alliance && d.alliance_id) setMyAllianceId(d.alliance_id); })
+      .catch(() => {});
+  }, [userId]);
 
   const fetchAlliances = useCallback(async (query: string) => {
     setLoading(true);
@@ -164,12 +174,28 @@ export default function Alliances({ userId: _userId, onNavigate }: AlliancesProp
                   </div>
                 </div>
 
-                <Button
-                  className="w-full bg-slate-800 hover:bg-indigo-600 text-white font-bold transition-all border border-transparent hover:border-indigo-400/50"
-                  onClick={() => onNavigate?.("alliance")}
-                >
-                  {alliance.recruitment_policy === "open" ? `Rejoindre ${alliance.tag}` : `Voir ${alliance.tag}`}
-                </Button>
+                {myAllianceId === alliance.id ? (
+                  <Button
+                    className="w-full bg-indigo-700/50 text-indigo-300 font-bold border border-indigo-500/30 cursor-default"
+                    disabled
+                  >
+                    ✓ Mon Alliance
+                  </Button>
+                ) : myAllianceId ? (
+                  <Button
+                    className="w-full bg-slate-800/50 text-slate-500 font-bold border border-transparent cursor-not-allowed"
+                    disabled
+                  >
+                    Déjà dans une alliance
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full bg-slate-800 hover:bg-indigo-600 text-white font-bold transition-all border border-transparent hover:border-indigo-400/50"
+                    onClick={() => onNavigate?.("alliance")}
+                  >
+                    {alliance.recruitment_policy === "open" ? `Rejoindre ${alliance.tag}` : `Voir ${alliance.tag}`}
+                  </Button>
+                )}
                 </div>
               </CardContent>
             </Card>

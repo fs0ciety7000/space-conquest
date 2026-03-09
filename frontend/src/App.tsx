@@ -428,12 +428,16 @@ function AppContent({
     };
     window.addEventListener('open-message-tab', handleOpenMessageTab);
 
+    const handleNavigateTab = (e: Event) => {
+      const tab = (e as CustomEvent<string>).detail;
+      if (tab) { setActiveTab(tab as TabType); setSidebarOpen(false); }
+    };
+    window.addEventListener('navigate-tab', handleNavigateTab);
+
     return () => {
-      // Assuming onFocus is defined elsewhere or not needed here.
-      // If onFocus is part of this useEffect, it should be added to the dependencies.
-      // For now, I'll only remove the listeners added in this block.
       window.removeEventListener('new-message-received', onMessage);
       window.removeEventListener('open-message-tab', handleOpenMessageTab);
+      window.removeEventListener('navigate-tab', handleNavigateTab);
     };
   }, [checkMessageAndReports]);
 
@@ -919,7 +923,7 @@ function AppContent({
                           {activeTab === 'profile' && <UniversalProfile userId={userId!} />}
                           {activeTab === 'ranking' && <Leaderboard currentPlanetId={planet.id} onAttack={handlePrepareAttack} onSpy={handlePrepareSpy} onTransport={handlePrepareTransport} onSendMessage={handleOpenMessage} />}
                           {activeTab === 'alliance' && <AllianceView userId={userId!} token={token!} onOpenMessage={handleOpenMessage} />}
-                          {activeTab === 'alliances-network' && <Alliances userId={userId!} />}
+                          {activeTab === 'alliances-network' && <Alliances userId={userId!} onNavigate={(tab) => setActiveTab(tab as TabType)} />}
                           {activeTab === 'achievements' && <Achievements userId={userId!} />}
                           {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
                           {activeTab === 'officers' && <Officers />}

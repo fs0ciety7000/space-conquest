@@ -220,7 +220,7 @@ pub async fn get_planet_admin_handler(
             obj.insert("energy_tech_level".to_string(), json!(tech_levels.get("energy_tech").copied().unwrap_or(0)));
             obj.insert("laser_battery_level".to_string(), json!(tech_levels.get("laser_tech").copied().unwrap_or(0)));
             obj.insert("armour_tech_level".to_string(), json!(tech_levels.get("armour_tech").copied().unwrap_or(0)));
-            obj.insert("espionage_tech_level".to_string(), json!(tech_levels.get("espionage").copied().unwrap_or(0)));
+            obj.insert("espionage_tech_level".to_string(), json!(tech_levels.get("espionage_tech").or_else(|| tech_levels.get("espionage")).copied().unwrap_or(0)));
             obj.insert("weapons_tech_level".to_string(), json!(tech_levels.get("weapons_tech").copied().unwrap_or(0)));
             obj.insert("shield_tech_level".to_string(), json!(tech_levels.get("shield_tech").copied().unwrap_or(0)));
             obj.insert("computer_tech_level".to_string(), json!(tech_levels.get("computer_tech").copied().unwrap_or(0)));

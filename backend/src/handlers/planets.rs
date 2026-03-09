@@ -811,6 +811,18 @@ async fn get_planet_handler(
 
     let unread_messages = count_unread_messages(p.owner_id, &state.db).await;
 
+    // Calcul de la production horaire (nécessaire pour EmpireBar)
+    let plasma_tech_level = tech_tree::get_planet_tech_level(&state.db, id, "plasma_tech").await.unwrap_or(0);
+    let metal_production = game_logic::calculate_resource_production(
+        game_logic::ResourceType::Metal, metal_mine_level, energy_tech_level, plasma_tech_level, energy_ratio, &config,
+    );
+    let crystal_production = game_logic::calculate_resource_production(
+        game_logic::ResourceType::Crystal, crystal_mine_level, energy_tech_level, plasma_tech_level, energy_ratio, &config,
+    );
+    let deuterium_production = game_logic::calculate_resource_production(
+        game_logic::ResourceType::Deuterium, deuterium_mine_level, energy_tech_level, plasma_tech_level, energy_ratio, &config,
+    );
+
     let mut json_response = serde_json::to_value(&updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
         obj.insert("incoming_missions".into(), json!(incoming_detailed));
@@ -819,6 +831,9 @@ async fn get_planet_handler(
         obj.insert("energy_production".into(), json!(energy_prod as i32));
         obj.insert("energy_consumption".into(), json!(energy_cons as i32));
         obj.insert("energy_ratio".into(), json!(energy_ratio_percent));
+        obj.insert("metal_production".into(), json!(metal_production as i32));
+        obj.insert("crystal_production".into(), json!(crystal_production as i32));
+        obj.insert("deuterium_production".into(), json!(deuterium_production as i32));
         obj.insert("unread_messages".into(), json!(unread_messages));
 
         let active_queue = ConstructionQueue::find()
