@@ -413,6 +413,11 @@ async fn main() {
         .route("/planets/:id/build-queue/reorder", put(build_queue::reorder_queue_handler))
         .route("/build-queue/:item_id", delete(build_queue::remove_from_queue_handler))
 
+        // Resource Slots
+        .route("/planets/:id/resource-slots", get(get_resource_slots_handler))
+        .route("/planets/:id/resource-slots/:slot_number", patch(update_resource_slot_handler))
+        .route("/planets/:id/resource-slots/:slot_number/toggle", post(toggle_resource_slot_handler))
+
         // Planet Market
         .route("/market/planets", get(planet_market::get_planet_listings_handler))
         .route("/market/planets/suggested-price", get(planet_market::get_suggested_price_handler))

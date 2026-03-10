@@ -543,7 +543,21 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {extraSlots.filter(s => s.slot_number >= 5).map((slot) => {
+            {[5, 6, 7, 8].map((slotNum) => {
+              const slot = extraSlots.find(s => s.slot_number === slotNum);
+              // If no DB row exists for this slot, show a placeholder (missing row = unavailable)
+              if (!slot) {
+                return (
+                  <Card key={slotNum} className="relative overflow-hidden border border-slate-800/50 bg-slate-950/30 opacity-40">
+                    <CardContent className="p-4 flex flex-col items-center justify-center h-full min-h-[160px] gap-2">
+                      <Lock size={24} className="text-slate-600" />
+                      <div className="text-xs font-bold text-slate-600">Slot {slotNum - 4}</div>
+                      <div className="text-[10px] text-slate-700">Non disponible</div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
               const resInfo = RESOURCE_TYPES[slot.resource_type as keyof typeof RESOURCE_TYPES];
               const SlotIcon = resInfo?.icon || Pickaxe;
               const slotColor = resInfo?.color || "text-gray-400";

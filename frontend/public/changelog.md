@@ -1,5 +1,32 @@
 # Changelog - Space Conquest
 
+## [8.8.0] - 2026-03-10 - Statistiques unifiées & Corrections slots
+
+### 🎯 Interface
+
+- **Statistiques unifiées** : les pages "Tableau de Bord" et "Statistiques" sont fusionnées en une seule page **Statistiques** avec deux onglets — *Production* (stats détaillées par planète) et *Analytique* (vue globale de l'empire avec graphique de production hebdomadaire).
+- **Slots de production bonus** : les 4 slots bonus (5-8) s'affichent désormais toujours, même sans données en base — cartes "Non disponible" pour les nouvelles planètes.
+
+### 🔧 Corrections
+
+- **Slots bonus invisibles** : les routes API `/planets/:id/resource-slots` n'étaient pas enregistrées dans le routeur backend — les 3 endpoints (GET, PATCH, POST toggle) sont maintenant actifs.
+- **Migration de backfill** : les planètes créées avant la mise en place des slots reçoivent automatiquement leurs 4 lignes de slots bonus (5-8) en base via une migration dédiée.
+- **Statistiques de production erronées** : la page statistiques affichait une production calculée côté client (~1,1M/h) au lieu d'utiliser les valeurs réelles du serveur (~7M/h). Corrigé — les valeurs métal, cristal et deutérium proviennent désormais directement du backend.
+- **Recycleurs** : ajout d'une notification WebSocket lorsque les recycleurs rentrent à la base (avec ou sans débris). Le jeu se rafraîchit automatiquement toutes les 60 secondes pour résoudre les missions arrivées même sans action du joueur.
+
+---
+
+## [8.7.4] - 2026-03-10 - Corrections de bugs
+
+### 🔧 Corrections
+
+- **Boucle à la connexion** : après login, la page n'affichait rien et nécessitait un rafraîchissement manuel. Corrigé — le contexte de planète se synchronise maintenant correctement après authentification.
+- **Temps de recherche erratique** : lancer une amélioration du Laboratoire affichait un temps correct puis sautait à plusieurs jours. Corrigé — la formule de durée utilise désormais le niveau de laboratoire (et non le chantier spatial) pour les recherches.
+- **Ressources insuffisantes (faux positif)** : améliorer une mine ou une technologie retournait une erreur "ressources manquantes" malgré des ressources suffisantes. Corrigé — le serveur recalcule maintenant les ressources produites depuis la dernière mise à jour avant de vérifier le coût.
+- **Slots de production disparus** : la section "Slots de Production Bonus" n'apparaissait plus sur la page des mines. Corrigé — la section est désormais toujours visible. Les slots sont et restaient actifs côté serveur.
+
+---
+
 ## [8.7.3] - 2026-03-09 - Formule de score & pastilles de notifications
 
 ### 🎯 Interface

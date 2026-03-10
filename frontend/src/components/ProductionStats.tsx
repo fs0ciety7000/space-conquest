@@ -42,6 +42,9 @@ interface Planet {
   energy_ratio: number;
   energy_production: number;
   energy_consumption: number;
+  metal_production?: number;
+  crystal_production?: number;
+  deuterium_production?: number;
   buildings?: Record<string, number>;
   technologies?: Record<string, number>;
 }
@@ -171,9 +174,15 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
     };
   };
 
-  const prodMetal = calculateProduction('metal', getBuildingLevel(planet, 'metal_mine'), config.production_metal_base || 30, config.production_metal_growth || 1.1);
-  const prodCrystal = calculateProduction('crystal', getBuildingLevel(planet, 'crystal_mine'), config.production_crystal_base || 20, config.production_crystal_growth || 1.1);
-  const prodDeut = calculateProduction('deuterium', getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05);
+  // Use backend-calculated production values (accurate, includes all bonuses)
+  const backendMetal = planet.metal_production ?? 0;
+  const backendCrystal = planet.crystal_production ?? 0;
+  const backendDeut = planet.deuterium_production ?? 0;
+
+  // Keep bonus breakdown from client-side calc (for tech/energy/slots display context only)
+  const prodMetal = { ...calculateProduction('metal', getBuildingLevel(planet, 'metal_mine'), config.production_metal_base || 30, config.production_metal_growth || 1.1), total: backendMetal };
+  const prodCrystal = { ...calculateProduction('crystal', getBuildingLevel(planet, 'crystal_mine'), config.production_crystal_base || 20, config.production_crystal_growth || 1.1), total: backendCrystal };
+  const prodDeut = { ...calculateProduction('deuterium', getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05), total: backendDeut };
 
   // Statistiques de combat
   const totalCombats = combatLogs.length;

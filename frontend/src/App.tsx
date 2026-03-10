@@ -31,14 +31,14 @@ const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const Changelog = lazy(() => import('./components/Changelog'));
 const MyPlanets = lazy(() => import('./components/MyPlanets'));
 const Marketplace = lazy(() => import('./components/Marketplace'));
-const ProductionStats = lazy(() => import('./components/ProductionStats'));
+
 const AllianceView = lazy(() => import('./components/AllianceView'));
 const MissionsView = lazy(() => import('./components/MissionsView'));
 const Officers = lazy(() => import('./components/Officers'));
 const TradeRoutesView = lazy(() => import('./components/TradeRoutesView'));
 const BuildQueueManager = lazy(() => import('./components/BuildQueueManager'));
 const UndergroundMarket = lazy(() => import('./components/UndergroundMarket'));
-const Dashboard = lazy(() => import('./components/Dashboard'));
+const StatsPage = lazy(() => import('./components/StatsPage'));
 const Achievements = lazy(() => import('./components/Achievements'));
 import PirateExtortionModal from './components/PirateExtortionModal';
 import { SabotagesDashboard } from './components/SabotagesDashboard';
@@ -611,6 +611,13 @@ function AppContent({
     }
   }, [token, planetId, checkMessageAndReports, wsConnected]);
 
+  // Auto-refresh planète toutes les 60s pour résoudre les missions arrivées (recycleurs, transport, etc.)
+  useEffect(() => {
+    if (!token || !planetId) return;
+    const interval = setInterval(fetchPlanet, 60_000);
+    return () => clearInterval(interval);
+  }, [token, planetId, fetchPlanet]);
+
   // Show maintenance page if maintenance is enabled
   if (maintenanceStatus?.enabled) {
     return <MaintenancePage message={{
@@ -647,7 +654,6 @@ function AppContent({
   const isAdmin = username === 'phantomhex';
 
   const MENU_ITEMS: MenuItem[] = [
-    { id: 'dashboard', label: 'Tableau de Bord', icon: Activity, category: 'COMMANDEMENT' },
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },
     { id: 'galaxy', label: 'Galaxie', icon: Globe, category: 'COMMANDEMENT' },
     { id: 'myplanets', label: 'Mes Planètes', icon: Map, category: 'COMMANDEMENT' },
@@ -915,7 +921,7 @@ function AppContent({
                         transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
                       >
                         <Suspense fallback={<div className="flex h-[60vh] items-center justify-center"><Loader2 size={40} className="animate-spin text-indigo-500/50" /></div>}>
-                          {activeTab === 'dashboard' && <Dashboard userId={userId!} />}
+
                           {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
                           {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handlePrepareSpy} onNavigateTransport={handlePrepareTransport}/>}
                           {activeTab === 'myplanets' && <MyPlanets currentPlanetId={planet.id} onSelectPlanet={(id) => { switchPlanet(id); setActiveTab('overview'); }} onNavigateTransport={handlePrepareTransport} />}
@@ -930,7 +936,7 @@ function AppContent({
                           {activeTab === 'achievements' && <Achievements userId={userId!} />}
                           {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
                           {activeTab === 'officers' && <Officers />}
-                          {activeTab === 'stats' && <ProductionStats planet={planet} speedFactor={speedFactor} />}
+                          {activeTab === 'stats' && <StatsPage planet={planet} userId={userId!} speedFactor={speedFactor} />}
 
                           {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
                           {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}

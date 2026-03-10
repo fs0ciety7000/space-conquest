@@ -604,6 +604,31 @@ async fn get_planet_handler(
                         // Créditer les ressources collectées à la planète source
                         active.metal_amount = Set(active.metal_amount.clone().unwrap() + take_m);
                         active.crystal_amount = Set(active.crystal_amount.clone().unwrap() + take_c);
+
+                        // Notification WS — recycleurs de retour
+                        if let Some(ref ws) = state.ws {
+                            ws.push_notification(
+                                p.owner_id,
+                                "fleet",
+                                "Recycleurs de retour",
+                                &format!(
+                                    "{}x recycleur(s) de retour en [{}:{}:{}] : +{} M, +{} C",
+                                    m.recyclers_sent, tg, ts, tp, take_m as i64, take_c as i64,
+                                ),
+                            )
+                            .await;
+                        }
+                    } else {
+                        // Débris introuvables (déjà collectés) — recycleurs reviennent vides
+                        if let Some(ref ws) = state.ws {
+                            ws.push_notification(
+                                p.owner_id,
+                                "fleet",
+                                "Recycleurs de retour",
+                                &format!("{}x recycleur(s) revenu(s) : débris déjà collectés.", m.recyclers_sent),
+                            )
+                            .await;
+                        }
                     }
                 }
             }
