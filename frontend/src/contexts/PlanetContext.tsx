@@ -80,6 +80,15 @@ export function PlanetProvider({ children, initialPlanetId, token }: { children:
     }
   }, [token]);
 
+  // Sync initialPlanetId prop into internal state when it changes (e.g., after login)
+  // useState doesn't re-initialize from props — must sync explicitly
+  useEffect(() => {
+    if (initialPlanetId && initialPlanetId !== currentPlanetIdRef.current) {
+      currentPlanetIdRef.current = initialPlanetId;
+      setPlanetId(initialPlanetId);
+    }
+  }, [initialPlanetId]);
+
   // Initial fetch when ID or token changes
   useEffect(() => {
     if (token && planetId) {

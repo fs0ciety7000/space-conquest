@@ -1124,11 +1124,59 @@ async fn upgrade_mine_handler(
 
     let target_level = base_level + (in_queue_count as i32) + 1;
 
-    if p.metal_amount < cost.metal || p.crystal_amount < cost.crystal || p.deuterium_amount < cost.deuterium {
+    // Recalculer les ressources depuis la dernière mise à jour du tick
+    // (évite les faux "ressources insuffisantes" dus aux données périmées en DB)
+    let now_utc = Utc::now().naive_utc();
+    let (current_metal, current_crystal, current_deuterium) = {
+        let elapsed = now_utc.signed_duration_since(p.last_update).num_seconds();
+        if elapsed > 0 {
+            let slots = ResourceSlot::find()
+                .filter(resource_slot::Column::PlanetId.eq(p.id))
+                .filter(resource_slot::Column::SlotNumber.gte(5))
+                .filter(resource_slot::Column::IsActive.eq(true))
+                .filter(resource_slot::Column::IsLocked.eq(false))
+                .all(&state.db).await.unwrap_or_default();
+            let slot_1 = slots.iter().find(|s| s.slot_number == 5).map(|s| s.resource_type.clone());
+            let slot_2 = slots.iter().find(|s| s.slot_number == 6).map(|s| s.resource_type.clone());
+            let slot_3 = slots.iter().find(|s| s.slot_number == 7).map(|s| s.resource_type.clone());
+            let slot_4 = slots.iter().find(|s| s.slot_number == 8).map(|s| s.resource_type.clone());
+
+            let metal_lv    = get_building_level(&state.db, p.id, "metal_mine").await;
+            let crystal_lv  = get_building_level(&state.db, p.id, "crystal_mine").await;
+            let deut_lv     = get_building_level(&state.db, p.id, "deuterium_mine").await;
+            let solar_lv    = get_building_level(&state.db, p.id, "solar_plant").await;
+            let energy_tech = tech_tree::get_planet_tech_level(&state.db, p.id, "energy_tech").await.unwrap_or(0);
+            let energy_ratio = game_logic::calculate_energy_ratio(solar_lv, energy_tech, metal_lv, crystal_lv, deut_lv, &config);
+
+            let m = game_logic::calculate_resources_with_slots(
+                game_logic::ResourceType::Metal, metal_lv, p.metal_amount,
+                p.last_update, energy_tech, 0, energy_ratio,
+                &slot_1, &slot_2, &slot_3, &slot_4, &config);
+            let c = game_logic::calculate_resources_with_slots(
+                game_logic::ResourceType::Crystal, crystal_lv, p.crystal_amount,
+                p.last_update, energy_tech, 0, energy_ratio,
+                &slot_1, &slot_2, &slot_3, &slot_4, &config);
+            let d = game_logic::calculate_resources_with_slots(
+                game_logic::ResourceType::Deuterium, deut_lv, p.deuterium_amount,
+                p.last_update, energy_tech, 0, energy_ratio,
+                &slot_1, &slot_2, &slot_3, &slot_4, &config);
+            (m, c, d)
+        } else {
+            (p.metal_amount, p.crystal_amount, p.deuterium_amount)
+        }
+    };
+
+    if current_metal < cost.metal || current_crystal < cost.crystal || current_deuterium < cost.deuterium {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let mut build_time = game_logic::get_build_time(cost.metal, cost.crystal, facility_level, &config);
+    // Recherches : utiliser get_research_time (réduit par niveau de labo)
+    // Bâtiments : utiliser get_build_time (réduit par niveau de chantier)
+    let mut build_time = if is_research {
+        game_logic::get_research_time(cost.metal, cost.crystal, facility_level, &config)
+    } else {
+        game_logic::get_build_time(cost.metal, cost.crystal, facility_level, &config)
+    };
 
     if is_research {
         let research_bonus = sabotage::apply_research_bonus(&state.db, p.owner_id)
@@ -1138,9 +1186,10 @@ async fn upgrade_mine_handler(
     }
 
     let mut active: planet::ActiveModel = p.clone().into();
-    active.metal_amount = Set(active.metal_amount.unwrap() - cost.metal);
-    active.crystal_amount = Set(active.crystal_amount.unwrap() - cost.crystal);
-    active.deuterium_amount = Set(active.deuterium_amount.unwrap() - cost.deuterium);
+    active.metal_amount = Set(current_metal - cost.metal);
+    active.crystal_amount = Set(current_crystal - cost.crystal);
+    active.deuterium_amount = Set(current_deuterium - cost.deuterium);
+    active.last_update = Set(now_utc);
     active
         .update(&state.db)
         .await

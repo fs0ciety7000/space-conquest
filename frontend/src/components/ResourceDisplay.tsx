@@ -525,8 +525,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
         );
       })}
 
-      {/* SLOTS SUPPLÉMENTAIRES (5-8) - Affichage uniquement des slots bonus */}
-      {extraSlots.filter(s => s.slot_number >= 5).length > 0 && (
+      {/* SLOTS SUPPLÉMENTAIRES (5-8) */}
+      {(
         <div className="col-span-full mt-8">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
