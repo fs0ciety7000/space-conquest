@@ -135,6 +135,7 @@ function AppContent({
 
   const [combatReport, setCombatReport] = useState<CombatReport | null>(null);
   const [showCombatModal, setShowCombatModal] = useState(false);
+  const [galaxyTarget, setGalaxyTarget] = useState<{galaxy: number, system: number} | null>(null);
   const [dispatchTarget, setDispatchTarget] = useState<{id: string, name: string, galaxy?: number, system?: number, position?: number} | null>(null);
   const [dispatchMission, setDispatchMission] = useState<'attack' | 'spy' | 'transport'>('attack');
   const [spyReport, setSpyReport] = useState<any>(null);
@@ -713,7 +714,7 @@ function AppContent({
 
       {/* Modals */}
       <div className="relative z-50">
-        {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} />}
+        {showCombatModal && combatReport && <CombatModal report={combatReport} onClose={() => setShowCombatModal(false)} onNavigateToGalaxy={(g, s) => { setGalaxyTarget({ galaxy: g, system: s }); setActiveTab('galaxy'); setSidebarOpen(false); }} />}
         {dispatchTarget && planetId && (
           <FleetDispatcher
             planetId={planetId}
@@ -923,7 +924,7 @@ function AppContent({
                         <Suspense fallback={<div className="flex h-[60vh] items-center justify-center"><Loader2 size={40} className="animate-spin text-indigo-500/50" /></div>}>
 
                           {activeTab === 'overview' && <PlanetOverview planet={planet} speedFactor={speedFactor} />}
-                          {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handlePrepareSpy} onNavigateTransport={handlePrepareTransport}/>}
+                          {activeTab === 'galaxy' && <GalaxyView planet={planet} onNavigateAttack={handlePrepareAttack} onNavigateSpy={handlePrepareSpy} onNavigateTransport={handlePrepareTransport} initialGalaxy={galaxyTarget?.galaxy} initialSystem={galaxyTarget?.system} key={galaxyTarget ? `${galaxyTarget.galaxy}-${galaxyTarget.system}` : 'default'} />}
                           {activeTab === 'myplanets' && <MyPlanets currentPlanetId={planet.id} onSelectPlanet={(id) => { switchPlanet(id); setActiveTab('overview'); }} onNavigateTransport={handlePrepareTransport} />}
                           {activeTab === 'messages' && <MessagesView token={token!} userId={userId!} initialRecipient={messageRecipient} initialTab={initialMessageTab} />}
                           {activeTab === 'friends' && <FriendsView userId={userId!} onSendMessage={(u) => { setMessageRecipient(u); setActiveTab('messages'); }} />}

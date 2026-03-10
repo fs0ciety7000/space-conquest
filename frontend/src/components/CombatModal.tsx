@@ -34,9 +34,10 @@ interface CombatModalProps {
   report: any | null;
   onClose: () => void;
   onSabotage?: (targetPlanetId: string, actionType: 'disable_mine' | 'steal_tech') => void;
+  onNavigateToGalaxy?: (galaxy: number, system: number) => void;
 }
 
-export default function CombatModal({ report, onClose, onSabotage }: CombatModalProps) {
+export default function CombatModal({ report, onClose, onSabotage, onNavigateToGalaxy }: CombatModalProps) {
   const [visibleLogs, setVisibleLogs] = useState<string[]>([]);
   const [parsedReport, setParsedReport] = useState<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -785,9 +786,23 @@ export default function CombatModal({ report, onClose, onSabotage }: CombatModal
               {/* Débris générés */}
               {parsedReport.details.debris && (parsedReport.details.debris.metal > 0 || parsedReport.details.debris.crystal > 0) && (
                 <div className="bg-slate-800/40 border border-slate-600/30 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Rocket size={14} className="text-slate-400" />
-                    <span className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Champ de Débris Généré</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Rocket size={14} className="text-slate-400" />
+                      <span className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Champ de Débris Généré</span>
+                    </div>
+                    {onNavigateToGalaxy && parsedReport.target_galaxy != null && !parsedReport.is_defense && (
+                      <button
+                        onClick={() => {
+                          onNavigateToGalaxy(parsedReport.target_galaxy, parsedReport.target_system);
+                          onClose();
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors border border-indigo-400/30"
+                      >
+                        <MapPin size={11} />
+                        Récolter [{parsedReport.target_galaxy}:{parsedReport.target_system}:{parsedReport.target_position}]
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex items-center justify-between bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2">

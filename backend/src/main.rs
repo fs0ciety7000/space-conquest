@@ -64,8 +64,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember, Friendship, FleetPreset, Bounty, Flagship, FlagshipModuleType, FlagshipModule},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member, friendship, fleet_preset, bounty, flagship, flagship_module_type, flagship_module
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember, Friendship, FleetPreset, Bounty, Flagship, FlagshipModuleType, FlagshipModule, DebrisField},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member, friendship, fleet_preset, bounty, flagship, flagship_module_type, flagship_module, debris_field
 };
 
 #[derive(Serialize, Clone)]
@@ -810,6 +810,35 @@ async fn resolve_attack_mission(
     def_active.debris_crystal = Set(def_planet.debris_crystal + result.debris.1);
     def_active.last_update = Set(now);
 
+    // Upsert debris into debris_field table (used by galaxy view + recycler missions)
+    if result.debris.0 > 0.0 || result.debris.1 > 0.0 {
+        let existing_df = DebrisField::find()
+            .filter(debris_field::Column::Galaxy.eq(def_planet.galaxy))
+            .filter(debris_field::Column::System.eq(def_planet.system))
+            .filter(debris_field::Column::Position.eq(def_planet.position))
+            .one(db)
+            .await
+            .unwrap_or(None);
+        if let Some(df) = existing_df {
+            let mut da: debris_field::ActiveModel = df.clone().into();
+            da.metal = Set(df.metal + result.debris.0);
+            da.crystal = Set(df.crystal + result.debris.1);
+            da.updated_at = Set(Utc::now().fixed_offset());
+            let _ = da.update(db).await;
+        } else {
+            let new_df = debris_field::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                galaxy: Set(def_planet.galaxy),
+                system: Set(def_planet.system),
+                position: Set(def_planet.position),
+                metal: Set(result.debris.0),
+                crystal: Set(result.debris.1),
+                updated_at: Set(Utc::now().fixed_offset()),
+            };
+            let _ = new_df.insert(db).await;
+        }
+    }
+
     // Update defender ships (exclude "def_" defense keys)
     let defender_ships_remaining: HashMap<String, i32> = result.defender_remaining.iter()
         .filter(|(k, _)| !k.starts_with("def_"))
@@ -898,6 +927,9 @@ async fn resolve_attack_mission(
             "log": result.log,
             "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
             "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "target_galaxy": def_planet.galaxy,
+            "target_system": def_planet.system,
+            "target_position": def_planet.position,
             "attacker_initial": result.attacker_initial,
             "attacker_remaining": result.attacker_remaining,
             "attacker_losses": attacker_total_lost,
@@ -918,6 +950,9 @@ async fn resolve_attack_mission(
             "log": result.log,
             "loot": { "metal": result.loot.0, "crystal": result.loot.1, "deuterium": result.loot.2 },
             "debris": { "metal": result.debris.0, "crystal": result.debris.1 },
+            "target_galaxy": def_planet.galaxy,
+            "target_system": def_planet.system,
+            "target_position": def_planet.position,
             "attacker_initial": result.attacker_initial,
             "attacker_remaining": result.attacker_remaining,
             "attacker_losses": attacker_total_lost,

@@ -45,13 +45,15 @@ interface GalaxyViewProps {
     onNavigateAttack: (id: string, name: string, galaxy: number, system: number, position: number) => void;
     onNavigateSpy: (id: string, name: string, galaxy: number, system: number, position: number) => void;
     onNavigateTransport: (id: string, name: string, galaxy: number, system: number, position: number) => void;
+    initialGalaxy?: number;
+    initialSystem?: number;
 }
 
 // --- COMPOSANT PRINCIPAL ---
 
-export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, onNavigateTransport }: GalaxyViewProps) {
-    const [galaxy, setGalaxy] = useState(planet.galaxy);
-    const [system, setSystem] = useState(planet.system);
+export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, onNavigateTransport, initialGalaxy, initialSystem }: GalaxyViewProps) {
+    const [galaxy, setGalaxy] = useState(initialGalaxy ?? planet.galaxy);
+    const [system, setSystem] = useState(initialSystem ?? planet.system);
     const [slots, setSlots] = useState<GalaxySlot[]>([]);
     const [loading, setLoading] = useState(false);
     const { activeEvents, incomingEvents } = useServerEvents();
