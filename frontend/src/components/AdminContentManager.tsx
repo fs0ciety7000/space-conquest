@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
 import { formatDuration } from '@/lib/utils';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 type ContentType = 'ships' | 'buildings' | 'defenses' | 'flagship_modules';
 
@@ -98,6 +99,8 @@ export default function AdminContentManager() {
   const [editingId, setEditingId] = useState<number | string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState<any>({});
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -185,8 +188,12 @@ export default function AdminContentManager() {
     }
   };
 
-  const handleDelete = async (id: number | string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cet élément ?')) return;
+  const handleDelete = (id: number | string) => {
+    setPendingDeleteId(id);
+    setConfirmOpen(true);
+  };
+
+  const doDelete = async (id: number | string) => {
 
     try {
       const endpoint = `${activeTab === 'ships' ? '/admin/ships' :
@@ -599,6 +606,19 @@ export default function AdminContentManager() {
           {activeTab === 'flagship_modules' && renderFlagshipModulesTable()}
         </CardContent>
       </Card>
+      <ConfirmModal
+        isOpen={confirmOpen}
+        title="Supprimer l'élément"
+        message="Êtes-vous sûr de vouloir supprimer cet élément ?"
+        variant="danger"
+        confirmLabel="Supprimer"
+        onConfirm={() => {
+          if (pendingDeleteId !== null) doDelete(pendingDeleteId);
+          setConfirmOpen(false);
+          setPendingDeleteId(null);
+        }}
+        onCancel={() => { setConfirmOpen(false); setPendingDeleteId(null); }}
+      />
     </div>
   );
 }

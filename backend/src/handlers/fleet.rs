@@ -327,7 +327,8 @@ async fn attack_v2_handler(
         deuterium: Set(0.0),
         ships_count: Set(total_ships),
         fleet_data: Set(Some(fleet_json)),
-        ..Default::default()
+        recyclers_sent: Set(0),
+        departure_time: Set(Utc::now().naive_utc()),
     };
     if let Err(e) = new_mission.insert(&state.db).await {
         eprintln!("[ATTACK] Erreur insertion mission: {e:?}");
@@ -357,6 +358,21 @@ async fn attack_v2_handler(
                     &arrival.to_string(),
                     total_ships,
                 );
+
+                // Persister la notification pour le défenseur
+                if let Ok(Some(target_planet)) = Planet::find_by_id(payload.target_planet_id).one(&state.db).await {
+                    let flight_mins = travel_time / 60;
+                    ws.push_notification(
+                        target_planet.owner_id,
+                        "incoming_attack",
+                        "Attaque entrante !",
+                        &format!(
+                            "Flotte ennemie en approche sur {} — arrivée dans ~{}min",
+                            target_planet.name, flight_mins
+                        ),
+                        None,
+                    ).await;
+                }
             }
         }
     }
@@ -773,6 +789,7 @@ async fn recycle_handler(
         ships_count: Set(payload.recyclers),
         fleet_data: Set(Some(fleet_data.to_string())),
         recyclers_sent: Set(payload.recyclers),
+        departure_time: Set(Utc::now().naive_utc()),
     };
     let _ = new_mission.insert(&state.db).await;
 
@@ -923,6 +940,7 @@ async fn transport_handler(
         ships_count: Set(payload.transporters),
         fleet_data: Set(None),
         recyclers_sent: Set(0),
+        departure_time: Set(Utc::now().naive_utc()),
     };
 
     let log = transport_log::ActiveModel {
@@ -1628,7 +1646,7 @@ async fn expedition_v2_handler(
 
     let updated_planet = Planet::find_by_id(id).one(&state.db).await.unwrap_or(None);
 
-    let _ = combat_log::ActiveModel {
+    let exp_log = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(id),
         target_name: Set("Secteur Inconnu".to_string()),
@@ -1641,7 +1659,21 @@ async fn expedition_v2_handler(
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(Some(expedition_report.clone())),
         details: Set(None),
-    }.insert(&state.db).await;
+    }.insert(&state.db).await.ok();
+
+    if let Some(ref ws) = state.ws {
+        let exp_report_id = exp_log.as_ref().map(|l| l.id);
+        ws.push_notification(
+            planet.owner_id,
+            "expedition",
+            "Expédition terminée",
+            &format!(
+                "Loot: {}M {}C {}D",
+                final_metal as i64, final_crystal as i64, final_deuterium as i64
+            ),
+            exp_report_id,
+        ).await;
+    }
 
     missions::update_mission_progress(&state, planet.owner_id, "expedition", "any", 1).await;
     missions::update_achievement_progress(&state, planet.owner_id, "expeditions", 1).await;

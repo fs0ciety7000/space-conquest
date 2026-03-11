@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { motion } from "framer-motion";
 import CreateListingModal from "./CreateListingModal";
 import { Button } from "@/components/ui/button";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 interface SellViewProps {
   planet: any;
@@ -41,6 +42,8 @@ export default function SellView({ planet, userId, onUpdate, onStatsUpdate }: Se
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [myListings, setMyListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingListingId, setPendingListingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadMyListings();
@@ -63,9 +66,12 @@ export default function SellView({ planet, userId, onUpdate, onStatsUpdate }: Se
     }
   };
 
-  const handleDeleteListing = async (listingId: string) => {
-    if (!confirm("Confirmer la suppression de cette offre ?")) return;
+  const handleDeleteListing = (listingId: string) => {
+    setPendingListingId(listingId);
+    setConfirmOpen(true);
+  };
 
+  const doDeleteListing = async (listingId: string) => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(apiUrl(`/market/listings/${listingId}?user_id=${userId}`), {
@@ -237,6 +243,19 @@ export default function SellView({ planet, userId, onUpdate, onStatsUpdate }: Se
           }}
         />
       )}
+      <ConfirmModal
+        isOpen={confirmOpen}
+        title="Supprimer l'offre"
+        message="Confirmer la suppression de cette offre ?"
+        variant="danger"
+        confirmLabel="Supprimer"
+        onConfirm={() => {
+          if (pendingListingId) doDeleteListing(pendingListingId);
+          setConfirmOpen(false);
+          setPendingListingId(null);
+        }}
+        onCancel={() => { setConfirmOpen(false); setPendingListingId(null); }}
+      />
     </>
   );
 }

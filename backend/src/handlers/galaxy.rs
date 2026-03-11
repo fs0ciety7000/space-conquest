@@ -436,6 +436,7 @@ pub async fn colonize_handler(
         ships_count: Set(1),
         fleet_data: Set(Some(colonize_data.to_string())),
         recyclers_sent: Set(0),
+        departure_time: Set(Utc::now().naive_utc()),
     };
     let _ = mission.insert(&state.db).await;
 

@@ -16,6 +16,7 @@ pub struct Model {
     pub ships_count: i32,
     pub fleet_data: Option<String>, // JSON-encoded fleet composition for v2 endpoints
     pub recyclers_sent: i32, // Nombre de recycleurs envoyés (mission recycle, Expansion 5.0)
+    pub departure_time: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

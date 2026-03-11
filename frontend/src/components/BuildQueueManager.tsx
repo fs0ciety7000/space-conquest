@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import {
   Layers, FlaskConical, Rocket, Shield, Pickaxe, Building2,
   Trash2, RefreshCw, GripVertical, Clock, CheckCircle2, AlertTriangle,
@@ -201,6 +202,8 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [showActive, setShowActive] = useState(true);
   const [, setTick] = useState(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingRemoveItem, setPendingRemoveItem] = useState<QueueItem | null>(null);
 
   // Drag/drop state
   const dragItemId = useRef<string | null>(null);
@@ -262,8 +265,12 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
     }
   };
 
-  const handleRemove = async (item: QueueItem) => {
-    if (!confirm(`Annuler "${formatItemLabel(item.category, item.item_key, item.quantity, item.target_level)}" ? Les ressources seront remboursées.`)) return;
+  const handleRemove = (item: QueueItem) => {
+    setPendingRemoveItem(item);
+    setConfirmOpen(true);
+  };
+
+  const doRemove = async (item: QueueItem) => {
     setRemoving(item.id);
     try {
       const res = await fetch(apiUrl(`/build-queue/${item.id}?planet_id=${planetId}`), { method: 'DELETE' });
@@ -612,6 +619,22 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
           </CardContent>
         </Card>
       )}
+      <ConfirmModal
+        isOpen={confirmOpen}
+        title="Annuler la construction"
+        message={pendingRemoveItem
+          ? `Annuler "${formatItemLabel(pendingRemoveItem.category, pendingRemoveItem.item_key, pendingRemoveItem.quantity, pendingRemoveItem.target_level)}" ? Les ressources seront remboursées.`
+          : 'Confirmer l\'annulation ?'}
+        variant="danger"
+        confirmLabel="Annuler la construction"
+        cancelLabel="Garder"
+        onConfirm={() => {
+          if (pendingRemoveItem) doRemove(pendingRemoveItem);
+          setConfirmOpen(false);
+          setPendingRemoveItem(null);
+        }}
+        onCancel={() => { setConfirmOpen(false); setPendingRemoveItem(null); }}
+      />
     </div>
   );
 }

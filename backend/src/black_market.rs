@@ -813,6 +813,8 @@ pub async fn process_due_extortions(db: &sea_orm::DatabaseConnection) {
         let loot_crystal = target_planet.crystal_amount * loot_pct;
         let loot_deuterium = target_planet.deuterium_amount * loot_pct;
 
+        let target_user_id = extortion.target_user_id;
+
         let mut planet_active: crate::entities::planet::ActiveModel = target_planet.into();
         planet_active.metal_amount = Set((planet_active.metal_amount.clone().unwrap() - loot_metal).max(0.0));
         planet_active.crystal_amount = Set((planet_active.crystal_amount.clone().unwrap() - loot_crystal).max(0.0));
@@ -824,6 +826,19 @@ pub async fn process_due_extortions(db: &sea_orm::DatabaseConnection) {
         ext_active.status = Set("resolved_passive".to_string());
         ext_active.resolved_at = Set(Some(now));
         let _ = ext_active.update(db).await;
+
+        // Notify the victim
+        crate::notifications::create_notification(
+            db,
+            target_user_id,
+            "pirate_extortion",
+            "Extorsion pirate",
+            &format!(
+                "Des pirates ont prélevé leurs ressources sur votre planète ({:.0} M / {:.0} C / {:.0} D).",
+                loot_metal, loot_crystal, loot_deuterium
+            ),
+            None,
+        ).await;
 
         println!("☠️  Extortion auto-resolved (passive loot): -{:.0} M / -{:.0} C / -{:.0} D",
             loot_metal, loot_crystal, loot_deuterium);

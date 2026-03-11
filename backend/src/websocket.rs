@@ -84,7 +84,7 @@ impl WsState {
     }
 
     /// Persiste une notification en DB et l'envoie en temps réel via WS à l'utilisateur
-    pub async fn push_notification(&self, user_id: Uuid, notif_type: &str, title: &str, message: &str) {
+    pub async fn push_notification(&self, user_id: Uuid, notif_type: &str, title: &str, message: &str, report_id: Option<Uuid>) {
         // Persister en DB
         let notif = notification::ActiveModel {
             id: Set(Uuid::new_v4()),
@@ -94,6 +94,7 @@ impl WsState {
             message: Set(message.to_string()),
             is_read: Set(false),
             created_at: Set(Utc::now().naive_utc()),
+            report_id: Set(report_id),
         };
         let _ = notif.insert(&self.db).await;
 

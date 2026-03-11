@@ -105,6 +105,15 @@ const getLabel = (id: string | null) => {
 
 const RESOURCE_PRODUCTION_KEYS = ['metal_mine', 'crystal_mine', 'deuterium_mine', 'solar_plant', 'fusion_plant'];
 
+const MISSION_BADGES: Record<string, { label: string; color: string }> = {
+  attack:    { label: 'ATTAQUE',      color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  spy:       { label: 'ESPIONNAGE',   color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+  expedition:{ label: 'EXPÉDITION',   color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  transport: { label: 'TRANSPORT',    color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  recycle:   { label: 'RECYCLAGE',    color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+  colonize:  { label: 'COLONISATION', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
+};
+
 const getItemType = (id: string, isResearch?: boolean) => {
     if (isResearch) return 'tech';
     if (['light_hunter', 'heavy_hunter', 'cruiser', 'battleship', 'destroyer', 'bomber', 'deathstar', 'death_star', 'colony_ship', 'transporter', 'recycler', 'spy_probe', 'grand_cargo'].includes(id)) return 'fleet';
@@ -488,8 +497,14 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                   </CardHeader>
                   <CardContent className="p-4 space-y-3">
                       {incomingMissions.length > 0 ? incomingMissions.map((m: any) => {
-                          const tl = getTimeLeft(m.arrival_time);
+                          const departureMs = new Date(m.departure_time + (m.departure_time?.endsWith('Z') ? '' : 'Z')).getTime();
+                          const arrivalMs = new Date(m.arrival_time + (m.arrival_time?.endsWith('Z') ? '' : 'Z')).getTime();
+                          const totalDuration = Math.max(1, (arrivalMs - departureMs) / 1000);
+                          const tl = Math.max(0, (arrivalMs - Date.now()) / 1000);
+                          const elapsed = totalDuration - tl;
+                          const pct = Math.min(100, Math.max(2, (elapsed / totalDuration) * 100));
                           const isAttack = m.mission_type === 'attack';
+                          const badge = MISSION_BADGES[m.mission_type] ?? { label: m.mission_type?.toUpperCase() ?? 'MISSION', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30' };
                           return (
                               <div key={m.id} className={`flex flex-col gap-2 p-3 rounded-lg border ${isAttack ? 'bg-red-950/30 border-red-500/30 shadow-[inset_0_0_30px_rgba(239,68,68,0.1)]' : 'bg-blue-500/5 border-blue-500/10'}`}>
                                   <div className="flex items-center justify-between">
@@ -499,9 +514,12 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                               <Rocket size={14} className="text-slate-200 relative z-10" />
                                           </div>
                                           <div>
-                                              <p className={`text-xs font-black uppercase tracking-wider ${isAttack ? 'text-red-400' : 'text-blue-400'}`}>
-                                                  {isAttack ? '⚠️ ALERTE ATTAQUE' : '📦 Transport civil'}
-                                              </p>
+                                              <div className="flex items-center gap-2 mb-0.5">
+                                                  <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${badge.color}`}>
+                                                      {badge.label}
+                                                  </span>
+                                                  {isAttack && <span className="text-[9px] font-black text-red-400 animate-pulse">⚠️ ALERTE</span>}
+                                              </div>
                                               {m.attacker_name && (
                                                   <p className="text-[10px] font-bold text-red-300">
                                                       Attaquant : {m.attacker_name}
@@ -516,7 +534,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                       </div>
                                       <div className="text-right">
                                           <div className={`font-mono text-lg font-black tabular-nums ${isAttack ? 'text-red-400' : 'text-slate-200'}`}>
-                                              {formatDuration(tl)}
+                                              {formatDuration(Math.floor(tl))}
                                           </div>
                                           <div className="text-[9px] font-mono text-slate-500">
                                               {m.ships_count} Unités
@@ -526,9 +544,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                   {/* Barre de progression pour les attaques */}
                                   {isAttack && (
                                       <div className="h-2 w-full bg-[rgba(10,5,32,0.85)] rounded-full border border-red-500/20 overflow-hidden">
-                                          <div 
+                                          <div
                                               className="h-full bg-gradient-to-r from-red-600 to-orange-500 rounded-full transition-all duration-1000 animate-pulse"
-                                              style={{ width: `${Math.max(5, 100 - (tl / 3))}%` }}
+                                              style={{ width: `${pct}%` }}
                                           />
                                       </div>
                                   )}
@@ -550,11 +568,17 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     </CardHeader>
     <CardContent className="p-4 space-y-4">
         {outgoingMissions.length > 0 ? outgoingMissions.map((m: any) => {
-            const tl = getTimeLeft(m.arrival_time);
-            
+            const departureMs = new Date(m.departure_time + (m.departure_time?.endsWith('Z') ? '' : 'Z')).getTime();
+            const arrivalMs = new Date(m.arrival_time + (m.arrival_time?.endsWith('Z') ? '' : 'Z')).getTime();
+            const totalDuration = Math.max(1, (arrivalMs - departureMs) / 1000);
+            const tl = Math.max(0, (arrivalMs - Date.now()) / 1000);
+            const elapsed = totalDuration - tl;
+            const pct = Math.min(100, Math.max(2, (elapsed / totalDuration) * 100));
+
             // Traduction et Style
-            const isAttack = m.mission_type.toLowerCase() === 'attack';
-            const label = isAttack ? "OFFENSIVE" : "TRANSPORT";
+            const missionType = m.mission_type?.toLowerCase() ?? '';
+            const isAttack = missionType === 'attack';
+            const badge = MISSION_BADGES[missionType] ?? { label: missionType.toUpperCase() || 'MISSION', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30' };
             const statusColor = isAttack ? "text-red-400" : "text-emerald-400";
             const barColor = isAttack ? "bg-red-500" : "bg-emerald-500";
 
@@ -562,8 +586,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 <div key={m.id} className="bg-[rgba(16,8,46,0.95)] border border-cyan-500/10 p-4 rounded-xl flex flex-col gap-3 group hover:border-cyan-500/25 transition-all duration-200">
                     <div className="flex justify-between items-start">
                         <div>
-                            <span className={`text-[10px] font-black ${statusColor} uppercase tracking-[0.2em]`}>
-                                {label}
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${badge.color} uppercase tracking-[0.2em]`}>
+                                {badge.label}
                             </span>
                             <h4 className="text-sm font-bold text-slate-200 mt-1">
                                 Vers : {m.target_name || "Secteur Inconnu"}
@@ -573,8 +597,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             </p>
                         </div>
                         <div className="text-right">
-                            <span className="text-sm font-mono tabular-nums font-black text-slate-200 bg-[rgba(10,5,32,0.85)] px-2 py-1 rounded border border-cyan-500/10 shadow-inner">
-                                {formatDuration(tl)}
+                            <span className={`text-sm font-mono tabular-nums font-black bg-[rgba(10,5,32,0.85)] px-2 py-1 rounded border border-cyan-500/10 shadow-inner ${statusColor}`}>
+                                {formatDuration(Math.floor(tl))}
                             </span>
                         </div>
                     </div>
@@ -582,14 +606,14 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     {/* Barre de progression ultra visible */}
                     <div className="space-y-1">
                         <div className="h-3 w-full bg-[rgba(10,5,32,0.85)] rounded-full border border-cyan-500/10 overflow-hidden p-0.5 shadow-inner">
-                            <div 
+                            <div
                                 className={`h-full ${barColor} rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.4)]`}
-                                style={{ width: `${Math.max(2, 100 - (tl / 10))}%` }} // Ajuster le /10 selon la durée max réelle
+                                style={{ width: `${pct}%` }}
                             />
                         </div>
                         <div className="flex justify-between text-[8px] font-bold text-slate-600 uppercase tracking-tighter">
                             <span>Décollage</span>
-                            <span>Impact imminent</span>
+                            <span>Destination</span>
                         </div>
                     </div>
                 </div>

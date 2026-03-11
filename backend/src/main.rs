@@ -1044,7 +1044,7 @@ async fn resolve_attack_mission(
     let details_json = result.details.as_ref().and_then(|d| serde_json::to_value(d).ok());
 
     // Combat log pour le défenseur
-    let _ = combat_log::ActiveModel {
+    let defender_log = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(mission.target_planet_id),
         target_name: Set(att_planet.name.clone()),
@@ -1057,10 +1057,10 @@ async fn resolve_attack_mission(
         date: Set(now),
         detailed_report: Set(Some(def_rep_json.clone())),
         details: Set(details_json.clone()),
-    }.insert(db).await;
+    }.insert(db).await.ok();
 
     // Combat log pour l'attaquant
-    let _ = combat_log::ActiveModel {
+    let attacker_log = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
         planet_id: Set(mission.source_planet_id),
         target_name: Set(def_planet.name.clone()),
@@ -1073,7 +1073,7 @@ async fn resolve_attack_mission(
         date: Set(now),
         detailed_report: Set(Some(att_rep_json.clone())),
         details: Set(details_json),
-    }.insert(db).await;
+    }.insert(db).await.ok();
 
     // ═══════════════════════════════════════════════════════════════════════════
     // NOTIFICATIONS WEBSOCKET
@@ -1088,30 +1088,33 @@ async fn resolve_attack_mission(
         // Notifier l'attaquant du résultat du combat
         websocket::notify_combat_result(ws, mission.source_planet_id, att_combat_result, &def_user.username);
 
-        // Persister notifications en DB + WS Notification event
+        // Persister notifications en DB + WS Notification event (liées aux combat_log)
+        let def_report_id = defender_log.as_ref().map(|l| l.id);
+        let att_report_id = attacker_log.as_ref().map(|l| l.id);
+
         let (def_title, def_msg) = if def_combat_result == "victory" {
             ("Victoire au combat", format!("Vous avez repoussé l'attaque de {}.", att_user.username))
         } else {
             ("Défaite au combat", format!("{} a attaqué votre planète {}.", att_user.username, def_planet.name))
         };
-        ws.push_notification(def_user.id, "combat", &def_title, &def_msg).await;
+        ws.push_notification(def_user.id, "combat", &def_title, &def_msg, def_report_id).await;
 
         let (att_title, att_msg) = if att_combat_result == "victory" {
             ("Victoire au combat", format!("Vous avez vaincu {} sur {}.", def_user.username, def_planet.name))
         } else {
             ("Défaite au combat", format!("Votre attaque contre {} a échoué.", def_user.username))
         };
-        ws.push_notification(att_user.id, "combat", &att_title, &att_msg).await;
+        ws.push_notification(att_user.id, "combat", &att_title, &att_msg, att_report_id).await;
 
         // Notifier en cas de conquête
         if planet_conquered {
             // Notifier le défenseur de la perte de sa planète
             websocket::notify_planet_status(ws, mission.target_planet_id, "lost", &def_planet.name, &att_user.username);
-            ws.push_notification(def_user.id, "combat", "Planète perdue", &format!("Votre planète {} a été conquise par {}.", def_planet.name, att_user.username)).await;
+            ws.push_notification(def_user.id, "combat", "Planète perdue", &format!("Votre planète {} a été conquise par {}.", def_planet.name, att_user.username), None).await;
 
             // Notifier l'attaquant de sa conquête
             websocket::notify_planet_status(ws, mission.source_planet_id, "conquered", &def_planet.name, &def_user.username);
-            ws.push_notification(att_user.id, "combat", "Planète conquise", &format!("Vous avez conquis la planète {} de {}.", def_planet.name, def_user.username)).await;
+            ws.push_notification(att_user.id, "combat", "Planète conquise", &format!("Vous avez conquis la planète {} de {}.", def_planet.name, def_user.username), None).await;
         }
     }
 
@@ -1672,7 +1675,9 @@ async fn attack_handler(
         crystal: Set(payload.cruisers as f64),
         deuterium: Set(payload.transporters as f64), // Store transporters in deuterium field
         ships_count: Set(payload.hunters + payload.cruisers + payload.transporters),
-        ..Default::default()
+        fleet_data: Set(None),
+        recyclers_sent: Set(0),
+        departure_time: Set(Utc::now().naive_utc()),
     };
     new_mission.insert(&state.db).await.unwrap();
 
@@ -2840,6 +2845,7 @@ async fn colonize_handler(
         ships_count: Set(1),
         fleet_data: Set(Some(colonize_data.to_string())),
         recyclers_sent: Set(0),
+        departure_time: Set(Utc::now().naive_utc()),
     };
     let _ = mission.insert(&state.db).await;
 

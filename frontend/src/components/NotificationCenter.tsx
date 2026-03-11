@@ -19,6 +19,7 @@ interface Notification {
   message: string;
   read: boolean;
   time: string;
+  report_id?: string;
 }
 
 interface NotificationCenterProps {
@@ -37,12 +38,19 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
     return 'system';
   };
 
-  const navigateForNotif = (type: string) => {
-    const cat = getCategory(type);
-    if (cat === 'military') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'reports', subTab: 'combat' } }));
-    else if (cat === 'logistics') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'reports', subTab: 'transport' } }));
-    else if (cat === 'economy') window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'reports', subTab: 'economy' } }));
-    else window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'messages' }));
+  const navigateForNotif = (notif: Notification) => {
+    const cat = getCategory(notif.type);
+    if (cat === 'military') {
+      window.dispatchEvent(new CustomEvent('navigate-tab', {
+        detail: { tab: 'reports', subTab: 'combat', report_id: notif.report_id }
+      }));
+    } else if (cat === 'logistics') {
+      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'reports', subTab: 'transport' } }));
+    } else if (cat === 'economy') {
+      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'reports', subTab: 'economy' } }));
+    } else {
+      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'messages' }));
+    }
   };
 
   const fetchNotifications = useCallback(async () => {
@@ -207,7 +215,7 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
                         ? `bg-cyan-500/5 ${getNotifAccent(notif.type)}`
                         : 'bg-transparent border-l-2 border-transparent'
                     }`}
-                    onClick={() => navigateForNotif(notif.type)}
+                    onClick={() => navigateForNotif(notif)}
                   >
                     <div className="flex items-start gap-3 w-full">
                       <div className="mt-0.5 p-1.5 rounded-lg bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 shadow-inner">

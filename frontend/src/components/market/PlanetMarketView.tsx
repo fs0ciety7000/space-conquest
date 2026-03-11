@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,9 @@ function ListingCard({
   const [priceCrystal, setPriceCrystal] = useState(listing.asking_price_crystal);
   const [priceDeuterium, setPriceDeuterium] = useState(listing.asking_price_deuterium);
   const [savingPrice, setSavingPrice] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; message: string; variant: 'danger' | 'default'; onConfirm: () => void;
+  }>({ open: false, title: '', message: '', variant: 'danger', onConfirm: () => {} });
 
   const biomeClass = BIOME_COLORS[listing.biome || 'tellurique'] || BIOME_COLORS.tellurique;
 
@@ -126,8 +130,17 @@ function ListingCard({
     setExpanded(e => !e);
   };
 
-  const handleBuy = async () => {
-    if (!confirm(`Acheter ${listing.planet_name} pour ${fmt(listing.asking_price_metal)}M / ${fmt(listing.asking_price_crystal)}C / ${fmt(listing.asking_price_deuterium)}D ?`)) return;
+  const handleBuy = () => {
+    setConfirmState({
+      open: true,
+      title: 'Confirmer l\'achat',
+      message: `Acheter ${listing.planet_name} pour ${fmt(listing.asking_price_metal)}M / ${fmt(listing.asking_price_crystal)}C / ${fmt(listing.asking_price_deuterium)}D ?`,
+      variant: 'default',
+      onConfirm: doBuy,
+    });
+  };
+
+  const doBuy = async () => {
     setBuying(true);
     try {
       const res = await fetch(apiUrl(`/market/planets/listings/${listing.id}/buy`), {
@@ -149,8 +162,17 @@ function ListingCard({
     }
   };
 
-  const handleCancel = async () => {
-    if (!confirm('Retirer cette annonce ? La planète reviendra dans vos colonies.')) return;
+  const handleCancel = () => {
+    setConfirmState({
+      open: true,
+      title: 'Retirer l\'annonce',
+      message: 'Retirer cette annonce ? La planète reviendra dans vos colonies.',
+      variant: 'danger',
+      onConfirm: doCancel,
+    });
+  };
+
+  const doCancel = async () => {
     setCancelling(true);
     try {
       const res = await fetch(apiUrl(`/market/planets/listings/${listing.id}?user_id=${userId}`), { method: 'DELETE' });
@@ -360,6 +382,14 @@ function ListingCard({
           </div>
         )}
       </CardContent>
+      <ConfirmModal
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        variant={confirmState.variant}
+        onConfirm={() => { confirmState.onConfirm(); setConfirmState(s => ({ ...s, open: false })); }}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
     </Card>
   );
 }
@@ -383,6 +413,9 @@ function SellPanel({
   const [crystal, setCrystal] = useState(0);
   const [deuterium, setDeuterium] = useState(0);
   const [sellingNpc, setSellingNpc] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; message: string; variant: 'danger' | 'default'; onConfirm: () => void;
+  }>({ open: false, title: '', message: '', variant: 'danger', onConfirm: () => {} });
 
   const fetchSuggested = useCallback(async () => {
     setLoading(true);
@@ -420,12 +453,23 @@ function SellPanel({
     setMetal(src.metal); setCrystal(src.crystal); setDeuterium(src.deuterium);
   };
 
-  const handleList = async () => {
+  const handleList = () => {
     if (!suggested) return;
-    // For NPC: confirm before proceeding (one-step flow)
     if (listingType === 'npc') {
-      if (!confirm(`Vendre ${planet.name} au PNJ pour ${fmt(suggested.suggested_npc.metal)} M / ${fmt(suggested.suggested_npc.crystal)} C / ${fmt(suggested.suggested_npc.deuterium)} D ? IRRÉVERSIBLE.`)) return;
+      setConfirmState({
+        open: true,
+        title: 'Vendre au PNJ',
+        message: `Vendre ${planet.name} au PNJ pour ${fmt(suggested.suggested_npc.metal)} M / ${fmt(suggested.suggested_npc.crystal)} C / ${fmt(suggested.suggested_npc.deuterium)} D ? IRRÉVERSIBLE.`,
+        variant: 'danger',
+        onConfirm: doList,
+      });
+    } else {
+      doList();
     }
+  };
+
+  const doList = async () => {
+    if (!suggested) return;
     setListing(true);
     try {
       // Create or update listing
@@ -466,9 +510,19 @@ function SellPanel({
     }
   };
 
-  const handleSellNpc = async () => {
+  const handleSellNpc = () => {
     if (!suggested?.existing_listing) return;
-    if (!confirm(`Vendre définitivement ${planet.name} au PNJ ? Vous recevrez ${fmt(suggested.suggested_npc.metal)} M / ${fmt(suggested.suggested_npc.crystal)} C / ${fmt(suggested.suggested_npc.deuterium)} D. Cette action est IRRÉVERSIBLE.`)) return;
+    setConfirmState({
+      open: true,
+      title: 'Vente définitive au PNJ',
+      message: `Vendre définitivement ${planet.name} au PNJ ? Vous recevrez ${fmt(suggested.suggested_npc.metal)} M / ${fmt(suggested.suggested_npc.crystal)} C / ${fmt(suggested.suggested_npc.deuterium)} D. Cette action est IRRÉVERSIBLE.`,
+      variant: 'danger',
+      onConfirm: doSellNpc,
+    });
+  };
+
+  const doSellNpc = async () => {
+    if (!suggested?.existing_listing) return;
     setSellingNpc(true);
     try {
       const res = await fetch(apiUrl(`/market/planets/listings/${suggested.existing_listing.id}/sell-npc?user_id=${userId}`), { method: 'POST' });
@@ -610,6 +664,14 @@ function SellPanel({
           </p>
         )}
       </CardContent>
+      <ConfirmModal
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        variant={confirmState.variant}
+        onConfirm={() => { confirmState.onConfirm(); setConfirmState(s => ({ ...s, open: false })); }}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
     </Card>
   );
 }

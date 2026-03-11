@@ -1,5 +1,28 @@
 # Changelog - Space Conquest
 
+## [10.6.0] - 2026-03-11 - Rapports, Notifications & Alertes Militaires
+
+### 📋 Notifications liées aux rapports
+- Toutes les actions (combat, expédition, espionnage, pirates) génèrent une notification clochette persistante liée au rapport détaillé
+- Attaque entrante → notification persistante pour le défenseur (en plus du WS temps-réel)
+- Pirates marché noir → notification à la victime après déduction des ressources
+- `report_id` dans les notifications → clic navigue directement vers le rapport concerné
+
+### 🎯 Section Militaire — PlanetOverview
+- Barres de progression corrigées : calcul réel `departure_time → arrival_time` (les formules hardcodées étaient erronées)
+- Badges de type : ATTAQUE, ESPIONNAGE, EXPÉDITION, TRANSPORT, RECYCLAGE, COLONISATION avec couleurs distinctes
+
+### 🪟 Modales de confirmation
+- Tous les `window.confirm()` remplacés par `ConfirmModal` (Dialog shadcn)
+- Variante `danger` (rouge) pour les actions destructives
+- 13 callsites remplacés dans 8 composants
+
+### ⚙️ DB (migration `m20260313_000001`)
+- `notification.report_id` — lien FK vers `combat_log`
+- `fleet_mission.departure_time` — timestamp de lancement
+
+---
+
 ## [10.5.0] - 2026-03-11 - Rééquilibrage Temps de Construction & Recherche
 
 ### ⚙️ Temps de production des vaisseaux

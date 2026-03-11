@@ -31,6 +31,7 @@ pub async fn create_notification(
     notif_type: &str,
     title: &str,
     message: &str,
+    report_id: Option<Uuid>,
 ) {
     let notif = notification::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -40,6 +41,7 @@ pub async fn create_notification(
         message: Set(message.to_string()),
         is_read: Set(false),
         created_at: Set(Utc::now().naive_utc()),
+        report_id: Set(report_id),
     };
     let _ = notif.insert(db).await;
 }
@@ -83,6 +85,7 @@ pub async fn get_notifications_handler(
             "message": n.message,
             "read": n.is_read,
             "time": n.created_at.to_string(),
+            "report_id": n.report_id.map(|id| id.to_string()),
         })
     }).collect();
 

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
 import { formatTimeUntil, formatDuration } from '@/lib/utils';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 interface TradeRoute {
   id: string;
@@ -145,6 +146,8 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
     deuterium_ratio: number; schedule_type: 'interval' | 'daily'; interval_hours: number; daily_hour: number;
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -255,7 +258,11 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
   };
 
   const handleDelete = async (route: TradeRoute) => {
-    if (!confirm(`Supprimer la route "${route.name}" ?`)) return;
+    setPendingAction(() => () => doDelete(route));
+    setConfirmOpen(true);
+  };
+
+  const doDelete = async (route: TradeRoute) => {
     try {
       const res = await fetch(apiUrl(`/trade-routes/${route.id}?user_id=${userId}`), { method: 'DELETE' });
       if (res.status === 204 || res.ok) {
@@ -913,6 +920,15 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
           <li>• Le nombre de routes disponibles dépend du niveau de votre <strong className="text-cyan-400">Hub Logistique</strong> sur la planète source (niv. 1 → 2 routes, niv. 3 → 6, niv. 5 → 12…).</li>
         </ul>
       </div>
+      <ConfirmModal
+        isOpen={confirmOpen}
+        title="Supprimer la route"
+        message="Êtes-vous sûr de vouloir supprimer cette route commerciale ?"
+        variant="danger"
+        confirmLabel="Supprimer"
+        onConfirm={() => { pendingAction?.(); setConfirmOpen(false); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

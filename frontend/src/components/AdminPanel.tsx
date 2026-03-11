@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery, Radio, Skull, Plus, Trash2, RefreshCw, Swords } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -432,6 +433,10 @@ export default function AdminPanel() {
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '', type: 'info', is_active: true });
 
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; message: string; variant: 'danger' | 'default'; onConfirm: () => void;
+  }>({ open: false, title: '', message: '', variant: 'danger', onConfirm: () => {} });
+
   // Black market CRUD state
   const [bmItems, setBmItems] = useState<any[]>([]);
   const [bmLoading, setBmLoading] = useState(false);
@@ -535,14 +540,21 @@ export default function AdminPanel() {
     }
   };
 
-  const deleteBmItem = async (id: string) => {
-    if (!confirm('Supprimer cet objet ?')) return;
-    const res = await fetch(apiUrl(`/admin/black-market/items/${id}`), {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+  const deleteBmItem = (id: string) => {
+    setConfirmState({
+      open: true,
+      title: 'Supprimer l\'objet',
+      message: 'Supprimer cet objet du marché underground ?',
+      variant: 'danger',
+      onConfirm: async () => {
+        const res = await fetch(apiUrl(`/admin/black-market/items/${id}`), {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) { toast.success('Objet supprimé'); fetchBmItems(); }
+        else toast.error('Erreur lors de la suppression');
+      },
     });
-    if (res.ok) { toast.success('Objet supprimé'); fetchBmItems(); }
-    else toast.error('Erreur lors de la suppression');
   };
 
   const fetchPlayers = async () => {
@@ -704,26 +716,29 @@ export default function AdminPanel() {
     }
   };
 
-  const deleteAnnouncement = async (id: number) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette annonce ?')) {
-      return;
-    }
-
-    try {
-      const res = await fetch(apiUrl(`/admin/announcements/${id}?user_id=${userId}`), {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (res.ok) {
-        toast.success('Annonce supprimée');
-        fetchAnnouncements();
-      } else {
-        toast.error('Erreur lors de la suppression');
-      }
-    } catch (e) {
-      toast.error('Erreur réseau');
-    }
+  const deleteAnnouncement = (id: number) => {
+    setConfirmState({
+      open: true,
+      title: 'Supprimer l\'annonce',
+      message: 'Êtes-vous sûr de vouloir supprimer cette annonce ?',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(apiUrl(`/admin/announcements/${id}?user_id=${userId}`), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            toast.success('Annonce supprimée');
+            fetchAnnouncements();
+          } else {
+            toast.error('Erreur lors de la suppression');
+          }
+        } catch (e) {
+          toast.error('Erreur réseau');
+        }
+      },
+    });
   };
 
   const fetchPlanetData = async (planetId: string) => {
@@ -2054,29 +2069,30 @@ export default function AdminPanel() {
                           size="sm"
                           variant="outline"
                           className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-                          onClick={async () => {
-                            if (!confirm(`⚠️ ATTENTION ⚠️\n\nVoulez-vous vraiment supprimer l'utilisateur ${player.username} ?\n\nCette action est IRRÉVERSIBLE et supprimera:\n- Le compte utilisateur\n- Toutes ses planètes\n- Toutes ses données`)) {
-                              return;
-                            }
-
-                            try {
-                              const res = await fetch(apiUrl(`/admin/user/${player.id}?user_id=${userId}`), {
-                                method: 'DELETE',
-                                headers: {
-                                  'Authorization': `Bearer ${token}`
+                          onClick={() => {
+                            setConfirmState({
+                              open: true,
+                              title: 'Supprimer l\'utilisateur',
+                              message: `Voulez-vous vraiment supprimer l'utilisateur ${player.username} ? Cette action est IRRÉVERSIBLE et supprimera le compte, toutes ses planètes et toutes ses données.`,
+                              variant: 'danger',
+                              onConfirm: async () => {
+                                try {
+                                  const res = await fetch(apiUrl(`/admin/user/${player.id}?user_id=${userId}`), {
+                                    method: 'DELETE',
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                  });
+                                  if (res.ok) {
+                                    toast.success('Utilisateur supprimé');
+                                    fetchPlayers();
+                                  } else {
+                                    const err = await res.json();
+                                    toast.error(err.error || 'Erreur');
+                                  }
+                                } catch (e) {
+                                  toast.error('Erreur réseau');
                                 }
-                              });
-
-                              if (res.ok) {
-                                toast.success('✅ Utilisateur supprimé');
-                                fetchPlayers();
-                              } else {
-                                const err = await res.json();
-                                toast.error(err.error || 'Erreur');
-                              }
-                            } catch (e) {
-                              toast.error('Erreur réseau');
-                            }
+                              },
+                            });
                           }}
                         >
                           Supprimer
@@ -2591,6 +2607,14 @@ export default function AdminPanel() {
       {activeTab === 'pve_events' && (
         <AdminPvePanel />
       )}
+      <ConfirmModal
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        variant={confirmState.variant}
+        onConfirm={() => { confirmState.onConfirm(); setConfirmState(s => ({ ...s, open: false })); }}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
     </div>
   );
 }

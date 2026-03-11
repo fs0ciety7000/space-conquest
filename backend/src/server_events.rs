@@ -408,6 +408,7 @@ pub async fn distribute_rewards(
                     "Contribution à '{}' : +{:.0} M / +{:.0} C / +{:.0} D / +{:.1} SC",
                     event_type.name, metal, crystal, deut, sc
                 ),
+                None,
             ).await;
         }
 

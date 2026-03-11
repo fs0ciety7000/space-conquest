@@ -478,6 +478,7 @@ async fn get_planet_handler(
                     "build",
                     "Production terminée",
                     &format!("{}x {} prêts au combat.", item.level, item.building_type),
+                    None,
                 )
                 .await;
             } else {
@@ -487,6 +488,7 @@ async fn get_planet_handler(
                     "build",
                     "Construction terminée",
                     &format!("{} niveau {} opérationnel.", item.building_type, item.level),
+                    None,
                 )
                 .await;
             }
@@ -615,6 +617,7 @@ async fn get_planet_handler(
                                     "{}x recycleur(s) de retour en [{}:{}:{}] : +{} M, +{} C",
                                     m.recyclers_sent, tg, ts, tp, take_m as i64, take_c as i64,
                                 ),
+                                None,
                             )
                             .await;
                         }
@@ -626,6 +629,7 @@ async fn get_planet_handler(
                                 "fleet",
                                 "Recycleurs de retour",
                                 &format!("{}x recycleur(s) revenu(s) : débris déjà collectés.", m.recyclers_sent),
+                                None,
                             )
                             .await;
                         }

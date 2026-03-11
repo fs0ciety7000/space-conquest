@@ -12,6 +12,7 @@ pub struct Model {
     pub message: String,
     pub is_read: bool,
     pub created_at: DateTime,
+    pub report_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

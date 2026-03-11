@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { apiUrl } from "@/config/api";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 interface ModuleType {
   id: string;
@@ -98,6 +99,8 @@ export default function FlagshipView({ userId, planetId, planet, onPlanetUpdate 
   const [renameVal, setRenameVal] = useState("");
   const [selectedSlotType, setSelectedSlotType] = useState<string | null>(null);
   const [showModuleShop, setShowModuleShop] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingUnequip, setPendingUnequip] = useState<{ moduleId: string; name: string } | null>(null);
 
   const loadFlagship = async () => {
     try {
@@ -179,8 +182,12 @@ export default function FlagshipView({ userId, planetId, planet, onPlanetUpdate 
     } catch { toast.error("Erreur réseau"); }
   };
 
-  const handleUnequip = async (moduleId: string, name: string) => {
-    if (!confirm(`Déséquiper ${name} ?`)) return;
+  const handleUnequip = (moduleId: string, name: string) => {
+    setPendingUnequip({ moduleId, name });
+    setConfirmOpen(true);
+  };
+
+  const doUnequip = async (moduleId: string, name: string) => {
     try {
       const res = await fetch(apiUrl(`/flagship/${userId}/unequip/${moduleId}`), {
         method: "DELETE",
@@ -534,6 +541,19 @@ export default function FlagshipView({ userId, planetId, planet, onPlanetUpdate 
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={confirmOpen}
+        title="Déséquiper le module"
+        message={pendingUnequip ? `Déséquiper ${pendingUnequip.name} ?` : 'Confirmer ?'}
+        variant="danger"
+        confirmLabel="Déséquiper"
+        onConfirm={() => {
+          if (pendingUnequip) doUnequip(pendingUnequip.moduleId, pendingUnequip.name);
+          setConfirmOpen(false);
+          setPendingUnequip(null);
+        }}
+        onCancel={() => { setConfirmOpen(false); setPendingUnequip(null); }}
+      />
     </div>
   );
 }

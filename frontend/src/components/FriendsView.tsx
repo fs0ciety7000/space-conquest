@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { apiUrl } from "@/config/api";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 interface Friend {
   friendship_id: string;
@@ -40,6 +41,8 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
   const [selected, setSelected] = useState<SearchResult | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingRemove, setPendingRemove] = useState<{ friendshipId: string; username: string } | null>(null);
 
   const fetchFriends = async () => {
     setLoading(true);
@@ -147,8 +150,12 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
     } catch { toast.error("Erreur de connexion"); }
   };
 
-  const handleRemove = async (friendshipId: string, username: string) => {
-    if (!confirm(`Retirer ${username} de vos amis ?`)) return;
+  const handleRemove = (friendshipId: string, username: string) => {
+    setPendingRemove({ friendshipId, username });
+    setConfirmOpen(true);
+  };
+
+  const doRemove = async (friendshipId: string) => {
     try {
       const res = await fetch(apiUrl(`/friends/${friendshipId}?user_id=${userId}`), { method: "DELETE" });
       if (res.ok) { toast.success("Ami retiré."); fetchFriends(); }
@@ -384,6 +391,19 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
           )}
         </CardContent>
       </Card>
+      <ConfirmModal
+        isOpen={confirmOpen}
+        title="Retirer un ami"
+        message={pendingRemove ? `Retirer ${pendingRemove.username} de vos amis ?` : 'Confirmer ?'}
+        variant="danger"
+        confirmLabel="Retirer"
+        onConfirm={() => {
+          if (pendingRemove) doRemove(pendingRemove.friendshipId);
+          setConfirmOpen(false);
+          setPendingRemove(null);
+        }}
+        onCancel={() => { setConfirmOpen(false); setPendingRemove(null); }}
+      />
     </motion.div>
   );
 }
