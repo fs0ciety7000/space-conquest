@@ -928,6 +928,7 @@ function AppContent({
                               userPlanets={[]}
                               token={token}
                               onActionSuccess={fetchPlanet}
+                              initialTarget={dispatchMission === 'spy' && dispatchTarget ? { id: dispatchTarget.id, name: dispatchTarget.name, galaxy: dispatchTarget.galaxy, system: dispatchTarget.system, position: dispatchTarget.position } : undefined}
                             />
                           )}
                           {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} initialView={reportsInitialView} />}

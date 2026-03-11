@@ -53,6 +53,7 @@ pub fn router(state: crate::AppState) -> axum::Router<crate::AppState> {
         .route("/players/search", axum::routing::get(search_players_handler))
         .route("/players/online-count", axum::routing::get(get_online_count_handler))
         .route("/players/:user_id/profile", axum::routing::get(get_player_profile_handler))
+        .route("/players/:user_id/planets", axum::routing::get(get_player_planets_handler))
         .route("/users/:id/friends", axum::routing::get(get_friends_handler))
         .route("/friends/request", axum::routing::post(send_friend_request_handler))
         .route("/friends/:friendship_id/accept", axum::routing::post(accept_friend_request_handler))
@@ -1311,4 +1312,36 @@ pub async fn delete_fleet_preset_handler(
     }
 
     (StatusCode::OK, Json(json!({"success": true}))).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /players/:user_id/planets
+// Returns the list of planets owned by a given player (public, no auth).
+// Only exposes non-sensitive coordinate/name data.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub async fn get_player_planets_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let planets = Planet::find()
+        .filter(planet::Column::OwnerId.eq(user_id))
+        .all(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let planet_list: Vec<serde_json::Value> = planets
+        .into_iter()
+        .map(|p| {
+            json!({
+                "id": p.id,
+                "name": p.name,
+                "galaxy": p.galaxy,
+                "system": p.system,
+                "position": p.position,
+            })
+        })
+        .collect();
+
+    Ok(Json(json!({ "planets": planet_list })))
 }

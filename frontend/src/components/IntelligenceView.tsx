@@ -71,6 +71,7 @@ export interface IntelligenceViewProps {
   userPlanets: { id: string; name: string; galaxy: number; system: number; position: number }[];
   token: string;
   onActionSuccess?: () => void;
+  initialTarget?: { id: string; name: string; galaxy?: number; system?: number; position?: number };
 }
 
 type Tab = 'operations' | 'rapport' | 'mes-ops' | 'securite';
@@ -186,14 +187,22 @@ interface OperationsTabProps {
   currentPlanet: IntelligenceViewProps['currentPlanet'];
   token: string;
   onReportReady: (report: SpyReportV2) => void;
+  initialTarget?: { id: string; name: string; galaxy?: number; system?: number; position?: number };
 }
 
-function OperationsTab({ currentPlanet, token, onReportReady }: OperationsTabProps) {
-  const [targetPlanetId, setTargetPlanetId] = useState('');
+function OperationsTab({ currentPlanet, token, onReportReady, initialTarget }: OperationsTabProps) {
   const [probeCount, setProbeCount] = useState(1);
   const [maxProbes, setMaxProbes] = useState(10);
   const [loading, setLoading] = useState(false);
   const [loadingProbes, setLoadingProbes] = useState(true);
+
+  const [playerQuery, setPlayerQuery] = useState('');
+  const [playerResults, setPlayerResults] = useState<{ user_id: string; username: string }[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [planetOptions, setPlanetOptions] = useState<{ id: string; name: string; galaxy: number; system: number; position: number }[]>([]);
+  const [resolvedTarget, setResolvedTarget] = useState<{ id: string; name: string } | null>(
+    initialTarget ? { id: initialTarget.id, name: initialTarget.name } : null
+  );
 
   useEffect(() => {
     const fetchProbes = async () => {
@@ -217,11 +226,35 @@ function OperationsTab({ currentPlanet, token, onReportReady }: OperationsTabPro
     fetchProbes();
   }, [currentPlanet.id, token]);
 
+  // Debounced player search (300ms)
+  useEffect(() => {
+    if (playerQuery.length < 2) { setPlayerResults([]); return; }
+    const timer = setTimeout(async () => {
+      const res = await fetch(apiUrl(`/players/search?q=${encodeURIComponent(playerQuery)}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setPlayerResults(await res.json());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [playerQuery, token]);
+
+  const handleSelectPlayer = async (userId: string) => {
+    setSelectedUserId(userId);
+    setPlayerResults([]);
+    const res = await fetch(apiUrl(`/players/${userId}/planets`), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setPlanetOptions(data.planets);
+    }
+  };
+
   const techBonus = Math.floor(Math.log2(Math.max(1, probeCount)));
 
   const handleLaunch = async () => {
-    if (!targetPlanetId.trim()) {
-      toast.error('Entrez un UUID de planète cible');
+    if (!resolvedTarget) {
+      toast.error('Sélectionnez une planète cible');
       return;
     }
     if (probeCount < 1) {
@@ -237,7 +270,7 @@ function OperationsTab({ currentPlanet, token, onReportReady }: OperationsTabPro
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          target_planet_id: targetPlanetId.trim(),
+          target_planet_id: resolvedTarget!.id,
           fleet: { spy_probe: probeCount },
         }),
       });
@@ -283,16 +316,72 @@ function OperationsTab({ currentPlanet, token, onReportReady }: OperationsTabPro
         {/* Planète cible */}
         <div className="space-y-2">
           <label className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">
-            UUID Planète Cible
+            Planète Cible
           </label>
-          <input
-            type="text"
-            value={targetPlanetId}
-            onChange={(e) => setTargetPlanetId(e.target.value)}
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-            className="w-full bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 hover:border-cyan-500/30 focus:border-cyan-500/50 rounded-lg px-3 py-2.5 text-xs font-mono text-slate-300 placeholder-slate-600 outline-none transition-colors"
-          />
-          <p className="text-[10px] text-slate-600">L'UUID se trouve en passant la souris sur une planète dans la vue Galaxie.</p>
+          {resolvedTarget ? (
+            <div className="flex items-center gap-2 p-2 bg-slate-700/60 rounded-lg border border-cyan-500/40">
+              <Target className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span className="text-sm text-white font-medium flex-1 truncate">{resolvedTarget.name}</span>
+              <button
+                onClick={() => { setResolvedTarget(null); setSelectedUserId(null); setPlanetOptions([]); setPlayerQuery(''); }}
+                className="text-xs text-slate-400 hover:text-white transition-colors ml-auto"
+              >
+                Changer
+              </button>
+            </div>
+          ) : selectedUserId && planetOptions.length > 0 ? (
+            <div className="space-y-1">
+              <button
+                onClick={() => { setSelectedUserId(null); setPlanetOptions([]); }}
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+              >
+                ← Changer de joueur
+              </button>
+              {planetOptions.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setResolvedTarget({ id: p.id, name: p.name })}
+                  className="w-full text-left px-3 py-2 rounded-lg bg-[rgba(5,0,15,0.8)] hover:bg-slate-700/60 border border-cyan-500/15 hover:border-cyan-500/30 text-sm flex items-center justify-between transition-colors"
+                >
+                  <span className="text-white">{p.name}</span>
+                  <span className="text-slate-400 text-xs font-mono">[{p.galaxy}:{p.system}:{p.position}]</span>
+                </button>
+              ))}
+            </div>
+          ) : selectedUserId && planetOptions.length === 0 ? (
+            <div className="space-y-1">
+              <button
+                onClick={() => { setSelectedUserId(null); setPlanetOptions([]); }}
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+              >
+                ← Changer de joueur
+              </button>
+              <p className="text-xs text-slate-500 font-mono py-2">Ce joueur n'a aucune planète.</p>
+            </div>
+          ) : (
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Rechercher un joueur..."
+                value={playerQuery}
+                onChange={e => { setPlayerQuery(e.target.value); setSelectedUserId(null); setPlanetOptions([]); }}
+                className="w-full bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 hover:border-cyan-500/30 focus:border-cyan-500/50 rounded-lg px-3 py-2.5 text-xs text-slate-300 placeholder-slate-600 outline-none transition-colors"
+              />
+              {playerResults.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl overflow-hidden">
+                  {playerResults.map(p => (
+                    <button
+                      key={p.user_id}
+                      onClick={() => handleSelectPlayer(p.user_id)}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-700 text-sm text-white transition-colors"
+                    >
+                      {p.username}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Nombre de sondes */}
@@ -334,7 +423,7 @@ function OperationsTab({ currentPlanet, token, onReportReady }: OperationsTabPro
         {/* Bouton lancer */}
         <button
           onClick={handleLaunch}
-          disabled={loading || maxProbes === 0 || !targetPlanetId.trim()}
+          disabled={loading || maxProbes === 0 || !resolvedTarget}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 hover:border-cyan-500/50 text-cyan-300 font-black uppercase tracking-widest text-xs rounded-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(0,245,255,0.15)] disabled:opacity-40 disabled:cursor-not-allowed disabled:translate-y-0"
         >
           {loading ? (
@@ -412,9 +501,10 @@ interface RapportTabProps {
   report: SpyReportV2 | null;
   token: string;
   onSabotageSuccess: () => void;
+  onClearReport: () => void;
 }
 
-function RapportTab({ report, token, onSabotageSuccess }: RapportTabProps) {
+function RapportTab({ report, token, onSabotageSuccess, onClearReport }: RapportTabProps) {
   const [selectedMine, setSelectedMine] = useState<'metal' | 'crystal' | 'deuterium'>('metal');
   const [sabotageLoading, setSabotageLoading] = useState(false);
 
@@ -520,6 +610,12 @@ function RapportTab({ report, token, onSabotageSuccess }: RapportTabProps) {
             Cible : {report.target_planet_name}
           </span>
         )}
+        <button
+          onClick={onClearReport}
+          className="ml-auto px-2.5 py-1 bg-slate-800/60 border border-slate-600/40 hover:border-slate-500/60 rounded-lg text-[10px] text-slate-400 hover:text-slate-200 transition-colors uppercase tracking-wider font-bold"
+        >
+          Effacer le rapport
+        </button>
       </div>
 
       {/* ── B. Score de Menace ── */}
@@ -1238,6 +1334,7 @@ export default function IntelligenceView({
   userPlanets: _userPlanets,
   token,
   onActionSuccess,
+  initialTarget,
 }: IntelligenceViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>('operations');
   const [activeReport, setActiveReport] = useState<SpyReportV2 | null>(null);
@@ -1249,7 +1346,6 @@ export default function IntelligenceView({
 
   const handleSabotageSuccess = useCallback(() => {
     onActionSuccess?.();
-    setActiveReport(null);
   }, [onActionSuccess]);
 
   const tabs: { id: Tab; label: string; icon: LucideIconType }[] = [
@@ -1328,6 +1424,7 @@ export default function IntelligenceView({
                   currentPlanet={currentPlanet}
                   token={token}
                   onReportReady={handleReportReady}
+                  initialTarget={initialTarget}
                 />
               )}
               {activeTab === 'rapport' && (
@@ -1335,6 +1432,7 @@ export default function IntelligenceView({
                   report={activeReport}
                   token={token}
                   onSabotageSuccess={handleSabotageSuccess}
+                  onClearReport={() => setActiveReport(null)}
                 />
               )}
               {activeTab === 'mes-ops' && (

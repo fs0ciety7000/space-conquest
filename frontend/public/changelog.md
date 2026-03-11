@@ -1,5 +1,20 @@
 # Changelog - Space Conquest
 
+## [10.4.0] - 2026-03-11 - Intelligence : Sélection de cible sans UUID
+
+### 🎯 Ciblage des missions d'espionnage/sabotage
+- Suppression du champ UUID dans l'onglet Opérations — le joueur ne manipule plus jamais d'UUID
+- **Depuis la Galaxie** : cliquer "Espionner" sur une planète pré-remplit automatiquement la cible dans la vue Intelligence
+- **Accès direct** : nouveau picker en 2 étapes — rechercher un joueur par nom → sélectionner une de ses planètes (`[G:S:P]`)
+- Le rapport de sabotage (Tab 2) reste affiché après une action, permettant d'enchaîner plusieurs sabotages sans re-espionner
+- Nouveau bouton "Effacer le rapport" pour réinitialiser manuellement
+
+### ⚙️ Backend
+- Nouveau endpoint `GET /players/:user_id/planets` — retourne les planètes d'un joueur (nom + coordonnées uniquement)
+- Endpoint `GET /players/search?q=` désormais correctement enregistré
+
+---
+
 ## [10.3.0] - 2026-03-11 - Équilibrage Production & Temps de Construction
 
 ### ⚙️ Temps de production des vaisseaux
