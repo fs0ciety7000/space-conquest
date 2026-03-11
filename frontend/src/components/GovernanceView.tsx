@@ -321,11 +321,11 @@ function SurveyCard({
   useEffect(() => {
     if (showResults) {
       setLoadingResults(true);
-      fetch(apiUrl(`/surveys/${survey.id}/results`), {
+      fetch(apiUrl(`/surveys/${survey.id}`), {
         headers: { Authorization: `Bearer ${token}` },
       })
-        .then((r) => r.json())
-        .then(setResults)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => { if (data) setResults(data.results ?? data); })
         .catch(() => {})
         .finally(() => setLoadingResults(false));
     }
@@ -620,12 +620,12 @@ export function GovernanceView({
     const headers = { Authorization: `Bearer ${token}` };
     setLoading(true);
     Promise.all([
-      fetch(apiUrl('/laws'), { headers }).then((r) => r.json()),
-      fetch(apiUrl('/surveys'), { headers }).then((r) => r.json()),
+      fetch(apiUrl('/laws'), { headers }).then((r) => r.ok ? r.json() : { laws: [] }),
+      fetch(apiUrl('/surveys'), { headers }).then((r) => r.ok ? r.json() : { surveys: [] }),
     ])
       .then(([lawsData, surveysData]) => {
-        setLaws(Array.isArray(lawsData) ? lawsData : []);
-        setSurveys(Array.isArray(surveysData) ? surveysData : []);
+        setLaws(Array.isArray(lawsData.laws) ? lawsData.laws : []);
+        setSurveys(Array.isArray(surveysData.surveys) ? surveysData.surveys : []);
       })
       .catch(() => {
         toast.error('Impossible de charger les données de gouvernance');

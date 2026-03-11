@@ -2934,9 +2934,10 @@ function AdminGovernancePanel() {
   const fetchLaws = async () => {
     setLoadingLaws(true);
     try {
-      const res = await fetch(apiUrl('/admin/laws'), { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(apiUrl('/laws'), { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) { setLaws([]); return; }
       const data = await res.json();
-      setLaws(Array.isArray(data) ? data : []);
+      setLaws(Array.isArray(data.laws) ? data.laws : []);
     } catch {
       toast.error('Impossible de charger les lois');
     } finally {
@@ -2947,9 +2948,10 @@ function AdminGovernancePanel() {
   const fetchSurveys = async () => {
     setLoadingSurveys(true);
     try {
-      const res = await fetch(apiUrl('/admin/surveys'), { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(apiUrl('/surveys'), { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) { setSurveys([]); return; }
       const data = await res.json();
-      setSurveys(Array.isArray(data) ? data : []);
+      setSurveys(Array.isArray(data.surveys) ? data.surveys : []);
     } catch {
       toast.error('Impossible de charger les sondages');
     } finally {
@@ -2989,6 +2991,7 @@ function AdminGovernancePanel() {
     try {
       const payload = {
         ...lawForm,
+        vote_end: new Date(lawForm.vote_end).toISOString(),
         effects: lawForm.effects.map((e) => ({
           ...e,
           duration_hours: e.duration_hours === '' ? null : e.duration_hours,
@@ -2999,7 +3002,11 @@ function AdminGovernancePanel() {
         headers: authHeaders,
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Erreur création loi');
+      if (!res.ok) {
+        const err = res.headers.get('content-type')?.includes('json') ? await res.json() : {};
+        toast.error(err.error || `Erreur ${res.status} lors de la création`);
+        return;
+      }
       toast.success('Loi créée');
       setLawForm({ title: '', description: '', vote_end: '', effects: [{ config_key: 'production_speed_multiplier', operation: 'multiply', delta: 1.5, duration_hours: 48 }] });
       fetchLaws();
@@ -3046,6 +3053,7 @@ function AdminGovernancePanel() {
     try {
       const payload = {
         ...surveyForm,
+        ends_at: new Date(surveyForm.ends_at).toISOString(),
         options: surveyForm.survey_type === 'multiple_choice'
           ? surveyForm.options.split(',').map((o) => o.trim()).filter(Boolean)
           : [],
@@ -3055,7 +3063,11 @@ function AdminGovernancePanel() {
         headers: authHeaders,
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const err = res.headers.get('content-type')?.includes('json') ? await res.json() : {};
+        toast.error(err.error || `Erreur ${res.status} lors de la création`);
+        return;
+      }
       toast.success('Sondage créé');
       setSurveyForm({ title: '', description: '', survey_type: 'yes_no', options: '', ends_at: '' });
       fetchSurveys();
