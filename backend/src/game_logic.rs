@@ -186,9 +186,9 @@ pub fn calculate_resources(
             base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Deuterium => {
-            let base = config.get_config("production_deuterium_base", 10.0);
+            let base = config.get_config("production_deuterium_base", 15.0);
             let growth = config.get_config("production_deuterium_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
     };
 
@@ -218,7 +218,7 @@ pub fn calculate_energy_production(solar_plant_level: i32, energy_tech_level: i3
 pub fn calculate_energy_consumption(metal_mine_level: i32, crystal_mine_level: i32, deuterium_mine_level: i32, config: &ServerConfigCache) -> f64 {
     let base_cons = config.get_config("energy_mine_consumption_base", 10.0);
     let growth = config.get_config("energy_mine_consumption_growth", 1.1);
-    let deut_extra = config.get_config("energy_deuterium_extra_consumption", 20.0);
+    let deut_extra = config.get_config("energy_deuterium_extra_consumption", 12.0);
 
     let metal_cons = base_cons * (metal_mine_level as f64) * growth.powi(metal_mine_level);
     let crystal_cons = base_cons * (crystal_mine_level as f64) * growth.powi(crystal_mine_level);
@@ -283,9 +283,9 @@ pub fn calculate_resource_production(
             base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Deuterium => {
-            let base = config.get_config("production_deuterium_base", 10.0);
+            let base = config.get_config("production_deuterium_base", 15.0);
             let growth = config.get_config("production_deuterium_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
     };
 
@@ -328,9 +328,9 @@ pub fn calculate_resources_with_energy(
             base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Deuterium => {
-            let base = config.get_config("production_deuterium_base", 10.0);
+            let base = config.get_config("production_deuterium_base", 15.0);
             let growth = config.get_config("production_deuterium_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
     };
 
@@ -1195,9 +1195,9 @@ pub fn calculate_resources_with_slots(
             base * (level as f64) * growth.powi(level) * plasma_bonus
         },
         ResourceType::Deuterium => {
-            let base = config.get_config("production_deuterium_base", 10.0);
+            let base = config.get_config("production_deuterium_base", 15.0);
             let growth = config.get_config("production_deuterium_growth", 1.1);
-            base * (level as f64) * growth.powi(level)
+            base * (level as f64) * growth.powi(level) * plasma_bonus
         },
     };
 

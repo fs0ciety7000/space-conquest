@@ -367,6 +367,8 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
       { key: 'ship_deathstar_metal', label: 'Étoile Mort - Métal', description: 'Coût métal étoile de la mort', defaultValue: '5000000.0' },
       { key: 'ship_deathstar_crystal', label: 'Étoile Mort - Cristal', description: 'Coût cristal étoile de la mort', defaultValue: '4000000.0' },
       { key: 'ship_deathstar_deuterium', label: 'Étoile Mort - Deutérium', description: 'Coût deutérium étoile de la mort', defaultValue: '1000000.0' },
+      { key: 'ship_build_rate', label: 'Vitesse de construction vaisseaux (taux de base)', description: 'Taux de base pour le temps de construction des vaisseaux — plus élevé = plus rapide', defaultValue: '100000' },
+      { key: 'ship_build_rate_shipyard_bonus', label: 'Bonus chantier naval par niveau (vaisseaux)', description: 'Multiplié par le niveau du chantier naval pour réduire le temps de construction', defaultValue: '0.15' },
     ]
   },
   {
@@ -379,6 +381,8 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
       { key: 'defense_missile_launcher_crystal', label: 'Missile - Cristal', description: 'Coût cristal lanceur de missiles', defaultValue: '2500.0' },
       { key: 'defense_plasma_turret_metal', label: 'Plasma - Métal', description: 'Coût métal tourelle plasma', defaultValue: '50000.0' },
       { key: 'defense_plasma_turret_crystal', label: 'Plasma - Cristal', description: 'Coût cristal tourelle plasma', defaultValue: '50000.0' },
+      { key: 'defense_build_rate', label: 'Vitesse de construction défenses (taux de base)', description: 'Taux de base pour le temps de construction des défenses — plus élevé = plus rapide', defaultValue: '2500' },
+      { key: 'defense_build_rate_shipyard_bonus', label: 'Bonus chantier naval par niveau (défenses)', description: 'Multiplié par le niveau du chantier naval pour réduire le temps de construction des défenses', defaultValue: '0.5' },
     ]
   },
   {
@@ -391,7 +395,7 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
       { key: 'production_metal_growth', label: 'Métal - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
       { key: 'production_crystal_base', label: 'Cristal - Base', description: 'Production base cristal (ratio 3:2:1)', defaultValue: '20.0' },
       { key: 'production_crystal_growth', label: 'Cristal - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
-      { key: 'production_deuterium_base', label: 'Deutérium - Base', description: 'Production base deutérium (ratio 3:2:1)', defaultValue: '10.0' },
+      { key: 'production_deuterium_base', label: 'Production deutérium (base par niveau)', description: 'Production base deutérium — valeur de base par niveau de mine (ratio 3:2:1)', defaultValue: '15' },
       { key: 'production_deuterium_growth', label: 'Deutérium - Croissance', description: 'Facteur croissance exponentielle (plus rare)', defaultValue: '1.05' },
     ]
   },
@@ -406,7 +410,7 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
       { key: 'energy_tech_bonus', label: 'Bonus Tech Énergie', description: 'Bonus par niveau tech énergie (+10%)', defaultValue: '0.10' },
       { key: 'energy_mine_consumption_base', label: 'Consommation Mine - Base', description: 'Consommation base des mines', defaultValue: '10.0' },
       { key: 'energy_mine_consumption_growth', label: 'Consommation Mine - Croissance', description: 'Facteur croissance consommation mines', defaultValue: '1.1' },
-      { key: 'energy_deuterium_extra_consumption', label: 'Deutérium - Conso Extra', description: 'Consommation supplémentaire mine deutérium', defaultValue: '20.0' },
+      { key: 'energy_deuterium_extra_consumption', label: 'Consommation énergie deutérium (facteur extra)', description: 'Consommation supplémentaire mine deutérium — facteur extra appliqué au-dessus de la base', defaultValue: '12' },
     ]
   },
 ];

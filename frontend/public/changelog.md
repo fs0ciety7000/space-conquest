@@ -1,5 +1,24 @@
 # Changelog - Space Conquest
 
+## [10.3.0] - 2026-03-11 - Équilibrage Production & Temps de Construction
+
+### ⚙️ Temps de production des vaisseaux
+- Correction majeure : tous les vaisseaux (Étoile de la Mort, Bombardier, Grand Cargo, etc.) utilisent désormais leurs coûts réels depuis la DB pour calculer le temps de construction — plus de blocage à 5s
+- Death Star (Chantier Lv12) : ~1.3 jour | Destroyer : ~24 min | Battleship : ~13 min
+- Les taux de construction (`ship_build_rate`, `ship_build_rate_shipyard_bonus`, `defense_build_rate`, `defense_build_rate_shipyard_bonus`) sont maintenant configurables via le panel admin sans recompilation
+
+### 🔵 Rééquilibrage Deutérium
+- Production de base augmentée : coefficient `10` → `15` (+50%)
+- Plasma Tech s'applique désormais aussi au Deutérium (comme Métal et Cristal)
+- Consommation énergie réduite : coefficient `20` → `12` (plus pénalisant d'avoir une mine deutérium)
+- Impact net : +57% de production deutérium à niveau égal, énergie -40% par niveau de mine
+
+### 🛠️ Panel Admin
+- Nouvelles clés configurables : `ship_build_rate`, `ship_build_rate_shipyard_bonus`, `defense_build_rate`, `defense_build_rate_shipyard_bonus`
+- Valeurs par défaut deutérium mises à jour dans le panel
+
+---
+
 ## [10.2.0] - 2026-03-11 - Refonte Intelligence & Espionnage
 
 ### 🕵️ Nouveau système Intelligence

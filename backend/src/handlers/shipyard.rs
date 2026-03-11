@@ -105,8 +105,12 @@ pub async fn get_ship_types_handler(
             let ship_types_augmented: Vec<serde_json::Value> = ship_types
                 .iter()
                 .map(|s| {
-                    let build_time_per_unit =
-                        game_logic::get_ship_production_time(&s.ship_key, 1, shipyard_level, &config);
+                    let ship_build_rate = config.get_config("ship_build_rate", 100_000.0);
+                    let shipyard_bonus = config.get_config("ship_build_rate_shipyard_bonus", 0.15);
+                    let cost_total = s.cost_metal as f64 + s.cost_crystal as f64;
+                    let effective_rate = ship_build_rate * (1.0 + shipyard_level as f64 * shipyard_bonus);
+                    let secs = ((cost_total / effective_rate * 3600.0) / config.ship_build_speed as f64) as i64;
+                    let build_time_per_unit = secs.max(5);
                     let mut v = serde_json::to_value(s).unwrap_or_default();
                     if let Some(obj) = v.as_object_mut() {
                         obj.insert(
@@ -243,7 +247,9 @@ pub async fn get_defense_types_handler(
         tech_tree::get_planet_building_level(&state.db, planet_id, "shipyard")
             .await
             .unwrap_or(0);
-    let shipyard_factor = 1.0 + shipyard_level as f64 * 0.5;
+    let defense_build_rate = config.get_config("defense_build_rate", 2500.0);
+    let defense_shipyard_bonus = config.get_config("defense_build_rate_shipyard_bonus", 0.5);
+    let shipyard_factor = 1.0 + shipyard_level as f64 * defense_shipyard_bonus;
 
     match tech_tree::get_defense_types_for_planet(&state.db, planet_id).await {
         Ok(defense_types) => {
@@ -252,7 +258,7 @@ pub async fn get_defense_types_handler(
                 .iter()
                 .map(|d| {
                     let cost_total = (d.base_cost_metal + d.base_cost_crystal) as f64;
-                    let build_time = ((cost_total / (2500.0 * shipyard_factor) * 3600.0
+                    let build_time = ((cost_total / (defense_build_rate * shipyard_factor) * 3600.0
                         / config.ship_build_speed) as i64)
                         .max(5);
                     let mut v = serde_json::to_value(d).unwrap_or_default();
@@ -703,8 +709,13 @@ pub async fn build_ships_handler(
         tech_tree::get_planet_building_level(&state.db, planet_id, "shipyard")
             .await
             .unwrap_or(0);
-    let additional_build_time =
-        game_logic::get_ship_production_time(&ship_key, quantity, shipyard_level, &config);
+    let ship_build_rate = config.get_config("ship_build_rate", 100_000.0);
+    let shipyard_bonus = config.get_config("ship_build_rate_shipyard_bonus", 0.15);
+    let cost_total = ship.cost_metal as f64 + ship.cost_crystal as f64;
+    let effective_rate = ship_build_rate * (1.0 + shipyard_level as f64 * shipyard_bonus);
+    let secs_per_unit = ((cost_total / effective_rate * 3600.0) / config.ship_build_speed as f64) as i64;
+    let secs_per_unit = secs_per_unit.max(5);
+    let additional_build_time = secs_per_unit * quantity as i64;
 
     // If already building, add to the existing queue
     if let Some(ps) = &existing_build {
@@ -994,8 +1005,10 @@ pub async fn build_defenses_handler(
             .await
             .unwrap_or(0);
     let cost_total = (defense.base_cost_metal + defense.base_cost_crystal) as f64;
-    let shipyard_factor = 1.0 + shipyard_level as f64 * 0.5;
-    let base_secs_per_unit = cost_total / (2500.0 * shipyard_factor) * 3600.0;
+    let defense_build_rate = config.get_config("defense_build_rate", 2500.0);
+    let defense_shipyard_bonus = config.get_config("defense_build_rate_shipyard_bonus", 0.5);
+    let shipyard_factor = 1.0 + shipyard_level as f64 * defense_shipyard_bonus;
+    let base_secs_per_unit = cost_total / (defense_build_rate * shipyard_factor) * 3600.0;
     let total_secs = base_secs_per_unit * quantity as f64 / config.ship_build_speed;
     let additional_build_time = (total_secs as i64).max(5 * quantity as i64);
 
@@ -1230,7 +1243,13 @@ pub async fn build_fleet_handler(
     let shipyard_level = crate::tech_tree::get_planet_building_level(&state.db, p.id, "shipyard")
         .await
         .unwrap_or(0);
-    let build_time = game_logic::get_ship_production_time(&type_ship, qty, shipyard_level, &config);
+    let ship_build_rate_legacy = config.get_config("ship_build_rate", 100_000.0);
+    let shipyard_bonus_legacy = config.get_config("ship_build_rate_shipyard_bonus", 0.15);
+    let cost_total_legacy = cost_m + cost_c;
+    let effective_rate_legacy = ship_build_rate_legacy * (1.0 + shipyard_level as f64 * shipyard_bonus_legacy);
+    let secs_per_unit_legacy = ((cost_total_legacy / effective_rate_legacy * 3600.0) / config.ship_build_speed as f64) as i64;
+    let secs_per_unit_legacy = secs_per_unit_legacy.max(5);
+    let build_time = secs_per_unit_legacy * qty as i64;
 
     let mut active: planet::ActiveModel = p.clone().into();
     active.metal_amount = Set(active.metal_amount.unwrap() - total_m);
