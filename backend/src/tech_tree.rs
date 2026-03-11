@@ -317,6 +317,9 @@ pub async fn get_tech_tree_for_planet(
     // Get planet's current tech levels
     let planet_tech_levels = get_all_planet_tech_levels(db, planet_id).await?;
 
+    // Niveau du labo de recherche (constant pour la planète, fetché une seule fois)
+    let lab_level = get_planet_building_level(db, planet_id, "research_lab").await.unwrap_or(0);
+
     let mut result = Vec::new();
 
     for tech in all_techs {
@@ -325,12 +328,14 @@ pub async fn get_tech_tree_for_planet(
         // Get requirements for this tech
         let requirements = get_tech_requirements(db, tech.id, planet_id).await?;
 
-        // Calculate next level research time
+        // Temps de recherche — formule polynomiale (level^1.5) avec diviseur research_speed
         let next_level_time = if current_level >= 0 {
-            let time = calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level);
-            // Apply construction speed multiplier
-            let speed_factor = config.building_speed;
-            Some(std::cmp::max(10, (time as f64 / speed_factor) as i64))
+            Some(crate::game_logic::get_research_time(
+                &tech.tech_key,
+                current_level + 1,
+                lab_level,
+                config,
+            ))
         } else {
             None
         };

@@ -105,12 +105,15 @@ pub async fn get_ship_types_handler(
             let ship_types_augmented: Vec<serde_json::Value> = ship_types
                 .iter()
                 .map(|s| {
-                    let ship_build_rate = config.get_config("ship_build_rate", 100_000.0);
-                    let shipyard_bonus = config.get_config("ship_build_rate_shipyard_bonus", 0.15);
+                    // Constantes alignées avec game_logic::get_ship_production_time
+                    const SHIP_BUILD_RATE: f64 = 3600.0;
+                    const SHIP_SHIPYARD_BONUS: f64 = 0.10;
                     let cost_total = s.cost_metal as f64 + s.cost_crystal as f64;
-                    let effective_rate = ship_build_rate * (1.0 + shipyard_level as f64 * shipyard_bonus);
-                    let secs = ((cost_total / effective_rate * 3600.0) / config.ship_build_speed as f64) as i64;
-                    let build_time_per_unit = secs.max(5);
+                    let effective_rate = SHIP_BUILD_RATE * (1.0 + shipyard_level as f64 * SHIP_SHIPYARD_BONUS);
+                    // Min appliqué avant le diviseur de vitesse (cohérent avec get_ship_production_time)
+                    let raw_secs = ((cost_total / effective_rate) * 3600.0) as i64;
+                    let raw_secs = raw_secs.max(5);
+                    let build_time_per_unit = (raw_secs as f64 / config.ship_build_speed as f64).max(5.0) as i64;
                     let mut v = serde_json::to_value(s).unwrap_or_default();
                     if let Some(obj) = v.as_object_mut() {
                         obj.insert(
@@ -247,9 +250,10 @@ pub async fn get_defense_types_handler(
         tech_tree::get_planet_building_level(&state.db, planet_id, "shipyard")
             .await
             .unwrap_or(0);
-    let defense_build_rate = config.get_config("defense_build_rate", 2500.0);
-    let defense_shipyard_bonus = config.get_config("defense_build_rate_shipyard_bonus", 0.5);
-    let shipyard_factor = 1.0 + shipyard_level as f64 * defense_shipyard_bonus;
+    // Taux de base des défenses — même logique que les vaisseaux
+    const DEFENSE_BUILD_RATE_DISP: f64 = 1800.0;
+    const DEFENSE_SHIPYARD_BONUS_DISP: f64 = 0.08;
+    let shipyard_factor = 1.0 + shipyard_level as f64 * DEFENSE_SHIPYARD_BONUS_DISP;
 
     match tech_tree::get_defense_types_for_planet(&state.db, planet_id).await {
         Ok(defense_types) => {
@@ -258,9 +262,10 @@ pub async fn get_defense_types_handler(
                 .iter()
                 .map(|d| {
                     let cost_total = (d.base_cost_metal + d.base_cost_crystal) as f64;
-                    let build_time = ((cost_total / (defense_build_rate * shipyard_factor) * 3600.0
-                        / config.ship_build_speed) as i64)
-                        .max(5);
+                    // Min appliqué avant vitesse
+                    let raw_secs = ((cost_total / (DEFENSE_BUILD_RATE_DISP * shipyard_factor)) * 3600.0) as i64;
+                    let raw_secs = raw_secs.max(5);
+                    let build_time = (raw_secs as f64 / config.ship_build_speed as f64).max(5.0) as i64;
                     let mut v = serde_json::to_value(d).unwrap_or_default();
                     if let Some(obj) = v.as_object_mut() {
                         obj.insert(
@@ -447,8 +452,12 @@ pub async fn start_research_handler(
         tech.cost_multiplier,
         current_level,
     );
+    // Temps de recherche — formule polynomiale (level^1.5) avec diviseur research_speed
+    let lab_level = tech_tree::get_planet_building_level(&state.db, planet_id, "research_lab")
+        .await
+        .unwrap_or(0);
     let research_time_seconds =
-        tech_tree::calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level);
+        game_logic::get_research_time(&tech_key, next_level, lab_level, &config_for_slots);
 
     // Check if planet has enough resources
     if planet.metal_amount < cost_metal as f64
@@ -709,12 +718,15 @@ pub async fn build_ships_handler(
         tech_tree::get_planet_building_level(&state.db, planet_id, "shipyard")
             .await
             .unwrap_or(0);
-    let ship_build_rate = config.get_config("ship_build_rate", 100_000.0);
-    let shipyard_bonus = config.get_config("ship_build_rate_shipyard_bonus", 0.15);
+    // Constantes alignées avec game_logic::get_ship_production_time
+    const SHIP_BUILD_RATE_QUEUE: f64 = 3600.0;
+    const SHIP_SHIPYARD_BONUS_QUEUE: f64 = 0.10;
     let cost_total = ship.cost_metal as f64 + ship.cost_crystal as f64;
-    let effective_rate = ship_build_rate * (1.0 + shipyard_level as f64 * shipyard_bonus);
-    let secs_per_unit = ((cost_total / effective_rate * 3600.0) / config.ship_build_speed as f64) as i64;
-    let secs_per_unit = secs_per_unit.max(5);
+    let effective_rate = SHIP_BUILD_RATE_QUEUE * (1.0 + shipyard_level as f64 * SHIP_SHIPYARD_BONUS_QUEUE);
+    // Min appliqué avant le diviseur de vitesse
+    let raw_secs_per_unit = ((cost_total / effective_rate) * 3600.0) as i64;
+    let raw_secs_per_unit = raw_secs_per_unit.max(5);
+    let secs_per_unit = (raw_secs_per_unit as f64 / config.ship_build_speed as f64).max(5.0) as i64;
     let additional_build_time = secs_per_unit * quantity as i64;
 
     // If already building, add to the existing queue
@@ -1005,12 +1017,15 @@ pub async fn build_defenses_handler(
             .await
             .unwrap_or(0);
     let cost_total = (defense.base_cost_metal + defense.base_cost_crystal) as f64;
-    let defense_build_rate = config.get_config("defense_build_rate", 2500.0);
-    let defense_shipyard_bonus = config.get_config("defense_build_rate_shipyard_bonus", 0.5);
-    let shipyard_factor = 1.0 + shipyard_level as f64 * defense_shipyard_bonus;
-    let base_secs_per_unit = cost_total / (defense_build_rate * shipyard_factor) * 3600.0;
-    let total_secs = base_secs_per_unit * quantity as f64 / config.ship_build_speed;
-    let additional_build_time = (total_secs as i64).max(5 * quantity as i64);
+    // Constantes alignées avec la formule d'affichage (get_defense_types_handler)
+    const DEFENSE_BUILD_RATE_Q: f64 = 1800.0;
+    const DEFENSE_SHIPYARD_BONUS_Q: f64 = 0.08;
+    let shipyard_factor = 1.0 + shipyard_level as f64 * DEFENSE_SHIPYARD_BONUS_Q;
+    // Min appliqué avant vitesse
+    let raw_secs_per_unit = ((cost_total / (DEFENSE_BUILD_RATE_Q * shipyard_factor)) * 3600.0) as i64;
+    let raw_secs_per_unit = raw_secs_per_unit.max(5);
+    let secs_per_unit = (raw_secs_per_unit as f64 / config.ship_build_speed as f64).max(5.0) as i64;
+    let additional_build_time = secs_per_unit * quantity as i64;
 
     // If already building, add to the existing queue
     if let Some(pd) = &existing_build {

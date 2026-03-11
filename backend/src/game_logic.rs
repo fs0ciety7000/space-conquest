@@ -517,13 +517,15 @@ pub fn get_build_time(level: i32, facility_level: i32, category_factor: f64, con
 /// Formule : (metal + crystal) / (BUILD_RATE x shipyard_factor) * 3600 / ship_build_speed
 /// BUILD_RATE x5 par rapport à l'ancienne formule pour éviter des temps absurdes.
 pub fn get_ship_production_time(ship_type: &str, qty: i32, shipyard_level: i32, config: &ServerConfigCache) -> i64 {
-    const BUILD_RATE: f64 = 12500.0;
-    const SHIPYARD_BONUS: f64 = 0.15;
+    // BUILD_RATE en ressources/heure — doit être identique à la formule dans handlers/shipyard.rs
+    const BUILD_RATE: f64 = 3600.0;
+    const SHIPYARD_BONUS: f64 = 0.10;
     const MIN_SECS_PER_UNIT: i64 = 5;
 
     let (metal, crystal) = get_unit_cost(ship_type, config);
     let cost_per_unit = metal + crystal;
     let effective_rate = BUILD_RATE * (1.0 + shipyard_level as f64 * SHIPYARD_BONUS);
+    // Temps brut sans diviseur de vitesse (en secondes)
     let secs_per_unit = ((cost_per_unit / effective_rate) * 3600.0) as i64;
     let secs_per_unit = secs_per_unit.max(MIN_SECS_PER_UNIT);
     let total_secs = secs_per_unit * qty as i64;

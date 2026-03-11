@@ -4560,7 +4560,11 @@ async fn start_research_handler(
     let cost_metal = tech_tree::calculate_tech_cost(tech.base_cost_metal, tech.cost_multiplier, current_level);
     let cost_crystal = tech_tree::calculate_tech_cost(tech.base_cost_crystal, tech.cost_multiplier, current_level);
     let cost_deuterium = tech_tree::calculate_tech_cost(tech.base_cost_deuterium, tech.cost_multiplier, current_level);
-    let research_time_seconds = tech_tree::calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level);
+    // Temps de recherche — formule polynomiale (level^1.5) avec diviseur research_speed
+    let lab_level = tech_tree::get_planet_building_level(&state.db, planet_id, "research_lab")
+        .await
+        .unwrap_or(0);
+    let research_time_seconds = game_logic::get_research_time(&tech_key, next_level, lab_level, &config_for_slots);
 
     // Check if planet has enough resources
     if planet.metal_amount < cost_metal as f64

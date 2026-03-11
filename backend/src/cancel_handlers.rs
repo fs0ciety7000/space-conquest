@@ -15,7 +15,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::entities::{prelude::*, planet, planet_defense, planet_ship, planet_technology, technology};
-use crate::AppState;
+use crate::{AppState, game_logic};
 use crate::tech_tree;
 
 /// Cancel an ongoing ship build
@@ -336,8 +336,10 @@ pub async fn cancel_research_handler(
     let cost_deuterium = tech_tree::calculate_tech_cost(tech.base_cost_deuterium, tech.cost_multiplier, current_level);
 
     let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
-    let raw_duration = tech_tree::calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level) as f64;
-    let total_duration = (raw_duration / (config.building_speed)) as i64;
+    let lab_level = tech_tree::get_planet_building_level(&state.db, planet_id, "research_lab")
+        .await.unwrap_or(0);
+    let target_level = research.researching_to_level.unwrap_or(current_level + 1);
+    let total_duration = game_logic::get_research_time(&tech.tech_key, target_level, lab_level, &config);
     let remaining_seconds = (end_time - now).num_seconds().max(0);
     let refund_ratio = if total_duration > 0 {
         (remaining_seconds as f64 / total_duration as f64).clamp(0.0, 0.95)

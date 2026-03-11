@@ -10,7 +10,7 @@ use serde_json::json;
 use uuid::Uuid;
 use axum::http::StatusCode;
 
-use crate::{AppState, ServerConfigCache};
+use crate::{AppState, ServerConfigCache, game_logic};
 use crate::entities::{
     prelude::*,
     planet, planet_ship, planet_defense, planet_technology,
@@ -231,10 +231,11 @@ async fn start_item_immediately(
             let current_level = tech_tree::get_planet_tech_level(db, planet_id, item_key)
                 .await.unwrap_or(0);
             let next_level = target_level.unwrap_or(current_level + 1);
-            let research_time = tech_tree::calculate_tech_time(
-                tech.base_time_seconds, tech.cost_multiplier, current_level
-            );
-            let end_time = now + Duration::seconds(research_time as i64);
+            // Formule polynomiale (level^1.5) avec diviseur research_speed
+            let lab_level = tech_tree::get_planet_building_level(db, planet_id, "research_lab")
+                .await.unwrap_or(0);
+            let research_time = game_logic::get_research_time(item_key, next_level, lab_level, config);
+            let end_time = now + Duration::seconds(research_time);
 
             let existing = PlanetTechnology::find()
                 .filter(planet_technology::Column::PlanetId.eq(planet_id))
