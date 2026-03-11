@@ -36,7 +36,9 @@
       "Bash(wc -l /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/handlers/*.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/combat.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/game_logic.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/tick_system.rs)",
       "Bash(grep -c \"unwrap\\(\\)\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/handlers/*.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/combat.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/trade_routes.rs)",
       "Bash(wc -l /var/home/phantomhex/Documents/code/space-conquest/frontend/src/components/*.tsx)",
-      "Bash(ls /var/home/phantomhex/Documents/code/space-conquest/frontend/src/components/ExpeditionZone*.tsx)"
+      "Bash(ls /var/home/phantomhex/Documents/code/space-conquest/frontend/src/components/ExpeditionZone*.tsx)",
+      "Bash(/tmp/inventory.txt:*)",
+      "Read(//tmp/**)"
     ]
   }
 }

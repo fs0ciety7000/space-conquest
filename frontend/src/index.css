@@ -189,6 +189,143 @@
 ═══════════════════════════════════════════════════════════════════════════ */
 @layer utilities {
 
+  /* ═══ SURFACES (hiérarchie de profondeur spatiale) ═══ */
+  .bg-surface-void     { background-color: #030014; }
+  .bg-surface-base     { background-color: #07050f; }
+  .bg-surface-panel    { background-color: #0d0b1a; }
+  .bg-surface-elevated { background-color: #14112a; }
+  .bg-surface-overlay  { background-color: #1c1836; }
+
+  /* ═══ PANELS HUD (glassmorphism thématique) ═══ */
+  .hud-panel {
+    background: rgba(13, 11, 26, 0.85);
+    border: 1px solid rgba(0, 245, 255, 0.15);
+    backdrop-filter: blur(12px) saturate(1.4);
+    box-shadow: 0 0 20px rgba(0, 245, 255, 0.04), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .hud-panel-magenta {
+    background: rgba(13, 11, 26, 0.85);
+    border: 1px solid rgba(255, 45, 155, 0.18);
+    backdrop-filter: blur(12px) saturate(1.4);
+    box-shadow: 0 0 20px rgba(255, 45, 155, 0.05), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .hud-panel-purple {
+    background: rgba(13, 11, 26, 0.85);
+    border: 1px solid rgba(180, 77, 255, 0.18);
+    backdrop-filter: blur(12px) saturate(1.4);
+    box-shadow: 0 0 20px rgba(180, 77, 255, 0.05), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ═══ TYPOGRAPHIE HUD ═══ */
+  .hud-value {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px rgba(0, 245, 255, 0.5);
+    letter-spacing: 0.05em;
+  }
+  .hud-label {
+    font-family: ui-monospace, monospace;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(139, 135, 168, 0.9);
+  }
+  .hud-value-metal   { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #f97316; text-shadow: 0 0 8px rgba(249,115,22,0.4); }
+  .hud-value-crystal { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #06b6d4; text-shadow: 0 0 8px rgba(6,182,212,0.4); }
+  .hud-value-deut    { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #22c55e; text-shadow: 0 0 8px rgba(34,197,94,0.4); }
+  .hud-value-energy  { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #facc15; text-shadow: 0 0 8px rgba(250,204,21,0.4); }
+
+  /* ═══ COIN BRACKETS (style HUD tactique) ═══ */
+  .hud-corners { position: relative; }
+  .hud-corners::before,
+  .hud-corners::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-color: rgba(0, 245, 255, 0.6);
+    border-style: solid;
+    transition: border-color 0.2s;
+  }
+  .hud-corners::before { top: 0;    left: 0;  border-width: 1px 0 0 1px; }
+  .hud-corners::after  { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
+  .hud-corners:hover::before,
+  .hud-corners:hover::after { border-color: rgba(0, 245, 255, 0.9); }
+
+  /* ═══ SCAN LINE (overlay HUD) ═══ */
+  .hud-scan {
+    position: relative;
+    overflow: hidden;
+  }
+  .hud-scan::after {
+    content: '';
+    position: absolute;
+    inset-x: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,245,255,0.5), transparent);
+    animation: hud-scanline 3s ease-in-out infinite;
+    animation-delay: var(--scan-delay, 0s);
+    pointer-events: none;
+  }
+  @keyframes hud-scanline {
+    0%   { top: -2px; opacity: 0; }
+    5%   { opacity: 1; }
+    95%  { opacity: 1; }
+    100% { top: 102%; opacity: 0; }
+  }
+
+  /* ═══ NÉON BORDER ROTATIF ═══ */
+  .neon-border {
+    position: relative;
+    z-index: 0;
+  }
+  .neon-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, #00f5ff, #ff2d9b, #b44dff, #00f5ff);
+    background-size: 300% 300%;
+    animation: neon-border-rotate 4s linear infinite;
+    z-index: -1;
+    opacity: 0.55;
+  }
+  @keyframes neon-border-rotate {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* ═══ SIDEBAR ITEM ACTIVE ═══ */
+  .sidebar-item-active {
+    background: linear-gradient(90deg, rgba(0,245,255,0.12) 0%, rgba(0,245,255,0.03) 100%);
+    border-left: 2px solid var(--neon-cyan);
+    box-shadow: inset 0 0 20px rgba(0,245,255,0.05);
+  }
+
+  /* ═══ GLOW ADDITIONNELS ═══ */
+  .glow-amber {
+    box-shadow: 0 0 5px #ffaa00, 0 0 20px rgba(255,170,0,0.4), 0 0 40px rgba(255,170,0,0.2);
+  }
+  .text-glow-green  { text-shadow: 0 0 8px rgba(34,197,94,0.7); }
+  .text-glow-red    { text-shadow: 0 0 8px rgba(239,68,68,0.7); }
+  .text-glow-amber  { text-shadow: 0 0 8px rgba(250,204,21,0.7); }
+  .text-glow-purple { text-shadow: 0 0 8px rgba(168,85,247,0.7); }
+
+  /* ═══ SEPARATEUR HUD ═══ */
+  .hud-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,245,255,0.2), transparent);
+  }
+
+  /* ═══ SCROLLBAR GLOBALE ═══ */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,245,255,0.3) rgba(7,5,15,0.5);
+  }
+
   /* ═══ FONDS SPATIAUX ═══ */
   .bg-space-void {
     background: linear-gradient(180deg, 

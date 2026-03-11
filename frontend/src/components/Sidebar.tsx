@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronRight, Keyboard, X } from 'lucide-react';
+import { ChevronDown, Keyboard, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface MenuItem {
@@ -22,6 +22,28 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+// Category accent colors (CSS vars or static hex — avoids Tailwind JIT purging)
+const categoryConfig: Record<string, { color: string; glow: string }> = {
+  COMMANDEMENT: { color: 'var(--neon-cyan)',    glow: 'rgba(0,245,255,0.15)' },
+  COMMUNICATION: { color: '#38bdf8',            glow: 'rgba(56,189,248,0.15)' },
+  DÉVELOPPEMENT:  { color: '#22c55e',            glow: 'rgba(34,197,94,0.15)' },
+  ÉCONOMIE:       { color: '#f59e0b',            glow: 'rgba(245,158,11,0.15)' },
+  MILITAIRE:      { color: '#ef4444',            glow: 'rgba(239,68,68,0.15)' },
+  ESPIONNAGE:     { color: '#a855f7',            glow: 'rgba(168,85,247,0.15)' },
+  DONNÉES:        { color: '#94a3b8',            glow: 'rgba(148,163,184,0.10)' },
+  SYSTÈME:        { color: '#71717a',            glow: 'rgba(113,113,122,0.10)' },
+};
+
+const containerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.04 } },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, x: -12 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.2, ease: 'easeOut' as const } },
+};
+
 export function Sidebar({
   menuItems,
   activeTab,
@@ -32,20 +54,15 @@ export function Sidebar({
   isMobile = false,
   onClose,
 }: SidebarProps) {
-  // État des catégories ouvertes/fermées
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(['COMMANDEMENT', 'MILITAIRE', 'ESPIONNAGE']) // Catégories ouvertes par défaut
+    new Set(['COMMANDEMENT', 'MILITAIRE', 'ESPIONNAGE'])
   );
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(category)) {
-        newSet.delete(category);
-      } else {
-        newSet.add(category);
-      }
-      return newSet;
+      const next = new Set(prev);
+      next.has(category) ? next.delete(category) : next.add(category);
+      return next;
     });
     playSound('click');
   };
@@ -54,13 +71,12 @@ export function Sidebar({
     if (item.onClick) {
       item.onClick();
       if (isMobile && onClose) onClose();
-      playSound('click');
     } else {
       onTabChange(item.id);
     }
+    playSound('click');
   };
 
-  // Regrouper les items par catégorie
   const categories = [
     'COMMANDEMENT',
     'COMMUNICATION',
@@ -72,77 +88,77 @@ export function Sidebar({
     'SYSTÈME',
   ];
 
-  // Configuration des catégories avec icônes et couleurs
-  const categoryConfig: Record<string, { color: string; gradient: string }> = {
-    COMMANDEMENT: { color: 'indigo', gradient: 'from-indigo-600 to-purple-600' },
-    COMMUNICATION: { color: 'cyan', gradient: 'from-cyan-600 to-blue-600' },
-    DÉVELOPPEMENT: { color: 'emerald', gradient: 'from-emerald-600 to-green-600' },
-    ÉCONOMIE: { color: 'amber', gradient: 'from-amber-600 to-orange-600' },
-    MILITAIRE: { color: 'red', gradient: 'from-red-600 to-rose-600' },
-    ESPIONNAGE: { color: 'violet', gradient: 'from-violet-600 to-purple-600' },
-    DONNÉES: { color: 'slate', gradient: 'from-slate-600 to-gray-600' },
-    SYSTÈME: { color: 'zinc', gradient: 'from-zinc-600 to-stone-600' },
-  };
-
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-black/40 backdrop-blur-md border-r border-cyan-500/10">
       {/* Header mobile */}
       {isMobile && (
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
-          <h2 className="text-sm font-black text-white uppercase tracking-widest">Menu</h2>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/10">
+          <span className="hud-label text-cyan-400 tracking-[0.2em]">NAVIGATION</span>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-white/5 rounded transition-colors"
           >
-            <X size={18} className="text-slate-400" />
+            <X size={16} className="text-slate-400" />
           </button>
         </div>
       )}
 
       {/* Catégories */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-indigo-900/50 scrollbar-track-transparent p-4 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {categories.map(category => {
           const items = menuItems.filter(item => item.category === category);
           if (items.length === 0) return null;
 
           const isExpanded = expandedCategories.has(category);
-          const config = categoryConfig[category];
+          const cfg = categoryConfig[category] ?? { color: '#94a3b8', glow: 'rgba(148,163,184,0.1)' };
 
           return (
-            <div key={category} className="space-y-1">
+            <div key={category}>
               {/* Header de catégorie */}
               <button
                 onClick={() => toggleCategory(category)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 hover:bg-white/5 group ${
-                  isExpanded ? `text-${config.color}-400` : 'text-slate-500'
-                }`}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-[0.18em] transition-all duration-200 hover:bg-white/5 group"
+                style={{ color: isExpanded ? cfg.color : '#475569' }}
               >
-                <span className="flex items-center gap-2">
-                  {isExpanded ? (
-                    <ChevronDown size={14} className="transition-transform" />
-                  ) : (
-                    <ChevronRight size={14} className="transition-transform" />
-                  )}
+                <span className="flex items-center gap-1.5">
+                  <motion.span
+                    animate={{ rotate: isExpanded ? 0 : -90 }}
+                    transition={{ duration: 0.18 }}
+                    className="inline-flex"
+                  >
+                    <ChevronDown size={12} />
+                  </motion.span>
                   {category}
                 </span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                  isExpanded ? `bg-${config.color}-500/20 text-${config.color}-400` : 'bg-slate-700/30 text-slate-500'
-                }`}>
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded font-mono"
+                  style={
+                    isExpanded
+                      ? { background: cfg.glow, color: cfg.color }
+                      : { background: 'rgba(71,85,105,0.2)', color: '#475569' }
+                  }
+                >
                   {items.length}
                 </span>
               </button>
 
-              {/* Items de la catégorie */}
-              <AnimatePresence>
+              {/* Items */}
+              <AnimatePresence initial={false}>
                 {isExpanded && (
                   <motion.div
+                    key="items"
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{ duration: 0.2, ease: 'easeInOut' }}
                     className="overflow-hidden"
                   >
-                    <div className="space-y-0.5 pl-2">
+                    <motion.div
+                      className="space-y-0.5 pl-1 pt-0.5 pb-1"
+                      variants={containerVariants}
+                      initial="hidden"
+                      animate="visible"
+                    >
                       {items.map(item => {
                         const isActive = activeTab === item.id;
                         return (
@@ -150,47 +166,54 @@ export function Sidebar({
                             key={item.id}
                             data-tour={item.id}
                             onClick={() => handleItemClick(item)}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase transition-all duration-200 group relative overflow-hidden ${
+                            variants={itemVariants}
+                            whileHover={{ x: 3 }}
+                            whileTap={{ scale: 0.97 }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-bold uppercase tracking-wide transition-all duration-200 relative overflow-hidden group ${
                               isActive
-                                ? `bg-gradient-to-r ${config.gradient} text-white shadow-lg shadow-${config.color}-500/30`
-                                : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                                ? 'sidebar-item-active text-white'
+                                : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
                             }`}
-                            whileHover={{ x: 4 }}
-                            whileTap={{ scale: 0.98 }}
+                            style={
+                              isActive
+                                ? { color: '#e2e8f0' }
+                                : {}
+                            }
                           >
-                            <div className="relative">
+                            {/* Icon */}
+                            <div className="relative shrink-0">
                               <item.icon
-                                size={16}
-                                className={`transition-all duration-300 ${
+                                size={14}
+                                style={
                                   isActive
-                                    ? 'scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]'
-                                    : 'group-hover:scale-110 group-hover:text-cyan-400'
+                                    ? { color: cfg.color, filter: `drop-shadow(0 0 6px ${cfg.color})` }
+                                    : {}
+                                }
+                                className={`transition-all duration-200 ${
+                                  !isActive ? 'group-hover:text-slate-300' : ''
                                 }`}
                               />
-
-                              {/* Badge messages non lus */}
                               {item.id === 'messages' && unreadMessagesCount > 0 && (
-                                <>
-                                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-                                  </span>
-                                </>
+                                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                                </span>
                               )}
                             </div>
 
-                            <span className="relative z-10 flex-1 text-left">{item.label}</span>
+                            <span className="flex-1 text-left">{item.label}</span>
 
+                            {/* Active indicator dot */}
                             {isActive && (
-                              <>
-                                <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-400/15 to-indigo-500/0 opacity-50 animate-shimmer"></div>
-                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-400 rounded-r shadow-[0_0_10px_rgba(0,245,255,0.8)]"></div>
-                              </>
+                              <span
+                                className="shrink-0 w-1 h-1 rounded-full"
+                                style={{ background: cfg.color, boxShadow: `0 0 6px ${cfg.color}` }}
+                              />
                             )}
                           </motion.button>
                         );
                       })}
-                    </div>
+                    </motion.div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -200,22 +223,18 @@ export function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-white/10 space-y-3">
-        {/* Bouton aide raccourcis */}
+      <div className="p-3 border-t border-cyan-500/10 space-y-2">
         <button
           onClick={onShowShortcuts}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-indigo-950/30 text-indigo-400 hover:bg-indigo-900/40 hover:text-indigo-300 transition-colors text-xs font-bold uppercase border border-indigo-900/30"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded hud-label text-cyan-600 hover:text-cyan-400 hover:bg-cyan-500/5 transition-colors border border-cyan-900/30 hover:border-cyan-700/40"
         >
-          <Keyboard size={16} /> Raccourcis (?)
+          <Keyboard size={13} /> RACCOURCIS (?)
         </button>
 
-        {/* Crédits */}
         {!isMobile && (
-          <div className="text-center pt-3 border-t border-white/5">
-            <p className="text-[10px] text-slate-600">
-              Propulsé par <span className="font-bold text-orange-400">🦀 Rust</span>
-            </p>
-          </div>
+          <p className="text-center text-[9px] text-slate-700 font-mono pt-1">
+            PROPULSÉ PAR <span className="text-orange-600">RUST</span>
+          </p>
         )}
       </div>
     </div>

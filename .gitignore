@@ -1,4 +1,8 @@
 .VSCodeCounter
+.agent/
+.agents/
+.claude/
+ai/
 
 # Migration files with credentials
 .env.migration
