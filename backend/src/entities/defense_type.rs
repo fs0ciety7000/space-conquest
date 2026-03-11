@@ -21,6 +21,8 @@ pub struct Model {
     pub hull: i32,
     pub description: Option<String>,
     pub created_at: Option<DateTime>,
+    pub icon_name: String,
+    pub sort_order: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

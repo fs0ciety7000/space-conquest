@@ -33,7 +33,7 @@ use tower_http::{
     services::ServeDir,
 };
 use uuid::Uuid;
-use chrono::{Utc, Duration, DateTime};
+use chrono::{Utc, Duration, DateTime, NaiveDateTime};
 use rand::Rng;
 
 use sea_orm_migration::MigratorTrait;
@@ -255,6 +255,8 @@ async fn main() {
         rate_limit_auth: std::sync::Arc::new(backend::rate_limit::RateLimiter::new(5, 60)),
         // Attack : 10 lancements par 60 secondes (anti-flood)
         rate_limit_attack: std::sync::Arc::new(backend::rate_limit::RateLimiter::new(10, 60)),
+        // Build : 10 constructions par 10 secondes (anti double-clic)
+        rate_limit_build: std::sync::Arc::new(backend::rate_limit::RateLimiter::new(10, 10)),
     };
     let cors = CorsLayer::permissive();
 
@@ -469,6 +471,7 @@ async fn main() {
         .merge(handlers::fleet::router(state.clone()))
         .merge(handlers::planets::router(state.clone()))
         .merge(handlers::server_events::router(state.clone()))
+        .merge(handlers::game_catalog::router(state.clone()))
 
         .layer(TraceLayer::new_for_http())
         .with_state(state.clone());
@@ -486,6 +489,38 @@ async fn main() {
     });
     println!("⚔️  PVE Events tick démarré (intervalle: 30s)");
 
+    // Rate limiter cleanup (prevent memory growth from many unique IPs)
+    {
+        let rl = state.rate_limit_attack.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                rl.cleanup();
+            }
+        });
+    }
+    {
+        let rl = state.rate_limit_auth.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                rl.cleanup();
+            }
+        });
+    }
+    {
+        let rl = state.rate_limit_build.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                rl.cleanup();
+            }
+        });
+    }
+    println!("🧹 Rate limiter cleanup tasks started (interval: 5min)");
 
     // Route WebSocket séparée avec WsState
     let ws_app = Router::new()
@@ -825,13 +860,19 @@ async fn resolve_attack_mission(
 
     // Upsert debris into debris_field table (used by galaxy view + recycler missions)
     if result.debris.0 > 0.0 || result.debris.1 > 0.0 {
-        let existing_df = DebrisField::find()
+        let existing_df = match DebrisField::find()
             .filter(debris_field::Column::Galaxy.eq(def_planet.galaxy))
             .filter(debris_field::Column::System.eq(def_planet.system))
             .filter(debris_field::Column::Position.eq(def_planet.position))
             .one(db)
             .await
-            .unwrap_or(None);
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Failed to read debris_field: {:?} - skipping debris update", e);
+                None
+            }
+        };
         if let Some(df) = existing_df {
             let mut da: debris_field::ActiveModel = df.clone().into();
             da.metal = Set(df.metal + result.debris.0);
@@ -998,6 +1039,9 @@ async fn resolve_attack_mission(
         })?;
     }
 
+    // Sérialiser le DetailedCombatReport une seule fois pour les deux logs
+    let details_json = result.details.as_ref().and_then(|d| serde_json::to_value(d).ok());
+
     // Combat log pour le défenseur
     let _ = combat_log::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -1011,7 +1055,7 @@ async fn resolve_attack_mission(
         ships_lost: Set(defender_total_lost),
         date: Set(now),
         detailed_report: Set(Some(def_rep_json.clone())),
-        details: Set(None),
+        details: Set(details_json.clone()),
     }.insert(db).await;
 
     // Combat log pour l'attaquant
@@ -1027,7 +1071,7 @@ async fn resolve_attack_mission(
         ships_lost: Set(attacker_total_lost),
         date: Set(now),
         detailed_report: Set(Some(att_rep_json.clone())),
-        details: Set(None),
+        details: Set(details_json),
     }.insert(db).await;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -4423,9 +4467,16 @@ async fn get_defense_types_handler(
 async fn start_research_handler(
     Path((planet_id, tech_key)): Path<(Uuid, String)>,
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
 ) -> impl IntoResponse {
     use entities::{prelude::*, technology, planet_technology};
     use sea_orm::ActiveModelTrait;
+
+    let ip = backend::rate_limit::RateLimiter::extract_ip(&headers);
+    if !state.rate_limit_build.check(&ip) {
+        return (axum::http::StatusCode::TOO_MANY_REQUESTS,
+                axum::Json(serde_json::json!({"error": "Trop de requêtes, réessayez dans quelques secondes"}))).into_response();
+    }
 
     // Get planet
     let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
@@ -4569,9 +4620,16 @@ async fn start_research_handler(
 async fn build_ships_handler(
     Path((planet_id, ship_key, quantity)): Path<(Uuid, String, i32)>,
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
 ) -> Response {
     use entities::{prelude::*, ship_type, planet_ship};
     use sea_orm::ActiveModelTrait;
+
+    let ip = backend::rate_limit::RateLimiter::extract_ip(&headers);
+    if !state.rate_limit_build.check(&ip) {
+        return (StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({"error": "Trop de requêtes, réessayez dans quelques secondes"}))).into_response();
+    }
 
     if quantity <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid quantity"}))).into_response();
@@ -4653,7 +4711,7 @@ async fn build_ships_handler(
         .unwrap_or(false);
 
     // Calculate build time
-    let config = state.config.read().unwrap().clone();
+    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
 
     if !is_already_building {
         // Check per-category slot limit for ships
@@ -4671,94 +4729,104 @@ async fn build_ships_handler(
     let build_time_per_ship = ship.build_time_seconds as f64 / (config.building_speed);
     let additional_build_time = (build_time_per_ship * quantity as f64) as i64;
 
-    // If already building, add to the existing queue
-    if let Some(ps) = &existing_build {
-        if ps.building_count.is_some() && ps.building_count.unwrap() > 0 {
-            // Calculate remaining build time
-            let now = Utc::now().naive_utc();
-            if let Some(current_end_time) = ps.build_end_time {
-                let remaining_seconds = (current_end_time - now).num_seconds().max(0);
+    // Determine which transaction branch to take before entering the closure.
+    // 1 = add to existing active queue, 2 = reset an existing idle record, 3 = insert new record.
+    let queue_branch: u8 = if let Some(ps) = &existing_build {
+        if ps.building_count.map(|c| c > 0).unwrap_or(false) && ps.build_end_time.is_some() {
+            1
+        } else {
+            2
+        }
+    } else {
+        3
+    };
 
-                // New end time = remaining time + additional time
-                let new_end_time = now + Duration::seconds(remaining_seconds + additional_build_time);
-                let new_quantity = ps.building_count.unwrap() + quantity;
+    // Pre-compute time values so the closure captures only Copy/Clone primitives.
+    let now_pre = Utc::now().naive_utc();
+    let (new_quantity, new_end_time, remaining_pre) = if queue_branch == 1 {
+        let ps = existing_build.as_ref().unwrap();
+        let current_end = ps.build_end_time.unwrap();
+        let remaining = (current_end - now_pre).num_seconds().max(0);
+        let nq = ps.building_count.unwrap() + quantity;
+        let net = now_pre + Duration::seconds(remaining + additional_build_time);
+        (nq, net, remaining)
+    } else {
+        let end_time = now_pre + Duration::seconds(additional_build_time);
+        (quantity, end_time, 0i64)
+    };
 
-                // Deduct resources
-                let mut active_planet: planet::ActiveModel = planet.clone().into();
-                active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
-                active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
-                active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
+    let ship_type_id = ship.id;
+    let ship_key_clone = ship_key.clone();
+    let planet_metal = planet.metal_amount;
+    let planet_crystal = planet.crystal_amount;
+    let planet_deuterium = planet.deuterium_amount;
 
-                if let Err(_) = active_planet.update(&state.db).await {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
-                }
+    // Wrap BOTH writes (resource deduction + queue update/insert) in a single transaction
+    // to prevent the double-spend exploit from concurrent requests.
+    let txn_result = state.db.transaction::<_, (i32, NaiveDateTime, i64), DbErr>(|txn| {
+        Box::pin(async move {
+            // 1. Re-read planet inside the transaction to lock it for this write
+            let planet_row = Planet::find_by_id(planet_id)
+                .one(txn)
+                .await?
+                .ok_or_else(|| DbErr::Custom("Planet not found in transaction".into()))?;
+            let mut active_planet: planet::ActiveModel = planet_row.into();
+            active_planet.metal_amount = Set(planet_metal - total_cost_metal as f64);
+            active_planet.crystal_amount = Set(planet_crystal - total_cost_crystal as f64);
+            active_planet.deuterium_amount = Set(planet_deuterium - total_cost_deuterium as f64);
+            active_planet.update(txn).await?;
 
-                // Update the build queue
-                let mut active_ps: planet_ship::ActiveModel = ps.clone().into();
+            // 2. Update or insert ship queue entry
+            if queue_branch == 1 || queue_branch == 2 {
+                // Re-read the row inside the transaction to prevent concurrent double-writes
+                let ps_current = PlanetShip::find()
+                    .filter(planet_ship::Column::PlanetId.eq(planet_id))
+                    .filter(planet_ship::Column::ShipTypeId.eq(ship_type_id))
+                    .one(txn)
+                    .await?
+                    .ok_or_else(|| DbErr::Custom("Ship row disappeared in transaction".into()))?;
+                let mut active_ps: planet_ship::ActiveModel = ps_current.into();
                 active_ps.building_count = Set(Some(new_quantity));
                 active_ps.build_end_time = Set(Some(new_end_time));
+                active_ps.update(txn).await?;
+            } else {
+                let new_ps = planet_ship::ActiveModel {
+                    planet_id: Set(planet_id),
+                    ship_type_id: Set(ship_type_id),
+                    count: Set(0),
+                    building_count: Set(Some(new_quantity)),
+                    build_end_time: Set(Some(new_end_time)),
+                };
+                new_ps.insert(txn).await?;
+            }
 
-                if let Err(_) = active_ps.update(&state.db).await {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update building queue"}))).into_response();
-                }
+            Ok((new_quantity, new_end_time, remaining_pre))
+        })
+    }).await;
 
-                // Return success with updated info
-                return Json(json!({
+    match txn_result {
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction failed"}))).into_response(),
+        Ok((final_qty, final_end, remaining_secs)) => {
+            if queue_branch == 1 {
+                Json(json!({
                     "success": true,
-                    "ship_key": ship_key,
-                    "quantity": new_quantity,
+                    "ship_key": ship_key_clone,
+                    "quantity": final_qty,
                     "added": quantity,
-                    "end_time": new_end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    "total_duration_seconds": remaining_seconds + additional_build_time
-                })).into_response();
+                    "end_time": final_end.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    "total_duration_seconds": remaining_secs + additional_build_time
+                })).into_response()
+            } else {
+                Json(json!({
+                    "success": true,
+                    "ship_key": ship_key_clone,
+                    "quantity": final_qty,
+                    "end_time": final_end.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    "duration_seconds": additional_build_time
+                })).into_response()
             }
         }
     }
-
-    // Deduct resources for new build
-    let mut active_planet: planet::ActiveModel = planet.clone().into();
-    active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
-    active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
-    active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
-
-    if let Err(_) = active_planet.update(&state.db).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
-    }
-
-    let end_time = Utc::now().naive_utc() + Duration::seconds(additional_build_time);
-
-    // Start building
-    if let Some(ps) = existing_build {
-        // Update existing record
-        let mut active_ps: planet_ship::ActiveModel = ps.into();
-        active_ps.building_count = Set(Some(quantity));
-        active_ps.build_end_time = Set(Some(end_time));
-
-        if let Err(_) = active_ps.update(&state.db).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
-        }
-    } else {
-        // Create new record
-        let new_ps = planet_ship::ActiveModel {
-            planet_id: Set(planet_id),
-            ship_type_id: Set(ship.id),
-            count: Set(0),
-            building_count: Set(Some(quantity)),
-            build_end_time: Set(Some(end_time)),
-        };
-
-        if let Err(_) = new_ps.insert(&state.db).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
-        }
-    }
-
-    Json(json!({
-        "success": true,
-        "ship_key": ship_key,
-        "quantity": quantity,
-        "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
-        "duration_seconds": additional_build_time
-    })).into_response()
 }
 
 /// POST /planets/:id/build-defenses/:defense_key/:quantity - Build defenses using relational system
@@ -4766,9 +4834,16 @@ async fn build_ships_handler(
 async fn build_defenses_handler(
     Path((planet_id, defense_key, quantity)): Path<(Uuid, String, i32)>,
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
 ) -> Response {
     use entities::{prelude::*, defense_type, planet_defense};
     use sea_orm::ActiveModelTrait;
+
+    let ip = backend::rate_limit::RateLimiter::extract_ip(&headers);
+    if !state.rate_limit_build.check(&ip) {
+        return (StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({"error": "Trop de requêtes, réessayez dans quelques secondes"}))).into_response();
+    }
 
     if quantity <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid quantity"}))).into_response();
@@ -4850,7 +4925,7 @@ async fn build_defenses_handler(
         .unwrap_or(false);
 
     // Calculate build time
-    let config = state.config.read().unwrap().clone();
+    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
 
     if !is_already_building {
         // Check per-category slot limit for defenses
@@ -4868,95 +4943,105 @@ async fn build_defenses_handler(
     let build_time_per_defense = defense.build_time_seconds as f64 / (config.building_speed);
     let additional_build_time = (build_time_per_defense * quantity as f64) as i64;
 
-    // If already building, add to the existing queue
-    if let Some(pd) = &existing_build {
-        if pd.building_count.is_some() && pd.building_count.unwrap() > 0 {
-            // Calculate remaining build time
-            let now = Utc::now().naive_utc();
-            if let Some(current_end_time) = pd.build_end_time {
-                let remaining_seconds = (current_end_time - now).num_seconds().max(0);
+    // Determine which transaction branch to take before entering the closure.
+    // 1 = add to existing active queue, 2 = reset an existing idle record, 3 = insert new record.
+    let queue_branch: u8 = if let Some(pd) = &existing_build {
+        if pd.building_count.map(|c| c > 0).unwrap_or(false) && pd.build_end_time.is_some() {
+            1
+        } else {
+            2
+        }
+    } else {
+        3
+    };
 
-                // New end time = remaining time + additional time
-                let new_end_time = now + Duration::seconds(remaining_seconds + additional_build_time);
-                let new_quantity = pd.building_count.unwrap() + quantity;
+    // Pre-compute time values so the closure captures only Copy/Clone primitives.
+    let now_pre = Utc::now().naive_utc();
+    let (new_quantity, new_end_time, remaining_pre) = if queue_branch == 1 {
+        let pd = existing_build.as_ref().unwrap();
+        let current_end = pd.build_end_time.unwrap();
+        let remaining = (current_end - now_pre).num_seconds().max(0);
+        let nq = pd.building_count.unwrap() + quantity;
+        let net = now_pre + Duration::seconds(remaining + additional_build_time);
+        (nq, net, remaining)
+    } else {
+        let end_time = now_pre + Duration::seconds(additional_build_time);
+        (quantity, end_time, 0i64)
+    };
 
-                // Deduct resources
-                let mut active_planet: planet::ActiveModel = planet.clone().into();
-                active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
-                active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
-                active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
+    let defense_type_id = defense.id;
+    let defense_key_clone = defense_key.clone();
+    let planet_metal = planet.metal_amount;
+    let planet_crystal = planet.crystal_amount;
+    let planet_deuterium = planet.deuterium_amount;
 
-                if let Err(_) = active_planet.update(&state.db).await {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
-                }
+    // Wrap BOTH writes (resource deduction + queue update/insert) in a single transaction
+    // to prevent the double-spend exploit from concurrent requests.
+    let txn_result = state.db.transaction::<_, (i32, NaiveDateTime, i64), DbErr>(|txn| {
+        Box::pin(async move {
+            // 1. Re-read planet inside the transaction to lock it for this write
+            let planet_row = Planet::find_by_id(planet_id)
+                .one(txn)
+                .await?
+                .ok_or_else(|| DbErr::Custom("Planet not found in transaction".into()))?;
+            let mut active_planet: planet::ActiveModel = planet_row.into();
+            active_planet.metal_amount = Set(planet_metal - total_cost_metal as f64);
+            active_planet.crystal_amount = Set(planet_crystal - total_cost_crystal as f64);
+            active_planet.deuterium_amount = Set(planet_deuterium - total_cost_deuterium as f64);
+            active_planet.update(txn).await?;
 
-                // Update the build queue
-                let mut active_pd: planet_defense::ActiveModel = pd.clone().into();
+            // 2. Update or insert defense queue entry
+            if queue_branch == 1 || queue_branch == 2 {
+                // Re-read the row inside the transaction to prevent concurrent double-writes
+                let pd_current = PlanetDefense::find()
+                    .filter(planet_defense::Column::PlanetId.eq(planet_id))
+                    .filter(planet_defense::Column::DefenseTypeId.eq(defense_type_id))
+                    .one(txn)
+                    .await?
+                    .ok_or_else(|| DbErr::Custom("Defense row disappeared in transaction".into()))?;
+                let mut active_pd: planet_defense::ActiveModel = pd_current.into();
                 active_pd.building_count = Set(Some(new_quantity));
                 active_pd.build_end_time = Set(Some(new_end_time));
+                active_pd.update(txn).await?;
+            } else {
+                let new_pd = planet_defense::ActiveModel {
+                    planet_id: Set(planet_id),
+                    defense_type_id: Set(defense_type_id),
+                    count: Set(0),
+                    building_count: Set(Some(new_quantity)),
+                    build_end_time: Set(Some(new_end_time)),
+                    updated_at: NotSet,
+                };
+                new_pd.insert(txn).await?;
+            }
 
-                if let Err(_) = active_pd.update(&state.db).await {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update building queue"}))).into_response();
-                }
+            Ok((new_quantity, new_end_time, remaining_pre))
+        })
+    }).await;
 
-                // Return success with updated info
-                return Json(json!({
+    match txn_result {
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction failed"}))).into_response(),
+        Ok((final_qty, final_end, remaining_secs)) => {
+            if queue_branch == 1 {
+                Json(json!({
                     "success": true,
-                    "defense_key": defense_key,
-                    "quantity": new_quantity,
+                    "defense_key": defense_key_clone,
+                    "quantity": final_qty,
                     "added": quantity,
-                    "end_time": new_end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    "total_duration_seconds": remaining_seconds + additional_build_time
-                })).into_response();
+                    "end_time": final_end.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    "total_duration_seconds": remaining_secs + additional_build_time
+                })).into_response()
+            } else {
+                Json(json!({
+                    "success": true,
+                    "defense_key": defense_key_clone,
+                    "quantity": final_qty,
+                    "end_time": final_end.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    "duration_seconds": additional_build_time
+                })).into_response()
             }
         }
     }
-
-    // Deduct resources for new build
-    let mut active_planet: planet::ActiveModel = planet.clone().into();
-    active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
-    active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
-    active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
-
-    if let Err(_) = active_planet.update(&state.db).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
-    }
-
-    let end_time = Utc::now().naive_utc() + Duration::seconds(additional_build_time);
-
-    // Start building
-    if let Some(pd) = existing_build {
-        // Update existing record
-        let mut active_pd: planet_defense::ActiveModel = pd.into();
-        active_pd.building_count = Set(Some(quantity));
-        active_pd.build_end_time = Set(Some(end_time));
-
-        if let Err(_) = active_pd.update(&state.db).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
-        }
-    } else {
-        // Create new record
-        let new_pd = planet_defense::ActiveModel {
-            planet_id: Set(planet_id),
-            defense_type_id: Set(defense.id),
-            count: Set(0),
-            building_count: Set(Some(quantity)),
-            build_end_time: Set(Some(end_time)),
-            updated_at: NotSet,
-        };
-
-        if let Err(_) = new_pd.insert(&state.db).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to start building"}))).into_response();
-        }
-    }
-
-    Json(json!({
-        "success": true,
-        "defense_key": defense_key,
-        "quantity": quantity,
-        "end_time": end_time.format("%Y-%m-%d %H:%M:%S").to_string(),
-        "duration_seconds": additional_build_time
-    })).into_response()
 }
 
 /// POST /tick - Process game tick (research completion, etc.)

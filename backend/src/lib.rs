@@ -138,6 +138,8 @@ pub struct AppState {
     pub rate_limit_auth: Arc<rate_limit::RateLimiter>,
     /// Rate limiter pour les attaques : 10 requêtes / 60s par IP.
     pub rate_limit_attack: Arc<rate_limit::RateLimiter>,
+    /// Rate limiter pour les constructions (vaisseaux, défenses, recherches) : 10 requêtes / 10s par IP.
+    pub rate_limit_build: Arc<rate_limit::RateLimiter>,
 }
 
 // Fonction helper pour recharger la config

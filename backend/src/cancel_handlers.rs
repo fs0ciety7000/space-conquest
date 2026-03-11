@@ -80,7 +80,7 @@ pub async fn cancel_ship_build_handler(
     let total_cost_crystal = ship.cost_crystal * building_count;
     let total_cost_deuterium = ship.cost_deuterium * building_count;
 
-    let config = state.config.read().unwrap().clone();
+    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
     let build_time_per_ship = ship.build_time_seconds as f64 / (config.building_speed);
     let total_duration = (build_time_per_ship * building_count as f64) as i64;
     let remaining_seconds = (end_time - now).num_seconds().max(0);
@@ -212,7 +212,7 @@ pub async fn cancel_defense_build_handler(
     let total_cost_crystal = defense.base_cost_crystal * building_count;
     let total_cost_deuterium = defense.base_cost_deuterium * building_count;
 
-    let config = state.config.read().unwrap().clone();
+    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
     let build_time_per_defense = defense.build_time_seconds as f64 / (config.building_speed);
     let total_duration = (build_time_per_defense * building_count as f64) as i64;
     let remaining_seconds = (end_time - now).num_seconds().max(0);
@@ -335,7 +335,7 @@ pub async fn cancel_research_handler(
     let cost_crystal = tech_tree::calculate_tech_cost(tech.base_cost_crystal, tech.cost_multiplier, current_level);
     let cost_deuterium = tech_tree::calculate_tech_cost(tech.base_cost_deuterium, tech.cost_multiplier, current_level);
 
-    let config = state.config.read().unwrap().clone();
+    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
     let raw_duration = tech_tree::calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level) as f64;
     let total_duration = (raw_duration / (config.building_speed)) as i64;
     let remaining_seconds = (end_time - now).num_seconds().max(0);

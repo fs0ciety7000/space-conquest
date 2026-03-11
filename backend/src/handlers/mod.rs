@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub mod galaxy;
+pub mod game_catalog;
 pub mod ranking;
 pub mod reports;
 pub mod profile;

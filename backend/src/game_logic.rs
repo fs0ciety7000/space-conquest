@@ -871,56 +871,6 @@ pub fn resolve_pvp(
     }
 }
 
-pub fn simulate_combat(fleet_size: i32, defense_bonus: i32, config: &ServerConfigCache) -> CombatResult {
-    let mut rng = rand::thread_rng();
-
-    // Niveau pirate aléatoire (configurable)
-    let pirate_min = config.get_config("expedition_pirate_scaling_min", 10.0) as i32;
-    let pirate_max = config.get_config("expedition_pirate_scaling_max", 100.0) as i32;
-    let pirate_strength = rng.gen_range(pirate_min..pirate_max);
-
-    let defense_multiplier = config.get_config("expedition_defense_bonus_multiplier", 5.0);
-    let player_strength = fleet_size + ((defense_bonus as f64 * defense_multiplier) as i32);
-
-    if player_strength > pirate_strength {
-        // VICTOIRE : Pertes réduites (configurable)
-        let loss_min = config.get_config("expedition_victory_loss_min", 0.03);
-        let loss_max = config.get_config("expedition_victory_loss_max", 0.15);
-        let loss_var = config.get_config("expedition_victory_loss_variation", 0.1);
-
-        let base_loss_rate = rng.gen_range(loss_min..loss_max);
-        let variation = rng.gen_range(-loss_var..loss_var);
-        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.01_f64, 0.20_f64);
-
-        let lost = (fleet_size as f64 * loss_rate).ceil() as i32;
-        let lost = lost.max(0).min(fleet_size);
-
-        CombatResult {
-            victory: true,
-            message: format!("Victoire ! Pirates éliminés (force: {})", pirate_strength),
-            ships_lost: lost
-        }
-    } else {
-        // DÉFAITE : Pertes modérées (configurable)
-        let loss_min = config.get_config("expedition_defeat_loss_min", 0.30);
-        let loss_max = config.get_config("expedition_defeat_loss_max", 0.60);
-        let loss_var = config.get_config("expedition_defeat_loss_variation", 0.15);
-
-        let base_loss_rate = rng.gen_range(loss_min..loss_max);
-        let variation = rng.gen_range(-loss_var..loss_var);
-        let loss_rate = (base_loss_rate * (1.0_f64 + variation)).clamp(0.25_f64, 0.70_f64);
-
-        let lost = (fleet_size as f64 * loss_rate).ceil() as i32;
-        let lost = lost.max(1).min(fleet_size);
-
-        CombatResult {
-            victory: false,
-            message: format!("Défaite ! Retraite forcée (pirates: {})", pirate_strength),
-            ships_lost: lost
-        }
-    }
-}
-
 // --- NAVIGATION GALACTIQUE ---
 pub fn calculate_distance(start: (i32, i32, i32), end: (i32, i32, i32)) -> f64 {
     let (g1, s1, p1) = start;

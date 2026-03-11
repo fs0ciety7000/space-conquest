@@ -47,6 +47,7 @@ pub fn router(_state: crate::AppState) -> Router<crate::AppState> {
             delete(cancel_construction_handler),
         )
         .route("/my-planets", get(get_my_planets_handler))
+        .route("/planets/:id/production-details", get(get_production_details_handler))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1577,4 +1578,130 @@ async fn get_my_planets_handler(
         .into_response();
     }
     (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète introuvable"}))).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /planets/:id/production-details
+// Returns per-resource production rates with energy modifier breakdown.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub async fn get_production_details_handler(
+    State(state): State<AppState>,
+    Path(planet_id): Path<String>,
+) -> impl IntoResponse {
+    use game_logic::ResourceType;
+
+    let planet_uuid = match Uuid::parse_str(&planet_id) {
+        Ok(u) => u,
+        Err(_) => {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid planet id"}))).into_response();
+        }
+    };
+
+    let db = &state.db;
+    let config = match state.config.read() {
+        Ok(c) => c.clone(),
+        Err(e) => e.into_inner().clone(),
+    };
+
+    // Load planet row (needed for ownership context; we don't read legacy columns)
+    match Planet::find_by_id(planet_uuid).one(db).await {
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response();
+        }
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+        }
+        Ok(Some(_)) => {}
+    };
+
+    // Load building levels from relational table
+    let building_levels = match tech_tree::get_all_planet_building_levels(db, planet_uuid).await {
+        Ok(b) => b,
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+        }
+    };
+
+    let metal_mine_level = building_levels.get("metal_mine").copied().unwrap_or(0);
+    let crystal_mine_level = building_levels.get("crystal_mine").copied().unwrap_or(0);
+    let deuterium_mine_level = building_levels.get("deuterium_mine").copied().unwrap_or(0);
+    let solar_plant_level = building_levels.get("solar_plant").copied().unwrap_or(0);
+
+    // Load tech levels from relational table
+    let tech_levels = match tech_tree::get_all_planet_tech_levels(db, planet_uuid).await {
+        Ok(t) => t,
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+        }
+    };
+
+    let energy_tech_level = tech_levels.get("energy_tech").copied().unwrap_or(0);
+    let plasma_tech_level = tech_levels.get("plasma_tech").copied().unwrap_or(0);
+
+    // Energy balance
+    let energy_produced = game_logic::calculate_energy_production(solar_plant_level, energy_tech_level, &config);
+    let energy_consumed = game_logic::calculate_energy_consumption(
+        metal_mine_level, crystal_mine_level, deuterium_mine_level, &config,
+    );
+    let energy_ratio = if energy_consumed == 0.0 {
+        1.0_f64
+    } else {
+        (energy_produced / energy_consumed).min(1.0)
+    };
+
+    // Per-resource production (energy_ratio already factored in by calculate_resource_production)
+    let metal_rate = game_logic::calculate_resource_production(
+        ResourceType::Metal,
+        metal_mine_level,
+        energy_tech_level,
+        plasma_tech_level,
+        energy_ratio,
+        &config,
+    );
+    let crystal_rate = game_logic::calculate_resource_production(
+        ResourceType::Crystal,
+        crystal_mine_level,
+        energy_tech_level,
+        plasma_tech_level,
+        energy_ratio,
+        &config,
+    );
+    let deuterium_rate = game_logic::calculate_resource_production(
+        ResourceType::Deuterium,
+        deuterium_mine_level,
+        energy_tech_level,
+        plasma_tech_level,
+        energy_ratio,
+        &config,
+    );
+
+    Json(json!({
+        "planet_id": planet_id,
+        "resources": {
+            "metal": {
+                "mine_level": metal_mine_level,
+                "hourly_rate": metal_rate,
+                "energy_modifier": energy_ratio
+            },
+            "crystal": {
+                "mine_level": crystal_mine_level,
+                "hourly_rate": crystal_rate,
+                "energy_modifier": energy_ratio
+            },
+            "deuterium": {
+                "mine_level": deuterium_mine_level,
+                "hourly_rate": deuterium_rate,
+                "energy_modifier": energy_ratio
+            }
+        },
+        "energy": {
+            "produced": energy_produced,
+            "consumed": energy_consumed,
+            "ratio": energy_ratio,
+            "deficit": energy_ratio < 1.0,
+            "solar_plant_level": solar_plant_level,
+            "energy_tech_level": energy_tech_level
+        }
+    })).into_response()
 }

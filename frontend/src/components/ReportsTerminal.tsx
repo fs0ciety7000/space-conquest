@@ -6,6 +6,7 @@ import { fr } from "date-fns/locale";
 import { apiUrl } from '@/config/api';
 import { toast } from 'sonner';
 import CombatModal from './CombatModal';
+import CombatReplay from './CombatReplay';
 import EconomyLog from './EconomyLog';
 
 interface CombatLog {
@@ -18,6 +19,8 @@ interface CombatLog {
   loot_crystal: number;
   ships_lost: number;
   date: string;
+  // Non-null when a DetailedCombatReport was persisted (Expansion 5.0+)
+  details?: Record<string, unknown> | null;
 }
 
 interface TransportLog {
@@ -49,6 +52,8 @@ export default function ReportsTerminal({ planetId, initialView }: { planetId: s
   const [extortionHistory, setExtortionHistory] = useState<ExtortionEvent[]>([]);
   const [view, setView] = useState<'combat' | 'transport' | 'economy' | 'pirates'>(initialView ?? 'combat');
   const [selectedReport, setSelectedReport] = useState<any>(null);
+  // Holds a combat_log entry for the Tour/Tour inline replay (no full modal fetch needed)
+  const [replayLog, setReplayLog] = useState<CombatLog | null>(null);
 
   useEffect(() => {
     if (initialView) setView(initialView);
@@ -454,7 +459,7 @@ export default function ReportsTerminal({ planetId, initialView }: { planetId: s
                     </div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end gap-1">
                     <div className="text-xs font-mono tabular-nums text-slate-200">
                       <span className="text-yellow-500">+{Math.floor(log.loot_metal).toLocaleString()}</span> M /
                       <span className="text-cyan-400"> +{Math.floor(log.loot_crystal).toLocaleString()}</span> C
@@ -462,6 +467,15 @@ export default function ReportsTerminal({ planetId, initialView }: { planetId: s
                     <div className="text-[10px] text-red-400/70 font-mono tabular-nums">
                       Pertes: {log.ships_lost} vso.
                     </div>
+                    {log.details != null && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setReplayLog(log); }}
+                        className="text-[10px] font-mono text-cyan-400/60 hover:text-cyan-400 border border-cyan-500/10 hover:border-cyan-500/30 px-2 py-0.5 rounded-[2px] transition-all duration-150"
+                        aria-label="Voir le replay tour par tour"
+                      >
+                        Tour/Tour
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -593,6 +607,22 @@ export default function ReportsTerminal({ planetId, initialView }: { planetId: s
           report={selectedReport}
           onClose={() => setSelectedReport(null)}
           onSabotage={handleSabotage}
+        />
+      )}
+
+      {/* Replay tour-par-tour — ouvert via le bouton "Tour/Tour" */}
+      {replayLog && (
+        <CombatReplay
+          report={{
+            details: replayLog.details as any,
+            opponent_name: replayLog.opponent_username ?? replayLog.target_name,
+            loot: {
+              metal: Math.max(0, replayLog.loot_metal),
+              crystal: Math.max(0, replayLog.loot_crystal),
+              deuterium: 0,
+            },
+          }}
+          onClose={() => setReplayLog(null)}
         />
       )}
     </motion.div>

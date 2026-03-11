@@ -19,6 +19,9 @@ pub struct Model {
     pub cost_multiplier: f64,
     pub description: Option<String>,
     pub created_at: Option<DateTime>,
+    pub icon_name: String,
+    pub sort_order: i32,
+    pub max_level: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

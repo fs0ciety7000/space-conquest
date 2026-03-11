@@ -30,6 +30,9 @@ pub struct Model {
     pub shipyard_required: i32,
     pub description: Option<String>,
     pub created_at: Option<DateTime>,
+    pub ship_class: String,
+    pub icon_name: String,
+    pub sort_order: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

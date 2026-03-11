@@ -210,7 +210,7 @@ async fn attack_v2_handler(
     let attacker_owner_id = att_planet.owner_id;
     let defender_owner_id = target_planet.owner_id;
 
-    let config_clone = state.config.read().unwrap().clone();
+    let config_clone = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
     if let Err(error_msg) = protection::validate_attack(
         &state.db,
         attacker_owner_id,
@@ -305,7 +305,7 @@ async fn attack_v2_handler(
     }
 
     let travel_time = {
-        let config = state.config.read().unwrap();
+        let config = state.config.read().unwrap_or_else(|e| e.into_inner());
         let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
         game_logic::calculate_flight_time(dist, flight_speed)
     };
@@ -653,7 +653,7 @@ async fn recycle_handler(
 
     // Temps de trajet aller-retour
     let travel_time = {
-        let config = state.config.read().unwrap();
+        let config = state.config.read().unwrap_or_else(|e| e.into_inner());
         let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
         game_logic::calculate_flight_time(dist, flight_speed)
     };
@@ -789,7 +789,7 @@ async fn transport_handler(
     }
 
     let total_load = payload.metal + payload.crystal + payload.deuterium;
-    let config_clone = state.config.read().unwrap().clone();
+    let config_clone = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
     let hangar_level_transport = tech_tree::get_planet_building_level(&state.db, source_id, "hangar").await.unwrap_or(0);
     let computer_tech_level = tech_tree::get_planet_tech_level(&state.db, source_id, "computer_tech").await.unwrap_or(0);
     let transporter_capacity = game_logic::get_transporter_capacity_with_tech(hangar_level_transport, computer_tech_level, &config_clone);
@@ -1249,7 +1249,7 @@ async fn expedition_v2_handler(
         let _ = planet_active.update(&state.db).await;
     }
 
-    let config = state.config.read().unwrap().clone();
+    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
     let base_duration = config.get_config("expedition_base_duration", 600.0);
     let speed_factor = config.production_speed * 2.0;
     let calm_bonus = config.get_config("expedition_calm_sector_bonus", 1.2);
