@@ -269,10 +269,10 @@ const SurveyResultsDisplay = memo(function SurveyResultsDisplay({
 }) {
   const { total_responses, breakdown } = results;
 
-  const getOptions = (): string[] => {
-    if (survey.survey_type === 'yes_no') return ['Oui', 'Non'];
-    if (survey.survey_type === 'rating') return ['1', '2', '3', '4', '5'];
-    return survey.options;
+  const getOptions = (): { key: string; label: string }[] => {
+    if (survey.survey_type === 'yes_no') return [{ key: 'yes', label: 'Oui' }, { key: 'no', label: 'Non' }];
+    if (survey.survey_type === 'rating') return ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'].map(v => ({ key: v, label: v }));
+    return survey.options.map(o => ({ key: o, label: o }));
   };
 
   const options = getOptions();
@@ -280,13 +280,13 @@ const SurveyResultsDisplay = memo(function SurveyResultsDisplay({
   return (
     <div className="space-y-2">
       <p className="text-xs text-slate-400">{total_responses} réponse{total_responses !== 1 ? 's' : ''}</p>
-      {options.map((opt) => {
-        const count = breakdown[opt] ?? 0;
+      {options.map(({ key, label }) => {
+        const count = breakdown[key] ?? 0;
         const pct = total_responses > 0 ? Math.round((count / total_responses) * 100) : 0;
         return (
-          <div key={opt} className="space-y-0.5">
+          <div key={key} className="space-y-0.5">
             <div className="flex justify-between text-xs">
-              <span className="text-slate-300">{opt}</span>
+              <span className="text-slate-300">{label}</span>
               <span className="text-slate-400">
                 {count} ({pct}%)
               </span>
@@ -357,19 +357,19 @@ function SurveyCard({
     if (survey.survey_type === 'yes_no') {
       return (
         <div className="flex gap-2">
-          {['Oui', 'Non'].map((opt) => (
+          {[{ value: 'yes', label: 'Oui' }, { value: 'no', label: 'Non' }].map(({ value, label }) => (
             <button
-              key={opt}
-              onClick={() => setSelectedAnswer(opt)}
+              key={value}
+              onClick={() => setSelectedAnswer(value)}
               className={`px-4 py-2 text-sm font-medium rounded border transition-colors ${
-                selectedAnswer === opt
-                  ? opt === 'Oui'
+                selectedAnswer === value
+                  ? value === 'yes'
                     ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-300'
                     : 'bg-red-600/30 border-red-500/60 text-red-300'
                   : 'bg-slate-800/60 border-white/10 text-slate-300 hover:border-white/20'
               }`}
             >
-              {opt}
+              {label}
             </button>
           ))}
         </div>

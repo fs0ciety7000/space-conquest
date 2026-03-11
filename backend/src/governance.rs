@@ -25,7 +25,7 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
-use chrono::Utc;
+use chrono::{Utc, Datelike, Timelike};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
     PaginatorTrait, QueryFilter, QueryOrder, Set,
@@ -117,6 +117,17 @@ pub struct SurveyListQuery {
 // ============================================================================
 // HELPERS
 // ============================================================================
+
+/// Formate un datetime ISO 8601 en français lisible : "17 mars 2026 à 23h00"
+fn format_date_fr(iso: &str) -> String {
+    let Ok(dt) = chrono::DateTime::parse_from_rfc3339(iso) else {
+        return iso.to_string();
+    };
+    let months = ["janv.", "févr.", "mars", "avr.", "mai", "juin",
+                  "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+    let m = months[(dt.month() as usize).saturating_sub(1)];
+    format!("{} {} {} à {:02}h{:02}", dt.day(), m, dt.year(), dt.hour(), dt.minute())
+}
 
 /// Extraire le user_id depuis le header Authorization: Bearer jwt-<uuid>
 fn extract_user_from_headers(headers: &HeaderMap) -> Option<Uuid> {
@@ -814,8 +825,8 @@ async fn create_law_handler(
             ws,
             &format!("Nouveau vote de loi : {}", law.title),
             &format!(
-                "Une nouvelle loi '{}' est soumise au vote. Exprime-toi avant le {}.",
-                law.title, payload.vote_end
+                "Une nouvelle loi '{}' est soumise au vote. Exprime-toi avant le {} dans l'onglet Sénat.",
+                law.title, format_date_fr(&payload.vote_end)
             ),
             "law_vote_open",
         )
@@ -1380,8 +1391,8 @@ async fn create_survey_handler(
             ws,
             &format!("Nouveau sondage : {}", survey_model.title),
             &format!(
-                "Un nouveau sondage '{}' est disponible. Participez avant le {}.",
-                survey_model.title, payload.ends_at
+                "Un nouveau sondage '{}' est disponible. Participez avant le {} dans l'onglet Sénat.",
+                survey_model.title, format_date_fr(&payload.ends_at)
             ),
             "survey_open",
         )
