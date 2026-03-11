@@ -1193,12 +1193,12 @@ async fn upgrade_mine_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Recherches : utiliser get_research_time (réduit par niveau de labo)
-    // Bâtiments : utiliser get_build_time (réduit par niveau de chantier)
+    // Recherches : utiliser get_research_time (basé sur niveau, réduit par labo)
+    // Bâtiments : utiliser get_build_time (basé sur niveau, réduit par chantier)
     let mut build_time = if is_research {
-        game_logic::get_research_time(cost.metal, cost.crystal, facility_level, &config)
+        game_logic::get_research_time(&type_mine, target_level, facility_level, &config)
     } else {
-        game_logic::get_build_time(cost.metal, cost.crystal, facility_level, &config)
+        game_logic::get_build_time(target_level, facility_level, game_logic::building_category_factor(&type_mine), &config)
     };
 
     if is_research {
@@ -1325,7 +1325,11 @@ async fn cancel_construction_handler(
                 .await
                 .unwrap_or(0)
         };
-        game_logic::get_build_time(base_m, base_c, facility_level, &config) as f64
+        if is_tech {
+            game_logic::get_research_time(&item.building_type, item.level, facility_level, &config) as f64
+        } else {
+            game_logic::get_build_time(item.level, facility_level, game_logic::building_category_factor(&item.building_type), &config) as f64
+        }
     };
 
     let now = Utc::now().naive_utc();

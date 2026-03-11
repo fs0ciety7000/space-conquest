@@ -252,15 +252,13 @@ export default function FleetDispatcher({
             }
         }
         else if (mission === 'transport') {
-            // Note: Le backend attend `transporters` (nombre de vaisseaux).
-            // Pour l'instant, on va utiliser les vaisseaux sélectionnés s'il gère les flottes mixtes pour le transport,
-            // ou bien on va juste extraire le nombre de transporteurs de shipSelection.
-            // On suppose que l'API /transport accepte transporters = nombre de vaisseaux de transport (petit_transporteur / grand_transporteur combiné ?)
-            // L'API actuelle de TransportModal envoyait simplement = `transporters` (quantité générique).
-            // Adaptons pour l'API existante : on utilise targetLoad et on prend le nombre total de vaisseaux sélectionnés.
+            // Le backend /transport vérifie uniquement les vaisseaux de type "transporter".
+            // On envoie uniquement ce count — pas le total de tous les vaisseaux sélectionnés.
+            // TODO (Option A): migrer vers fleet: HashMap<String,i32> côté backend pour flottes mixtes.
+            const transporterCount = shipSelection['transporter'] || 0;
 
-            if (totalShips === 0) {
-                toast.error("Sélectionnez des vaisseaux de transport");
+            if (transporterCount === 0) {
+                toast.error("Sélectionnez au moins un transporteur pour cette mission");
                 return setIsLaunching(false);
             }
             if (targetLoad <= 0) {
@@ -277,7 +275,7 @@ export default function FleetDispatcher({
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     target_planet_id: targetPlanet.id,
-                    transporters: totalShips, // FIXME: L'API devrait accepter une flotte complète
+                    transporters: transporterCount,
                     metal,
                     crystal,
                     deuterium

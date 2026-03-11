@@ -25,12 +25,8 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const getProgress = (endTime: number) => {
-    if (items.length === 0) return 0;
-    const totalDuration = endTime - (now - (endTime - now));
-    const elapsed = now - (endTime - totalDuration);
-    return Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
-  };
+  // Le backend ne retourne pas startTime — on affiche une barre indéterminée animée.
+  // Le vrai signal de progression est le countdown formatTimeUntilMs(endTime).
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -73,7 +69,6 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
       <div className="space-y-3">
         {items.map((item, idx) => {
           const isActive = idx === 0;
-          const progress = isActive ? getProgress(item.endTime) : 0;
           const timeRemaining = formatTimeUntilMs(item.endTime);
 
           return (
@@ -145,8 +140,8 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
                       {timeRemaining}
                     </div>
                     {isActive && (
-                      <div className="text-xs text-cyan-500/70 mt-0.5 tabular-nums">
-                        {progress.toFixed(0)}%
+                      <div className="text-xs text-cyan-500/70 mt-0.5 animate-pulse">
+                        En cours…
                       </div>
                     )}
                   </div>
@@ -167,7 +162,7 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
               {/* Barre de progression visuelle en bas */}
               {isActive && (
                 <div className="px-3 pb-3">
-                  <Progress variant="success" value={progress} />
+                  <Progress variant="success" value={100} className="animate-pulse opacity-60" />
                 </div>
               )}
             </div>

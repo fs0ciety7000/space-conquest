@@ -155,15 +155,15 @@ pub fn calculate_resources(
     let now = chrono::Utc::now().naive_utc();
     let duration = now.signed_duration_since(last_update).num_seconds() as f64;
 
-    // 💡 Bonus technologie énergie (+1% par niveau)
+    // Bonus technologie énergie (+1% par niveau)
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
-    // 🔥 Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
+    // Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
     let plasma_bonus_factor = config.get_config("tech_bonus_plasma_prod", 0.01);
     let plasma_bonus = 1.0 + (plasma_tech_level as f64 * plasma_bonus_factor);
 
-    // ⚡ CALCUL DU RATIO ÉNERGÉTIQUE
+    // CALCUL DU RATIO ÉNERGÉTIQUE
     let energy_production = calculate_energy_production(solar_plant_level, energy_tech_level, config);
     let energy_consumption = calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level, config);
 
@@ -173,7 +173,7 @@ pub fn calculate_resources(
         (energy_production / energy_consumption).min(1.0).max(0.0)
     };
 
-    // 📊 Production de base (ratio 3:2:1) - lire depuis config
+    // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
         ResourceType::Metal => {
             let base = config.get_config("production_metal_base", 30.0);
@@ -266,7 +266,7 @@ pub fn calculate_resource_production(
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
-    // 🔥 Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
+    // Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
     let plasma_bonus_factor = config.get_config("tech_bonus_plasma_prod", 0.01);
     let plasma_bonus = 1.0 + (plasma_tech_level as f64 * plasma_bonus_factor);
 
@@ -311,7 +311,7 @@ pub fn calculate_resources_with_energy(
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
-    // 🔥 Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
+    // Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
     let plasma_bonus_factor = config.get_config("tech_bonus_plasma_prod", 0.01);
     let plasma_bonus = 1.0 + (plasma_tech_level as f64 * plasma_bonus_factor);
 
@@ -342,7 +342,7 @@ pub fn calculate_resources_with_energy(
 // --- COÛTS DES BÂTIMENTS (Exponentiel) ---
 pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCache) -> Cost {
     let base_cost = match building_type {
-        // 🏭 MINES (multiplicateur 1.5)
+        // MINES (multiplicateur 1.5)
         "metal" => Cost {
             metal: 60.0 * 1.5f64.powi(level - 1),
             crystal: 15.0 * 1.5f64.powi(level - 1),
@@ -358,15 +358,15 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
             crystal: 75.0 * 1.5f64.powi(level - 1),
             deuterium: 0.0,
         },
-        
-        // ⚡ ÉNERGIE (multiplicateur 1.5)
+
+        // ÉNERGIE (multiplicateur 1.5)
         "solar_plant" => Cost {
             metal: 75.0 * 1.5f64.powi(level - 1),
             crystal: 30.0 * 1.5f64.powi(level - 1),
             deuterium: 0.0,
         },
-        
-        // 🏗️ INFRASTRUCTURES (multiplicateur 2.0)
+
+        // INFRASTRUCTURES (multiplicateur 2.0)
         "shipyard" => Cost {
             metal: 400.0 * 1.5f64.powi(level - 1),
             crystal: 200.0 * 1.5f64.powi(level - 1),
@@ -388,7 +388,7 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
             deuterium: 0.0,
         },
 
-        // 🔬 TECHNOLOGIES DE BASE (multiplicateur 2.0)
+        // TECHNOLOGIES DE BASE (multiplicateur 2.0)
         "energy_tech" => Cost {
             metal: 0.0,
             crystal: 800.0 * 2.0f64.powi(level - 1),
@@ -410,7 +410,7 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
             deuterium: 0.0,
         },
 
-        // 🔬 TECHNOLOGIES AVANCÉES - EXPANSION 2.0 (multiplicateur 2.0)
+        // TECHNOLOGIES AVANCÉES - EXPANSION 2.0 (multiplicateur 2.0)
         "ion_tech" => Cost {
             metal: 1000.0 * 2.0f64.powi(level - 1),
             crystal: 300.0 * 2.0f64.powi(level - 1),
@@ -461,52 +461,76 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
             crystal: 1000.0 * 2.0f64.powi(level - 1),
             deuterium: 1000.0 * 2.0f64.powi(level - 1),
         },
-        
+
         _ => Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 },
     };
 
     base_cost
 }
 
-/// Temps de recherche avec bonus du laboratoire de recherche.
-/// Réduction : -5% par niveau de lab, max -50%.
-pub fn get_research_time(metal_cost: f64, crystal_cost: f64, research_lab_level: i32, config: &ServerConfigCache) -> i64 {
-    let total_resources = metal_cost + crystal_cost;
-    let base_time = (total_resources / 2500.0 * 3600.0) as i64;
+/// Temps de recherche basé sur le niveau cible, avec bonus du laboratoire.
+/// Formule : BASE_TECH_TIME * level^TECH_EXPONENT * category_factor
+/// Réduction : -7% par niveau de labo, max -55%.
+pub fn get_research_time(tech_key: &str, level: i32, lab_level: i32, config: &ServerConfigCache) -> i64 {
+    const BASE_TECH_TIME: f64 = 2400.0;   // 40 min à L1
+    const TECH_EXPONENT: f64 = 1.50;
+    const LAB_REDUCTION: f64 = 0.07;
+    const MAX_REDUCTION: f64 = 0.55;
 
-    // -5% par niveau de labo, plafonné à -50%
-    let time_reduction = 1.0 - (research_lab_level as f64 * 0.05).min(0.5);
-    let final_time = (base_time as f64 * time_reduction) as i64;
+    let category_factor: f64 = match tech_key {
+        "graviton_tech" | "astrophysics" => 2.5,
+        "plasma_tech" | "hyperspace_tech" | "computer_tech" | "espionage_tech" => 1.5,
+        _ => 1.0,
+    };
 
-    std::cmp::max(10, (final_time as f64 / config.research_speed) as i64)
+    let base = BASE_TECH_TIME * (level as f64).powf(TECH_EXPONENT) * category_factor;
+    let reduction_factor = 1.0 - (lab_level as f64 * LAB_REDUCTION).min(MAX_REDUCTION);
+    let final_time = base * reduction_factor / config.research_speed;
+    std::cmp::max(10, final_time as i64)
 }
 
-// ⏱️ TEMPS DE CONSTRUCTION PROGRESSIF
-pub fn get_build_time(metal_cost: f64, crystal_cost: f64, facility_level: i32, config: &ServerConfigCache) -> i64 {
-    let total_resources = metal_cost + crystal_cost;
-    let base_time = (total_resources / 2500.0 * 3600.0) as i64;
+/// Détermine le category_factor d'un bâtiment pour get_build_time.
+/// Mines et énergie : 1.0 — Infrastructures : 1.8
+pub fn building_category_factor(building_key: &str) -> f64 {
+    match building_key {
+        "metal_mine" | "crystal_mine" | "deuterium_mine" | "solar_plant" | "fusion_plant" => 1.0,
+        _ => 1.8, // shipyard, research_lab, hangar, resource_storage, nanite_factory...
+    }
+}
 
-    // Réduction selon niveau du chantier (max -50%)
-    let time_reduction = 1.0 - (facility_level as f64 * 0.05).min(0.5);
-    let final_time = (base_time as f64 * time_reduction) as i64;
+// TEMPS DE CONSTRUCTION PROGRESSIF
+/// Formule : BASE_TIME * level^EXPONENT * category_factor
+/// Réduction : -8% par niveau de chantier, max -60%.
+pub fn get_build_time(level: i32, facility_level: i32, category_factor: f64, config: &ServerConfigCache) -> i64 {
+    const BASE_TIME: f64 = 1800.0;   // 30 min à L1
+    const EXPONENT: f64 = 1.40;
+    const REDUCTION_PER_LEVEL: f64 = 0.08;
+    const MAX_REDUCTION: f64 = 0.60;
 
-    std::cmp::max(10, (final_time as f64 / config.building_speed) as i64)
+    let base = BASE_TIME * (level as f64).powf(EXPONENT) * category_factor;
+    let reduction_factor = 1.0 - (facility_level as f64 * REDUCTION_PER_LEVEL).min(MAX_REDUCTION);
+    let final_time = base * reduction_factor / config.building_speed;
+    std::cmp::max(10, final_time as i64)
 }
 
 /// Temps de production d'un vaisseau/défense, basé sur son coût réel.
-/// Formule : (metal + crystal) / (2500 × shipyard_factor) × 3600 / ship_build_speed
-/// Le niveau du chantier spatial réduit le temps (×0.5 par niveau, non plafonné).
+/// Formule : (metal + crystal) / (BUILD_RATE x shipyard_factor) * 3600 / ship_build_speed
+/// BUILD_RATE x5 par rapport à l'ancienne formule pour éviter des temps absurdes.
 pub fn get_ship_production_time(ship_type: &str, qty: i32, shipyard_level: i32, config: &ServerConfigCache) -> i64 {
+    const BUILD_RATE: f64 = 12500.0;
+    const SHIPYARD_BONUS: f64 = 0.15;
+    const MIN_SECS_PER_UNIT: i64 = 5;
+
     let (metal, crystal) = get_unit_cost(ship_type, config);
     let cost_per_unit = metal + crystal;
-    // Bonus chantier : chaque niveau réduit le temps (formule continue, non plafonnée)
-    let shipyard_factor = 1.0 + shipyard_level as f64 * 0.5;
-    let base_secs_per_unit = cost_per_unit / (2500.0 * shipyard_factor) * 3600.0;
-    let total_secs = base_secs_per_unit * qty as f64;
-    std::cmp::max(5 * qty as i64, (total_secs / config.ship_build_speed) as i64)
+    let effective_rate = BUILD_RATE * (1.0 + shipyard_level as f64 * SHIPYARD_BONUS);
+    let secs_per_unit = ((cost_per_unit / effective_rate) * 3600.0) as i64;
+    let secs_per_unit = secs_per_unit.max(MIN_SECS_PER_UNIT);
+    let total_secs = secs_per_unit * qty as i64;
+    std::cmp::max(MIN_SECS_PER_UNIT * qty as i64, (total_secs as f64 / config.ship_build_speed) as i64)
 }
 
-// 📦 CAPACITÉS
+// CAPACITÉS
 pub fn get_fleet_capacity(hangar_level: i32, config: &ServerConfigCache) -> i32 {
     let base = config.get_config("hangar_capacity_base", 500.0) as i32;
     let per_level = config.get_config("hangar_capacity_per_level", 500.0) as i32;
@@ -747,7 +771,7 @@ pub fn resolve_pvp(
         ("plasma_turret", def_plasmas, apply_techs(get_unit_base_stats("plasma_turret", config), &def_techs)),
     ];
 
-    log.push("⚔️ Début de l'engagement orbital".to_string());
+    log.push("Début de l'engagement orbital".to_string());
 
     for round in 1..=6 {
         let mut att_dmg = 0.0;
@@ -802,7 +826,7 @@ pub fn resolve_pvp(
                  else if f_att_h+f_att_c <= 0 { "defender".into() }
                  else { "draw".into() };
 
-    // 💰 BUTIN (configurable % des ressources, limité par la capacité de cargo des vaisseaux survivants)
+    // BUTIN (configurable % des ressources, limité par la capacité de cargo des vaisseaux survivants)
     let loot = if winner == "attacker" {
         // Calculer la capacité de cargo totale des vaisseaux survivants
         // Les transporteurs ne participent pas au combat, donc ils survivent tous
@@ -822,7 +846,7 @@ pub fn resolve_pvp(
 
         // Si le butin potentiel dépasse la capacité, le réduire proportionnellement
         let actual_loot_ratio = if total_potential_loot > total_cargo_capacity && total_cargo_capacity > 0.0 {
-            log.push(format!("⚠️ Cargo insuffisant ! Capacité: {:.0} / Butin disponible: {:.0}", total_cargo_capacity, total_potential_loot));
+            log.push(format!("Cargo insuffisant ! Capacité: {:.0} / Butin disponible: {:.0}", total_cargo_capacity, total_potential_loot));
             total_cargo_capacity / total_potential_loot
         } else {
             1.0
@@ -835,13 +859,13 @@ pub fn resolve_pvp(
         };
 
         if final_loot.metal > 0.0 || final_loot.crystal > 0.0 || final_loot.deuterium > 0.0 {
-            log.push(format!("💰 Butin récupéré : {:.0}M / {:.0}C / {:.0}D", final_loot.metal, final_loot.crystal, final_loot.deuterium));
+            log.push(format!("Butin récupéré : {:.0}M / {:.0}C / {:.0}D", final_loot.metal, final_loot.crystal, final_loot.deuterium));
         }
 
         final_loot
     } else { Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 } };
 
-    // 🛠️ CHAMP DE DÉBRIS (configurable % des pertes)
+    // CHAMP DE DÉBRIS (configurable % des pertes)
     let att_h_lost = att_hunters - f_att_h;
     let att_c_lost = att_cruisers - f_att_c;
     let def_h_lost = def_hunters - f_def_h;
@@ -858,7 +882,7 @@ pub fn resolve_pvp(
     let debris_c = total_crystal_lost * debris_percentage;
 
     if debris_m > 0.0 {
-        log.push(format!("🛠️ Débris : {:.0}M / {:.0}C", debris_m, debris_c));
+        log.push(format!("Débris : {:.0}M / {:.0}C", debris_m, debris_c));
     }
 
     PvpReport {
@@ -907,7 +931,7 @@ pub fn calculate_flight_time(dist: f64, flight_speed_multiplier: f64) -> i64 {
 }
 
 
-// 📊 CALCUL DES POINTS D'UNE PLANÈTE (utilisé par leaderboard et profil)
+// CALCUL DES POINTS D'UNE PLANÈTE (utilisé par leaderboard et profil)
 // Uses relational tables (planet_buildings, planet_technologies, planet_ships, planet_defenses)
 pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &sea_orm::DatabaseConnection, config: &ServerConfigCache) -> (i32, i32, i32) {
     use crate::tech_tree;
@@ -1062,7 +1086,7 @@ pub fn get_rank_badge(total_points: i32) -> &'static str {
 }
 
 // ========================
-// 🎰 SYSTÈME DE SLOTS DE PRODUCTION
+// SYSTÈME DE SLOTS DE PRODUCTION
 // ========================
 
 /// Compte le nombre de slots assignés à un type de ressource
@@ -1143,7 +1167,7 @@ pub fn calculate_resources_with_slots(
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
 
-    // 🔥 Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
+    // Bonus Plasma Tech (+1% production Métal/Cristal par niveau)
     let plasma_bonus_factor = config.get_config("tech_bonus_plasma_prod", 0.01);
     let plasma_bonus = 1.0 + (plasma_tech_level as f64 * plasma_bonus_factor);
 
