@@ -371,6 +371,13 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
           const notifPayload = data.payload as { notif_type: string; title: string; message: string };
           // Dispatcher un custom event pour que NotificationCenter puisse l'ajouter
           window.dispatchEvent(new CustomEvent('new-notification', { detail: notifPayload }));
+          // Toast spécifique pour les débris (alerte immédiate)
+          if (notifPayload.notif_type === 'debris') {
+            toast.info(`♻️ ${notifPayload.title}`, {
+              description: notifPayload.message,
+              duration: 8000,
+            });
+          }
           break;
         }
 

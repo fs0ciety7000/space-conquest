@@ -1120,6 +1120,16 @@ async fn resolve_attack_mission(
         };
         ws.push_notification(att_user.id, "combat", &att_title, &att_msg, att_report_id).await;
 
+        // Notifier de la création d'un champ de débris (si débris > 0)
+        if result.debris.0 > 0.0 || result.debris.1 > 0.0 {
+            let debris_msg = format!(
+                "Des débris se trouvent en [{}:{}:{}] — Métal: {} / Cristal: {}",
+                def_planet.galaxy, def_planet.system, def_planet.position,
+                result.debris.0 as i64, result.debris.1 as i64
+            );
+            ws.push_notification(att_user.id, "debris", "Champ de débris créé", &debris_msg, att_report_id).await;
+        }
+
         // Notifier en cas de conquête
         if planet_conquered {
             // Notifier le défenseur de la perte de sa planète

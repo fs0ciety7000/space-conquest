@@ -23,6 +23,7 @@ import BeginnerProtectionBadge from './BeginnerProtectionBadge';
 import Galaxy3DView from './galaxy3d/Galaxy3DView';
 import RadialMenu from './RadialMenu';
 import { calculateDistance } from '@/utils/galaxyCalculations';
+import { getShipCount } from '@/utils/techTreeCompat';
 // --- INTERFACES ---
 
 interface GalaxySlot {
@@ -181,7 +182,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
 
     const handleRecycle = async (slot: GalaxySlot) => {
         const token = localStorage.getItem('token');
-        const availableRecyclers = planet.ships?.recycler ?? 0;
+        const availableRecyclers = getShipCount(planet, 'recycler');
 
         if (availableRecyclers === 0) {
             toast.error("Aucun recycleur disponible", {
