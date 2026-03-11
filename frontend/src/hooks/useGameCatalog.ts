@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { API_URL } from '@/config/api'
+import { apiUrl } from '@/config/api'
 
 export interface ShipTypeCatalog {
   id: number
@@ -73,9 +73,9 @@ async function fetchCatalog(): Promise<GameCatalog> {
   }
 
   const [ships, buildings, defenses] = await Promise.all([
-    fetch(`${API_URL}/game/ship-types`).then(r => r.json()),
-    fetch(`${API_URL}/game/building-types`).then(r => r.json()),
-    fetch(`${API_URL}/game/defense-types`).then(r => r.json()),
+    fetch(apiUrl('/game/ship-types')).then(r => r.json()),
+    fetch(apiUrl('/game/building-types')).then(r => r.json()),
+    fetch(apiUrl('/game/defense-types')).then(r => r.json()),
   ])
 
   catalogCache = { ships, buildings, defenses }
