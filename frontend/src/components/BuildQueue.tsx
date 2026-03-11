@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Clock, Trash2, Factory, Rocket, FlaskConical } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { formatTimeUntilMs } from '@/lib/utils';
 
 interface QueueItem {
@@ -26,7 +27,6 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
 
   const getProgress = (endTime: number) => {
     if (items.length === 0) return 0;
-    const firstItem = items[0];
     const totalDuration = endTime - (now - (endTime - now));
     const elapsed = now - (endTime - totalDuration);
     return Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
@@ -34,21 +34,21 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'building': return <Factory size={16} className="text-orange-400" />;
-      case 'tech': return <FlaskConical size={16} className="text-purple-400" />;
-      case 'ship': return <Rocket size={16} className="text-cyan-400" />;
-      case 'defense': return <Factory size={16} className="text-red-400" />;
-      default: return <Clock size={16} />;
+      case 'building': return <Factory  size={16} className="text-orange-400" />;
+      case 'tech':     return <FlaskConical size={16} className="text-purple-400" />;
+      case 'ship':     return <Rocket   size={16} className="text-cyan-400"   />;
+      case 'defense':  return <Factory  size={16} className="text-red-400"    />;
+      default:         return <Clock    size={16} />;
     }
   };
 
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'building': return 'Bâtiment';
-      case 'tech': return 'Recherche';
-      case 'ship': return 'Vaisseau';
-      case 'defense': return 'Défense';
-      default: return 'Construction';
+      case 'tech':     return 'Recherche';
+      case 'ship':     return 'Vaisseau';
+      case 'defense':  return 'Défense';
+      default:         return 'Construction';
     }
   };
 
@@ -57,14 +57,18 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
   }
 
   return (
-    <div className="bg-slate-900/50 backdrop-blur-sm border border-indigo-500/20 rounded-lg p-4 shadow-xl">
-      <h3 className="text-lg font-bold text-indigo-400 mb-4 flex items-center gap-2">
-        <Clock size={20} className="animate-pulse" />
-        FILE DE CONSTRUCTION
-        <span className="text-xs font-mono bg-indigo-950/50 px-2 py-1 rounded-full text-indigo-300">
+    <div className="bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border border-cyan-500/10 rounded-lg p-4 shadow-xl">
+      {/* Section header */}
+      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-cyan-500/10">
+        <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+        <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-2">
+          <Clock size={14} className="animate-pulse" />
+          FILE DE CONSTRUCTION
+        </span>
+        <span className="ml-auto text-xs font-mono bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full text-cyan-400">
           {items.length}
         </span>
-      </h3>
+      </div>
 
       <div className="space-y-3">
         {items.map((item, idx) => {
@@ -73,27 +77,19 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
           const timeRemaining = formatTimeUntilMs(item.endTime);
 
           return (
-            <div 
+            <div
               key={item.id}
               className={`relative overflow-hidden rounded-lg transition-all duration-300 ${
-                isActive 
-                  ? 'bg-gradient-to-r from-indigo-950/60 to-purple-950/40 border-2 border-indigo-500/50 shadow-lg shadow-indigo-900/30' 
-                  : 'bg-slate-800/40 border border-slate-700/30'
+                isActive
+                  ? 'bg-[rgba(0,245,255,0.05)] border border-cyan-500/20 shadow-lg'
+                  : 'bg-[rgba(10,5,32,0.85)] border border-cyan-500/10'
               }`}
             >
-              {/* Barre de progression pour l'item actif */}
-              {isActive && (
-                <div 
-                  className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 transition-all duration-1000 ease-linear"
-                  style={{ width: `${progress}%` }}
-                />
-              )}
-
               <div className="relative flex items-center justify-between p-3">
                 <div className="flex items-center gap-3 flex-1">
                   {/* Icône + Badge */}
                   <div className={`p-2 rounded-lg ${
-                    isActive ? 'bg-indigo-900/50' : 'bg-slate-700/30'
+                    isActive ? 'bg-cyan-500/10' : 'bg-black/30'
                   }`}>
                     {getIcon(item.type)}
                   </div>
@@ -101,30 +97,30 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
                   {/* Infos */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm truncate">
+                      <span className="font-bold text-slate-200 text-sm truncate">
                         {item.name}
                       </span>
                       {item.level && (
-                        <span className="text-xs bg-slate-700/50 px-2 py-0.5 rounded-full text-slate-300">
+                        <span className="text-xs bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full text-cyan-400">
                           Niv. {item.level}
                         </span>
                       )}
                       {item.quantity && (
-                        <span className="text-xs bg-slate-700/50 px-2 py-0.5 rounded-full text-slate-300">
+                        <span className="text-xs bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full text-cyan-400">
                           ×{item.quantity}
                         </span>
                       )}
                     </div>
 
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-slate-500">
                         {getTypeLabel(item.type)}
                       </span>
                       {isActive && (
                         <>
                           <span className="text-slate-600">•</span>
-                          <span className="text-xs text-indigo-400 font-mono animate-pulse">
-                            🔨 En construction
+                          <span className="text-xs text-cyan-400 font-mono animate-pulse">
+                            En construction
                           </span>
                         </>
                       )}
@@ -132,7 +128,7 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
                         <>
                           <span className="text-slate-600">•</span>
                           <span className="text-xs text-slate-500 font-mono">
-                            ⏳ File #{idx + 1}
+                            File #{idx + 1}
                           </span>
                         </>
                       )}
@@ -143,13 +139,13 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
                 {/* Timer + Actions */}
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className={`font-mono font-bold ${
-                      isActive ? 'text-indigo-300 text-base' : 'text-slate-400 text-sm'
+                    <div className={`font-mono font-bold tabular-nums ${
+                      isActive ? 'text-cyan-400 text-base' : 'text-slate-400 text-sm'
                     }`}>
                       {timeRemaining}
                     </div>
                     {isActive && (
-                      <div className="text-xs text-indigo-500 mt-0.5">
+                      <div className="text-xs text-cyan-500/70 mt-0.5 tabular-nums">
                         {progress.toFixed(0)}%
                       </div>
                     )}
@@ -170,11 +166,8 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
 
               {/* Barre de progression visuelle en bas */}
               {isActive && (
-                <div className="h-1 bg-slate-900/50">
-                  <div 
-                    className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-1000 ease-linear"
-                    style={{ width: `${progress}%` }}
-                  />
+                <div className="px-3 pb-3">
+                  <Progress variant="success" value={progress} />
                 </div>
               )}
             </div>
@@ -183,12 +176,12 @@ export function BuildQueue({ items, onCancel }: BuildQueueProps) {
       </div>
 
       {/* Résumé */}
-      <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
+      <div className="mt-4 pt-3 border-t border-cyan-500/10 flex items-center justify-between text-xs text-slate-400">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
           <span>Production active</span>
         </div>
-        <div>
+        <div className="font-mono tabular-nums">
           Temps total: {formatTimeUntilMs(items[items.length - 1]?.endTime || Date.now())}
         </div>
       </div>

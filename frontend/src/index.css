@@ -15,6 +15,29 @@
   --color-neon-green: var(--neon-green);
   --color-neon-red: var(--neon-red);
 
+  /* --- CYBERPUNK BACKGROUNDS --- */
+  --color-bg-void: #020008;
+  --color-bg-base: #05000f;
+  --color-bg-panel: #0a0520;
+  --color-bg-elevated: #10082e;
+  --color-bg-surface: #160b3a;
+
+  /* --- CYBERPUNK NEON ACCENTS --- */
+  --color-neon-cyan: #00f5ff;
+  --color-neon-magenta: #ff00ff;
+  --color-neon-purple: #bf00ff;
+  --color-neon-blue: #0080ff;
+  --color-neon-green: #00ff88;
+  --color-neon-orange: #ff6600;
+  --color-neon-yellow: #ffee00;
+  --color-neon-red: #ff003c;
+
+  /* --- CYBERPUNK TEXT --- */
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #475569;
+  --color-text-accent: #00f5ff;
+
   /* --- SHADCN MAPPINGS --- */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -66,7 +89,7 @@
 
 :root {
   --radius: 0.625rem;
-  
+
   /* ═══ PALETTE NÉON VIBRANTE ═══ */
   --neon-cyan: #00f5ff;
   --neon-magenta: #ff00ff;
@@ -76,6 +99,47 @@
   --neon-blue: #3b82f6;
   --neon-green: #22c55e;
   --neon-red: #ef4444;
+
+  /* ═══ CYBERPUNK BACKGROUNDS ═══ */
+  --bg-void: #020008;
+  --bg-base: #05000f;
+  --bg-panel: #0a0520;
+  --bg-elevated: #10082e;
+  --bg-surface: #160b3a;
+
+  /* ═══ CYBERPUNK NEON (précis, design system v2) ═══ */
+  --neon-cyan: #00f5ff;
+  --neon-magenta: #ff00ff;
+  --neon-purple: #bf00ff;
+  --neon-blue: #0080ff;
+  --neon-green: #00ff88;
+  --neon-orange: #ff6600;
+  --neon-yellow: #ffee00;
+  --neon-red: #ff003c;
+
+  /* ═══ CYBERPUNK DIMS & GLOWS ═══ */
+  --cyan-dim: rgba(0, 245, 255, 0.15);
+  --cyan-glow: rgba(0, 245, 255, 0.4);
+  --glow-cyan-sm: 0 0 8px rgba(0, 245, 255, 0.3);
+  --glow-cyan-md: 0 0 20px rgba(0, 245, 255, 0.4);
+  --glow-cyan-lg: 0 0 40px rgba(0, 245, 255, 0.5);
+  --glow-magenta: 0 0 20px rgba(255, 0, 255, 0.4);
+  --glow-purple: 0 0 20px rgba(191, 0, 255, 0.4);
+  --glow-red: 0 0 20px rgba(255, 0, 60, 0.5);
+  --glow-green: 0 0 20px rgba(0, 255, 136, 0.4);
+
+  /* ═══ CYBERPUNK RADIUS ═══ */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* ═══ CYBERPUNK ANIMATIONS ═══ */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --ease-snap: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   
   /* ═══ COULEURS DE RESSOURCES ═══ */
   --color-metal: #f97316;
@@ -602,6 +666,181 @@
     animation: progress-shine 2s ease-in-out infinite;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     CYBERPUNK DESIGN SYSTEM v2 — UTILITY CLASSES
+  ═══════════════════════════════════════════════════════════════════════ */
+
+  /* === CYBERPUNK CLIP-PATH === */
+  .clip-cyber-sm { clip-path: polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px); }
+  .clip-cyber-md { clip-path: polygon(12px 0%, 100% 0%, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0% 100%, 0% 12px); }
+  .clip-cyber-lg { clip-path: polygon(20px 0%, 100% 0%, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0% 100%, 0% 20px); }
+  .clip-cyber-double { clip-path: polygon(10px 0%, 100% 0%, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0% 100%, 0% 10px); }
+
+  /* === BUTTONS CYBERPUNK === */
+  .btn-cyber-primary {
+    position: relative; overflow: hidden;
+    background: linear-gradient(135deg, rgba(0, 245, 255, 0.1), rgba(0, 128, 255, 0.1));
+    border: 1px solid rgba(0, 245, 255, 0.4);
+    color: #00f5ff;
+    clip-path: polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-cyber-primary::after {
+    content: '';
+    position: absolute; inset-block: 0;
+    width: 30%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+    animation: btn-shine 2.5s ease infinite;
+  }
+  .btn-cyber-primary:hover {
+    border-color: #00f5ff;
+    box-shadow: 0 0 20px rgba(0, 245, 255, 0.4), 0 0 60px rgba(0, 245, 255, 0.15), inset 0 0 20px rgba(0, 245, 255, 0.05);
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, rgba(0, 245, 255, 0.2), rgba(0, 128, 255, 0.15));
+  }
+  .btn-cyber-primary:active { transform: translateY(0); box-shadow: 0 0 10px rgba(0, 245, 255, 0.3); }
+
+  .btn-cyber-secondary {
+    background: transparent;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    color: #94a3b8;
+    clip-path: polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-cyber-secondary:hover {
+    border-color: rgba(0, 245, 255, 0.3);
+    color: #00f5ff;
+    box-shadow: 0 0 12px rgba(0, 245, 255, 0.2);
+    transform: translateY(-1px);
+  }
+
+  .btn-cyber-danger {
+    background: rgba(255, 0, 60, 0.1);
+    border: 1px solid rgba(255, 0, 60, 0.35);
+    color: #ff6680;
+    clip-path: polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-cyber-danger:hover {
+    background: rgba(255, 0, 60, 0.2);
+    border-color: #ff003c;
+    box-shadow: 0 0 20px rgba(255, 0, 60, 0.4), inset 0 0 20px rgba(255, 0, 60, 0.05);
+    transform: translateY(-2px);
+    color: #ff003c;
+  }
+
+  .btn-cyber-success {
+    background: rgba(0, 255, 136, 0.08);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    color: #00ff88;
+    clip-path: polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-cyber-success:hover {
+    background: rgba(0, 255, 136, 0.15);
+    border-color: #00ff88;
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.35);
+    transform: translateY(-2px);
+  }
+
+  .btn-cyber-ghost {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #475569;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-cyber-ghost:hover {
+    background: rgba(0, 245, 255, 0.05);
+    border-color: rgba(0, 245, 255, 0.15);
+    color: #94a3b8;
+    transform: translateY(-1px);
+  }
+
+  /* === CYBER PANELS === */
+  .cyber-panel {
+    background: rgba(10, 5, 32, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 245, 255, 0.12);
+  }
+  .cyber-panel-elevated {
+    background: rgba(16, 8, 46, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 245, 255, 0.25);
+    box-shadow: 0 0 40px rgba(0, 245, 255, 0.08), 0 25px 50px rgba(0, 0, 0, 0.8);
+  }
+
+  /* === CYBER BADGES === */
+  .badge-cyber-cyan   { background: rgba(0,245,255,0.1); border: 1px solid rgba(0,245,255,0.3); color: #00f5ff; padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .badge-cyber-purple { background: rgba(191,0,255,0.1); border: 1px solid rgba(191,0,255,0.3); color: #bf00ff; padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .badge-cyber-red    { background: rgba(255,0,60,0.1);  border: 1px solid rgba(255,0,60,0.3);  color: #ff003c; padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .badge-cyber-green  { background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3); color: #00ff88; padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .badge-cyber-orange { background: rgba(255,102,0,0.1); border: 1px solid rgba(255,102,0,0.3); color: #ff6600; padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* === CYBER INPUT === */
+  .input-cyber {
+    background: rgba(5, 0, 15, 0.8);
+    border: 1px solid rgba(0, 245, 255, 0.12);
+    color: #e2e8f0;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    transition: all 0.2s ease;
+    width: 100%;
+  }
+  .input-cyber::placeholder { color: rgba(71, 85, 105, 0.8); }
+  .input-cyber:focus {
+    border-color: rgba(0, 245, 255, 0.5);
+    box-shadow: 0 0 0 2px rgba(0, 245, 255, 0.1), 0 0 12px rgba(0, 245, 255, 0.15);
+    outline: none;
+  }
+
+  /* === SECTION HEADER === */
+  .section-header {
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0, 245, 255, 0.1);
+    margin-bottom: 16px;
+  }
+  .section-accent {
+    width: 3px; height: 16px;
+    background: linear-gradient(to bottom, #00f5ff, rgba(0,245,255,0));
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    color: rgba(0, 245, 255, 0.7);
+  }
+
+  /* === PROGRESS BARS === */
+  .progress-cyber {
+    background: rgba(0, 245, 255, 0.05);
+    border: 1px solid rgba(0, 245, 255, 0.1);
+    border-radius: 2px;
+    height: 6px;
+    overflow: hidden;
+  }
+  .progress-cyber-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #0080ff, #00f5ff);
+    box-shadow: 0 0 8px rgba(0, 245, 255, 0.5);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+  .progress-cyber-fill-danger {
+    background: linear-gradient(90deg, #ff003c, #ff6680);
+    box-shadow: 0 0 8px rgba(255, 0, 60, 0.5);
+  }
+  .progress-cyber-fill-success {
+    background: linear-gradient(90deg, #00cc66, #00ff88);
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+  }
+  .progress-cyber-fill-energy {
+    background: linear-gradient(90deg, #cc8800, #ffee00);
+    box-shadow: 0 0 8px rgba(255, 238, 0, 0.4);
+  }
+
   /* ═══ SCROLLBAR PERSONNALISÉE ═══ */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
@@ -626,6 +865,39 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    ANIMATIONS
 ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CYBERPUNK KEYFRAMES v2
+═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes btn-shine {
+  from { transform: translateX(-150%) skewX(-20deg); }
+  to   { transform: translateX(350%) skewX(-20deg); }
+}
+
+@keyframes cyber-border-trace {
+  0%   { clip-path: inset(0 100% 100% 0); }
+  25%  { clip-path: inset(0 0 100% 0); }
+  50%  { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes neon-flicker {
+  0%, 95%, 100% { opacity: 1; }
+  96% { opacity: 0.85; }
+  97% { opacity: 1; }
+  98% { opacity: 0.9; }
+}
+
+@keyframes scan-line-move {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(100vh); }
+}
+
+@keyframes data-flow-x {
+  from { background-position: -200% center; }
+  to   { background-position: 200% center; }
+}
 
 /* Scan holographique */
 @keyframes holo-scan {

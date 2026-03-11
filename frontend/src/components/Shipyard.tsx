@@ -1,10 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Rocket, Shield, Info, Lock, CheckCircle2, XCircle, Timer,
   Hammer, Crosshair, Truck, Box, Zap, Scan, Sword, Warehouse, ShieldCheck
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { GameImage } from '@/components/ui/game-image';
@@ -48,13 +50,19 @@ interface ShipyardProps {
 
 const getShipTheme = (type: string) => {
   const themes: Record<string, any> = {
-    OFFENSIF: { color: "text-red-500", border: "border-red-500/50", gradient: "from-slate-950 to-red-950/20" },
-    LOGISTIQUE: { color: "text-emerald-400", border: "border-emerald-500/50", gradient: "from-slate-950 to-emerald-950/20" },
-    RENSEIGNEMENT: { color: "text-purple-400", border: "border-purple-500/50", gradient: "from-slate-950 to-purple-950/20" },
-    UTILITAIRE: { color: "text-amber-400", border: "border-amber-500/50", gradient: "from-slate-950 to-amber-950/20" }
+    OFFENSIF:       { color: "text-red-500",     border: "border-red-500/50",     gradient: "from-[rgba(10,5,32,0.85)] to-red-950/20"     },
+    LOGISTIQUE:     { color: "text-emerald-400",  border: "border-emerald-500/50", gradient: "from-[rgba(10,5,32,0.85)] to-emerald-950/20"  },
+    RENSEIGNEMENT:  { color: "text-purple-400",   border: "border-purple-500/50",  gradient: "from-[rgba(10,5,32,0.85)] to-purple-950/20"   },
+    UTILITAIRE:     { color: "text-amber-400",    border: "border-amber-500/50",   gradient: "from-[rgba(10,5,32,0.85)] to-amber-950/20"    }
   };
   return themes[type] || themes.OFFENSIF;
 };
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } }
+};
+const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 
 export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const [qty, setQty] = useState<Record<string, number>>({});
@@ -88,8 +96,8 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   }, [planet.id]);
 
   // --- CALCULS TECHNOLOGIQUES ---
-  const bonusAtk = 1 + ((getTechLevel(planet, 'laser_tech')) * 0.1);
-  const bonusShd = 1 + ((getTechLevel(planet, 'energy_tech')) * 0.1);
+  const bonusAtk  = 1 + ((getTechLevel(planet, 'laser_tech'))  * 0.1);
+  const bonusShd  = 1 + ((getTechLevel(planet, 'energy_tech')) * 0.1);
   const bonusHull = 1 + ((getTechLevel(planet, 'armour_tech')) * 0.1);
 
   // Calculate current fleet from dynamic ship types data
@@ -99,35 +107,28 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const isFull = currentFleet >= maxFleet;
   const remainingSpace = Math.max(0, maxFleet - currentFleet);
 
-
   // Map ship_key to icon and type
   const getShipIcon = (ship_key: string) => {
     const iconMap: Record<string, any> = {
       light_hunter: Crosshair,
       heavy_hunter: Scan,
-      cruiser: Shield,
-      battleship: ShieldCheck,
-      bomber: Zap,
-      destroyer: Sword,
-      transporter: Truck,
-      colony_ship: Rocket,
-      recycler: Hammer,
-      spy_probe: Info,
-      deathstar: ShieldCheck, // Use ShieldCheck for ultimate ship
+      cruiser:      Shield,
+      battleship:   ShieldCheck,
+      bomber:       Zap,
+      destroyer:    Sword,
+      transporter:  Truck,
+      colony_ship:  Rocket,
+      recycler:     Hammer,
+      spy_probe:    Info,
+      deathstar:    ShieldCheck,
     };
     return iconMap[ship_key] || Rocket;
   };
 
   const getShipCategory = (ship_key: string): string => {
-    if (['light_hunter', 'heavy_hunter', 'cruiser', 'battleship', 'bomber', 'destroyer'].includes(ship_key)) {
-      return 'OFFENSIF';
-    }
-    if (['transporter', 'colony_ship'].includes(ship_key)) {
-      return 'LOGISTIQUE';
-    }
-    if (['spy_probe'].includes(ship_key)) {
-      return 'RENSEIGNEMENT';
-    }
+    if (['light_hunter', 'heavy_hunter', 'cruiser', 'battleship', 'bomber', 'destroyer'].includes(ship_key)) return 'OFFENSIF';
+    if (['transporter', 'colony_ship'].includes(ship_key)) return 'LOGISTIQUE';
+    if (['spy_probe'].includes(ship_key)) return 'RENSEIGNEMENT';
     return 'UTILITAIRE';
   };
 
@@ -135,14 +136,14 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
     const classMap: Record<string, string> = {
       light_hunter: 'Intercepteur',
       heavy_hunter: 'Chasseur Lourd',
-      cruiser: 'Frégate Lourde',
-      battleship: 'Vaisseau de Ligne',
-      bomber: 'Bombardier',
-      destroyer: 'Destroyer',
-      transporter: 'Cargo Standard',
-      colony_ship: 'Module Arche',
-      recycler: 'Collecteur',
-      spy_probe: 'Drone Furtif',
+      cruiser:      'Frégate Lourde',
+      battleship:   'Vaisseau de Ligne',
+      bomber:       'Bombardier',
+      destroyer:    'Destroyer',
+      transporter:  'Cargo Standard',
+      colony_ship:  'Module Arche',
+      recycler:     'Collecteur',
+      spy_probe:    'Drone Furtif',
     };
     return classMap[ship_key] || 'Vaisseau';
   };
@@ -194,9 +195,9 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      
+
       {/* Jauge Hangar */}
-      <Card className="bg-slate-950 border border-white/10 relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
+      <Card className="bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px] relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-fade-in">
          <div className="absolute inset-0 bg-gradient-to-r from-orange-900/10 to-transparent"></div>
          <div className="absolute top-0 inset-x-0 h-px bg-orange-500/20 opacity-50 hover:opacity-100 transition-all duration-300 animate-shine"></div>
          <CardContent className="p-4 flex items-center justify-between relative z-10">
@@ -205,42 +206,50 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
                     <Warehouse size={24} />
                 </div>
                 <div>
-                    <h3 className="text-sm font-black uppercase text-white tracking-widest">Capacité Hangar</h3>
+                    <h3 className="text-sm font-black uppercase text-slate-200 tracking-widest">Capacité Hangar</h3>
                     <p className="text-xs text-slate-400">Niveau {getBuildingLevel(planet, 'hangar')} ({maxFleet} slots)</p>
                 </div>
             </div>
             <div className="flex-1 mx-8">
                 <div className="flex justify-between text-[10px] font-bold uppercase mb-1">
                     <span className={isFull ? "text-red-500 animate-pulse" : "text-slate-400"}>{isFull ? "SATURATION" : "Occupation"}</span>
-                    <span className="text-white">{currentFleet.toLocaleString()} <span className="text-slate-500">/ {maxFleet.toLocaleString()}</span></span>
+                    <span className="text-slate-200">{currentFleet.toLocaleString()} <span className="text-slate-500">/ {maxFleet.toLocaleString()}</span></span>
                 </div>
-                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <div className={`h-full transition-all duration-1000 ${isFull ? 'bg-red-500 animate-pulse' : 'bg-orange-500'}`} style={{ width: `${capacityPercent}%` }}></div>
-                </div>
+                <Progress variant={isFull ? "danger" : "metal"} value={capacityPercent} />
             </div>
          </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      {/* Section header */}
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+        <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+        <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">VAISSEAUX DISPONIBLES</span>
+      </div>
+
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+      >
       {shipTypes.map((ship) => {
         const shipIcon = getShipIcon(ship.ship_key);
         const shipCategory = getShipCategory(ship.ship_key);
         const shipClass = getShipClass(ship.ship_key);
 
-        // Check if requirements are met
         const locked = ship.requirements.some(req => !req.met);
-
         const theme = getShipTheme(shipCategory);
         const canAfford = planet.metal_amount >= ship.cost_metal && planet.crystal_amount >= ship.cost_crystal;
 
-        const maxMetal = ship.cost_metal > 0 ? Math.floor(planet.metal_amount / ship.cost_metal) : Infinity;
-        const maxCrystal = ship.cost_crystal > 0 ? Math.floor(planet.crystal_amount / ship.cost_crystal) : Infinity;
+        const maxMetal    = ship.cost_metal   > 0 ? Math.floor(planet.metal_amount   / ship.cost_metal)   : Infinity;
+        const maxCrystal  = ship.cost_crystal > 0 ? Math.floor(planet.crystal_amount / ship.cost_crystal) : Infinity;
         const maxBuildable = Math.min(maxMetal, maxCrystal, remainingSpace);
 
         const ShipIcon = shipIcon;
 
         return (
-          <Card key={ship.id} className={`relative overflow-hidden border-t-4 ${locked ? 'border-slate-800 bg-black/60' : `${theme.border} bg-gradient-to-b ${theme.gradient}`} shadow-2xl group transition-all duration-500 hover:-translate-y-2 hover:shadow-3xl hover-scale card-depth card-depth-hover animate-slide-up`}>
+          <motion.div key={ship.id} variants={item}>
+          <Card className={`relative overflow-hidden border-t-4 h-full ${locked ? 'border-cyan-500/10 bg-[rgba(10,5,32,0.85)] opacity-50 cursor-not-allowed' : `${theme.border} bg-gradient-to-b ${theme.gradient}`} shadow-2xl group transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:shadow-[0_0_15px_rgba(0,245,255,0.1)] backdrop-blur-[12px] card-depth card-depth-hover animate-slide-up`}>
             {locked && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center p-6 text-center border border-red-900/30">
                     <div className="bg-red-950/30 p-3 rounded-full border border-red-900 mb-4 animate-pulse"><Lock size={24} className="text-red-500" /></div>
@@ -273,7 +282,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
                    fallbackIcon={<ShipIcon className={`${theme.color} w-20 h-20 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2`} />}
                    loading="lazy"
                  />
-                 
+
                  {/* Holographic Assembly Overlay */}
                  {buildQueue.some(q => q.item_key === ship.ship_key && q.category === 'ships') && (() => {
                      const buildingItem = buildQueue.find(q => q.item_key === ship.ship_key && q.category === 'ships');
@@ -281,14 +290,14 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
                          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-cyan-950/40 backdrop-blur-[2px]">
                             {/* Scanning beam animation */}
                             <div className="absolute top-0 inset-x-0 h-1 bg-cyan-400/80 shadow-[0_0_15px_rgba(34,211,238,1)] animate-scan"></div>
-                            
+
                             {/* Grid background */}
                             <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.1)_1px,transparent_1px)] bg-[size:10px_10px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,black_40%,transparent_100%)]"></div>
-                            
+
                             <div className="relative p-3 rounded-full border border-cyan-500/50 bg-black/50 shadow-[0_0_30px_rgba(34,211,238,0.2)] mb-2 animate-pulse">
                                <Hammer size={24} className="text-cyan-400" />
                             </div>
-                            
+
                             <div className="text-center relative z-10">
                                 <span className="text-[10px] uppercase font-black tracking-widest text-cyan-400 bg-black/60 px-2 py-0.5 rounded border border-cyan-500/30">
                                   ASSEMBLAGE: {buildingItem.quantity}
@@ -309,79 +318,96 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
                    </div>
                    <div>
                       <div className={`text-[9px] font-black uppercase tracking-[0.2em] ${theme.color} mb-1 flex items-center gap-1`}><Zap size={10} /> {shipCategory}</div>
-                      <h3 className="text-lg font-black uppercase text-white leading-none">{ship.display_name}</h3>
+                      <h3 className="text-lg font-black uppercase text-slate-200 leading-none">{ship.display_name}</h3>
                       <p className="text-[10px] text-slate-500 font-mono mt-0.5 tracking-wider">CLASSE: {shipClass}</p>
                    </div>
                 </div>
-                <div className="text-right bg-black/30 px-2 py-1 rounded border border-white/5">
-                    <span className="text-xl font-mono font-black text-white">{ship.current_count.toLocaleString()}</span>
+                <div className="text-right bg-black/30 px-2 py-1 rounded border border-cyan-500/10">
+                    <span className="text-xl font-mono font-black text-slate-200">{ship.current_count.toLocaleString()}</span>
                     <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest">En Stock</p>
                 </div>
               </div>
 
               {/* STATS DE COMBAT RÉELLES */}
               <div className="grid grid-cols-4 gap-1.5 mb-4">
-                 <StatBox icon={Sword} label="ATK" value={Math.floor(ship.attack * bonusAtk)} color="text-red-400" />
-                 <StatBox icon={Shield} label="SHD" value={Math.floor(ship.shield * bonusShd)} color="text-cyan-400" />
-                 <StatBox icon={ShieldCheck} label="HULL" value={Math.floor(ship.hull * bonusHull)} color="text-emerald-400" />
-                 <StatBox icon={Box} label="CAP" value={ship.cargo_capacity} color="text-amber-400" />
+                 <StatBox icon={Sword}       label="ATK"  value={Math.floor(ship.attack  * bonusAtk)}  color="text-red-400"     />
+                 <StatBox icon={Shield}      label="SHD"  value={Math.floor(ship.shield  * bonusShd)}  color="text-cyan-400"    />
+                 <StatBox icon={ShieldCheck} label="HULL" value={Math.floor(ship.hull    * bonusHull)} color="text-emerald-400" />
+                 <StatBox icon={Box}         label="CAP"  value={ship.cargo_capacity}                  color="text-amber-400"   />
               </div>
 
-{/* Coûts dynamiques selon quantité */}
-<div className="space-y-2 mb-3">
-  <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${planet.metal_amount >= ship.cost_metal * (qty[ship.ship_key] || 1) ? 'border-white/5' : 'border-red-900/50'}`}>
-     <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
-       <Box size={10} /> Métal
-     </span>
-     <div className="flex flex-col items-end">
-       <span className={`text-sm font-mono font-black ${planet.metal_amount >= ship.cost_metal * (qty[ship.ship_key] || 1) ? 'text-white' : 'text-red-500'}`}>
-         {(ship.cost_metal * (qty[ship.ship_key] || 1)).toLocaleString()}
-       </span>
-       {(qty[ship.ship_key] || 0) > 1 && (
-         <span className="text-[10px] text-slate-400 font-mono font-bold">
-           {ship.cost_metal.toLocaleString()} × {qty[ship.ship_key]}
-         </span>
-       )}
-     </div>
-  </div>
-  <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${planet.crystal_amount >= ship.cost_crystal * (qty[ship.ship_key] || 1) ? 'border-white/5' : 'border-red-900/50'}`}>
-     <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
-       <Box size={10} /> Cristal
-     </span>
-     <div className="flex flex-col items-end">
-       <span className={`text-sm font-mono font-black ${planet.crystal_amount >= ship.cost_crystal * (qty[ship.ship_key] || 1) ? 'text-white' : 'text-red-500'}`}>
-         {(ship.cost_crystal * (qty[ship.ship_key] || 1)).toLocaleString()}
-       </span>
-       {(qty[ship.ship_key] || 0) > 1 && (
-         <span className="text-[10px] text-slate-400 font-mono font-bold">
-           {ship.cost_crystal.toLocaleString()} × {qty[ship.ship_key]}
-         </span>
-       )}
-     </div>
-  </div>
-  {/* Temps de production */}
-  {(qty[ship.ship_key] || 0) > 0 && (
-    <div className="flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border border-white/5">
-      <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
-        <Timer size={10} /> Durée
-      </span>
-      <span className="text-sm font-mono font-black text-indigo-300">
-        {formatDuration(ship.build_time_seconds * (qty[ship.ship_key] || 1))}
-      </span>
-    </div>
-  )}
-</div>
-
-
+              {/* Coûts dynamiques selon quantité */}
+              <div className="space-y-2 mb-3">
+                <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${planet.metal_amount >= ship.cost_metal * (qty[ship.ship_key] || 1) ? 'border-cyan-500/10' : 'border-red-900/50'}`}>
+                   <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
+                     <Box size={10} /> Métal
+                   </span>
+                   <div className="flex flex-col items-end">
+                     <span className={`text-sm font-mono font-black tabular-nums ${planet.metal_amount >= ship.cost_metal * (qty[ship.ship_key] || 1) ? 'text-orange-400' : 'text-red-500'}`}>
+                       {(ship.cost_metal * (qty[ship.ship_key] || 1)).toLocaleString()}
+                     </span>
+                     {(qty[ship.ship_key] || 0) > 1 && (
+                       <span className="text-[10px] text-slate-400 font-mono tabular-nums font-bold">
+                         {ship.cost_metal.toLocaleString()} × {qty[ship.ship_key]}
+                       </span>
+                     )}
+                   </div>
+                </div>
+                <div className={`flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border ${planet.crystal_amount >= ship.cost_crystal * (qty[ship.ship_key] || 1) ? 'border-cyan-500/10' : 'border-red-900/50'}`}>
+                   <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
+                     <Box size={10} /> Cristal
+                   </span>
+                   <div className="flex flex-col items-end">
+                     <span className={`text-sm font-mono font-black tabular-nums ${planet.crystal_amount >= ship.cost_crystal * (qty[ship.ship_key] || 1) ? 'text-cyan-400' : 'text-red-500'}`}>
+                       {(ship.cost_crystal * (qty[ship.ship_key] || 1)).toLocaleString()}
+                     </span>
+                     {(qty[ship.ship_key] || 0) > 1 && (
+                       <span className="text-[10px] text-slate-400 font-mono tabular-nums font-bold">
+                         {ship.cost_crystal.toLocaleString()} × {qty[ship.ship_key]}
+                       </span>
+                     )}
+                   </div>
+                </div>
+                {/* Temps de production */}
+                {(qty[ship.ship_key] || 0) > 0 && (
+                  <div className="flex justify-between items-center px-2 py-1.5 rounded bg-black/40 border border-cyan-500/10">
+                    <span className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-2">
+                      <Timer size={10} /> Durée
+                    </span>
+                    <span className="text-sm font-mono font-black tabular-nums text-cyan-400">
+                      {formatDuration(ship.build_time_seconds * (qty[ship.ship_key] || 1))}
+                    </span>
+                  </div>
+                )}
+              </div>
 
               <div className="mt-auto">
                 <div className="flex justify-between text-[10px] mb-1 px-1">
                    <span className="text-slate-500 uppercase font-bold">Production</span>
-                   <button onClick={() => !locked && !isFull && setQty({...qty, [ship.ship_key]: maxBuildable})} className={`uppercase font-bold tracking-wider hover:text-white transition-colors ${maxBuildable > 0 ? 'text-indigo-400 cursor-pointer' : 'text-slate-600 cursor-not-allowed'}`}>Max: {maxBuildable.toLocaleString()}</button>
+                   <button onClick={() => !locked && !isFull && setQty({...qty, [ship.ship_key]: maxBuildable})} className={`uppercase font-bold tracking-wider hover:text-slate-200 transition-colors ${maxBuildable > 0 ? 'text-cyan-400 cursor-pointer' : 'text-slate-600 cursor-not-allowed'}`}>Max: {maxBuildable.toLocaleString()}</button>
                 </div>
                 <div className="flex gap-2">
-                    <input type="number" min="1" max={maxBuildable} value={qty[ship.ship_key] || ''} placeholder="0" className="w-20 bg-black/50 border border-white/10 rounded-lg text-center text-white text-sm font-bold focus:outline-none focus:border-indigo-500 transition-colors" onChange={(e) => setQty({...qty, [ship.ship_key]: parseInt(e.target.value)})} disabled={locked || isFull} />
-                    <Button onClick={() => buildShip(ship.ship_key)} disabled={locked || !canAfford || (qty[ship.ship_key] || 0) <= 0 || isFull} className={`flex-1 h-10 font-black uppercase text-[10px] tracking-[0.2em] transition-all rounded-lg relative overflow-hidden group/btn ${isFull ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed' : !canAfford ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed' : `bg-black hover:bg-slate-900 text-white border ${theme.border} hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]`}`}>
+                    <input
+                      type="number"
+                      min="1"
+                      max={maxBuildable}
+                      value={qty[ship.ship_key] || ''}
+                      placeholder="0"
+                      className="w-20 bg-black/50 border border-cyan-500/10 rounded-lg text-center text-slate-200 text-sm font-bold focus:outline-none focus:border-cyan-500/30 transition-colors"
+                      onChange={(e) => setQty({...qty, [ship.ship_key]: parseInt(e.target.value)})}
+                      disabled={locked || isFull}
+                    />
+                    <Button
+                      onClick={() => buildShip(ship.ship_key)}
+                      disabled={locked || !canAfford || (qty[ship.ship_key] || 0) <= 0 || isFull}
+                      className={`flex-1 h-10 font-black uppercase text-[10px] tracking-[0.2em] transition-all duration-200 rounded-lg relative overflow-hidden group/btn ${
+                        isFull
+                          ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed'
+                          : !canAfford
+                            ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed'
+                            : `bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/40 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(0,245,255,0.1)]`
+                      }`}
+                    >
                         {isFull ? (
                             <span className="relative z-10">Hangar Saturé</span>
                         ) : !canAfford ? (
@@ -394,18 +420,19 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
               </div>
             </CardContent>
           </Card>
+          </motion.div>
         );
       })}
-      </div>
+      </motion.div>
     </div>
   );
 }
 
 function StatBox({ icon: Icon, label, value, color }: { icon: any, label: string, value: number, color: string }) {
     return (
-        <div className="flex flex-col items-center bg-black/40 border border-white/5 rounded py-1.5">
+        <div className="flex flex-col items-center bg-black/40 border border-cyan-500/10 rounded py-1.5">
             <span className={`text-[7px] font-black uppercase ${color} flex items-center gap-0.5 mb-0.5`}><Icon size={8} /> {label}</span>
-            <span className="text-[10px] font-mono font-bold text-white">{value.toLocaleString()}</span>
+            <span className="text-[10px] font-mono font-bold text-slate-200">{value.toLocaleString()}</span>
         </div>
     )
 }

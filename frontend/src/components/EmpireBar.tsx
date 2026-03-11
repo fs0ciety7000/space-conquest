@@ -181,7 +181,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         {/* Logo */}
         <button
           onClick={onNavigateToOverview}
-          className="flex items-center gap-2 hover:bg-white/5 rounded px-2 py-1 transition-all group"
+          className="flex items-center gap-2 hover:bg-cyan-500/5 rounded px-2 py-1 transition-all group"
           title="Retour à l'accueil"
         >
           <img
@@ -190,7 +190,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             className="h-7 w-7 md:h-9 md:w-9 drop-shadow-[0_0_8px_rgba(0,245,255,0.4)] group-hover:drop-shadow-[0_0_14px_rgba(0,245,255,0.6)] transition-all"
           />
           <div className="hidden lg:block">
-            <p className="text-[11px] font-black text-white uppercase tracking-[0.2em] leading-none group-hover:text-cyan-300 transition-colors font-mono">
+            <p className="text-[11px] font-black text-slate-200 uppercase tracking-[0.2em] leading-none group-hover:text-cyan-400 transition-colors font-mono">
               Space Conquest
             </p>
             <div className="flex items-center gap-2 mt-0.5">
@@ -215,7 +215,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                       <span className={`w-1.5 h-1.5 rounded-full ${getConnectionStatusColor(wsStatus)}`} />
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
+                  <TooltipContent side="bottom" className="border-cyan-500/15 backdrop-blur-[12px]" style={{ background: 'rgba(10,5,32,0.95)' }}>
                     <span className="text-xs text-slate-400">WebSocket: </span>
                     <span className={`text-xs ${wsStatus === 'connected' ? 'text-emerald-400' : wsStatus === 'connecting' ? 'text-yellow-400' : 'text-slate-500'}`}>
                       {getConnectionStatusText(wsStatus)}
@@ -240,10 +240,10 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                 <span className="hud-label text-cyan-700 hidden sm:inline">
                   COORD [{planet.galaxy}:{planet.system}:{planet.position}]
                 </span>
-                <span className="font-bold text-slate-100 flex items-center gap-1.5 text-xs md:text-sm font-mono">
+                <span className="font-bold text-cyan-400 flex items-center gap-1.5 text-xs md:text-sm font-mono tabular-nums">
                   <span className="truncate max-w-[100px] sm:max-w-none">{planet.name}</span>
                   {myPlanets.length > 1 && (
-                    <span className="px-1 py-0.5 bg-cyan-900/30 text-cyan-400 rounded text-[9px] font-mono border border-cyan-700/30">
+                    <span className="px-1 py-0.5 bg-cyan-500/10 text-cyan-400 text-[9px] font-mono border border-cyan-500/20">
                       {myPlanets.length}
                     </span>
                   )}
@@ -253,12 +253,12 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             </Button>
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent className="bg-slate-950 border-slate-800 text-white shadow-2xl min-w-[280px] max-w-[400px]">
+          <DropdownMenuContent className="border border-cyan-500/15 text-slate-200 shadow-2xl min-w-[280px] max-w-[400px] backdrop-blur-[12px]" style={{ background: 'rgba(10,5,32,0.95)' }}>
             <DropdownMenuLabel className="text-xs text-slate-500 uppercase tracking-widest flex items-center justify-between px-4">
               <span>Vos Colonies</span>
-              <span className="text-cyan-500 font-mono">{myPlanets.length}</span>
+              <span className="text-cyan-400 font-mono">{myPlanets.length}</span>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator className="bg-white/10" />
+            <DropdownMenuSeparator className="bg-cyan-500/10" />
 
             {myPlanets.length > 3 && (
               <div className="px-2 py-2">
@@ -269,14 +269,15 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                     placeholder="Rechercher..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-600 transition-colors"
+                    className="w-full pl-8 pr-3 py-1.5 border border-cyan-500/15 rounded text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/40 transition-colors"
+                    style={{ background: 'rgba(16,8,46,0.95)' }}
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
               </div>
             )}
 
-            <div className="max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+            <div className="max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-cyan-500/20 scrollbar-track-transparent">
               {myPlanets.length > 0 ? (
                 (() => {
                   const filtered = myPlanets.filter(p =>
@@ -295,7 +296,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                   return galaxies.map((galaxyNum) => (
                     <div key={galaxyNum}>
                       {galaxies.length > 1 && (
-                        <div className="px-4 py-1 text-[10px] text-slate-600 uppercase tracking-widest font-bold sticky top-0 bg-slate-950/95 backdrop-blur-sm border-b border-slate-800">
+                        <div className="px-4 py-1 text-[10px] text-slate-500 uppercase tracking-widest font-bold sticky top-0 backdrop-blur-sm border-b border-cyan-500/10" style={{ background: 'rgba(10,5,32,0.97)' }}>
                           Galaxie {galaxyNum}
                         </div>
                       )}
@@ -313,12 +314,12 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                             <DropdownMenuItem
                               key={p.id}
                               onClick={() => { onSwitchPlanet(p.id); setSearchQuery(""); }}
-                              className={`flex justify-between items-center py-2 px-4 cursor-pointer focus:bg-white/10 transition-all ${
+                              className={`flex justify-between items-center py-2 px-4 cursor-pointer focus:bg-cyan-500/5 transition-all ${
                                 isHomePlanet
-                                  ? 'bg-yellow-600/20 text-yellow-300 border-l-2 border-yellow-400 hover:bg-yellow-600/30'
+                                  ? 'bg-yellow-500/10 text-yellow-300 border-l-2 border-yellow-400 hover:bg-yellow-500/15'
                                   : p.is_current
-                                    ? 'bg-cyan-900/20 text-cyan-300 border-l-2 border-cyan-500'
-                                    : 'text-slate-300 hover:bg-white/5'
+                                    ? 'bg-cyan-500/10 text-cyan-400 border-l-2 border-cyan-500/60'
+                                    : 'text-slate-300 hover:bg-cyan-500/5 hover:text-cyan-400 hover:border-l-2 hover:border-cyan-500/30'
                               }`}
                             >
                               <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -368,7 +369,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             production={prodMetal}
             max={storageCapacity}
           />
-          <div className="w-px h-5 bg-white/5" />
+          <div className="w-px h-5 bg-cyan-500/10" />
           <ResourceItem
             icon={Gem}
             value={realtimeResources?.crystal ?? planet.crystal_amount}
@@ -378,7 +379,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             production={prodCrystal}
             max={storageCapacity}
           />
-          <div className="w-px h-5 bg-white/5" />
+          <div className="w-px h-5 bg-cyan-500/10" />
           <ResourceItem
             icon={Droplets}
             value={realtimeResources?.deuterium ?? planet.deuterium_amount}
@@ -390,7 +391,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
           />
 
           {/* Crédits Syndicat */}
-          <div className="w-px h-5 bg-white/5" />
+          <div className="w-px h-5 bg-cyan-500/10" />
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -404,7 +405,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                   </span>
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
+              <TooltipContent side="bottom" className="border-cyan-500/15 backdrop-blur-[12px]" style={{ background: 'rgba(10,5,32,0.95)' }}>
                 <p className="text-yellow-400 font-bold text-xs">Crédits du Syndicat</p>
                 <p className="text-slate-400 text-xs">Obtenables via les expéditions.</p>
                 <p className="text-slate-400 text-xs">Utilisables au Marché Underground.</p>
@@ -413,7 +414,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
           </TooltipProvider>
 
           {/* Énergie */}
-          <div className="w-px h-5 bg-white/5" />
+          <div className="w-px h-5 bg-cyan-500/10" />
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -430,7 +431,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                       {energyRatio}%
                     </span>
                   </div>
-                  <div className="h-0.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-0.5 w-full bg-cyan-500/10 rounded-full overflow-hidden">
                     <div
                       className="h-full transition-all duration-500"
                       style={{ width: `${Math.min(energyRatio, 100)}%`, background: energyColor }}
@@ -438,7 +439,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                   </div>
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
+              <TooltipContent side="bottom" className="border-cyan-500/15 backdrop-blur-[12px]" style={{ background: 'rgba(10,5,32,0.95)' }}>
                 <div className="text-xs space-y-1.5">
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-400">Production</span>
@@ -448,7 +449,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
                     <span className="text-slate-400">Consommation</span>
                     <span className="text-red-400 font-mono font-bold">-{energyConsumption.toLocaleString()}</span>
                   </div>
-                  <div className="border-t border-white/10 pt-1.5 flex justify-between gap-4">
+                  <div className="border-t border-cyan-500/10 pt-1.5 flex justify-between gap-4">
                     <span className="text-slate-400">Ratio</span>
                     <span className="font-mono font-bold" style={{ color: energyColor }}>
                       {energyRatio}%{energyRatio < 100 && ' ⚠'}
@@ -466,20 +467,20 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
         {/* Ressources Mobile compact */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="lg:hidden flex items-center gap-1.5 px-2 py-1.5 hover:bg-white/5 rounded transition-all">
+            <Button variant="ghost" className="lg:hidden flex items-center gap-1.5 px-2 py-1.5 hover:bg-cyan-500/5 rounded transition-all">
               <Stone size={14} className="text-orange-400" />
               <span className="text-xs font-mono text-orange-300">{formatCompact(planet.metal_amount)}</span>
               <ChevronDown size={11} className="text-slate-500" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="bg-slate-950 border-slate-800 text-white shadow-2xl min-w-[200px]" align="end">
+          <DropdownMenuContent className="border border-cyan-500/15 text-slate-200 shadow-2xl min-w-[200px] backdrop-blur-[12px]" style={{ background: 'rgba(10,5,32,0.95)' }} align="end">
             <DropdownMenuLabel className="text-xs text-slate-500 uppercase">Ressources</DropdownMenuLabel>
-            <DropdownMenuSeparator className="bg-white/10" />
+            <DropdownMenuSeparator className="bg-cyan-500/10" />
             <div className="p-2 space-y-2">
               <MobileResource icon={Stone} label="Métal" value={planet.metal_amount} prod={prodMetal} iconColor="text-orange-400" valueColor="text-orange-300" />
               <MobileResource icon={Gem} label="Cristal" value={planet.crystal_amount} prod={prodCrystal} iconColor="text-cyan-400" valueColor="text-cyan-300" />
               <MobileResource icon={Droplets} label="Deutérium" value={planet.deuterium_amount} prod={prodDeut} iconColor="text-emerald-400" valueColor="text-emerald-300" />
-              <div className="pt-2 border-t border-white/10">
+              <div className="pt-2 border-t border-cyan-500/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Zap size={13} style={{ color: energyColor }} />
@@ -511,7 +512,7 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
           {unreadMessages > 0 && (
             <span className="absolute -top-1 -right-1 flex items-center justify-center">
               <span className="animate-ping absolute h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center border border-slate-950 leading-none">
+              <span className="relative bg-red-500 text-slate-200 text-[9px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center border border-cyan-500/10 leading-none">
                 {unreadMessages > 9 ? '9+' : unreadMessages}
               </span>
             </span>
@@ -543,23 +544,23 @@ function ResourceItem({ icon: Icon, value, label, iconColor, hudClass, productio
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-2 group cursor-help px-2.5 py-1.5 rounded transition-all hover:-translate-y-0.5 hover:bg-white/5">
+          <div className="flex items-center gap-2 group cursor-help px-2.5 py-1.5 rounded transition-all hover:-translate-y-0.5 hover:bg-cyan-500/5">
             <Icon
               size={15}
               className={`${iconColor} transition-transform group-hover:scale-110 shrink-0 ${isNearFull ? 'animate-pulse' : ''}`}
             />
-            <span className={`${hudClass} text-sm min-w-[52px] text-right ${isNearFull ? '!text-yellow-400' : ''}`}>
+            <span className={`${hudClass} text-sm min-w-[52px] text-right font-mono tabular-nums ${isNearFull ? '!text-yellow-400' : ''}`}>
               {format(value)}
             </span>
           </div>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="bg-slate-900 border-white/10">
+        <TooltipContent side="bottom" className="border-cyan-500/15 backdrop-blur-[12px]" style={{ background: 'rgba(10,5,32,0.95)' }}>
           <div className="text-xs space-y-1.5">
             <p className="text-slate-400 hud-label">{label}</p>
             <p className="text-emerald-400 font-mono font-bold">+{format(production)}/h</p>
             {max && (
               <>
-                <div className="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                <div className="w-full bg-cyan-500/10 rounded-full h-1 overflow-hidden">
                   <div
                     className={`h-full transition-all ${percentage >= 90 ? 'bg-yellow-400' : percentage >= 75 ? 'bg-orange-400' : 'bg-emerald-500'}`}
                     style={{ width: `${Math.min(percentage, 100)}%` }}

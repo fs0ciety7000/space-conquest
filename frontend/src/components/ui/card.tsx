@@ -1,86 +1,103 @@
 import * as React from "react"
+import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
-interface CardProps extends React.ComponentProps<"div"> {
-  variant?: "default" | "glass" | "holo" | "glow" | "cyber";
-  glowColor?: "cyan" | "purple" | "orange" | "green" | "red" | "blue";
-}
-
-function Card({ className, variant = "default", glowColor, ...props }: CardProps) {
-  const variants = {
-    default: "bg-card border-white/10",
-    glass: "glass-card",
-    holo: "holo-card",
-    glow: "glass-card hover:glow-cyan",
-    cyber: "cyber-border glass-card",
-  };
-
-  const glowColors = {
-    cyan: "hover:border-cyan-500/50 hover:shadow-[0_0_30px_rgba(0,245,255,0.15)]",
-    purple: "hover:border-purple-500/50 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)]",
-    orange: "hover:border-orange-500/50 hover:shadow-[0_0_30px_rgba(249,115,22,0.15)]",
-    green: "hover:border-emerald-500/50 hover:shadow-[0_0_30px_rgba(34,197,94,0.15)]",
-    red: "hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(239,68,68,0.15)]",
-    blue: "hover:border-blue-500/50 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]",
-  };
-
-  return (
+const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
-      data-slot="card"
+      ref={ref}
       className={cn(
-        "relative flex flex-col gap-6 rounded-xl border py-6 shadow-lg",
-        "transition-all duration-500 ease-out",
-        "hover:-translate-y-1",
-        variants[variant],
-        glowColor && glowColors[glowColor],
+        "relative",
+        "bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px]",
+        "border border-cyan-500/[0.12]",
+        "rounded-lg overflow-hidden",
+        "transition-all duration-200",
         className
       )}
       {...props}
     />
   )
-}
+)
+Card.displayName = "Card"
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
+// Cyberpunk card with bevel and hover glow
+const CyberCard = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & {
+    accent?: 'cyan' | 'purple' | 'red' | 'green' | 'orange'
+  }
+>(
+  ({ className, accent = 'cyan', children, ...props }, ref) => {
+    const accentMap = {
+      cyan:   { border: 'rgba(0,245,255,0.15)',   glow: 'rgba(0,245,255,0.1)',   hoverBorder: 'rgba(0,245,255,0.35)',   hoverGlow: 'rgba(0,245,255,0.15)' },
+      purple: { border: 'rgba(191,0,255,0.15)',   glow: 'rgba(191,0,255,0.08)', hoverBorder: 'rgba(191,0,255,0.35)',   hoverGlow: 'rgba(191,0,255,0.12)' },
+      red:    { border: 'rgba(255,0,60,0.15)',    glow: 'rgba(255,0,60,0.08)',  hoverBorder: 'rgba(255,0,60,0.35)',    hoverGlow: 'rgba(255,0,60,0.12)'  },
+      green:  { border: 'rgba(0,255,136,0.15)',   glow: 'rgba(0,255,136,0.08)', hoverBorder: 'rgba(0,255,136,0.35)',  hoverGlow: 'rgba(0,255,136,0.12)' },
+      orange: { border: 'rgba(255,102,0,0.15)',   glow: 'rgba(255,102,0,0.08)', hoverBorder: 'rgba(255,102,0,0.35)', hoverGlow: 'rgba(255,102,0,0.12)' },
+    }
+    const a = accentMap[accent]
+    return (
+      <motion.div
+        ref={ref}
+        whileHover={{ y: -2 }}
+        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+        className={cn(
+          "relative group",
+          "bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px]",
+          "rounded-lg overflow-hidden",
+          "transition-all duration-200",
+          "[clip-path:polygon(12px_0%,100%_0%,100%_calc(100%-12px),calc(100%-12px)_100%,0%_100%,0%_12px)]",
+          className
+        )}
+        style={{
+          border: `1px solid ${a.border}`,
+          boxShadow: `0 0 20px ${a.glow}`,
+        }}
+        {...(props as any)}
+      >
+        {children}
+      </motion.div>
+    )
+  }
+)
+CyberCard.displayName = "CyberCard"
+
+const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
-      data-slot="card-header"
+      ref={ref}
+      className={cn("flex flex-col gap-1.5 p-4 pb-3 border-b border-cyan-500/10", className)}
+      {...props}
+    />
+  )
+)
+CardHeader.displayName = "CardHeader"
+
+const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
+  ({ className, ...props }, ref) => (
+    <h3
+      ref={ref}
       className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6",
-        "has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        "text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70",
         className
       )}
       {...props}
     />
   )
-}
+)
+CardTitle.displayName = "CardTitle"
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-title"
-      className={cn(
-        "leading-none font-bold tracking-wide",
-        className
-      )}
-      {...props}
-    />
+const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
+  ({ className, ...props }, ref) => (
+    <p ref={ref} className={cn("text-xs text-slate-500", className)} {...props} />
   )
-}
+)
+CardDescription.displayName = "CardDescription"
 
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return (
+const CardAction = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
-      data-slot="card-description"
-      className={cn("text-muted-foreground text-sm", className)}
-      {...props}
-    />
-  )
-}
-
-function CardAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-action"
+      ref={ref}
       className={cn(
         "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
         className
@@ -88,34 +105,25 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
       {...props}
     />
   )
-}
+)
+CardAction.displayName = "CardAction"
 
-function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
+const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("p-4", className)} {...props} />
+  )
+)
+CardContent.displayName = "CardContent"
+
+const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
-      data-slot="card-content"
-      className={cn("px-6", className)}
+      ref={ref}
+      className={cn("flex items-center p-4 pt-3 border-t border-cyan-500/10", className)}
       {...props}
     />
   )
-}
+)
+CardFooter.displayName = "CardFooter"
 
-function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn("flex items-center px-6 [.border-t]:pt-6", className)}
-      {...props}
-    />
-  )
-}
-
-export {
-  Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
-  CardAction,
-  CardDescription,
-  CardContent,
-}
+export { Card, CyberCard, CardHeader, CardFooter, CardTitle, CardAction, CardDescription, CardContent }

@@ -38,7 +38,8 @@
       "Bash(wc -l /var/home/phantomhex/Documents/code/space-conquest/frontend/src/components/*.tsx)",
       "Bash(ls /var/home/phantomhex/Documents/code/space-conquest/frontend/src/components/ExpeditionZone*.tsx)",
       "Bash(/tmp/inventory.txt:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(ls:*)"
     ]
   }
 }

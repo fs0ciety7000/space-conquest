@@ -3,6 +3,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { apiUrl } from '@/config/api';
+import { motion } from 'framer-motion';
+
 interface SpyReport {
   success: boolean;
   tech_difference: number;
@@ -33,38 +35,38 @@ export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }
 
   // Couleurs selon le niveau de tech
   const isHighTech = report.tech_difference >= 2;
-  const statusColor = report.tech_difference >= 0 ? "text-emerald-400" : "text-amber-500";
+  const statusColor = report.tech_difference >= 0 ? "text-emerald-400" : "text-amber-400";
   const statusBorder = report.tech_difference >= 0 ? "border-emerald-500/30" : "border-amber-500/30";
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-950 border border-slate-800 text-white max-w-lg p-0 overflow-hidden sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] card-depth glass-card animate-slide-up">
-        
+      <DialogContent className="bg-[rgba(16,8,46,0.95)] backdrop-blur-[20px] border border-cyan-500/10 text-slate-200 max-w-lg p-0 overflow-hidden sm:rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] card-depth glass-card animate-slide-up">
+
         {/* HEADER */}
-        <div className="relative p-6 bg-slate-900/50 border-b border-white/5 overflow-hidden">
+        <div className="relative p-6 bg-[rgba(10,5,32,0.85)]/50 border-b border-cyan-500/10 overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10">
                 <ScanEye size={120} className="animate-spin-slow" />
             </div>
-            
+
             <div className="relative z-10 flex justify-between items-start">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
                         <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
                         <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-blue-400">Renseignement</h3>
                     </div>
-                    <h2 className="text-2xl font-black uppercase tracking-wider text-white">Rapport Sonde</h2>
+                    <h2 className="text-2xl font-black uppercase tracking-wider text-slate-200">Rapport Sonde</h2>
                     <p className="text-xs text-slate-400 mt-1 font-mono">
                         Cryptage: <span className={statusColor}>{report.tech_difference > 0 ? "DÉCHIFFRÉ" : "PARTIEL"} (Delta Tech: {report.tech_difference})</span>
                     </p>
                 </div>
-                <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-all duration-300 hover:scale-110 card-depth hover:shadow-lg text-slate-400 hover:text-white">
+                <button onClick={onClose} className="p-2 bg-cyan-500/5 hover:bg-cyan-500/10 rounded-full transition-all duration-300 hover:scale-110 card-depth hover:shadow-lg text-slate-400 hover:text-slate-200">
                     <X size={20} />
                 </button>
             </div>
         </div>
 
         <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-            
+
             {/* 1. RESSOURCES */}
             <Section title="Gisements détectés" icon={Pickaxe} isLocked={!hasResources} delay={1}>
                 {report.resources && (
@@ -76,7 +78,7 @@ export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }
                 )}
             </Section>
 
-            <Separator className="bg-white/5" />
+            <Separator className="bg-cyan-500/10" />
 
             {/* 2. FLOTTE */}
             <Section title="Flotte en Stationnement" icon={Ship} isLocked={!hasFleet} delay={2}>
@@ -85,9 +87,9 @@ export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }
                         <div className="grid grid-cols-2 gap-2">
                             {Object.entries(report.fleet).map(([key, count]) => (
                                 count > 0 && (
-                                    <div key={key} className="flex justify-between items-center p-2 bg-white/5 rounded border border-white/5 hover:-translate-y-0.5 transition-all duration-300 card-depth hover:shadow-lg">
+                                    <div key={key} className="flex justify-between items-center p-2 bg-[rgba(5,0,15,0.8)] border border-cyan-500/10 rounded hover:bg-cyan-500/5 hover:-translate-y-0.5 transition-all duration-150">
                                         <span className="text-xs uppercase text-slate-400 font-bold">{key.replace('_', ' ')}</span>
-                                        <span className="text-sm font-mono text-white">{count.toLocaleString()}</span>
+                                        <span className="text-sm font-mono text-cyan-400 tabular-nums">{count.toLocaleString()}</span>
                                     </div>
                                 )
                             ))}
@@ -98,16 +100,16 @@ export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }
                 ) : null}
             </Section>
 
-            <Separator className="bg-white/5" />
+            <Separator className="bg-cyan-500/10" />
 
             {/* 3. DÉFENSE (Full Scan uniquement) */}
             <Section title="Systèmes Défensifs" icon={ShieldAlert} isLocked={!hasDefense} delay={3}>
                 {report.defense !== undefined ? (
                      <div className="flex items-center gap-4 p-3 bg-red-950/20 border border-red-500/20 rounded-lg glass-card hover:-translate-y-0.5 transition-all duration-300 card-depth">
-                        <AlertTriangle className="text-red-500 animate-bounce-subtle" size={24} />
+                        <AlertTriangle className="text-red-400 animate-bounce-subtle" size={24} />
                         <div>
                             <div className="text-xs uppercase font-bold text-red-400">Signature Défensive</div>
-                            <div className="text-lg font-black text-white">{report.defense > 0 ? `${report.defense} Unités` : "Aucune défense"}</div>
+                            <div className="text-lg font-black text-slate-200">{report.defense > 0 ? `${report.defense} Unités` : "Aucune défense"}</div>
                         </div>
                      </div>
                 ) : null}
@@ -116,16 +118,16 @@ export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }
             {/* 4. ACTIONS DE SABOTAGE */}
             {report.success && onSabotage && (
                 <>
-                    <Separator className="bg-white/5" />
+                    <Separator className="bg-cyan-500/10" />
                     {report.tech_difference >= 1 ? (
                         <Section title="Opérations Clandestines" icon={Zap} isLocked={false} delay={4}>
                             <div className="space-y-3">
                                 {/* Avertissement */}
                                 <div className="bg-yellow-950/20 border border-yellow-500/30 rounded-lg p-3 flex items-start gap-3">
-                                    <AlertTriangle size={20} className="text-yellow-400 shrink-0 mt-0.5" />
+                                    <AlertTriangle size={20} className="text-amber-400 shrink-0 mt-0.5" />
                                     <div>
-                                        <div className="text-xs font-bold text-yellow-300 mb-1">Risques Opérationnels</div>
-                                        <div className="text-[10px] text-yellow-200/70 leading-relaxed">
+                                        <div className="text-xs font-bold text-amber-400 mb-1">Risques Opérationnels</div>
+                                        <div className="text-[10px] text-amber-400/70 leading-relaxed">
                                             Si détecté: sonde détruite + Casus Belli (droit d'attaque sans pénalité)
                                         </div>
                                     </div>
@@ -177,8 +179,8 @@ export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }
                             <div className="bg-red-950/20 border border-red-500/30 rounded-lg p-3 flex items-start gap-3">
                                 <Lock size={20} className="text-red-400 shrink-0 mt-0.5" />
                                 <div>
-                                    <div className="text-xs font-bold text-red-300 mb-1">Avantage Technologique Insuffisant</div>
-                                    <div className="text-[10px] text-red-200/70 leading-relaxed">
+                                    <div className="text-xs font-bold text-red-400 mb-1">Avantage Technologique Insuffisant</div>
+                                    <div className="text-[10px] text-red-300/70 leading-relaxed">
                                         Votre niveau d'espionnage doit être supérieur d'au moins <span className="font-bold text-red-300">1 niveau</span> à la cible pour effectuer des sabotages.
                                     </div>
                                     <div className="mt-2 text-[10px] text-slate-400">
@@ -192,8 +194,8 @@ export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }
             )}
         </div>
 
-        <div className="p-4 bg-slate-900 border-t border-white/5">
-            <Button onClick={onClose} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold uppercase tracking-widest card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+        <div className="p-4 bg-[rgba(10,5,32,0.85)] border-t border-cyan-500/10">
+            <Button onClick={onClose} className="w-full bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 hover:border-cyan-500/30 hover:bg-cyan-500/5 text-slate-200 font-bold uppercase tracking-widest card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
                 Fermer le dossier
             </Button>
         </div>
@@ -208,7 +210,7 @@ export default function SpyModal({ report, onClose, targetPlanetId, onSabotage }
 function Section({ title, icon: Icon, children, isLocked, delay }: any) {
     if (isLocked) {
         return (
-            <div className="opacity-50 grayscale select-none relative overflow-hidden rounded-xl border border-dashed border-slate-700 p-4 bg-slate-900/30">
+            <div className="opacity-50 grayscale select-none relative overflow-hidden rounded-xl border border-dashed border-cyan-500/10 p-4 bg-[rgba(10,5,32,0.85)]/30">
                 <div className="flex items-center gap-2 mb-3 opacity-50">
                     <Icon size={16} />
                     <h4 className="text-xs font-bold uppercase tracking-widest">{title}</h4>
@@ -223,9 +225,9 @@ function Section({ title, icon: Icon, children, isLocked, delay }: any) {
 
     return (
         <div className="animate-in slide-in-from-bottom-2 fade-in duration-500" style={{ animationDelay: `${delay * 100}ms` }}>
-            <div className="flex items-center gap-2 mb-3 text-slate-400">
-                <Icon size={16} className="text-blue-400 animate-bounce-subtle" />
-                <h4 className="text-xs font-bold uppercase tracking-widest">{title}</h4>
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+                <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">{title}</span>
             </div>
             {children}
         </div>
@@ -234,10 +236,10 @@ function Section({ title, icon: Icon, children, isLocked, delay }: any) {
 
 function ResourceCard({ icon: Icon, label, value, color }: any) {
     return (
-        <div className="bg-slate-900/50 p-2.5 rounded-lg border border-white/5 flex flex-col items-center text-center gap-1 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth">
+        <div className="bg-[rgba(5,0,15,0.8)] border border-cyan-500/10 p-2.5 rounded-lg flex flex-col items-center text-center gap-1 group hover:border-cyan-500/30 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 card-depth">
             <Icon size={14} className={`${color} group-hover:scale-110 transition-transform`} />
             <span className="text-[9px] uppercase font-bold text-slate-500">{label}</span>
-            <span className={`text-xs font-mono font-bold ${color}`}>{Math.floor(value).toLocaleString()}</span>
+            <span className={`text-xs font-mono font-bold tabular-nums ${color}`}>{Math.floor(value).toLocaleString()}</span>
         </div>
     );
 }

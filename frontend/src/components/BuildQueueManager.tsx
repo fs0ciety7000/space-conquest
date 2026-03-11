@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
 import { formatDuration } from '@/lib/utils';
@@ -42,32 +43,32 @@ interface BuildQueueManagerProps {
 // ── Category meta ─────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  { id: 'research',  label: 'Recherche',    Icon: FlaskConical, color: 'indigo' },
-  { id: 'ships',     label: 'Vaisseaux',    Icon: Rocket,       color: 'sky'    },
-  { id: 'defenses',  label: 'Défenses',     Icon: Shield,       color: 'emerald'},
-  { id: 'resources', label: 'Ressources',   Icon: Pickaxe,      color: 'amber'  },
-  { id: 'facilities',label: 'Installations',Icon: Building2,    color: 'violet' },
+  { id: 'research',   label: 'Recherche',     Icon: FlaskConical, color: 'cyan'    },
+  { id: 'ships',      label: 'Vaisseaux',     Icon: Rocket,       color: 'sky'     },
+  { id: 'defenses',   label: 'Défenses',      Icon: Shield,       color: 'emerald' },
+  { id: 'resources',  label: 'Ressources',    Icon: Pickaxe,      color: 'amber'   },
+  { id: 'facilities', label: 'Installations', Icon: Building2,    color: 'violet'  },
 ] as const;
 
 type CategoryId = 'research' | 'ships' | 'defenses' | 'resources' | 'facilities';
 
+// All color palettes now use cyan-500/10 tones to match the design system.
+// Individual accent colors are preserved for category differentiation only.
 const COLOR_CLASSES: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-  indigo:  { bg: 'bg-indigo-600/20',  border: 'border-indigo-500/50', text: 'text-indigo-300',  badge: 'bg-indigo-900/40 text-indigo-300'  },
-  sky:     { bg: 'bg-sky-600/20',     border: 'border-sky-500/50',    text: 'text-sky-300',     badge: 'bg-sky-900/40 text-sky-300'        },
-  emerald: { bg: 'bg-emerald-600/20', border: 'border-emerald-500/50',text: 'text-emerald-300', badge: 'bg-emerald-900/40 text-emerald-300'},
-  amber:   { bg: 'bg-amber-600/20',   border: 'border-amber-500/50',  text: 'text-amber-300',   badge: 'bg-amber-900/40 text-amber-300'    },
-  violet:  { bg: 'bg-violet-600/20',  border: 'border-violet-500/50', text: 'text-violet-300',  badge: 'bg-violet-900/40 text-violet-300'  },
+  cyan:    { bg: 'bg-cyan-500/10',    border: 'border-cyan-500/20',    text: 'text-cyan-400',    badge: 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400'      },
+  sky:     { bg: 'bg-sky-500/10',     border: 'border-sky-500/20',     text: 'text-sky-400',     badge: 'bg-sky-500/10 border border-sky-500/20 text-sky-400'          },
+  emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', badge: 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' },
+  amber:   { bg: 'bg-amber-500/10',   border: 'border-amber-500/20',   text: 'text-amber-400',   badge: 'bg-amber-500/10 border border-amber-500/20 text-amber-400'    },
+  violet:  { bg: 'bg-violet-500/10',  border: 'border-violet-500/20',  text: 'text-violet-400',  badge: 'bg-violet-500/10 border border-violet-500/20 text-violet-400' },
 };
 
 function formatItemLabel(category: string, item_key: string, quantity: number, target_level: number | null): string {
   const label = LABELS[item_key] || item_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  if (category === 'ships') return `${quantity}× ${label}`;
+  if (category === 'ships')   return `${quantity}× ${label}`;
   if (category === 'defenses') return `${quantity}× ${label}`;
-  if (target_level != null) return `${label} → niv. ${target_level}`;
+  if (target_level != null)   return `${label} → niv. ${target_level}`;
   return label;
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 // ── Active build helpers ───────────────────────────────────────────────────────
 
@@ -124,7 +125,7 @@ interface ActiveBuild {
   endTime: string | null | undefined;
   quantity?: number;
   targetLevel?: number;
-  cancelKey: string; // used to call cancel endpoint
+  cancelKey: string;
 }
 
 function getActiveBuilds(planet: any, category: string): ActiveBuild[] {
@@ -190,6 +191,8 @@ function getActiveBuilds(planet: any, category: string): ActiveBuild[] {
   }
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function BuildQueueManager({ planetId, planet }: BuildQueueManagerProps) {
   const [status, setStatus] = useState<QueueStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -232,7 +235,7 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
     const headers = { 'Authorization': `Bearer ${token}` };
     let url = '';
     if (category === 'research') url = apiUrl(`/planets/${planetId}/cancel-research/${build.cancelKey}`);
-    else if (category === 'ships') url = apiUrl(`/planets/${planetId}/cancel-ship-build/${build.cancelKey}`);
+    else if (category === 'ships')    url = apiUrl(`/planets/${planetId}/cancel-ship-build/${build.cancelKey}`);
     else if (category === 'defenses') url = apiUrl(`/planets/${planetId}/cancel-defense-build/${build.cancelKey}`);
     else url = apiUrl(`/planets/${planetId}/cancel-construction/${build.cancelKey}`);
 
@@ -268,8 +271,8 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
         const data = await res.json();
         const r = data.refunded || {};
         const parts = [];
-        if (r.metal > 0) parts.push(`${Math.round(r.metal).toLocaleString()} métal`);
-        if (r.crystal > 0) parts.push(`${Math.round(r.crystal).toLocaleString()} cristal`);
+        if (r.metal     > 0) parts.push(`${Math.round(r.metal).toLocaleString()} métal`);
+        if (r.crystal   > 0) parts.push(`${Math.round(r.crystal).toLocaleString()} cristal`);
         if (r.deuterium > 0) parts.push(`${Math.round(r.deuterium).toLocaleString()} deutérium`);
         toast.success(`Annulé${parts.length ? ` — Remboursé: ${parts.join(', ')}` : ''}`);
         fetchStatus();
@@ -306,7 +309,7 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
       .sort((a, b) => a.queue_position - b.queue_position);
 
     const fromIdx = items.findIndex(i => i.id === dragItemId.current);
-    const toIdx = items.findIndex(i => i.id === targetId);
+    const toIdx   = items.findIndex(i => i.id === targetId);
     if (fromIdx === -1 || toIdx === -1) return;
 
     const reordered = [...items];
@@ -361,7 +364,7 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="animate-spin text-indigo-400" size={32} />
+        <RefreshCw className="animate-spin text-cyan-400" size={32} />
       </div>
     );
   }
@@ -380,9 +383,13 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Layers className="text-indigo-400" size={28} /> File de Construction
-          </h2>
+          {/* Section header */}
+          <div className="flex items-center gap-2 mb-1 pb-2 border-b border-cyan-500/10">
+            <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+            <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-2">
+              <Layers size={14} /> FILE DE CONSTRUCTION
+            </span>
+          </div>
           <p className="text-slate-400 text-sm mt-1">
             Gérez vos constructions en attente par catégorie. Glissez-déposez pour prioriser.
           </p>
@@ -391,13 +398,13 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
           variant="outline"
           size="sm"
           onClick={fetchStatus}
-          className="border-slate-600 text-slate-400 hover:text-white gap-1"
+          className="border-cyan-500/10 text-slate-400 hover:text-slate-200 hover:border-cyan-500/30 gap-1"
         >
           <RefreshCw size={14} /> Actualiser
         </Button>
       </div>
 
-      {/* Summary row */}
+      {/* Summary row — category tabs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         {CATEGORIES.map(({ id, label, Icon, color }) => {
           const cs = status?.categories[id];
@@ -408,10 +415,10 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
             <button
               key={id}
               onClick={() => setActiveCategory(id as CategoryId)}
-              className={`p-3 rounded-xl border text-left transition-all ${
+              className={`p-3 rounded-xl border text-left transition-all duration-200 ${
                 isActive
-                  ? `${cols.bg} ${cols.border} ring-1 ring-offset-1 ring-offset-slate-950 ${cols.border.replace('border-', 'ring-')}`
-                  : 'bg-slate-900/40 border-slate-700/30 hover:border-slate-600/50'
+                  ? `${cols.bg} ${cols.border} ring-1 ring-offset-1 ring-offset-[rgba(10,5,32,0.85)] ${cols.border.replace('border-', 'ring-')}`
+                  : 'bg-[rgba(10,5,32,0.85)] border-cyan-500/10 hover:border-cyan-500/30 hover:bg-cyan-500/5'
               }`}
             >
               <div className="flex items-center gap-2 mb-1.5">
@@ -425,7 +432,7 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
                       <div
                         key={i}
                         className={`h-1.5 flex-1 rounded-full ${
-                          i < cs.slots_used ? cols.bg.replace('/20', '/60') : 'bg-slate-700/50'
+                          i < cs.slots_used ? cols.bg.replace('/10', '/50') : 'bg-cyan-500/5'
                         }`}
                       />
                     ))}
@@ -450,14 +457,14 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
           {showActive ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           Constructions actives — {cat.label}
           {catStatus && (
-            <span className={`text-xs px-2 py-0.5 rounded-full ${colors.badge}`}>
+            <Badge variant="secondary" className={`text-xs ${colors.text}`}>
               {catStatus.slots_used} / {catStatus.slots_total} slot{catStatus.slots_total > 1 ? 's' : ''}
-            </span>
+            </Badge>
           )}
         </button>
 
         {showActive && catStatus && (
-          <Card className={`${colors.bg.replace('/20', '/10')} border ${colors.border.replace('/50', '/20')}`}>
+          <Card className={`${colors.bg} border ${colors.border} bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px]`}>
             <CardContent className="p-4 space-y-2">
               {activeBuilds.length === 0 ? (
                 <p className="text-slate-500 text-sm">Aucune construction active dans cette catégorie.</p>
@@ -465,21 +472,21 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
                 activeBuilds.map((build) => {
                   const tl = getTimeLeft(build.endTime);
                   return (
-                    <div key={build.key} className="flex items-center gap-3 bg-slate-900/40 rounded-lg p-2.5 border border-slate-700/30">
+                    <div key={build.key} className="flex items-center gap-3 bg-[rgba(0,245,255,0.05)] rounded-lg p-2.5 border border-cyan-500/10">
                       <CheckCircle2 size={14} className={`${colors.text} shrink-0 animate-pulse`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-white text-sm font-medium truncate">{build.name}</span>
+                          <span className="text-slate-200 text-sm font-medium truncate">{build.name}</span>
                           {build.targetLevel != null && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${colors.badge}`}>→ niv. {build.targetLevel}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${colors.badge}`}>→ niv. {build.targetLevel}</span>
                           )}
                           {build.quantity != null && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${colors.badge}`}>×{build.quantity}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${colors.badge}`}>×{build.quantity}</span>
                           )}
                         </div>
                         <div className="flex items-center gap-1 mt-1">
                           <Clock size={10} className="text-slate-500" />
-                          <span className="text-slate-400 text-xs font-mono">{formatDuration(tl)}</span>
+                          <span className="text-cyan-400 text-xs font-mono tabular-nums">{formatDuration(tl)}</span>
                         </div>
                       </div>
                       <button
@@ -511,20 +518,20 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
       {/* Pending queue */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-slate-300 text-sm font-medium flex items-center gap-2">
+          <h3 className="text-slate-400 text-sm font-medium flex items-center gap-2">
             <Clock size={14} className={colors.text} />
             File d'attente — {cat.label}
             {pendingItems.length > 0 && (
-              <span className={`text-xs px-2 py-0.5 rounded-full ${colors.badge}`}>
+              <Badge variant="secondary" className={colors.text}>
                 {pendingItems.length} élément{pendingItems.length > 1 ? 's' : ''}
-              </span>
+              </Badge>
             )}
           </h3>
           <p className="text-slate-500 text-xs">Faites glisser pour réorganiser</p>
         </div>
 
         {pendingItems.length === 0 ? (
-          <Card className="bg-slate-900/30 border border-slate-700/20">
+          <Card className="bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px]">
             <CardContent className="p-8 text-center">
               <cat.Icon className="mx-auto text-slate-700 mb-3" size={36} />
               <p className="text-slate-500 text-sm">
@@ -548,10 +555,10 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
                   onDragOver={e => handleDragOver(e, item.id)}
                   onDrop={e => handleDrop(e, item.id)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-grab active:cursor-grabbing ${
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 cursor-grab active:cursor-grabbing ${
                     isDragged
                       ? 'opacity-50 scale-95'
-                      : `bg-slate-900/50 border-slate-700/30 hover:border-slate-600/50 hover:bg-slate-900/70`
+                      : 'bg-[rgba(10,5,32,0.85)] border-cyan-500/10 hover:border-cyan-500/30 hover:bg-cyan-500/5'
                   }`}
                 >
                   {/* Drag handle */}
@@ -564,7 +571,7 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
 
                   {/* Item info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">
+                    <p className="text-slate-200 text-sm font-medium truncate">
                       {formatItemLabel(item.category, item.item_key, item.quantity, item.target_level)}
                     </p>
                     <p className="text-slate-500 text-xs">
@@ -595,7 +602,7 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
 
       {/* Global summary */}
       {totalPending > 0 && (
-        <Card className="bg-slate-900/20 border border-slate-700/20">
+        <Card className="bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px]">
           <CardContent className="p-3 flex items-center gap-3">
             <AlertTriangle size={14} className="text-amber-400 shrink-0" />
             <p className="text-slate-400 text-xs">

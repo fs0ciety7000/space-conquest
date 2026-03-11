@@ -138,8 +138,8 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400 animate-pulse">Chargement des technologies...</div>
+      <div className="flex items-center justify-center h-96 bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px]">
+        <div className="text-slate-200 animate-pulse">Chargement des technologies...</div>
       </div>
     );
   }

@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import ReactFlow, {
   Node,
   Edge,
@@ -53,26 +56,26 @@ interface TechInfo {
 const getTechConfig = (tech_key: string) => {
   const configs: Record<string, { icon: any; color: string; hexColor: string; border: string; bg: string; category: string }> = {
     // Base Technologies
-    energy_tech: { icon: Zap, color: 'text-yellow-400', hexColor: '#facc15', border: 'border-yellow-500/50', bg: 'bg-yellow-950/30', category: 'Base' },
-    laser_tech: { icon: Target, color: 'text-red-400', hexColor: '#f87171', border: 'border-red-500/50', bg: 'bg-red-950/30', category: 'Base' },
-    espionage_tech: { icon: Eye, color: 'text-emerald-400', hexColor: '#34d399', border: 'border-emerald-500/50', bg: 'bg-emerald-950/30', category: 'Base' },
-    armour_tech: { icon: Shield, color: 'text-slate-400', hexColor: '#94a3b8', border: 'border-slate-500/50', bg: 'bg-slate-950/30', category: 'Base' },
+    energy_tech:     { icon: Zap,       color: 'text-yellow-400',  hexColor: '#facc15', border: 'border-yellow-500/30',  bg: 'bg-yellow-500/5',  category: 'Base' },
+    laser_tech:      { icon: Target,    color: 'text-red-400',     hexColor: '#f87171', border: 'border-red-500/20',     bg: 'bg-red-500/5',     category: 'Base' },
+    espionage_tech:  { icon: Eye,       color: 'text-emerald-400', hexColor: '#34d399', border: 'border-emerald-500/30', bg: 'bg-emerald-500/5', category: 'Base' },
+    armour_tech:     { icon: Shield,    color: 'text-slate-300',   hexColor: '#94a3b8', border: 'border-cyan-500/10',    bg: 'bg-cyan-500/5',    category: 'Base' },
 
     // Advanced Technologies
-    ion_tech: { icon: Atom, color: 'text-cyan-400', hexColor: '#22d3ee', border: 'border-cyan-500/50', bg: 'bg-cyan-950/30', category: 'Advanced' },
-    plasma_tech: { icon: Zap, color: 'text-pink-400', hexColor: '#f472b6', border: 'border-pink-500/50', bg: 'bg-pink-950/30', category: 'Advanced' },
-    shield_tech: { icon: Shield, color: 'text-blue-400', hexColor: '#60a5fa', border: 'border-blue-500/50', bg: 'bg-blue-950/30', category: 'Advanced' },
-    weapons_tech: { icon: Target, color: 'text-orange-400', hexColor: '#fb923c', border: 'border-orange-500/50', bg: 'bg-orange-950/30', category: 'Advanced' },
-    computer_tech: { icon: Cpu, color: 'text-purple-400', hexColor: '#c084fc', border: 'border-purple-500/50', bg: 'bg-purple-950/30', category: 'Advanced' },
+    ion_tech:        { icon: Atom,      color: 'text-cyan-400',    hexColor: '#22d3ee', border: 'border-cyan-500/30',    bg: 'bg-cyan-500/5',    category: 'Advanced' },
+    plasma_tech:     { icon: Zap,       color: 'text-pink-400',    hexColor: '#f472b6', border: 'border-pink-500/20',    bg: 'bg-pink-500/5',    category: 'Advanced' },
+    shield_tech:     { icon: Shield,    color: 'text-blue-400',    hexColor: '#60a5fa', border: 'border-blue-500/20',    bg: 'bg-blue-500/5',    category: 'Advanced' },
+    weapons_tech:    { icon: Target,    color: 'text-orange-400',  hexColor: '#fb923c', border: 'border-red-500/20',     bg: 'bg-red-500/5',     category: 'Advanced' },
+    computer_tech:   { icon: Cpu,       color: 'text-purple-400',  hexColor: '#c084fc', border: 'border-purple-500/30',  bg: 'bg-purple-500/5',  category: 'Advanced' },
 
     // Propulsion
-    combustion_drive: { icon: Rocket, color: 'text-amber-400', hexColor: '#fbbf24', border: 'border-amber-500/50', bg: 'bg-amber-950/30', category: 'Propulsion' },
-    impulse_drive: { icon: Gauge, color: 'text-indigo-400', hexColor: '#818cf8', border: 'border-indigo-500/50', bg: 'bg-indigo-950/30', category: 'Propulsion' },
-    hyperspace_drive: { icon: Orbit, color: 'text-violet-400', hexColor: '#a78bfa', border: 'border-violet-500/50', bg: 'bg-violet-950/30', category: 'Propulsion' },
-    astrophysics: { icon: Telescope, color: 'text-teal-400', hexColor: '#2dd4bf', border: 'border-teal-500/50', bg: 'bg-teal-950/30', category: 'Science' },
+    combustion_drive: { icon: Rocket,   color: 'text-amber-400',   hexColor: '#fbbf24', border: 'border-amber-500/30',   bg: 'bg-amber-500/5',   category: 'Propulsion' },
+    impulse_drive:    { icon: Gauge,    color: 'text-purple-400',  hexColor: '#a78bfa', border: 'border-purple-500/30',  bg: 'bg-purple-500/5',  category: 'Propulsion' },
+    hyperspace_drive: { icon: Orbit,    color: 'text-violet-400',  hexColor: '#a78bfa', border: 'border-purple-500/30',  bg: 'bg-purple-500/5',  category: 'Propulsion' },
+    astrophysics:     { icon: Telescope,color: 'text-teal-400',    hexColor: '#2dd4bf', border: 'border-cyan-500/30',    bg: 'bg-cyan-500/5',    category: 'Science' },
   };
 
-  return configs[tech_key] || { icon: Microscope, color: 'text-gray-400', hexColor: '#9ca3af', border: 'border-gray-500/50', bg: 'bg-gray-950/30', category: 'Other' };
+  return configs[tech_key] || { icon: Microscope, color: 'text-slate-400', hexColor: '#94a3b8', border: 'border-cyan-500/10', bg: 'bg-cyan-500/5', category: 'Other' };
 };
 
 // Gain par niveau pour chaque technologie
@@ -107,6 +110,12 @@ const calculateNextLevelCost = (tech: TechInfo) => {
   };
 };
 
+// Framer Motion variants for staggered entrance
+const nodeVariants = {
+  hidden: { opacity: 0, scale: 0.8 },
+  show: { opacity: 1, scale: 1, transition: { type: 'spring' as const, stiffness: 200, damping: 20 } },
+};
+
 // Composant personnalisé pour chaque noeud technologique
 const TechNode = ({ data }: { data: any }) => {
   const config = getTechConfig(data.tech_key);
@@ -129,184 +138,196 @@ const TechNode = ({ data }: { data: any }) => {
     }
   }, [isResearching, data.researchEndTime]);
 
-  return (
-    <Card className={`
-      relative overflow-hidden w-[280px] min-h-[320px] transition-all duration-300
-      ${isLocked
-        ? 'bg-red-950/20 border-red-900/50 opacity-70'
-        : `bg-slate-950 border ${config.border}`
-      }
-      ${!isLocked && !isResearching ? 'hover:-translate-y-1 hover:shadow-2xl cursor-pointer hover:scale-105' : ''}
-      ${!isLocked && canAfford ? 'shadow-lg shadow-cyan-500/20' : ''}
-      card-depth
-    `}>
-      {/* Effet de glow */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
-        <div className={`absolute top-0 right-0 w-24 h-24 ${isLocked ? 'bg-red-900/30' : config.bg} blur-3xl`}></div>
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-        {isLocked && (
-          <div className="absolute inset-0 bg-red-900/10"></div>
-        )}
-      </div>
+  // Derive node state class
+  const nodeStateClass = isResearching
+    ? 'border-amber-500/40 bg-amber-500/5'
+    : isLocked
+      ? 'border-slate-700/30 opacity-50'
+      : data.current_level > 0
+        ? 'border-emerald-500/40 bg-emerald-500/5'
+        : `${config.border} bg-cyan-500/5 hover:border-cyan-500/50`;
 
-      <CardContent className="p-4 relative z-10">
-        {/* Header avec icône et niveau */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${config.bg} border ${config.border}`}>
-              {isLocked ? (
-                <Lock size={20} className="text-slate-600" />
-              ) : (
-                <Icon size={20} className={config.color} />
-              )}
-            </div>
-            <div>
-              <div className={`text-xs font-black uppercase tracking-wider ${config.color}`}>
-                {data.display_name}
-              </div>
-              <div className="text-[10px] text-slate-500">{config.category}</div>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className={`text-2xl font-black font-mono ${config.color}`}>
-              {data.current_level}
-            </div>
-            <div className="text-[8px] text-slate-500 uppercase">Niveau</div>
-          </div>
+  return (
+    <motion.div variants={nodeVariants} initial="hidden" animate="show">
+      <Card className={`
+        relative overflow-hidden w-[280px] min-h-[320px] transition-all duration-300
+        bg-[rgba(16,8,46,0.95)] backdrop-blur-[20px]
+        border ${nodeStateClass}
+        ${!isLocked && !isResearching ? 'hover:-translate-y-1 hover:shadow-2xl cursor-pointer hover:scale-105' : ''}
+        ${!isLocked && canAfford ? 'shadow-lg shadow-cyan-500/20' : ''}
+        card-depth
+      `}>
+        {/* Glow layer */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+          <div className={`absolute top-0 right-0 w-24 h-24 ${config.bg} blur-3xl`}></div>
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
         </div>
 
-        {/* Description */}
-        {data.description && (
-          <div className="text-[9px] text-slate-400 italic mb-2 line-clamp-2">
-            {data.description}
-          </div>
-        )}
-
-        {/* Statut avec temps restant */}
-        {isResearching && (
-          <div className="mb-3 bg-indigo-950/30 border border-indigo-500/30 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Loader2 size={12} className="text-indigo-400 animate-spin" />
-              <span className="text-[10px] text-indigo-400 font-bold">Recherche en cours...</span>
+        <CardContent className="p-4 relative z-10">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${config.bg} border ${config.border}`}>
+                {isLocked ? (
+                  <Lock size={20} className="text-slate-600" />
+                ) : (
+                  <Icon size={20} className={config.color} />
+                )}
+              </div>
+              <div>
+                <div className={`text-xs font-black uppercase tracking-wider ${config.color}`}>
+                  {data.display_name}
+                </div>
+                <div className="text-[10px] text-slate-500">{config.category}</div>
+              </div>
             </div>
-            {data.researchEndTime && (
-              <div className="flex items-center gap-2 bg-indigo-900/40 rounded px-2 py-1.5">
-                <Timer size={14} className="text-indigo-300" />
-                <span className="text-sm font-mono font-bold text-indigo-200">{timeRemaining}</span>
-              </div>
-            )}
+            <div className="text-right flex flex-col items-end gap-1">
+              {data.current_level > 0 ? (
+                <Badge variant="purple">Nv. {data.current_level}</Badge>
+              ) : (
+                <Badge variant="secondary">Nv. 0</Badge>
+              )}
+            </div>
           </div>
-        )}
 
-        {/* Prérequis non satisfaits */}
-        {isLocked && data.requirements.length > 0 && (
-          <div className="mb-3 bg-red-950/20 border border-red-900/30 rounded-lg p-2">
-            <div className="text-[9px] text-red-400 font-bold mb-1">Prérequis :</div>
-            {data.requirements.filter((r: any) => !r.met).map((req: any, idx: number) => (
-              <div key={idx} className="text-[8px] text-slate-400 flex items-center gap-1">
-                <Lock size={8} className="text-red-500" />
-                {req.required_tech_name} Niv. {req.required_level} (actuel: {req.current_level})
-              </div>
-            ))}
-          </div>
-        )}
+          {/* Description */}
+          {data.description && (
+            <div className="text-[9px] text-slate-400 italic mb-2 line-clamp-2">
+              {data.description}
+            </div>
+          )}
 
-        {/* Prérequis satisfaits (afficher avec checkmarks) */}
-        {!isLocked && data.requirements.length > 0 && (
-          <div className="mb-3 bg-green-950/20 border border-green-900/30 rounded-lg p-2">
-            <div className="text-[9px] text-green-400 font-bold mb-1">Prérequis OK :</div>
-            {data.requirements.map((req: any, idx: number) => (
-              <div key={idx} className="text-[8px] text-slate-400 flex items-center gap-1">
-                <CheckCircle2 size={8} className="text-green-500" />
-                {req.required_tech_name} Niv. {req.required_level}
+          {/* Statut : recherche en cours */}
+          {isResearching && (
+            <div className="mb-3 bg-amber-500/5 border border-amber-500/40 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Loader2 size={12} className="text-amber-400 animate-spin" />
+                <span className="text-[10px] text-amber-400 font-bold">Recherche en cours...</span>
               </div>
-            ))}
-          </div>
-        )}
+              {data.researchEndTime && (
+                <div className="flex items-center gap-2 bg-amber-500/10 rounded px-2 py-1.5">
+                  <Timer size={14} className="text-amber-300" />
+                  <span className="text-sm font-mono font-bold text-amber-200">{timeRemaining}</span>
+                </div>
+              )}
+            </div>
+          )}
 
-        {/* Coûts */}
-        {!isLocked && !isResearching && data.cost && (
-          <div className="space-y-1 mb-3">
-            {data.cost.metal > 0 && (
-              <div className="flex justify-between items-center text-[10px] bg-black/40 px-2 py-1 rounded border border-white/5">
-                <span className="text-orange-400 flex items-center gap-1">
-                  <Box size={10} /> Métal
-                </span>
-                <span className={`font-mono font-bold ${data.metal >= data.cost.metal ? 'text-white' : 'text-red-500'}`}>
-                  {data.cost.metal.toLocaleString()}
-                </span>
-              </div>
-            )}
-            {data.cost.crystal > 0 && (
-              <div className="flex justify-between items-center text-[10px] bg-black/40 px-2 py-1 rounded border border-white/5">
-                <span className="text-cyan-400 flex items-center gap-1">
-                  <Gem size={10} /> Cristal
-                </span>
-                <span className={`font-mono font-bold ${data.crystal >= data.cost.crystal ? 'text-white' : 'text-red-500'}`}>
-                  {data.cost.crystal.toLocaleString()}
-                </span>
-              </div>
-            )}
-            {data.cost.deuterium > 0 && (
-              <div className="flex justify-between items-center text-[10px] bg-black/40 px-2 py-1 rounded border border-white/5">
+          {/* Prérequis non satisfaits */}
+          {isLocked && data.requirements.length > 0 && (
+            <div className="mb-3 bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-lg p-2">
+              <div className="text-[9px] text-red-400 font-bold mb-1">Prérequis :</div>
+              {data.requirements.filter((r: any) => !r.met).map((req: any, idx: number) => (
+                <div key={idx} className="text-[8px] text-slate-400 flex items-center gap-1">
+                  <Lock size={8} className="text-red-500" />
+                  {req.required_tech_name} Niv. {req.required_level} (actuel: {req.current_level})
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Prérequis satisfaits */}
+          {!isLocked && data.requirements.length > 0 && (
+            <div className="mb-3 bg-[rgba(10,5,32,0.85)] border border-emerald-500/20 rounded-lg p-2">
+              <div className="text-[9px] text-emerald-400 font-bold mb-1">Prérequis OK :</div>
+              {data.requirements.map((req: any, idx: number) => (
+                <div key={idx} className="text-[8px] text-slate-400 flex items-center gap-1">
+                  <CheckCircle2 size={8} className="text-emerald-500" />
+                  {req.required_tech_name} Niv. {req.required_level}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Coûts */}
+          {!isLocked && !isResearching && data.cost && (
+            <div className="space-y-1 mb-3">
+              {data.cost.metal > 0 && (
+                <div className="flex justify-between items-center text-[10px] bg-[rgba(10,5,32,0.85)] px-2 py-1 rounded border border-cyan-500/10">
+                  <span className="text-orange-400 flex items-center gap-1">
+                    <Box size={10} /> Métal
+                  </span>
+                  <span className={`font-mono font-bold tabular-nums text-xs ${data.metal >= data.cost.metal ? 'text-cyan-400' : 'text-red-500'}`}>
+                    {data.cost.metal.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {data.cost.crystal > 0 && (
+                <div className="flex justify-between items-center text-[10px] bg-[rgba(10,5,32,0.85)] px-2 py-1 rounded border border-cyan-500/10">
+                  <span className="text-cyan-400 flex items-center gap-1">
+                    <Gem size={10} /> Cristal
+                  </span>
+                  <span className={`font-mono font-bold tabular-nums text-xs ${data.crystal >= data.cost.crystal ? 'text-cyan-400' : 'text-red-500'}`}>
+                    {data.cost.crystal.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {data.cost.deuterium > 0 && (
+                <div className="flex justify-between items-center text-[10px] bg-[rgba(10,5,32,0.85)] px-2 py-1 rounded border border-cyan-500/10">
+                  <span className="text-emerald-400 flex items-center gap-1">
+                    <Droplets size={10} /> Deutérium
+                  </span>
+                  <span className={`font-mono font-bold tabular-nums text-xs ${data.deuterium >= data.cost.deuterium ? 'text-cyan-400' : 'text-red-500'}`}>
+                    {data.cost.deuterium.toLocaleString()}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Temps de recherche + gain */}
+          {!isLocked && !isResearching && (
+            <div className="space-y-1 mb-3">
+              {data.next_level_time_seconds && (
+                <div className="flex justify-between items-center text-[10px] bg-[rgba(10,5,32,0.85)] px-2 py-1 rounded border border-cyan-500/10">
+                  <span className="text-purple-400 flex items-center gap-1">
+                    <Clock size={10} /> Durée
+                  </span>
+                  <span className="font-mono font-bold tabular-nums text-xs text-purple-300">
+                    {formatDuration(data.next_level_time_seconds)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center text-[10px] bg-[rgba(10,5,32,0.85)] px-2 py-1 rounded border border-cyan-500/10">
                 <span className="text-emerald-400 flex items-center gap-1">
-                  <Droplets size={10} /> Deutérium
+                  <CheckCircle2 size={10} /> Gain Niv. {data.current_level + 1}
                 </span>
-                <span className={`font-mono font-bold ${data.deuterium >= data.cost.deuterium ? 'text-white' : 'text-red-500'}`}>
-                  {data.cost.deuterium.toLocaleString()}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Temps de recherche + gain */}
-        {!isLocked && !isResearching && (
-          <div className="space-y-1 mb-3">
-            {data.next_level_time_seconds && (
-              <div className="flex justify-between items-center text-[10px] bg-black/40 px-2 py-1 rounded border border-white/5">
-                <span className="text-indigo-400 flex items-center gap-1">
-                  <Clock size={10} /> Durée
-                </span>
-                <span className="font-mono font-bold text-indigo-300">
-                  {formatDuration(data.next_level_time_seconds)}
+                <span className="font-mono font-bold text-emerald-300">
+                  {getTechGainPerLevel(data.tech_key)}
                 </span>
               </div>
-            )}
-            <div className="flex justify-between items-center text-[10px] bg-black/40 px-2 py-1 rounded border border-white/5">
-              <span className="text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 size={10} /> Gain Niv. {data.current_level + 1}
-              </span>
-              <span className="font-mono font-bold text-emerald-300">
-                {getTechGainPerLevel(data.tech_key)}
-              </span>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Bouton d'action */}
-        {!isLocked && !isResearching && (
-          <Button
-            onClick={data.onResearch}
-            disabled={!canAfford}
-            className={`w-full h-8 text-[10px] font-black uppercase tracking-wider ${
-              !canAfford
-                ? 'bg-slate-900 text-slate-500 border border-white/5'
-                : `${config.bg} ${config.border} ${config.color} hover:bg-white/10`
-            }`}
-          >
-            {canAfford ? `Rechercher Niv. ${data.current_level + 1}` : 'Ressources Manquantes'}
-          </Button>
-        )}
+          {/* Research progress bar (when researching) */}
+          {isResearching && (
+            <Progress variant="default" value={50} className="mb-3" />
+          )}
 
-        {isLocked && (
-          <div className="flex items-center gap-2 text-slate-500 text-xs">
-            <Lock size={12} />
-            <span>Verrouilé</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {/* Bouton d'action */}
+          {!isLocked && !isResearching && (
+            <Button
+              onClick={data.onResearch}
+              disabled={!canAfford}
+              className={`w-full h-8 text-[10px] font-black uppercase tracking-wider ${
+                !canAfford
+                  ? 'bg-[rgba(10,5,32,0.85)] text-slate-500 border border-cyan-500/10'
+                  : `bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:bg-purple-500/30`
+              }`}
+            >
+              {canAfford ? `Rechercher Niv. ${data.current_level + 1}` : 'Ressources Manquantes'}
+            </Button>
+          )}
+
+          {isLocked && (
+            <div className="flex items-center gap-2 text-slate-500 text-xs">
+              <Lock size={12} />
+              <span>Verrouilé</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 };
 
@@ -552,7 +573,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
 
   if (loading) {
     return (
-      <div className="h-screen bg-slate-950 overflow-hidden flex items-center justify-center">
+      <div className="h-screen bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] overflow-hidden flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
       </div>
     );
@@ -563,7 +584,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   // au lieu du graphe ReactFlow interactif lorsque l'écran est trop petit.
   // Voir: https://reactflow.dev/docs/api/react-flow-props/#fitview
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden relative">
+    <div className="h-screen bg-[rgba(10,5,32,0.85)] overflow-hidden relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -584,13 +605,13 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
       >
         {/* Removed Background grid for cleaner skill tree look */}
         <Controls
-          className="bg-slate-900/90 border-purple-500/30 backdrop-blur-md rounded-lg"
+          className="bg-[rgba(16,8,46,0.95)] border-purple-500/30 backdrop-blur-[20px] rounded-lg"
           showInteractive={false}
         />
         {/* Mobile pinch-to-zoom hint — visible only on touch screens */}
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 sm:hidden pointer-events-none">
-          <div className="bg-slate-900/90 border border-purple-500/30 rounded-full px-4 py-1.5 text-[10px] text-purple-300 font-bold backdrop-blur-md whitespace-nowrap">
-            👆 Pince pour zoomer · Glisser pour naviguer
+          <div className="bg-[rgba(16,8,46,0.95)] border border-purple-500/30 rounded-full px-4 py-1.5 text-[10px] text-purple-300 font-bold backdrop-blur-[20px] whitespace-nowrap">
+            Pince pour zoomer · Glisser pour naviguer
           </div>
         </div>
 
@@ -598,39 +619,45 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
         {/* TODO CLAUDE: Sur très petits écrans, envisager de remplacer le MiniMap par un bouton "Centrer" */}
         <div className="hidden sm:block">
           <MiniMap
-            className="bg-slate-900/90 border border-purple-500/30 rounded-lg backdrop-blur-md"
+            className="bg-[rgba(16,8,46,0.95)] border border-purple-500/30 rounded-lg backdrop-blur-[20px]"
             nodeColor={(node) => {
               const config = getTechConfig(node.id);
-              // Red for locked nodes, color for unlocked
               return node.data.allRequirementsMet ? config.hexColor : '#dc2626';
             }}
-            maskColor="rgba(15, 23, 42, 0.9)"
+            maskColor="rgba(10, 5, 32, 0.9)"
             style={{
-              backgroundColor: '#0f172a',
+              backgroundColor: 'rgba(10, 5, 32, 0.85)',
             }}
           />
         </div>
       </ReactFlow>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-slate-900/90 backdrop-blur-md border border-purple-500/30 rounded-lg p-3 text-xs z-10">
-        <div className="font-bold text-purple-400 mb-2">Légende</div>
-        <div className="space-y-1">
+      <div className="absolute bottom-4 left-4 bg-[rgba(16,8,46,0.95)] backdrop-blur-[20px] border border-cyan-500/10 rounded-lg p-3 text-xs z-10">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+          <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-purple-400 to-transparent flex-shrink-0" />
+          <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-purple-500/70">TECHNOLOGIES</span>
+        </div>
+        <div className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-cyan-500 rounded-full"></div>
-            <span className="text-slate-300">Technologie débloquée</span>
+            <div className="w-3 h-3 rounded-full bg-emerald-500/40 border border-emerald-500/40"></div>
+            <span className="text-slate-200">Technologie débloquée</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-            <span className="text-slate-300">Technologie verrouillée</span>
+            <div className="w-3 h-3 rounded-full border border-cyan-500/30 bg-cyan-500/5"></div>
+            <span className="text-slate-200">Disponible</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-0.5 bg-green-500"></div>
-            <span className="text-slate-300">Dépendance satisfaite</span>
+            <div className="w-3 h-3 rounded-full border border-slate-700/30 opacity-50"></div>
+            <span className="text-slate-200">Verrouillée</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-0.5 bg-red-500"></div>
-            <span className="text-slate-300">Dépendance manquante</span>
+            <div className="w-3 h-0.5 bg-emerald-500/30"></div>
+            <span className="text-slate-200">Dépendance satisfaite</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-0.5 bg-cyan-500/20"></div>
+            <span className="text-slate-200">Dépendance disponible</span>
           </div>
         </div>
       </div>

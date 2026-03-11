@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { DataCard } from "@/components/ui/data-card";
+import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
@@ -466,16 +468,21 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   }, [incomingMissions, alertedMissions]);
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="flex flex-col gap-6 pb-10"
+    >
       
       {/* SECTION RADAR / MISSIONS ALERTES */}
       {(incomingMissions.length > 0 || outgoingMissions.length > 0) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* RADAR DE DÉTECTION (Incoming) */}
-              <Card className={`bg-slate-950 border ${incomingMissions.some((m: any) => m.mission_type === 'attack') ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-blue-500/30'} overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
+              <Card className={`bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border ${incomingMissions.some((m: any) => m.mission_type === 'attack') ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-cyan-500/10'} overflow-hidden relative transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-500/25 hover:shadow-[0_0_15px_rgba(0,245,255,0.08)]`}>
                   <div className="absolute top-0 right-0 p-2 opacity-10"><Radar size={80} /></div>
-                  <CardHeader className="pb-2 border-b border-white/5">
-                      <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-slate-400">
+                  <CardHeader className="pb-2 border-b border-cyan-500/10">
+                      <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-cyan-500/70">
                           <Radio size={14} className="animate-pulse text-blue-400" /> Flux de circulation entrant
                       </CardTitle>
                   </CardHeader>
@@ -489,7 +496,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                       <div className="flex items-center gap-3">
                                           <div className={`p-2 rounded-full relative ${isAttack ? 'bg-red-500' : 'bg-blue-500'}`}>
                                               {isAttack && <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75"></div>}
-                                              <Rocket size={14} className="text-white relative z-10" />
+                                              <Rocket size={14} className="text-slate-200 relative z-10" />
                                           </div>
                                           <div>
                                               <p className={`text-xs font-black uppercase tracking-wider ${isAttack ? 'text-red-400' : 'text-blue-400'}`}>
@@ -508,7 +515,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                           </div>
                                       </div>
                                       <div className="text-right">
-                                          <div className={`font-mono text-lg font-black ${isAttack ? 'text-red-400' : 'text-white'}`}>
+                                          <div className={`font-mono text-lg font-black tabular-nums ${isAttack ? 'text-red-400' : 'text-slate-200'}`}>
                                               {formatDuration(tl)}
                                           </div>
                                           <div className="text-[9px] font-mono text-slate-500">
@@ -518,7 +525,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                   </div>
                                   {/* Barre de progression pour les attaques */}
                                   {isAttack && (
-                                      <div className="h-2 w-full bg-slate-900 rounded-full border border-red-500/20 overflow-hidden">
+                                      <div className="h-2 w-full bg-[rgba(10,5,32,0.85)] rounded-full border border-red-500/20 overflow-hidden">
                                           <div 
                                               className="h-full bg-gradient-to-r from-red-600 to-orange-500 rounded-full transition-all duration-1000 animate-pulse"
                                               style={{ width: `${Math.max(5, 100 - (tl / 3))}%` }}
@@ -534,9 +541,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
               </Card>
 
            {/* CENTRE DE COMMANDE (Missions sortantes) */}
-<Card className="bg-slate-950 border border-emerald-500/30 overflow-hidden relative shadow-[0_0_15px_rgba(16,185,129,0.1)] hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
+<Card className="bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border border-cyan-500/10 overflow-hidden relative transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-500/25 hover:shadow-[0_0_15px_rgba(0,245,255,0.08)]">
     <div className="absolute top-0 right-0 p-2 opacity-10"><Navigation size={80} /></div>
-    <CardHeader className="pb-2 border-b border-white/5 bg-emerald-950/20">
+    <CardHeader className="pb-2 border-b border-cyan-500/10 bg-emerald-950/20">
         <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-emerald-400">
             <Navigation size={14} className="animate-pulse" /> Centre de Commandement Flotte
         </CardTitle>
@@ -552,7 +559,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             const barColor = isAttack ? "bg-red-500" : "bg-emerald-500";
 
             return (
-                <div key={m.id} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-3 group hover:border-emerald-500/30 transition-all">
+                <div key={m.id} className="bg-[rgba(16,8,46,0.95)] border border-cyan-500/10 p-4 rounded-xl flex flex-col gap-3 group hover:border-cyan-500/25 transition-all duration-200">
                     <div className="flex justify-between items-start">
                         <div>
                             <span className={`text-[10px] font-black ${statusColor} uppercase tracking-[0.2em]`}>
@@ -566,7 +573,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             </p>
                         </div>
                         <div className="text-right">
-                            <span className="text-sm font-mono font-black text-white bg-black px-2 py-1 rounded border border-white/10 shadow-inner">
+                            <span className="text-sm font-mono tabular-nums font-black text-slate-200 bg-[rgba(10,5,32,0.85)] px-2 py-1 rounded border border-cyan-500/10 shadow-inner">
                                 {formatDuration(tl)}
                             </span>
                         </div>
@@ -574,7 +581,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
                     {/* Barre de progression ultra visible */}
                     <div className="space-y-1">
-                        <div className="h-3 w-full bg-slate-900 rounded-full border border-white/5 overflow-hidden p-0.5 shadow-inner">
+                        <div className="h-3 w-full bg-[rgba(10,5,32,0.85)] rounded-full border border-cyan-500/10 overflow-hidden p-0.5 shadow-inner">
                             <div 
                                 className={`h-full ${barColor} rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.4)]`}
                                 style={{ width: `${Math.max(2, 100 - (tl / 10))}%` }} // Ajuster le /10 selon la durée max réelle
@@ -588,7 +595,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 </div>
             );
         }) : (
-            <div className="text-center py-8 text-slate-600 border-2 border-dashed border-white/5 rounded-xl">
+            <div className="text-center py-8 text-slate-600 border-2 border-dashed border-cyan-500/10 rounded-xl">
                 <p className="text-[10px] uppercase font-black tracking-widest opacity-50 italic">Hangar de lancement vide</p>
             </div>
         )}
@@ -599,20 +606,20 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* CARTE PLANETE ET FILE */}
-        <Card className="lg:col-span-2 bg-slate-950 border border-white/10 overflow-hidden relative group flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
+        <Card className="lg:col-span-2 bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border border-cyan-500/10 overflow-hidden relative group flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-500/25 hover:shadow-[0_0_15px_rgba(0,245,255,0.08)]">
             <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1614730341194-75c607ae363c?q=80&w=2696&auto=format&fit=crop')] bg-cover bg-center opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-[rgba(10,5,32,0.95)] via-[rgba(10,5,32,0.85)] to-transparent"></div>
             
             <CardHeader className="relative z-10 flex flex-row items-center gap-6 pb-2">
                 <div className="relative shrink-0">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 blur-md absolute animate-pulse"></div>
-                    <div className="w-20 h-20 rounded-full bg-slate-900 border-2 border-indigo-400/50 flex items-center justify-center relative z-10 shadow-xl">
-                        <Globe size={40} className="text-indigo-300" />
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-700 blur-md absolute animate-pulse"></div>
+                    <div className="w-20 h-20 rounded-full bg-[rgba(10,5,32,0.85)] border-2 border-cyan-400/50 flex items-center justify-center relative z-10 shadow-xl">
+                        <Globe size={40} className="text-cyan-400" />
                     </div>
                 </div>
                 <div>
                     <div className="flex flex-wrap items-center gap-3 mb-1">
-                        <h2 className="text-3xl font-black uppercase text-white tracking-widest drop-shadow-md">{planet.name}</h2>
+                        <h2 className="text-3xl font-black uppercase text-slate-200 tracking-widest drop-shadow-md">{planet.name}</h2>
                         <div className="px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-[10px] text-green-400 font-bold uppercase tracking-wider">Opérationnel</div>
                         {planet.biome && (
                           <div
@@ -623,19 +630,19 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                           </div>
                         )}
                     </div>
-                    <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-white/5 font-mono text-xs text-slate-400">
-                        <MapPin size={12} className="text-indigo-400" />
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-black/40 rounded border border-cyan-500/10 font-mono text-xs text-slate-400">
+                        <MapPin size={12} className="text-cyan-400" />
                         <span>[{planet.galaxy}:{planet.system}:{planet.position}]</span>
                     </div>
                 </div>
             </CardHeader>
 
             <CardContent className="relative z-10 pt-0 pb-4 px-6">
-                <div className="bg-gradient-to-br from-black/60 via-slate-900/40 to-black/60 border-2 border-cyan-500/20 rounded-xl p-4 backdrop-blur-md shadow-[0_0_30px_rgba(6,182,212,0.1)] relative overflow-hidden">
+                <div className="bg-[rgba(16,8,46,0.95)] border border-cyan-500/15 rounded-xl p-4 backdrop-blur-[12px] shadow-[0_0_30px_rgba(6,182,212,0.08)] relative overflow-hidden">
                     {/* Effets de fond animés */}
                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
                         <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 bg-cyan-400 animate-pulse"></div>
-                        <div className="absolute -bottom-10 -left-10 w-24 h-24 rounded-full blur-2xl opacity-15 bg-indigo-400 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                        <div className="absolute -bottom-10 -left-10 w-24 h-24 rounded-full blur-2xl opacity-15 bg-cyan-400 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
                         <div className="absolute inset-0 opacity-5">
                             <div className="absolute top-1/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse"></div>
                         </div>
@@ -691,12 +698,12 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
                                         <div className="flex justify-between items-center text-xs relative z-10">
                                             <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg bg-black/40 border border-white/10 relative ${index === 0 ? 'animate-pulse' : ''}`}>
+                                                <div className={`p-2 rounded-lg bg-black/40 border border-cyan-500/10 relative ${index === 0 ? 'animate-pulse' : ''}`}>
                                                     <Icon size={16} className={`${color} drop-shadow-[0_0_6px_currentColor]`} />
                                                     {index === 0 && <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/20 to-transparent animate-pulse"></div>}
                                                 </div>
                                                 <div>
-                                                    <span className={`font-black text-sm block tracking-wide ${index === 0 ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-slate-200'}`}>{label}</span>
+                                                    <span className={`font-black text-sm block tracking-wide ${index === 0 ? 'text-slate-100 drop-shadow-[0_0_8px_rgba(0,245,255,0.4)]' : 'text-slate-200'}`}>{label}</span>
                                                     <span className="text-[9px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1">
                                                         {type === 'fleet' || type === 'defense' ? (
                                                             <>
@@ -713,7 +720,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2.5">
-                                                <div className={`flex items-center gap-2 ${index === 0 ? 'text-cyan-300' : 'text-indigo-300'} font-mono bg-black/60 px-3 py-1.5 rounded-lg border-2 ${index === 0 ? 'border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'border-indigo-500/30'}`}>
+                                                <div className={`flex items-center gap-2 ${index === 0 ? 'text-cyan-300' : 'text-cyan-400/60'} font-mono bg-black/60 px-3 py-1.5 rounded-lg border-2 ${index === 0 ? 'border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'border-cyan-500/15'}`}>
                                                     <Clock size={12} className={index === 0 ? "animate-spin-slow drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" : ""} />
                                                     <span className="font-black text-sm">{formatDuration(tl)}</span>
                                                 </div>
@@ -736,7 +743,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                                         <XCircle size={18} className="drop-shadow-[0_0_4px_currentColor]" />
                                                     </button>
                                                     <div className="absolute bottom-full right-0 mb-2 hidden group-hover/cancel:block z-50">
-                                                        <div className="bg-slate-950 border-2 border-red-500/50 text-white text-[10px] p-3 rounded-lg shadow-[0_0_30px_rgba(239,68,68,0.4)] whitespace-nowrap backdrop-blur-md">
+                                                        <div className="bg-[rgba(10,5,32,0.95)] border-2 border-red-500/50 text-slate-200 text-[10px] p-3 rounded-lg shadow-[0_0_30px_rgba(239,68,68,0.4)] whitespace-nowrap backdrop-blur-md">
                                                             <span className="text-red-400 font-black uppercase tracking-wider border-b border-red-500/30 pb-1.5 mb-2 block drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]">⚠️ Annulation</span>
                                                             <span className="text-slate-300 font-semibold">Remboursement: <span className="text-emerald-400 font-black">{refundPercent}%</span></span>
                                                         </div>
@@ -779,10 +786,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                         else if (isShip) { Icon = Rocket; color = "text-orange-400/60"; }
                                         else if (isDefense) { Icon = Shield; color = "text-red-400/60"; }
                                         return (
-                                            <div key={item.id} className="relative bg-slate-900/30 border border-slate-700/20 rounded-lg p-2.5 opacity-70">
+                                            <div key={item.id} className="relative bg-[rgba(16,8,46,0.95)] border border-cyan-500/10 rounded-lg p-2.5 opacity-70">
                                                 <div className="flex justify-between items-center text-xs">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="p-1.5 rounded-lg bg-black/30 border border-white/5">
+                                                        <div className="p-1.5 rounded-lg bg-black/30 border border-cyan-500/10">
                                                             <Icon size={12} className={color} />
                                                         </div>
                                                         <div>
@@ -794,7 +801,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                                             </span>
                                                         </div>
                                                     </div>
-                                                    <span className="text-[9px] text-slate-600 font-mono bg-slate-800/50 px-2 py-1 rounded">
+                                                    <span className="text-[9px] text-slate-600 font-mono bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 px-2 py-1 rounded">
                                                         File #{item.queue_position + 1}
                                                     </span>
                                                 </div>
@@ -819,9 +826,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
           const intervalHours = config.trade_route_interval_hours ?? 24;
 
           return (
-            <Card className="order-last bg-slate-950 border border-amber-500/20 overflow-hidden relative hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
+            <Card className="order-last bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border border-cyan-500/10 overflow-hidden relative transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-500/25 hover:shadow-[0_0_15px_rgba(0,245,255,0.08)]">
               <div className="absolute top-0 right-0 p-2 opacity-10"><Truck size={80} /></div>
-              <CardHeader className="pb-2 border-b border-white/5">
+              <CardHeader className="pb-2 border-b border-cyan-500/10">
                 <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-amber-400">
                   <Truck size={14} className="text-amber-400" /> Routes Commerciales
                   <span className="text-slate-500 normal-case font-normal text-[9px] ml-1">depuis cette planète</span>
@@ -860,11 +867,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                   const nextCollectSec = arrivalMs > nowMs ? Math.floor((arrivalMs - nowMs) / 1000) : 0;
 
                   return (
-                    <div key={route.id} className={`rounded-lg border p-3 ${route.is_active ? 'bg-amber-950/20 border-amber-500/20' : 'bg-slate-900/20 border-slate-700/20 opacity-50'}`}>
+                    <div key={route.id} className={`rounded-lg border p-3 ${route.is_active ? 'bg-[rgba(16,8,46,0.95)] border-amber-500/20' : 'bg-[rgba(10,5,32,0.6)] border-cyan-500/10 opacity-50'}`}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2 text-xs">
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${route.is_active ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`} />
-                          <span className="text-white font-medium truncate max-w-[140px]">{route.name}</span>
+                          <span className="text-slate-200 font-medium truncate max-w-[140px]">{route.name}</span>
                           <span className="text-slate-500">→</span>
                           <span className="text-cyan-300 text-xs">{route.target_planet_name ?? route.target_planet_id.slice(0, 8)}</span>
                         </div>
@@ -880,7 +887,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                               ETA : <span className={phase === 'outbound' ? 'text-amber-300' : 'text-cyan-300'}>{fmtSec(remainingSec)}</span>
                             </span>
                           </div>
-                          <div className="h-1 bg-slate-700/50 rounded-full overflow-hidden">
+                          <div className="h-1 bg-cyan-500/5 border border-cyan-500/10 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all duration-1000 ${phase === 'outbound' ? 'bg-amber-500' : 'bg-cyan-500'}`}
                               style={{ width: `${progress}%` }}
@@ -889,8 +896,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         </>
                       ) : route.is_active && nextCollectSec > 0 ? (
                         <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                          <Clock size={10} className="text-indigo-400" />
-                          Départ dans <span className="text-indigo-300 ml-1 font-medium">{fmtSec(Math.max(0, nextCollectSec - travelSec))}</span>
+                          <Clock size={10} className="text-cyan-400" />
+                          Départ dans <span className="text-cyan-300 ml-1 font-medium">{fmtSec(Math.max(0, nextCollectSec - travelSec))}</span>
                           <span className="ml-auto">Collecte : <span className="text-amber-400">{fmtSec(nextCollectSec)}</span></span>
                         </div>
                       ) : null}
@@ -903,7 +910,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         })()}
 
         {/* ENERGIE - DESIGN ÉLECTRIQUE */}
-        <Card className={`order-first bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${energyRatio >= 100 ? 'border-yellow-500/50' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
+        <Card className={`order-first bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border-2 ${energyRatio >= 100 ? 'border-yellow-500/50' : energyRatio >= 50 ? 'border-orange-500/50' : 'border-red-500/50'} flex flex-col relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(0,245,255,0.08)]`}>
             {/* Effets de fond électriques */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 {/* Lueur principale */}
@@ -935,14 +942,14 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             <CardContent className="space-y-4 relative z-10">
                 {/* Indicateur principal avec effet glow */}
                 <div className="text-center py-2">
-                    <div className={`text-5xl font-black font-mono tracking-tighter ${energyRatio >= 100 ? 'text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]' : energyRatio >= 50 ? 'text-orange-400 drop-shadow-[0_0_15px_rgba(251,146,60,0.5)]' : 'text-red-400 drop-shadow-[0_0_20px_rgba(248,113,113,0.7)] animate-pulse'}`}>
+                    <div className={`text-5xl font-black font-mono tabular-nums tracking-tighter ${energyRatio >= 100 ? 'text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)]' : energyRatio >= 50 ? 'text-orange-400 drop-shadow-[0_0_15px_rgba(251,146,60,0.5)]' : 'text-red-400 drop-shadow-[0_0_20px_rgba(248,113,113,0.7)] animate-pulse'}`}>
                         {energyRatio}%
                     </div>
                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Efficacité du réseau</div>
                 </div>
 
                 {/* Graphique Production vs Consommation */}
-                <div className="bg-black/40 rounded-xl p-4 border border-white/10 relative overflow-hidden">
+                <div className="bg-[rgba(16,8,46,0.95)] rounded-xl p-4 border border-cyan-500/10 relative overflow-hidden">
                     <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold flex items-center gap-2">
                         <Activity size={10} className="text-cyan-400" /> Flux énergétique
                     </div>
@@ -951,11 +958,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     <div className="flex items-end justify-center gap-6 h-24">
                         {/* Barre Production */}
                         <div className="flex flex-col items-center gap-2">
-                            <div className="relative w-8 h-20 bg-slate-900 rounded-lg border border-white/10 overflow-hidden">
+                            <div className="relative w-8 h-20 bg-[rgba(10,5,32,0.85)] rounded-lg border border-cyan-500/10 overflow-hidden">
                                 {/* Graduation */}
                                 <div className="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-30">
                                     {[...Array(5)].map((_, i) => (
-                                        <div key={i} className="h-px bg-white/50 w-full"></div>
+                                        <div key={i} className="h-px bg-cyan-500/30 w-full"></div>
                                     ))}
                                 </div>
                                 {/* Barre de remplissage */}
@@ -991,11 +998,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
                         {/* Barre Consommation */}
                         <div className="flex flex-col items-center gap-2">
-                            <div className="relative w-8 h-20 bg-slate-900 rounded-lg border border-white/10 overflow-hidden">
+                            <div className="relative w-8 h-20 bg-[rgba(10,5,32,0.85)] rounded-lg border border-cyan-500/10 overflow-hidden">
                                 {/* Graduation */}
                                 <div className="absolute inset-0 flex flex-col justify-between py-1 px-0.5 opacity-30">
                                     {[...Array(5)].map((_, i) => (
-                                        <div key={i} className="h-px bg-white/50 w-full"></div>
+                                        <div key={i} className="h-px bg-cyan-500/30 w-full"></div>
                                     ))}
                                 </div>
                                 {/* Barre de remplissage */}
@@ -1023,11 +1030,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                         <span>Charge du réseau</span>
                         <span className={energyRatio >= 100 ? 'text-emerald-400' : energyRatio >= 50 ? 'text-orange-400' : 'text-red-400'}>{Math.round(energyPercent)}%</span>
                     </div>
-                    <div className="relative h-4 w-full bg-slate-900 rounded-full overflow-hidden border border-white/10">
+                    <div className="relative h-4 w-full bg-[rgba(10,5,32,0.85)] rounded-full overflow-hidden border border-cyan-500/10">
                         {/* Graduations */}
                         <div className="absolute inset-0 flex justify-between px-1 items-center">
                             {[...Array(10)].map((_, i) => (
-                                <div key={i} className="w-px h-2 bg-white/20"></div>
+                                <div key={i} className="w-px h-2 bg-cyan-500/20"></div>
                             ))}
                         </div>
                         {/* Barre de progression */}
@@ -1074,18 +1081,18 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 )}
 
                 {/* Stats compactes en bas */}
-                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5">
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-cyan-500/10">
                     <div className="text-center">
                         <span className="text-[8px] text-slate-600 uppercase block">Centrale</span>
-                        <span className="text-yellow-400 font-mono text-xs font-bold">Niv.{getBuildingLevel(planet, 'solar_plant')}</span>
+                        <span className="text-yellow-400 font-mono tabular-nums text-xs font-bold">Niv.{getBuildingLevel(planet, 'solar_plant')}</span>
                     </div>
-                    <div className="text-center border-x border-white/5">
+                    <div className="text-center border-x border-cyan-500/10">
                         <span className="text-[8px] text-slate-600 uppercase block">Tech. Énergie</span>
-                        <span className="text-purple-400 font-mono text-xs font-bold">Niv.{getTechLevel(planet, 'energy_tech')}</span>
+                        <span className="text-cyan-400 font-mono tabular-nums text-xs font-bold">Niv.{getTechLevel(planet, 'energy_tech')}</span>
                     </div>
                     <div className="text-center">
                         <span className="text-[8px] text-slate-600 uppercase block">Rendement</span>
-                        <span className={`font-mono text-xs font-bold ${energyNet >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>{energyNet >= 0 ? '+' : ''}{fmt(energyNet)}</span>
+                        <span className={`font-mono tabular-nums text-xs font-bold ${energyNet >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>{energyNet >= 0 ? '+' : ''}{fmt(energyNet)}</span>
                     </div>
                 </div>
             </CardContent>
@@ -1100,7 +1107,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
       {/* --- SECTION TACTIQUE MILITAIRE --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* CAPACITÉ OFFENSIVE */}
-          <Card className="bg-gradient-to-br from-slate-950 via-red-950/20 to-slate-950 border-2 border-red-500/40 relative overflow-hidden group hover:-translate-y-1 hover:shadow-[0_0_40px_rgba(239,68,68,0.3)] transition-all duration-500 card-depth animate-fade-in">
+          <Card className="bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border-2 border-red-500/40 relative overflow-hidden group transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(239,68,68,0.15)]">
               {/* Effets de fond dynamiques */}
               <div className="absolute inset-0 overflow-hidden pointer-events-none">
                   <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 bg-red-500 animate-pulse"></div>
@@ -1130,7 +1137,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
               <CardContent className="relative z-10 pt-4">
                   {/* Indicateur principal */}
                   <div className="flex items-end gap-3 mb-6">
-                      <span className="text-5xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-br from-red-400 via-red-300 to-orange-400 tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,0.5)] animate-pulse">{fmt(totalAtk)}</span>
+                      <span className="text-5xl font-black font-mono tabular-nums text-transparent bg-clip-text bg-gradient-to-br from-red-400 via-red-300 to-orange-400 tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,0.5)] animate-pulse">{fmt(totalAtk)}</span>
                       <div className="mb-2">
                           <span className="text-xs font-black text-red-500 uppercase tracking-wider block drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]">Dégâts</span>
                           <span className="text-[9px] font-bold text-slate-500 uppercase">/ Round</span>
@@ -1138,7 +1145,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                   </div>
 
                   {/* Stat détaillée */}
-                  <div className="bg-black/40 rounded-xl p-4 border border-red-500/30 shadow-inner">
+                  <div className="bg-[rgba(16,8,46,0.95)] rounded-xl p-4 border border-red-500/20 shadow-inner">
                       <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center mb-3">
                           <span className="flex items-center gap-1.5">
                               <Target size={12} className="text-red-400" />
@@ -1148,11 +1155,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       </div>
 
                       {/* Barre de progression style voltmètre */}
-                      <div className="relative h-3 w-full bg-slate-900 rounded-full overflow-hidden border-2 border-red-500/30 shadow-inner">
+                      <div className="relative h-3 w-full bg-[rgba(10,5,32,0.85)] rounded-full overflow-hidden border-2 border-red-500/20 shadow-inner">
                           {/* Graduations */}
                           <div className="absolute inset-0 flex justify-between px-1 items-center z-10">
                               {[...Array(10)].map((_, i) => (
-                                  <div key={i} className="w-px h-2 bg-white/30"></div>
+                                  <div key={i} className="w-px h-2 bg-cyan-500/20"></div>
                               ))}
                           </div>
                           {/* Barre de remplissage */}
@@ -1186,12 +1193,12 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
           </Card>
 
           {/* STRUCTURE & BLINDAGE */}
-          <Card className="bg-gradient-to-br from-slate-950 via-emerald-950/20 to-slate-950 border-2 border-emerald-500/40 relative overflow-hidden group hover:-translate-y-1 hover:shadow-[0_0_40px_rgba(16,185,129,0.3)] transition-all duration-500 card-depth animate-fade-in">
+          <Card className="bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border-2 border-emerald-500/40 relative overflow-hidden group transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]">
               {/* Effets de fond dynamiques */}
               <div className="absolute inset-0 overflow-hidden pointer-events-none">
                   <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 bg-emerald-500 animate-pulse"></div>
                   <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 bg-cyan-500 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5 group-hover:from-emerald-500/10 group-hover:to-cyan-500/10 transition-all duration-500"></div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5 group-hover:from-emerald-500/8 group-hover:to-cyan-500/8 transition-all duration-200"></div>
                   <div className="absolute inset-0 opacity-10">
                       <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse"></div>
                       <div className="absolute top-2/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse" style={{ animationDelay: '0.7s' }}></div>
@@ -1216,7 +1223,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
               <CardContent className="relative z-10 pt-4">
                   {/* Indicateur principal */}
                   <div className="flex items-end gap-3 mb-6">
-                      <span className="text-5xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 via-emerald-300 to-cyan-400 tracking-tighter drop-shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse">{fmt(totalHull)}</span>
+                      <span className="text-5xl font-black font-mono tabular-nums text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 via-emerald-300 to-cyan-400 tracking-tighter drop-shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse">{fmt(totalHull)}</span>
                       <div className="mb-2">
                           <span className="text-xs font-black text-emerald-500 uppercase tracking-wider block drop-shadow-[0_0_6px_rgba(16,185,129,0.6)]">Points</span>
                           <span className="text-[9px] font-bold text-slate-500 uppercase">Coque</span>
@@ -1224,7 +1231,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                   </div>
 
                   {/* Stat détaillée */}
-                  <div className="bg-black/40 rounded-xl p-4 border border-emerald-500/30 shadow-inner">
+                  <div className="bg-[rgba(16,8,46,0.95)] rounded-xl p-4 border border-emerald-500/20 shadow-inner">
                       <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center mb-3">
                           <span className="flex items-center gap-1.5">
                               <Shield size={12} className="text-emerald-400" />
@@ -1234,11 +1241,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       </div>
 
                       {/* Barre de progression style voltmètre */}
-                      <div className="relative h-3 w-full bg-slate-900 rounded-full overflow-hidden border-2 border-emerald-500/30 shadow-inner">
+                      <div className="relative h-3 w-full bg-[rgba(10,5,32,0.85)] rounded-full overflow-hidden border-2 border-emerald-500/20 shadow-inner">
                           {/* Graduations */}
                           <div className="absolute inset-0 flex justify-between px-1 items-center z-10">
                               {[...Array(10)].map((_, i) => (
-                                  <div key={i} className="w-px h-2 bg-white/30"></div>
+                                  <div key={i} className="w-px h-2 bg-cyan-500/20"></div>
                               ))}
                           </div>
                           {/* Barre de remplissage */}
@@ -1275,20 +1282,20 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
       {/* INFRASTRUCTURES & RESSOURCES */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
         {/* INFRASTRUCTURES - Design style Réseau Électrique */}
-        <Card className="md:col-span-1 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 border-indigo-500/30 backdrop-blur-md relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up">
+        <Card className="md:col-span-1 bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border border-cyan-500/15 relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-500/25 hover:shadow-[0_0_15px_rgba(0,245,255,0.08)]">
             {/* Effets de fond */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-20 bg-indigo-400 animate-pulse"></div>
-                <div className="absolute -left-5 -bottom-5 w-24 h-24 rounded-full blur-2xl opacity-15 bg-purple-400"></div>
+                <div className="absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-15 bg-cyan-400 animate-pulse"></div>
+                <div className="absolute -left-5 -bottom-5 w-24 h-24 rounded-full blur-2xl opacity-10 bg-cyan-500"></div>
                 <div className="absolute inset-0 opacity-5">
-                    <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-400 to-transparent animate-pulse"></div>
+                    <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse"></div>
                 </div>
             </div>
 
             <CardHeader className="pb-2 relative z-10">
-                <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-slate-400">
+                <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-cyan-500/70">
                     <div className="relative">
-                        <Hammer size={16} className="text-indigo-400 drop-shadow-[0_0_6px_rgba(99,102,241,0.8)]" />
+                        <Hammer size={16} className="text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
                     </div>
                     Infrastructures
                 </CardTitle>
@@ -1316,13 +1323,13 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 ))}
 
                 {/* Barre de niveau global */}
-                <div className="mt-3 pt-3 border-t border-white/5">
+                <div className="mt-3 pt-3 border-t border-cyan-500/10">
                     <div className="flex justify-between text-[9px] uppercase font-bold text-slate-500 mb-1">
                         <span>Niveau d'Industrialisation</span>
                     </div>
-                    <div className="relative h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-white/10">
+                    <div className="relative h-2 w-full bg-[rgba(10,5,32,0.85)] rounded-full overflow-hidden border border-cyan-500/10">
                         <div
-                            className="h-full bg-gradient-to-r from-indigo-600 via-purple-500 to-cyan-400 transition-all duration-500"
+                            className="h-full bg-gradient-to-r from-cyan-600 via-cyan-500 to-cyan-400 transition-all duration-500"
                             style={{ width: `${Math.min(100, ((getBuildingLevel(planet, 'metal_mine') + getBuildingLevel(planet, 'crystal_mine') + getBuildingLevel(planet, 'deuterium_mine') + getBuildingLevel(planet, 'solar_plant')) / 80) * 100)}%` }}
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
@@ -1333,21 +1340,21 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
         </Card>
 
         <div className="md:col-span-3 min-w-0">
-            <Card className="bg-gradient-to-br from-slate-950 via-emerald-950/20 to-slate-950 border-2 border-emerald-500/40 relative overflow-hidden hover:-translate-y-1 hover:shadow-[0_0_40px_rgba(16,185,129,0.3)] transition-all duration-500 card-depth animate-slide-up">
+            <Card className="bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border border-cyan-500/15 relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-500/25 hover:shadow-[0_0_15px_rgba(0,245,255,0.08)]">
                 {/* Effets de fond animés */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 bg-emerald-500 animate-pulse"></div>
-                    <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-15 bg-cyan-500 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5"></div>
+                    <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-15 bg-emerald-500 animate-pulse"></div>
+                    <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full blur-2xl opacity-10 bg-cyan-500 animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/3 via-transparent to-cyan-500/3"></div>
                     <div className="absolute inset-0 opacity-10">
                         <div className="absolute top-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse"></div>
                         <div className="absolute top-2/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse" style={{ animationDelay: '0.7s' }}></div>
                     </div>
                 </div>
 
-                <CardHeader className="pb-3 relative z-10 border-b border-emerald-500/20">
+                <CardHeader className="pb-3 relative z-10 border-b border-cyan-500/10">
                     <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.2em] text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]">
+                        <span className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.2em] text-cyan-500/70">
                             <div className="relative">
                                 <TrendingUp size={18} className="animate-pulse" />
                                 <TrendingUp size={18} className="absolute inset-0 animate-ping opacity-30" />
@@ -1368,7 +1375,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 </CardHeader>
                 <CardContent className="space-y-4 relative z-10">
                     {/* Graphique comparatif */}
-                    <div className="bg-black/40 rounded-xl p-4 border border-emerald-500/30 shadow-inner backdrop-blur-sm">
+                    <div className="bg-[rgba(16,8,46,0.95)] rounded-xl p-4 border border-cyan-500/10 shadow-inner backdrop-blur-sm">
                         <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold">Répartition Production /h</div>
                         <div className="space-y-2">
                             {(() => {
@@ -1377,7 +1384,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                     <>
                                         <div className="flex items-center gap-2">
                                             <Stone size={12} className="text-orange-400 shrink-0 animate-bounce-subtle" />
-                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
+                                            <div className="flex-1 h-4 bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-full overflow-hidden">
                                                 <div
                                                     className="h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full transition-all duration-500 animate-gradient"
                                                     style={{ width: `${(prodMetal / maxProd) * 100}%` }}
@@ -1387,7 +1394,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Gem size={12} className="text-cyan-400 shrink-0 animate-bounce-subtle" style={{ animationDelay: '0.3s' }} />
-                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
+                                            <div className="flex-1 h-4 bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-full overflow-hidden">
                                                 <div
                                                     className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full transition-all duration-500 animate-gradient"
                                                     style={{ width: `${(prodCrystal / maxProd) * 100}%` }}
@@ -1397,7 +1404,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Droplets size={12} className="text-emerald-400 shrink-0 animate-bounce-subtle" style={{ animationDelay: '0.6s' }} />
-                                            <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden progress-bar-animated">
+                                            <div className="flex-1 h-4 bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-full overflow-hidden">
                                                 <div
                                                     className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-500 animate-gradient"
                                                     style={{ width: `${(prodDeut / maxProd) * 100}%` }}
@@ -1414,13 +1421,13 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     {/* Détails par ressource */}
                     <div className="grid grid-cols-3 gap-3">
                         {/* Métal */}
-                        <div className="bg-gradient-to-b from-orange-950/40 to-slate-900/60 p-3 rounded-xl border-2 border-orange-500/40 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(251,146,60,0.3)] transition-all duration-300 card-depth group/res animate-fade-in relative overflow-hidden">
+                        <div className="bg-[rgba(16,8,46,0.95)] p-3 rounded-xl border border-orange-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-500/40 hover:shadow-[0_0_15px_rgba(251,146,60,0.1)] group/res relative overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover/res:opacity-100 transition-opacity"></div>
                             <div className="flex items-center gap-1.5 mb-2">
                                 <Stone size={14} className="text-orange-400" />
                                 <span className="text-orange-300 font-bold text-xs uppercase">Métal</span>
                             </div>
-                            <div className="text-white font-mono font-black text-lg">{fmt(realtimeResources?.metal ?? planet.metal_amount)}</div>
+                            <div className="text-orange-400 font-mono tabular-nums font-black text-lg">{fmt(realtimeResources?.metal ?? planet.metal_amount)}</div>
                             <div className="mt-2 space-y-1">
                                 <div className="flex justify-between text-[10px]">
                                     <span className="text-slate-500">Par heure</span>
@@ -1432,17 +1439,17 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 </div>
                             </div>
                             {planet.slot_bonuses?.metal && planet.slot_bonuses.metal !== "+0%" && (
-                                <div className="mt-2 text-[9px] text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded text-center">{planet.slot_bonuses.metal} slot</div>
+                                <div className="mt-2 text-[9px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded text-center">{planet.slot_bonuses.metal} slot</div>
                             )}
                         </div>
                         {/* Cristal */}
-                        <div className="bg-gradient-to-b from-cyan-950/40 to-slate-900/60 p-3 rounded-xl border-2 border-cyan-500/40 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(6,182,212,0.3)] transition-all duration-300 card-depth group/res animate-fade-in relative overflow-hidden">
+                        <div className="bg-[rgba(16,8,46,0.95)] p-3 rounded-xl border border-cyan-500/15 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-500/35 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)] group/res relative overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover/res:opacity-100 transition-opacity"></div>
                             <div className="flex items-center gap-1.5 mb-2">
                                 <Gem size={14} className="text-cyan-400" />
                                 <span className="text-cyan-300 font-bold text-xs uppercase">Cristal</span>
                             </div>
-                            <div className="text-white font-mono font-black text-lg">{fmt(realtimeResources?.crystal ?? planet.crystal_amount)}</div>
+                            <div className="text-cyan-400 font-mono tabular-nums font-black text-lg">{fmt(realtimeResources?.crystal ?? planet.crystal_amount)}</div>
                             <div className="mt-2 space-y-1">
                                 <div className="flex justify-between text-[10px]">
                                     <span className="text-slate-500">Par heure</span>
@@ -1454,17 +1461,17 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 </div>
                             </div>
                             {planet.slot_bonuses?.crystal && planet.slot_bonuses.crystal !== "+0%" && (
-                                <div className="mt-2 text-[9px] text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded text-center">{planet.slot_bonuses.crystal} slot</div>
+                                <div className="mt-2 text-[9px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded text-center">{planet.slot_bonuses.crystal} slot</div>
                             )}
                         </div>
                         {/* Deutérium */}
-                        <div className="bg-gradient-to-b from-emerald-950/40 to-slate-900/60 p-3 rounded-xl border-2 border-emerald-500/40 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(16,185,129,0.3)] transition-all duration-300 card-depth group/res animate-fade-in relative overflow-hidden">
+                        <div className="bg-[rgba(16,8,46,0.95)] p-3 rounded-xl border border-emerald-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-[0_0_15px_rgba(16,185,129,0.1)] group/res relative overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover/res:opacity-100 transition-opacity"></div>
                             <div className="flex items-center gap-1.5 mb-2">
                                 <Droplets size={14} className="text-emerald-400" />
                                 <span className="text-emerald-300 font-bold text-xs uppercase">Deutérium</span>
                             </div>
-                            <div className="text-white font-mono font-black text-lg">{fmt(realtimeResources?.deuterium ?? planet.deuterium_amount)}</div>
+                            <div className="text-emerald-400 font-mono tabular-nums font-black text-lg">{fmt(realtimeResources?.deuterium ?? planet.deuterium_amount)}</div>
                             <div className="mt-2 space-y-1">
                                 <div className="flex justify-between text-[10px]">
                                     <span className="text-slate-500">Par heure</span>
@@ -1476,13 +1483,13 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 </div>
                             </div>
                             {planet.slot_bonuses?.deuterium && planet.slot_bonuses.deuterium !== "+0%" && (
-                                <div className="mt-2 text-[9px] text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded text-center">{planet.slot_bonuses.deuterium} slot</div>
+                                <div className="mt-2 text-[9px] text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded text-center">{planet.slot_bonuses.deuterium} slot</div>
                             )}
                         </div>
                     </div>
 
                     {/* Total journalier */}
-                    <div className="bg-gradient-to-r from-yellow-950/40 to-emerald-950/40 rounded-xl p-4 border-2 border-yellow-500/30 shadow-inner relative overflow-hidden">
+                    <div className="bg-[rgba(16,8,46,0.95)] rounded-xl p-4 border border-cyan-500/10 shadow-inner relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 via-emerald-500/5 to-cyan-500/5 animate-gradient"></div>
                         <div className="flex items-center justify-between relative z-10">
                             <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black flex items-center gap-2">
@@ -1504,7 +1511,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
       {/* STATIONNEMENT FLOTTE & DEFENSES - REDESIGN STYLE RÉSEAU ÉLECTRIQUE */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             {/* HANGAR - Design immersif */}
-            <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${totalFleet >= hangarCap ? 'border-orange-500/50' : 'border-blue-500/50'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
+            <Card className={`bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border-2 ${totalFleet >= hangarCap ? 'border-orange-500/50' : 'border-cyan-500/15'} flex flex-col relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(0,245,255,0.08)]`}>
                 {/* Effets de fond */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
                     <div className={`absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 ${totalFleet >= hangarCap ? 'bg-orange-400' : 'bg-blue-400'} animate-pulse`}></div>
@@ -1533,7 +1540,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 <CardContent className="space-y-4 relative z-10">
                     {/* Indicateur de capacité principal */}
                     <div className="text-center py-2">
-                        <div className={`text-4xl font-black font-mono tracking-tighter ${totalFleet >= hangarCap ? 'text-orange-400 animate-pulse' : 'text-blue-400'} drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]`}>
+                        <div className={`text-4xl font-black font-mono tabular-nums tracking-tighter ${totalFleet >= hangarCap ? 'text-orange-400 animate-pulse' : 'text-cyan-400'} drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]`}>
                             {fmt(totalFleet)} <span className="text-xl text-slate-500">/ {fmt(hangarCap)}</span>
                         </div>
                         <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Capacité Hangar Niv.{getBuildingLevel(planet, 'hangar')}</div>
@@ -1541,10 +1548,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
 
                     {/* Jauge de capacité style électrique */}
                     <div className="space-y-2">
-                        <div className="relative h-4 w-full bg-slate-900 rounded-full overflow-hidden border border-white/10">
+                        <div className="relative h-4 w-full bg-[rgba(10,5,32,0.85)] rounded-full overflow-hidden border border-cyan-500/10">
                             <div className="absolute inset-0 flex justify-between px-1 items-center">
                                 {[...Array(10)].map((_, i) => (
-                                    <div key={i} className="w-px h-2 bg-white/20"></div>
+                                    <div key={i} className="w-px h-2 bg-cyan-500/20"></div>
                                 ))}
                             </div>
                             <div
@@ -1566,9 +1573,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     </div>
 
                     {/* Grille des vaisseaux */}
-                    <div className="bg-black/40 rounded-xl p-3 border border-white/10">
+                    <div className="bg-[rgba(16,8,46,0.95)] rounded-xl p-3 border border-cyan-500/10">
                         <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold flex items-center gap-2">
-                            <Activity size={10} className="text-blue-400" /> Inventaire Flotte
+                            <Activity size={10} className="text-cyan-400" /> Inventaire Flotte
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                             {[
@@ -1584,12 +1591,12 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 { label: "Transporteurs", key: "transporter", val: getShipCount(planet, 'transporter'), Icon: Truck, color: "text-amber-400", alwaysShow: true },
                                 { label: "Étoile de la Mort", key: "deathstar", val: getShipCount(planet, 'deathstar'), Icon: Sparkles, color: "text-fuchsia-400", alwaysShow: false },
                             ].filter(item => item.alwaysShow || (item.val || 0) > 0).map(item => (
-                                <div key={item.label} className="bg-slate-900/60 p-2.5 rounded-lg border border-white/5 flex items-center justify-between hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300 group card-depth">
+                                <div key={item.label} className="bg-[rgba(10,5,32,0.85)] p-2.5 rounded-lg border border-cyan-500/10 flex items-center justify-between hover:border-cyan-500/25 hover:-translate-y-0.5 hover:shadow-[0_0_10px_rgba(0,245,255,0.06)] transition-all duration-200 group">
                                     <div className="flex items-center gap-2">
                                         <item.Icon size={16} className={`${item.color} group-hover:scale-110 transition-transform drop-shadow-[0_0_4px_currentColor]`} />
                                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{item.label}</span>
                                     </div>
-                                    <span className={`font-mono font-black text-sm ${(item.val || 0) > 0 ? 'text-blue-400' : 'text-slate-600'}`}>{fmt(item.val || 0)}</span>
+                                    <span className={`font-mono tabular-nums font-black text-sm ${(item.val || 0) > 0 ? 'text-cyan-400' : 'text-slate-600'}`}>{fmt(item.val || 0)}</span>
                                 </div>
                             ))}
                         </div>
@@ -1598,7 +1605,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             </Card>
 
             {/* DÉFENSES PLANÉTAIRES - Design immersif */}
-            <Card className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-2 ${totalDefense > 0 ? 'border-red-500/50' : 'border-slate-700/50'} backdrop-blur-md flex flex-col relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 card-depth animate-slide-up`}>
+            <Card className={`bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border-2 ${totalDefense > 0 ? 'border-red-500/40' : 'border-cyan-500/10'} flex flex-col relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(0,245,255,0.06)]`}>
                 {/* Effets de fond */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
                     <div className={`absolute -right-20 -top-20 w-48 h-48 rounded-full blur-3xl opacity-20 ${totalDefense > 0 ? 'bg-red-400 animate-pulse' : 'bg-slate-600'}`}></div>
@@ -1618,7 +1625,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                             </div>
                             Bouclier Orbital
                         </span>
-                        <span className={`text-[10px] font-black px-2 py-1 rounded-full border flex items-center gap-1 ${totalDefense > 0 ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-slate-700/30 text-slate-500 border-slate-600/50'}`}>
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full border flex items-center gap-1 ${totalDefense > 0 ? 'bg-red-500/20 text-red-400 border-red-500/50' : 'bg-[rgba(10,5,32,0.85)] text-slate-500 border-cyan-500/10'}`}>
                             {totalDefense > 0 ? <><ShieldCheck size={10} /> ACTIF</> : <><AlertTriangle size={10} /> VULNÉRABLE</>}
                         </span>
                     </CardTitle>
@@ -1627,14 +1634,14 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                 <CardContent className="space-y-4 relative z-10">
                     {/* Indicateur de puissance principal */}
                     <div className="text-center py-2">
-                        <div className={`text-4xl font-black font-mono tracking-tighter ${totalDefense > 0 ? 'text-red-400 drop-shadow-[0_0_15px_rgba(248,113,113,0.5)]' : 'text-slate-600'}`}>
+                        <div className={`text-4xl font-black font-mono tabular-nums tracking-tighter ${totalDefense > 0 ? 'text-red-400 drop-shadow-[0_0_15px_rgba(248,113,113,0.5)]' : 'text-slate-600'}`}>
                             {fmt(totalDefense)}
                         </div>
                         <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Systèmes de Défense Actifs</div>
                     </div>
 
                     {/* Grille des systèmes de défense */}
-                    <div className="bg-black/40 rounded-xl p-4 border border-white/10">
+                    <div className="bg-[rgba(16,8,46,0.95)] rounded-xl p-4 border border-cyan-500/10">
                         <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-3 font-bold flex items-center gap-2">
                             <Activity size={10} className="text-red-400" /> Arsenal Défensif
                         </div>
@@ -1654,7 +1661,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 const count = getShipCount(planet, key);
                                 const active = count > 0;
                                 return (
-                                    <div key={key} className={`rounded-lg p-2 border transition-opacity ${active ? 'bg-slate-900/50' : 'bg-slate-900/20 opacity-40'} border-${color}-500/20`}>
+                                    <div key={key} className={`rounded-lg p-2 border transition-opacity ${active ? 'bg-[rgba(16,8,46,0.95)]' : 'bg-[rgba(10,5,32,0.6)] opacity-40'} border-${color}-500/20`}>
                                         <div className={`text-[8px] text-${color}-400 uppercase font-bold mb-1`}>{label}</div>
                                         <div className={`text-lg font-mono font-black ${active ? `text-${color}-400` : 'text-slate-600'}`}>{fmt(count)}</div>
                                     </div>
@@ -1677,10 +1684,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                     )}
 
                     {/* Stats de puissance en bas */}
-                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5">
-                        <div className="text-center bg-black/30 rounded-lg p-2">
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-cyan-500/10">
+                        <div className="text-center bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-lg p-2">
                             <span className="text-[8px] text-slate-600 uppercase block">Dégâts/Round</span>
-                            <span className="text-red-400 font-mono text-xs font-bold">
+                            <span className="text-red-400 font-mono tabular-nums text-xs font-bold">
                                 {fmt(
                                     (getShipCount(planet, 'rocket_launcher') || 0) * 80 +
                                     (getShipCount(planet, 'light_laser') || 0) * 100 +
@@ -1695,9 +1702,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 )}
                             </span>
                         </div>
-                        <div className="text-center bg-black/30 rounded-lg p-2">
+                        <div className="text-center bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-lg p-2">
                             <span className="text-[8px] text-slate-600 uppercase block">Boucliers</span>
-                            <span className="text-cyan-400 font-mono text-xs font-bold">
+                            <span className="text-cyan-400 font-mono tabular-nums text-xs font-bold">
                                 {fmt(
                                     (getShipCount(planet, 'rocket_launcher') || 0) * 20 +
                                     (getShipCount(planet, 'light_laser') || 0) * 25 +
@@ -1712,9 +1719,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                                 )}
                             </span>
                         </div>
-                        <div className="text-center bg-black/30 rounded-lg p-2">
+                        <div className="text-center bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-lg p-2">
                             <span className="text-[8px] text-slate-600 uppercase block">Points Coque</span>
-                            <span className="text-emerald-400 font-mono text-xs font-bold">
+                            <span className="text-emerald-400 font-mono tabular-nums text-xs font-bold">
                                 {fmt(
                                     (getShipCount(planet, 'rocket_launcher') || 0) * 200 +
                                     (getShipCount(planet, 'light_laser') || 0) * 100 +
@@ -1738,6 +1745,6 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
             <AlertTriangle size={12} />
             <span>Données limitées au secteur local [{planet.galaxy}:{planet.system}:{planet.position}]</span>
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -89,14 +89,20 @@ export function Sidebar({
   ];
 
   return (
-    <div className="flex flex-col h-full bg-black/40 backdrop-blur-md border-r border-cyan-500/10">
+    <motion.div
+      className="flex flex-col h-full border-r border-cyan-500/10 backdrop-blur-[12px]"
+      style={{ background: 'rgba(10,5,32,0.85)' }}
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+    >
       {/* Header mobile */}
       {isMobile && (
         <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/10">
           <span className="hud-label text-cyan-400 tracking-[0.2em]">NAVIGATION</span>
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-white/5 rounded transition-colors"
+            className="p-1.5 hover:bg-cyan-500/5 rounded transition-colors"
           >
             <X size={16} className="text-slate-400" />
           </button>
@@ -117,7 +123,7 @@ export function Sidebar({
               {/* Header de catégorie */}
               <button
                 onClick={() => toggleCategory(category)}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-[0.18em] transition-all duration-200 hover:bg-white/5 group"
+                className="w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] transition-all duration-200 hover:bg-cyan-500/5 group"
                 style={{ color: isExpanded ? cfg.color : '#475569' }}
               >
                 <span className="flex items-center gap-1.5">
@@ -169,16 +175,11 @@ export function Sidebar({
                             variants={itemVariants}
                             whileHover={{ x: 3 }}
                             whileTap={{ scale: 0.97 }}
-                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-bold uppercase tracking-wide transition-all duration-200 relative overflow-hidden group ${
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold uppercase tracking-wide transition-all duration-200 relative overflow-hidden group ${
                               isActive
-                                ? 'sidebar-item-active text-white'
-                                : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
+                                ? 'bg-cyan-500/10 border-l-2 border-cyan-500/60 text-cyan-400'
+                                : 'text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/5 hover:border-l-2 hover:border-cyan-500/50 border-l-2 border-transparent'
                             }`}
-                            style={
-                              isActive
-                                ? { color: '#e2e8f0' }
-                                : {}
-                            }
                           >
                             {/* Icon */}
                             <div className="relative shrink-0">
@@ -190,7 +191,7 @@ export function Sidebar({
                                     : {}
                                 }
                                 className={`transition-all duration-200 ${
-                                  !isActive ? 'group-hover:text-slate-300' : ''
+                                  !isActive ? 'group-hover:text-cyan-400' : ''
                                 }`}
                               />
                               {item.id === 'messages' && unreadMessagesCount > 0 && (
@@ -226,7 +227,7 @@ export function Sidebar({
       <div className="p-3 border-t border-cyan-500/10 space-y-2">
         <button
           onClick={onShowShortcuts}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded hud-label text-cyan-600 hover:text-cyan-400 hover:bg-cyan-500/5 transition-colors border border-cyan-900/30 hover:border-cyan-700/40"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 hud-label text-cyan-600 hover:text-cyan-400 hover:bg-cyan-500/5 transition-colors border border-cyan-500/10 hover:border-cyan-500/30"
         >
           <Keyboard size={13} /> RACCOURCIS (?)
         </button>
@@ -237,6 +238,6 @@ export function Sidebar({
           </p>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
