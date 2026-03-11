@@ -76,7 +76,7 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk_law_proposal_created_by")
                             .from(Alias::new("law_proposal"), Alias::new("created_by"))
-                            .to(Alias::new("users"), Alias::new("id"))
+                            .to(Alias::new("user"), Alias::new("id"))
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
@@ -138,7 +138,7 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk_law_vote_user_id")
                             .from(Alias::new("law_vote"), Alias::new("user_id"))
-                            .to(Alias::new("users"), Alias::new("id"))
+                            .to(Alias::new("user"), Alias::new("id"))
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
@@ -276,7 +276,7 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk_survey_created_by")
                             .from(Alias::new("survey"), Alias::new("created_by"))
-                            .to(Alias::new("users"), Alias::new("id"))
+                            .to(Alias::new("user"), Alias::new("id"))
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
@@ -342,7 +342,7 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk_survey_response_user_id")
                             .from(Alias::new("survey_response"), Alias::new("user_id"))
-                            .to(Alias::new("users"), Alias::new("id"))
+                            .to(Alias::new("user"), Alias::new("id"))
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
