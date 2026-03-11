@@ -100,10 +100,10 @@ pub async fn get_game_config_handler(State(state): State<AppState>) -> impl Into
     let config = state.config.read().unwrap().clone();
 
     // Normaliser speed_factor pour le frontend (500 → 5, 1000 → 10, etc.)
-    let normalized_speed_factor = config.speed_factor / 100.0;
+    let normalized_speed_factor = config.production_speed;
 
     // Diviser les coûts par le cost_scaling (basé sur speed_factor)
-    let cost_divider = (config.speed_factor / 100.0).max(1.0);
+    let cost_divider = (config.production_speed).max(1.0);
 
     // Renvoyer toutes les config nécessaires pour les calculs frontend
     Json(json!({

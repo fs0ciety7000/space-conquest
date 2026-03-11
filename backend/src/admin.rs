@@ -530,16 +530,9 @@ pub async fn get_server_stats_handler(
         total_defenses += d.count;
     }
 
-    // Récupérer le SPEED_FACTOR depuis la DB (fallback sur la constante)
-    let speed_factor = if let Ok(Some(config)) = ServerConfig::find()
-        .filter(server_config::Column::ConfigKey.eq("speed_factor"))
-        .one(&state.db)
-        .await
-    {
-        config.config_value.parse::<f64>().unwrap_or(game_logic::SPEED_FACTOR)
-    } else {
-        game_logic::SPEED_FACTOR
-    };
+    let production_speed = if let Ok(cache) = state.config.read() {
+        cache.production_speed
+    } else { 250.0 };
 
     let stats = ServerStats {
         total_users,
@@ -549,7 +542,7 @@ pub async fn get_server_stats_handler(
         total_deuterium,
         total_ships,
         total_defenses,
-        speed_factor,
+        speed_factor: production_speed,
     };
 
     Json(stats).into_response()
@@ -646,37 +639,12 @@ pub async fn update_server_config_handler(
         println!("⚠️  Keys not found in DB: {:?}", not_found_keys);
     }
 
-    // Recharger le cache de configuration depuis la DB
-    let mut new_speed_factor = game_logic::SPEED_FACTOR;
-    let mut new_construction_speed = 1.0;
-    let mut new_mining_speed = 1.0;
-    let mut all_configs = HashMap::new();
-
-    // Recharger toutes les configs depuis la DB
-    if let Ok(configs) = ServerConfig::find().all(&state.db).await {
-        for config in configs {
-            // Parser les valeurs numériques
-            if let Ok(val) = config.config_value.parse::<f64>() {
-                all_configs.insert(config.config_key.clone(), val);
-
-                // Mettre à jour les valeurs du cache
-                match config.config_key.as_str() {
-                    "speed_factor" => new_speed_factor = val,
-                    "construction_speed_multiplier" => new_construction_speed = val,
-                    "mining_speed_multiplier" => new_mining_speed = val,
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    // Mettre à jour le cache
+    // Recharger le cache complet depuis la DB (v9.1 — granular speed keys)
+    let new_cache = crate::ServerConfigCache::load_from_db(&state.db).await;
+    let config_count = new_cache.configs.len();
     if let Ok(mut cache) = state.config.write() {
-        cache.speed_factor = new_speed_factor;
-        cache.construction_speed = new_construction_speed;
-        cache.mining_speed = new_mining_speed;
-        cache.configs = all_configs.clone();
-        println!("🔄 Cache reloaded with {} configs", all_configs.len());
+        *cache = new_cache;
+        println!("🔄 Cache reloaded with {} configs", config_count);
     } else {
         println!("❌ Failed to acquire write lock on config cache");
     }

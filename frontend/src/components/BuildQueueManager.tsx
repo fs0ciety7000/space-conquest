@@ -246,6 +246,9 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
           description: total > 0 ? `Remboursement: ${Math.floor(total).toLocaleString()} ressources (${Math.round((data.refund_ratio || 0) * 100)}%)` : undefined,
         });
         fetchStatus();
+      } else if (res.status === 409) {
+        toast.info('Déjà annulée', { description: 'Cette construction a déjà été annulée.' });
+        fetchStatus();
       } else {
         toast.error('Impossible d\'annuler');
       }

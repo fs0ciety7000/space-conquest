@@ -175,17 +175,12 @@ pub async fn recruit_officer_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "No planet found for user".to_string()))?;
 
-    // Calculer le facteur de coût basé sur la vitesse du serveur
-    let speed_factor = if let Ok(config) = state.config.read() {
-        (config.speed_factor / 100.0).max(1.0)
-    } else {
-        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
-    };
+    let prod_speed = state.config.read().map(|c| c.production_speed).unwrap_or(250.0);
 
-    // Calculer les coûts réels (divisés par le speed_factor, comme pour les autres unités)
-    let actual_cost_metal = template.recruitment_cost_metal / speed_factor;
-    let actual_cost_crystal = template.recruitment_cost_crystal / speed_factor;
-    let actual_cost_deuterium = template.recruitment_cost_deuterium / speed_factor;
+    // Coûts des officiers scalés avec la production (même ratio que les autres coûts)
+    let actual_cost_metal = template.recruitment_cost_metal / prod_speed;
+    let actual_cost_crystal = template.recruitment_cost_crystal / prod_speed;
+    let actual_cost_deuterium = template.recruitment_cost_deuterium / prod_speed;
 
     // Vérifier que le joueur a assez de ressources
     if planet.metal_amount < actual_cost_metal {
@@ -313,21 +308,16 @@ pub async fn get_officer_levelup_cost_handler(
         return Err((StatusCode::BAD_REQUEST, "Officer is already at max level".to_string()));
     }
 
-    // Calculer les coûts avec le speed factor
-    let speed_factor = if let Ok(config) = state.config.read() {
-        (config.speed_factor / 100.0).max(1.0)
-    } else {
-        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
-    };
+    let prod_speed = state.config.read().map(|c| c.production_speed).unwrap_or(250.0);
 
     let (base_metal, base_crystal, base_deuterium) = calculate_levelup_cost(&template, officer.level);
     let next_level = officer.level + 1;
     let next_bonus = calculate_bonus(&template, next_level);
 
     Ok(Json(LevelUpCostResponse {
-        metal: base_metal / speed_factor,
-        crystal: base_crystal / speed_factor,
-        deuterium: base_deuterium / speed_factor,
+        metal: base_metal / prod_speed,
+        crystal: base_crystal / prod_speed,
+        deuterium: base_deuterium / prod_speed,
         next_level,
         next_bonus,
     }))
@@ -374,17 +364,12 @@ pub async fn levelup_officer_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "No planet found for user".to_string()))?;
 
-    // Calculer les coûts avec le speed factor
-    let speed_factor = if let Ok(config) = state.config.read() {
-        (config.speed_factor / 100.0).max(1.0)
-    } else {
-        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
-    };
+    let prod_speed = state.config.read().map(|c| c.production_speed).unwrap_or(250.0);
 
     let (base_metal, base_crystal, base_deuterium) = calculate_levelup_cost(&template, officer.level);
-    let actual_cost_metal = base_metal / speed_factor;
-    let actual_cost_crystal = base_crystal / speed_factor;
-    let actual_cost_deuterium = base_deuterium / speed_factor;
+    let actual_cost_metal = base_metal / prod_speed;
+    let actual_cost_crystal = base_crystal / prod_speed;
+    let actual_cost_deuterium = base_deuterium / prod_speed;
 
     // Vérifier les ressources
     if planet.metal_amount < actual_cost_metal {

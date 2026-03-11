@@ -14,13 +14,14 @@ use sea_orm::{
     EntityTrait,
     Set,
     NotSet,
-    IntoActiveModel,     // ✅ Ajoute celui-ci
+    IntoActiveModel,
     QueryFilter,
     QueryOrder,
-    QuerySelect,         // ✅ Ajoute celui-ci
+    QuerySelect,
     ColumnTrait,
     Condition,
-    PaginatorTrait,      // ✅ Ajoute celui-ci
+    PaginatorTrait,
+    TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_string};
@@ -222,7 +223,7 @@ async fn main() {
 
     println!("⚙️ Chargement de la configuration du serveur...");
     let config_cache = backend::ServerConfigCache::load_from_db(&db).await;
-    println!("✅ Configuration chargée - Speed Factor: {}", config_cache.speed_factor);
+    println!("✅ Configuration chargée - Production Speed: {}", config_cache.production_speed);
 
     // Wrap config in Arc<RwLock<>> for sharing
     let config = std::sync::Arc::new(std::sync::RwLock::new(config_cache));
@@ -250,6 +251,10 @@ async fn main() {
         config,
         ws: Some(ws_state.clone()),
         build_locks: std::sync::Arc::new(dashmap::DashMap::new()),
+        // Auth : 5 tentatives par 60 secondes (anti brute-force)
+        rate_limit_auth: std::sync::Arc::new(backend::rate_limit::RateLimiter::new(5, 60)),
+        // Attack : 10 lancements par 60 secondes (anti-flood)
+        rate_limit_attack: std::sync::Arc::new(backend::rate_limit::RateLimiter::new(10, 60)),
     };
     let cors = CorsLayer::permissive();
 
@@ -623,10 +628,18 @@ async fn resolve_attack_mission(
     let db = &state.db;
     let now = Utc::now().naive_utc();
 
-    let att_planet = Planet::find_by_id(mission.source_planet_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
-    let att_user = User::find_by_id(att_planet.owner_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
-    let def_planet_raw = Planet::find_by_id(mission.target_planet_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
-    let def_user = User::find_by_id(def_planet_raw.owner_id).one(db).await.unwrap().ok_or(StatusCode::NOT_FOUND)?;
+    let att_planet = Planet::find_by_id(mission.source_planet_id).one(db).await
+        .map_err(|e| { eprintln!("[COMBAT] DB error fetching att_planet: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let att_user = User::find_by_id(att_planet.owner_id).one(db).await
+        .map_err(|e| { eprintln!("[COMBAT] DB error fetching att_user: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let def_planet_raw = Planet::find_by_id(mission.target_planet_id).one(db).await
+        .map_err(|e| { eprintln!("[COMBAT] DB error fetching def_planet: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let def_user = User::find_by_id(def_planet_raw.owner_id).one(db).await
+        .map_err(|e| { eprintln!("[COMBAT] DB error fetching def_user: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     // Calculer le ratio énergétique du défenseur pour un calcul précis des ressources
     let def_metal_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "metal").await.unwrap_or(0);
@@ -902,8 +915,7 @@ async fn resolve_attack_mission(
             "conquered": false
         })
     };
-    def_active.unread_report = Set(Some(to_string(&def_rep_json).unwrap()));
-    def_active.update(db).await.unwrap();
+    def_active.unread_report = Set(Some(to_string(&def_rep_json).unwrap_or_default()));
 
     let mut att_active: planet::ActiveModel = att_planet.clone().into();
     if result.winner == "attacker" {
@@ -965,8 +977,26 @@ async fn resolve_attack_mission(
             "conquered": false
         })
     };
-    att_active.unread_report = Set(Some(to_string(&att_rep_json).unwrap()));
-    att_active.update(db).await.unwrap();
+    att_active.unread_report = Set(Some(to_string(&att_rep_json).unwrap_or_default()));
+
+    // Transaction atomique : sauvegarder les deux planètes + supprimer la mission
+    // Garantit que si une écriture échoue, la mission n'est pas supprimée → elle rejoue au prochain tick
+    let mission_id = mission.id;
+    {
+        let def_active_c = def_active.clone();
+        let att_active_c = att_active.clone();
+        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            Box::pin(async move {
+                def_active_c.update(txn).await?;
+                att_active_c.update(txn).await?;
+                FleetMission::delete_by_id(mission_id).exec(txn).await?;
+                Ok(())
+            })
+        }).await.map_err(|e| {
+            eprintln!("[COMBAT TXN FAILED] mission={mission_id}: {e:?}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    }
 
     // Combat log pour le défenseur
     let _ = combat_log::ActiveModel {
@@ -999,8 +1029,6 @@ async fn resolve_attack_mission(
         detailed_report: Set(Some(att_rep_json.clone())),
         details: Set(None),
     }.insert(db).await;
-
-    FleetMission::delete_by_id(mission.id).exec(db).await.unwrap();
 
     // ═══════════════════════════════════════════════════════════════════════════
     // NOTIFICATIONS WEBSOCKET
@@ -1139,10 +1167,10 @@ async fn get_game_config_handler(State(state): State<AppState>) -> impl IntoResp
     let config = state.config.read().unwrap().clone();
 
     // Normaliser speed_factor pour le frontend (500 → 5, 1000 → 10, etc.)
-    let normalized_speed_factor = config.speed_factor / 100.0;
+    let normalized_speed_factor = config.production_speed;
 
     // Diviser les coûts par le cost_scaling (basé sur speed_factor)
-    let cost_divider = (config.speed_factor / 100.0).max(1.0);
+    let cost_divider = (config.production_speed).max(1.0);
 
     // Renvoyer toutes les config nécessaires pour les calculs frontend
     Json(json!({
@@ -1471,7 +1499,10 @@ async fn build_fleet_handler(
 
     if p.metal_amount < total_m || p.crystal_amount < total_c { return Err(StatusCode::BAD_REQUEST); }
 
-    let build_time = game_logic::get_ship_production_time(qty, &config);
+    let shipyard_lvl = tech_tree::get_planet_building_level(&state.db, p.id, "shipyard")
+        .await
+        .unwrap_or(0);
+    let build_time = game_logic::get_ship_production_time(&type_ship, qty, shipyard_lvl, &config);
 
     let mut active: planet::ActiveModel = p.clone().into();
     active.metal_amount = Set(active.metal_amount.unwrap() - total_m);
@@ -1728,7 +1759,8 @@ async fn expedition_handler(
     let hunter_vuln_mult = config_clone.get_config("expedition_hunter_vulnerability", 1.0);
     let cruiser_vuln_mult = config_clone.get_config("expedition_cruiser_vulnerability", 0.5);
     let calm_bonus = config_clone.get_config("expedition_calm_sector_bonus", 1.2);
-    let speed_factor = config_clone.speed_factor;
+    // production_speed = 250 = old (speed_factor/100) × mining_speed; recover compat divisor
+    let speed_factor = config_clone.production_speed * 2.0;
     let base_duration = config_clone.get_config("expedition_base_duration", 600.0);
 
     let base_metal_per_hunter = hunter_metal_min + rand::thread_rng().gen_range(0.0..=hunter_metal_range);
@@ -2140,7 +2172,7 @@ async fn scout_expedition_handler(
     let cruiser_deut_range = config.get_config("expedition_cruiser_deut_range", 30.0);
 
     let deuterium_chance = config.get_config("expedition_deuterium_chance", 0.5);
-    let speed_factor = config.speed_factor;
+    let speed_factor = config.production_speed * 2.0;
 
     let avg_metal_per_hunter = hunter_metal_min + (hunter_metal_range / 2.0);
     let avg_crystal_per_hunter = hunter_crystal_min + (hunter_crystal_range / 2.0);
@@ -3690,8 +3722,7 @@ async fn buy_from_listing_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    // Execute transaction atomically
-    // 1. Buyer loses target resource
+    // 1. Préparer buyer ActiveModel
     let mut active_buyer = buyer_planet.clone().into_active_model();
     match listing.target_resource.as_str() {
         "metal" => active_buyer.metal_amount = Set(buyer_planet.metal_amount - total_cost),
@@ -3699,8 +3730,6 @@ async fn buy_from_listing_handler(
         "deuterium" => active_buyer.deuterium_amount = Set(buyer_planet.deuterium_amount - total_cost),
         _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
-
-    // 2. Buyer gains sold resource
     match listing.resource_type.as_str() {
         "metal" => {
             let current = match listing.target_resource.as_str() {
@@ -3725,9 +3754,8 @@ async fn buy_from_listing_handler(
         },
         _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
-    let updated_buyer = active_buyer.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // 3. Seller gains target resource (minus tax)
+    // 2. Préparer seller ActiveModel
     let mut active_seller = seller_planet.clone().into_active_model();
     match listing.target_resource.as_str() {
         "metal" => active_seller.metal_amount = Set(seller_planet.metal_amount + seller_receives),
@@ -3735,23 +3763,17 @@ async fn buy_from_listing_handler(
         "deuterium" => active_seller.deuterium_amount = Set(seller_planet.deuterium_amount + seller_receives),
         _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
-    let _updated_seller = active_seller.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // 4. Update or delete listing
+    // 3. Préparer listing ActiveModel
+    let mut active_listing = listing.clone().into_active_model();
     if payload.quantity >= listing.quantity {
-        // Full purchase - mark inactive
-        let mut active_listing = listing.clone().into_active_model();
         active_listing.is_active = Set(false);
-        active_listing.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     } else {
-        // Partial purchase - update quantity
-        let mut active_listing = listing.clone().into_active_model();
         active_listing.quantity = Set(listing.quantity - payload.quantity);
-        active_listing.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
 
-    // 5. Record transaction
-    let transaction = market_transaction::ActiveModel {
+    // 4. Préparer l'enregistrement de la transaction
+    let transaction_record = market_transaction::ActiveModel {
         id: Set(Uuid::new_v4()),
         seller_planet_id: Set(listing.seller_planet_id),
         seller_user_id: Set(listing.seller_user_id),
@@ -3766,7 +3788,24 @@ async fn buy_from_listing_handler(
         transaction_type: Set("player".to_string()),
         created_at: Set(now),
     };
-    transaction.insert(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 5. Transaction atomique : acheteur + vendeur + listing + log, ou rollback total
+    let (upd_metal, upd_crystal, upd_deuterium) = db.transaction::<_, (f64, f64, f64), sea_orm::DbErr>(|txn| {
+        let ab = active_buyer.clone();
+        let as_ = active_seller.clone();
+        let al = active_listing.clone();
+        let tr = transaction_record.clone();
+        Box::pin(async move {
+            let ub = ab.update(txn).await?;
+            as_.update(txn).await?;
+            al.update(txn).await?;
+            tr.insert(txn).await?;
+            Ok((ub.metal_amount, ub.crystal_amount, ub.deuterium_amount))
+        })
+    }).await.map_err(|e| {
+        eprintln!("[MARKET BUY TXN FAILED]: {e:?}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // 6. Update server stats
     let totals = market::calculate_server_resource_totals(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -3792,9 +3831,9 @@ async fn buy_from_listing_handler(
     Ok(Json(json!({
         "message": "Purchase successful",
         "buyer_planet": {
-            "metal_amount": updated_buyer.metal_amount,
-            "crystal_amount": updated_buyer.crystal_amount,
-            "deuterium_amount": updated_buyer.deuterium_amount,
+            "metal_amount": upd_metal,
+            "crystal_amount": upd_crystal,
+            "deuterium_amount": upd_deuterium,
         },
         "seller_received": seller_receives,
         "tax_paid": tax_amount,
@@ -3890,16 +3929,14 @@ async fn buy_from_npc_handler(
         _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 
-    let updated_planet = active_planet.update(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Record transaction
+    // Transaction atomique : mise à jour planète + log
     let now = Utc::now().naive_utc();
-    let transaction = market_transaction::ActiveModel {
+    let npc_transaction = market_transaction::ActiveModel {
         id: Set(Uuid::new_v4()),
         seller_planet_id: Set(payload.planet_id),
         seller_user_id: Set(payload.user_id),
-        buyer_planet_id: Set(Uuid::nil()), // NPC
-        buyer_user_id: Set(Uuid::nil()),   // NPC
+        buyer_planet_id: Set(Uuid::nil()),
+        buyer_user_id: Set(Uuid::nil()),
         resource_sold: Set(payload.sell_resource.clone()),
         resource_paid: Set(payload.buy_resource.clone()),
         quantity_sold: Set(payload.sell_quantity),
@@ -3909,7 +3946,18 @@ async fn buy_from_npc_handler(
         transaction_type: Set("npc".to_string()),
         created_at: Set(now),
     };
-    transaction.insert(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let (upd_metal, upd_crystal, upd_deuterium) = db.transaction::<_, (f64, f64, f64), sea_orm::DbErr>(|txn| {
+        let ap = active_planet.clone();
+        let tr = npc_transaction.clone();
+        Box::pin(async move {
+            let up = ap.update(txn).await?;
+            tr.insert(txn).await?;
+            Ok((up.metal_amount, up.crystal_amount, up.deuterium_amount))
+        })
+    }).await.map_err(|e| {
+        eprintln!("[NPC MARKET TXN FAILED]: {e:?}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Update server stats
     let totals = market::calculate_server_resource_totals(db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -3918,9 +3966,9 @@ async fn buy_from_npc_handler(
     Ok(Json(json!({
         "message": "NPC exchange successful",
         "planet": {
-            "metal_amount": updated_planet.metal_amount,
-            "crystal_amount": updated_planet.crystal_amount,
-            "deuterium_amount": updated_planet.deuterium_amount,
+            "metal_amount": upd_metal,
+            "crystal_amount": upd_crystal,
+            "deuterium_amount": upd_deuterium,
         },
         "exchanged": {
             "sold_resource": payload.sell_resource,
@@ -4620,7 +4668,7 @@ async fn build_ships_handler(
         }
     }
 
-    let build_time_per_ship = ship.build_time_seconds as f64 / ((config.speed_factor / 100.0) * config.construction_speed);
+    let build_time_per_ship = ship.build_time_seconds as f64 / (config.building_speed);
     let additional_build_time = (build_time_per_ship * quantity as f64) as i64;
 
     // If already building, add to the existing queue
@@ -4817,7 +4865,7 @@ async fn build_defenses_handler(
         }
     }
 
-    let build_time_per_defense = defense.build_time_seconds as f64 / ((config.speed_factor / 100.0) * config.construction_speed);
+    let build_time_per_defense = defense.build_time_seconds as f64 / (config.building_speed);
     let additional_build_time = (build_time_per_defense * quantity as f64) as i64;
 
     // If already building, add to the existing queue

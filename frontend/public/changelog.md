@@ -1,5 +1,31 @@
 # Changelog - Space Conquest
 
+## [9.1.0] - 2026-03-11 - Refactoring vitesses & Rééquilibrage du jeu
+
+### ⚙️ Backend — Refactoring SPEED_FACTOR (breaking change interne)
+
+- **Suppression de `SPEED_FACTOR`** : la constante monolithique `SPEED_FACTOR = 500` est supprimée. Elle est remplacée par 4 multiplicateurs granulaires configurables depuis l'administration :
+  - `production_speed_multiplier` (250) — vitesse de production des mines
+  - `building_speed_multiplier` (50) — vitesse de construction des bâtiments
+  - `research_speed_multiplier` (25) — vitesse de recherche technologique
+  - `ship_build_speed_multiplier` (100) — vitesse de production des vaisseaux
+
+### 🚀 Temps de production des vaisseaux (nouvelle formule)
+
+- **Formule basée sur le coût** : le temps de production d'un vaisseau est maintenant proportionnel à son coût total (métal + cristal). Un Destructeur prend bien plus longtemps à produire qu'un Chasseur Léger.
+- **Formule** : `coût_total / (2500 × niveau_chantier × 0.5) × 3600 / ship_build_speed`
+- **Niveau du chantier spatial** : chaque niveau de chantier accélère la production de 50%.
+
+### 💰 Coûts des unités
+
+- **Suppression du diviseur de coût** : les coûts de vaisseaux et défenses n'étaient pas divisés par le bon facteur. Les coûts sont maintenant ceux définis dans la base de données sans modification artificielle.
+
+### 🎯 Combat & Butin
+
+- **Butin sans plafond arbitraire** : le plafond sur le butin par ressource (`combat_loot_cap_per_resource`) est supprimé. La seule limite est la capacité cargo des vaisseaux attaquants survivants.
+
+---
+
 ## [8.8.0] - 2026-03-10 - Statistiques unifiées & Corrections slots
 
 ### 🎯 Interface

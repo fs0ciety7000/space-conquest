@@ -1,7 +1,7 @@
 // backend/src/tech_tree.rs
 // Tech Tree System - Dynamic relational database queries
 
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySelect, ActiveModelTrait, Set};
+use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySelect, ActiveModelTrait, Set};
 use crate::entities::{prelude::*, technology, planet_technology, ship_type, planet_ship, technology_requirement, ship_requirement, ship_building_requirement, building_type, building_requirement, planet_building, defense_type, defense_requirement, planet_defense};
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
@@ -65,7 +65,7 @@ impl PlanetData {
 
 /// Deduct ships from a planet (updates planet_ship table)
 pub async fn deduct_ships(
-    db: &DatabaseConnection,
+    db: &impl ConnectionTrait,
     planet_id: Uuid,
     ship_key: &str,
     amount: i32,
@@ -329,7 +329,7 @@ pub async fn get_tech_tree_for_planet(
         let next_level_time = if current_level >= 0 {
             let time = calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level);
             // Apply construction speed multiplier
-            let speed_factor = (config.speed_factor / 100.0) * config.construction_speed;
+            let speed_factor = config.building_speed;
             Some(std::cmp::max(10, (time as f64 / speed_factor) as i64))
         } else {
             None

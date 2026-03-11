@@ -264,6 +264,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
           description: `Remboursement de ${Math.floor(total).toLocaleString()} ressources (${Math.round(data.refund_ratio * 100)}%).`
         });
         fetchPlanet();
+      } else if (res.status === 409) {
+        toast.info("Déjà annulée", { description: "Cette construction a déjà été annulée." });
       } else {
         toast.error("Erreur lors de l'annulation");
       }
@@ -286,6 +288,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
           description: `Remboursement de ${Math.floor(total).toLocaleString()} ressources (${Math.round(data.refund_ratio * 100)}%).`
         });
         fetchPlanet();
+      } else if (res.status === 409) {
+        toast.info("Déjà annulée", { description: "Cette recherche a déjà été annulée." });
       } else {
         toast.error("Erreur lors de l'annulation");
       }
@@ -310,6 +314,8 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
           description: `Remboursement de ${Math.floor(total).toLocaleString()} ressources (${Math.round(data.refund_ratio * 100)}%).`
         });
         fetchPlanet();
+      } else if (res.status === 409) {
+        toast.info("Déjà annulée", { description: "Cette construction a déjà été annulée." });
       } else {
         toast.error("Erreur lors de l'annulation");
       }

@@ -86,6 +86,7 @@ mod m20260309_000001_create_debris_field;
 mod m20260309_000002_system_messages_and_pve;
 mod m20260309_000003_planet_combat_zone;
 mod m20260310_000001_backfill_resource_slots;
+mod m20260312_000001_refactor_speed_config;
 
 pub struct Migrator;
 
@@ -179,6 +180,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260309_000002_system_messages_and_pve::Migration),
             Box::new(m20260309_000003_planet_combat_zone::Migration),
             Box::new(m20260310_000001_backfill_resource_slots::Migration),
+            Box::new(m20260312_000001_refactor_speed_config::Migration),
         ]
     }
 }

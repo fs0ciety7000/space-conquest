@@ -156,7 +156,7 @@ async fn start_item_immediately(
     target_level: Option<i32>,
 ) -> Result<String, DbErr> {
     let now = Utc::now().naive_utc();
-    let speed = (config.speed_factor / 100.0) * config.construction_speed;
+    let speed = config.building_speed;
 
     match category {
         "ships" => {

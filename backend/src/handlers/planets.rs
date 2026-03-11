@@ -201,9 +201,6 @@ async fn get_planet_handler(
     let slot_4: Option<String> = slots.iter().find(|s| s.slot_number == 8).map(|s| s.resource_type.clone());
 
     let config = state.config.read().unwrap().clone();
-    let speed_factor = config.speed_factor;
-    let _ = speed_factor; // used indirectly via config
-
     // Get building levels from planet_buildings
     let metal_mine_level = get_building_level(&state.db, id, "metal_mine").await;
     let crystal_mine_level = get_building_level(&state.db, id, "crystal_mine").await;
@@ -1306,7 +1303,10 @@ async fn cancel_construction_handler(
     let is_unit = is_ship_unit || is_defense_unit;
 
     let total_duration = if is_unit {
-        game_logic::get_ship_production_time(item.level, &config) as f64
+        let sy_level = tech_tree::get_planet_building_level(&state.db, p.id, "shipyard")
+            .await
+            .unwrap_or(0);
+        game_logic::get_ship_production_time(&item.building_type, item.level, sy_level, &config) as f64
     } else {
         let is_tech = Technology::find()
             .filter(backend::entities::technology::Column::TechKey.eq(&item.building_type))

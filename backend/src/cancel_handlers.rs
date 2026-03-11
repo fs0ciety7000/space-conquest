@@ -10,7 +10,7 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -24,6 +24,7 @@ use crate::tech_tree;
 ///
 /// Cancels the current ship build for the given ship key and refunds resources
 /// based on remaining build time (up to 95% refund).
+/// The cancel and refund are wrapped in a DB transaction to prevent double-refund exploits.
 #[axum::debug_handler]
 pub async fn cancel_ship_build_handler(
     Path((planet_id, ship_key)): Path<(Uuid, String)>,
@@ -31,7 +32,7 @@ pub async fn cancel_ship_build_handler(
 ) -> Response {
     use crate::entities::ship_type;
 
-    // Get planet
+    // Get planet (read-only pre-check)
     let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
         Ok(Some(p)) => p,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
@@ -63,7 +64,7 @@ pub async fn cancel_ship_build_handler(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
     };
 
-    // Calculate refund
+    // Calculate refund (outside transaction — read-only computation)
     let building_count = build.building_count.unwrap_or(0);
     if building_count <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "No units being built"}))).into_response();
@@ -75,14 +76,12 @@ pub async fn cancel_ship_build_handler(
         None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "No build in progress"}))).into_response(),
     };
 
-    // Calculate total cost
     let total_cost_metal = ship.cost_metal * building_count;
     let total_cost_crystal = ship.cost_crystal * building_count;
     let total_cost_deuterium = ship.cost_deuterium * building_count;
 
-    // Calculate refund based on remaining time (up to 95%)
     let config = state.config.read().unwrap().clone();
-    let build_time_per_ship = ship.build_time_seconds as f64 / ((config.speed_factor / 100.0) * config.construction_speed);
+    let build_time_per_ship = ship.build_time_seconds as f64 / (config.building_speed);
     let total_duration = (build_time_per_ship * building_count as f64) as i64;
     let remaining_seconds = (end_time - now).num_seconds().max(0);
     let refund_ratio = (remaining_seconds as f64 / total_duration as f64).clamp(0.0, 0.95);
@@ -91,23 +90,56 @@ pub async fn cancel_ship_build_handler(
     let refund_crystal = (total_cost_crystal as f64 * refund_ratio) as i32;
     let refund_deuterium = (total_cost_deuterium as f64 * refund_ratio) as i32;
 
-    // Refund resources
-    let mut active_planet: planet::ActiveModel = planet.into();
-    active_planet.metal_amount = Set(active_planet.metal_amount.unwrap() + refund_metal as f64);
-    active_planet.crystal_amount = Set(active_planet.crystal_amount.unwrap() + refund_crystal as f64);
-    active_planet.deuterium_amount = Set(active_planet.deuterium_amount.unwrap() + refund_deuterium as f64);
+    let ship_type_id = ship.id;
 
-    if let Err(_) = active_planet.update(&state.db).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to refund resources"}))).into_response();
-    }
+    // TRANSACTION: cancel first (idempotency guard), then credit resources
+    // Re-reads build inside the transaction to prevent concurrent double-cancel.
+    let txn_result = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        Box::pin(async move {
+            // Re-read the build inside the transaction to ensure it's still active
+            let build_current = PlanetShip::find()
+                .filter(planet_ship::Column::PlanetId.eq(planet_id))
+                .filter(planet_ship::Column::ShipTypeId.eq(ship_type_id))
+                .filter(planet_ship::Column::BuildingCount.is_not_null())
+                .one(txn)
+                .await?;
 
-    // Cancel the build
-    let mut active_build: planet_ship::ActiveModel = build.into();
-    active_build.building_count = Set(None);
-    active_build.build_end_time = Set(None);
+            let build_current = match build_current {
+                Some(b) if b.building_count.is_some() => b,
+                _ => return Err(sea_orm::DbErr::Custom("Build already cancelled or not found".into())),
+            };
 
-    if let Err(_) = active_build.update(&state.db).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to cancel build"}))).into_response();
+            // 1. Cancel the build (idempotency key — must succeed first)
+            let mut active_build: planet_ship::ActiveModel = build_current.into();
+            active_build.building_count = Set(None);
+            active_build.build_end_time = Set(None);
+            active_build.update(txn).await?;
+
+            // 2. Refund resources to planet (only if cancel succeeded)
+            let planet_current = Planet::find_by_id(planet_id).one(txn).await?
+                .ok_or_else(|| sea_orm::DbErr::Custom("Planet not found in transaction".into()))?;
+            let cur_m = planet_current.metal_amount;
+            let cur_c = planet_current.crystal_amount;
+            let cur_d = planet_current.deuterium_amount;
+            let mut active_planet: planet::ActiveModel = planet_current.into();
+            active_planet.metal_amount = Set(cur_m + refund_metal as f64);
+            active_planet.crystal_amount = Set(cur_c + refund_crystal as f64);
+            active_planet.deuterium_amount = Set(cur_d + refund_deuterium as f64);
+            active_planet.update(txn).await?;
+
+            Ok(())
+        })
+    }).await;
+
+    match txn_result {
+        Err(sea_orm::TransactionError::Transaction(e)) if e.to_string().contains("already cancelled") => {
+            return (StatusCode::CONFLICT, Json(json!({"error": "Build already cancelled"}))).into_response();
+        }
+        Err(e) => {
+            eprintln!("[cancel_ship_build] transaction failed: {:?}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction failed"}))).into_response();
+        }
+        Ok(_) => {}
     }
 
     Json(json!({
@@ -125,6 +157,7 @@ pub async fn cancel_ship_build_handler(
 ///
 /// Cancels the current defense build for the given defense key and refunds resources
 /// based on remaining build time (up to 95% refund).
+/// Atomic transaction: cancel first, then refund.
 #[axum::debug_handler]
 pub async fn cancel_defense_build_handler(
     Path((planet_id, defense_key)): Path<(Uuid, String)>,
@@ -132,9 +165,9 @@ pub async fn cancel_defense_build_handler(
 ) -> Response {
     use crate::entities::defense_type;
 
-    // Get planet
-    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
-        Ok(Some(p)) => p,
+    // Get planet (read-only pre-check)
+    match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(_)) => {},
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
     };
@@ -164,7 +197,6 @@ pub async fn cancel_defense_build_handler(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
     };
 
-    // Calculate refund
     let building_count = build.building_count.unwrap_or(0);
     if building_count <= 0 {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "No units being built"}))).into_response();
@@ -176,14 +208,12 @@ pub async fn cancel_defense_build_handler(
         None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "No build in progress"}))).into_response(),
     };
 
-    // Calculate total cost
     let total_cost_metal = defense.base_cost_metal * building_count;
     let total_cost_crystal = defense.base_cost_crystal * building_count;
     let total_cost_deuterium = defense.base_cost_deuterium * building_count;
 
-    // Calculate refund based on remaining time (up to 95%)
     let config = state.config.read().unwrap().clone();
-    let build_time_per_defense = defense.build_time_seconds as f64 / ((config.speed_factor / 100.0) * config.construction_speed);
+    let build_time_per_defense = defense.build_time_seconds as f64 / (config.building_speed);
     let total_duration = (build_time_per_defense * building_count as f64) as i64;
     let remaining_seconds = (end_time - now).num_seconds().max(0);
     let refund_ratio = (remaining_seconds as f64 / total_duration as f64).clamp(0.0, 0.95);
@@ -192,23 +222,54 @@ pub async fn cancel_defense_build_handler(
     let refund_crystal = (total_cost_crystal as f64 * refund_ratio) as i32;
     let refund_deuterium = (total_cost_deuterium as f64 * refund_ratio) as i32;
 
-    // Refund resources
-    let mut active_planet: planet::ActiveModel = planet.into();
-    active_planet.metal_amount = Set(active_planet.metal_amount.unwrap() + refund_metal as f64);
-    active_planet.crystal_amount = Set(active_planet.crystal_amount.unwrap() + refund_crystal as f64);
-    active_planet.deuterium_amount = Set(active_planet.deuterium_amount.unwrap() + refund_deuterium as f64);
+    let defense_type_id = defense.id;
 
-    if let Err(_) = active_planet.update(&state.db).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to refund resources"}))).into_response();
-    }
+    // TRANSACTION: cancel first, then refund
+    let txn_result = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        Box::pin(async move {
+            let build_current = PlanetDefense::find()
+                .filter(planet_defense::Column::PlanetId.eq(planet_id))
+                .filter(planet_defense::Column::DefenseTypeId.eq(defense_type_id))
+                .filter(planet_defense::Column::BuildingCount.is_not_null())
+                .one(txn)
+                .await?;
 
-    // Cancel the build
-    let mut active_build: planet_defense::ActiveModel = build.into();
-    active_build.building_count = Set(None);
-    active_build.build_end_time = Set(None);
+            let build_current = match build_current {
+                Some(b) if b.building_count.is_some() => b,
+                _ => return Err(sea_orm::DbErr::Custom("Build already cancelled or not found".into())),
+            };
 
-    if let Err(_) = active_build.update(&state.db).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to cancel build"}))).into_response();
+            // 1. Cancel first
+            let mut active_build: planet_defense::ActiveModel = build_current.into();
+            active_build.building_count = Set(None);
+            active_build.build_end_time = Set(None);
+            active_build.update(txn).await?;
+
+            // 2. Refund resources
+            let planet_current = Planet::find_by_id(planet_id).one(txn).await?
+                .ok_or_else(|| sea_orm::DbErr::Custom("Planet not found in transaction".into()))?;
+            let cur_m = planet_current.metal_amount;
+            let cur_c = planet_current.crystal_amount;
+            let cur_d = planet_current.deuterium_amount;
+            let mut active_planet: planet::ActiveModel = planet_current.into();
+            active_planet.metal_amount = Set(cur_m + refund_metal as f64);
+            active_planet.crystal_amount = Set(cur_c + refund_crystal as f64);
+            active_planet.deuterium_amount = Set(cur_d + refund_deuterium as f64);
+            active_planet.update(txn).await?;
+
+            Ok(())
+        })
+    }).await;
+
+    match txn_result {
+        Err(sea_orm::TransactionError::Transaction(e)) if e.to_string().contains("already cancelled") => {
+            return (StatusCode::CONFLICT, Json(json!({"error": "Build already cancelled"}))).into_response();
+        }
+        Err(e) => {
+            eprintln!("[cancel_defense_build] transaction failed: {:?}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction failed"}))).into_response();
+        }
+        Ok(_) => {}
     }
 
     Json(json!({
@@ -226,14 +287,15 @@ pub async fn cancel_defense_build_handler(
 ///
 /// Cancels the current research for the given tech key and refunds resources
 /// based on remaining research time (up to 95% refund).
+/// Atomic transaction: cancel first, then refund.
 #[axum::debug_handler]
 pub async fn cancel_research_handler(
     Path((planet_id, tech_key)): Path<(Uuid, String)>,
     State(state): State<AppState>,
 ) -> Response {
-    // Get planet
-    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
-        Ok(Some(p)) => p,
+    // Get planet (read-only pre-check)
+    match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(_)) => {},
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
     };
@@ -268,16 +330,14 @@ pub async fn cancel_research_handler(
         None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "No research end time"}))).into_response(),
     };
 
-    // Cost is at current_level (researching FROM current to current+1)
     let current_level = research.current_level;
     let cost_metal = tech_tree::calculate_tech_cost(tech.base_cost_metal, tech.cost_multiplier, current_level);
     let cost_crystal = tech_tree::calculate_tech_cost(tech.base_cost_crystal, tech.cost_multiplier, current_level);
     let cost_deuterium = tech_tree::calculate_tech_cost(tech.base_cost_deuterium, tech.cost_multiplier, current_level);
 
-    // Refund based on remaining time (up to 95%)
     let config = state.config.read().unwrap().clone();
     let raw_duration = tech_tree::calculate_tech_time(tech.base_time_seconds, tech.cost_multiplier, current_level) as f64;
-    let total_duration = (raw_duration / ((config.speed_factor / 100.0) * config.construction_speed)) as i64;
+    let total_duration = (raw_duration / (config.building_speed)) as i64;
     let remaining_seconds = (end_time - now).num_seconds().max(0);
     let refund_ratio = if total_duration > 0 {
         (remaining_seconds as f64 / total_duration as f64).clamp(0.0, 0.95)
@@ -289,23 +349,54 @@ pub async fn cancel_research_handler(
     let refund_crystal = (cost_crystal as f64 * refund_ratio) as i32;
     let refund_deuterium = (cost_deuterium as f64 * refund_ratio) as i32;
 
-    // Refund resources
-    let mut active_planet: planet::ActiveModel = planet.into();
-    active_planet.metal_amount = Set(active_planet.metal_amount.unwrap() + refund_metal as f64);
-    active_planet.crystal_amount = Set(active_planet.crystal_amount.unwrap() + refund_crystal as f64);
-    active_planet.deuterium_amount = Set(active_planet.deuterium_amount.unwrap() + refund_deuterium as f64);
+    let tech_id = tech.id;
 
-    if let Err(_) = active_planet.update(&state.db).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to refund resources"}))).into_response();
-    }
+    // TRANSACTION: cancel first, then refund
+    let txn_result = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        Box::pin(async move {
+            let research_current = PlanetTechnology::find()
+                .filter(planet_technology::Column::PlanetId.eq(planet_id))
+                .filter(planet_technology::Column::TechId.eq(tech_id))
+                .filter(planet_technology::Column::ResearchingToLevel.is_not_null())
+                .one(txn)
+                .await?;
 
-    // Cancel the research
-    let mut active_research: planet_technology::ActiveModel = research.into();
-    active_research.researching_to_level = Set(None);
-    active_research.research_end_time = Set(None);
+            let research_current = match research_current {
+                Some(r) if r.researching_to_level.is_some() => r,
+                _ => return Err(sea_orm::DbErr::Custom("Research already cancelled or not found".into())),
+            };
 
-    if let Err(_) = active_research.update(&state.db).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to cancel research"}))).into_response();
+            // 1. Cancel the research first
+            let mut active_research: planet_technology::ActiveModel = research_current.into();
+            active_research.researching_to_level = Set(None);
+            active_research.research_end_time = Set(None);
+            active_research.update(txn).await?;
+
+            // 2. Refund resources
+            let planet_current = Planet::find_by_id(planet_id).one(txn).await?
+                .ok_or_else(|| sea_orm::DbErr::Custom("Planet not found in transaction".into()))?;
+            let cur_m = planet_current.metal_amount;
+            let cur_c = planet_current.crystal_amount;
+            let cur_d = planet_current.deuterium_amount;
+            let mut active_planet: planet::ActiveModel = planet_current.into();
+            active_planet.metal_amount = Set(cur_m + refund_metal as f64);
+            active_planet.crystal_amount = Set(cur_c + refund_crystal as f64);
+            active_planet.deuterium_amount = Set(cur_d + refund_deuterium as f64);
+            active_planet.update(txn).await?;
+
+            Ok(())
+        })
+    }).await;
+
+    match txn_result {
+        Err(sea_orm::TransactionError::Transaction(e)) if e.to_string().contains("already cancelled") => {
+            return (StatusCode::CONFLICT, Json(json!({"error": "Research already cancelled"}))).into_response();
+        }
+        Err(e) => {
+            eprintln!("[cancel_research] transaction failed: {:?}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction failed"}))).into_response();
+        }
+        Ok(_) => {}
     }
 
     Json(json!({

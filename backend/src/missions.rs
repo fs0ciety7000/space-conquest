@@ -87,7 +87,7 @@ pub struct MissionsOverview {
     pub streak: StreakInfo,
     pub total_xp: i32,
     pub missions_completed_today: i32,
-    pub speed_factor: f64,
+    pub production_speed: f64,
     pub player_tier: i32,
     pub player_tier_name: String,
     pub missions_to_next_tier: Option<i32>,
@@ -175,12 +175,9 @@ pub async fn get_daily_missions_handler(
         .map(|m| m.reward_xp)
         .sum();
 
-    // Récupérer le speed_factor depuis la config
-    let speed_factor = if let Ok(config) = state.config.read() {
-        (config.speed_factor / 100.0).max(1.0)
-    } else {
-        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
-    };
+    let production_speed = state.config.read()
+        .map(|c| c.production_speed)
+        .unwrap_or(250.0);
 
     let (tier_name, missions_to_next) = tier_info(player_tier, total_claimed);
 
@@ -189,7 +186,7 @@ pub async fn get_daily_missions_handler(
         streak: streak_info,
         total_xp,
         missions_completed_today: completed_today,
-        speed_factor,
+        production_speed,
         player_tier,
         player_tier_name: tier_name,
         missions_to_next_tier: missions_to_next,
@@ -279,17 +276,12 @@ pub async fn claim_mission_reward_handler(
     let streak = get_or_create_streak(&state, user_id).await;
     let bonus = calculate_streak_bonus(streak.current_streak);
 
-    // Récupérer le facteur de vitesse du serveur
-    let speed_factor = if let Ok(config) = state.config.read() {
-        (config.speed_factor / 100.0).max(1.0)
-    } else {
-        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
-    };
+    let prod_speed = state.config.read().map(|c| c.production_speed).unwrap_or(250.0);
 
     // Appliquer le bonus de streak ET le multiplicateur de vitesse aux récompenses
-    let metal = mission.reward_metal * bonus * speed_factor;
-    let crystal = mission.reward_crystal * bonus * speed_factor;
-    let deuterium = mission.reward_deuterium * bonus * speed_factor;
+    let metal = mission.reward_metal * bonus * prod_speed;
+    let crystal = mission.reward_crystal * bonus * prod_speed;
+    let deuterium = mission.reward_deuterium * bonus * prod_speed;
 
     // Créditer la planète
     let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
@@ -575,17 +567,12 @@ pub async fn claim_daily_reward_handler(
 
     let reward = calculate_streak_reward(streak.current_streak);
 
-    // Récupérer le facteur de vitesse du serveur pour adapter les récompenses
-    let speed_factor = if let Ok(config) = state.config.read() {
-        (config.speed_factor / 100.0).max(1.0)
-    } else {
-        (crate::game_logic::SPEED_FACTOR / 100.0).max(1.0)
-    };
+    let prod_speed = state.config.read().map(|c| c.production_speed).unwrap_or(250.0);
 
-    // Appliquer le multiplicateur de vitesse aux récompenses
-    let metal = reward.metal * speed_factor;
-    let crystal = reward.crystal * speed_factor;
-    let deuterium = reward.deuterium * speed_factor;
+    // Appliquer le multiplicateur de production aux récompenses
+    let metal = reward.metal * prod_speed;
+    let crystal = reward.crystal * prod_speed;
+    let deuterium = reward.deuterium * prod_speed;
 
     // Créditer la planète
     let planet = match Planet::find_by_id(planet_id).one(&state.db).await {

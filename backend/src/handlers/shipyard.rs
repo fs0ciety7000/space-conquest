@@ -30,6 +30,41 @@ use backend::entities::{
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Lazy eval helper — met à jour les ressources d'une planète avant toute
+// vérification de coût, afin d'éviter les comparaisons sur des valeurs périmées.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async fn apply_lazy_eval(
+    db: &sea_orm::DatabaseConnection,
+    planet: &mut planet::Model,
+    config: &backend::ServerConfigCache,
+) {
+    let metal_level = tech_tree::get_planet_building_level(db, planet.id, "metal_mine").await.unwrap_or(0);
+    let crystal_level = tech_tree::get_planet_building_level(db, planet.id, "crystal_mine").await.unwrap_or(0);
+    let deuterium_level = tech_tree::get_planet_building_level(db, planet.id, "deuterium_mine").await.unwrap_or(0);
+    let solar_level = tech_tree::get_planet_building_level(db, planet.id, "solar_plant").await.unwrap_or(0);
+    let energy_tech = tech_tree::get_planet_tech_level(db, planet.id, "energy_tech").await.unwrap_or(0);
+    let plasma_tech = tech_tree::get_planet_tech_level(db, planet.id, "plasma_tech").await.unwrap_or(0);
+
+    let energy_ratio = game_logic::calculate_energy_ratio(
+        solar_level, energy_tech, metal_level, crystal_level, deuterium_level, config,
+    );
+
+    planet.metal_amount = game_logic::calculate_resources_with_energy(
+        game_logic::ResourceType::Metal, metal_level, planet.metal_amount, planet.last_update,
+        energy_tech, plasma_tech, energy_ratio, config,
+    );
+    planet.crystal_amount = game_logic::calculate_resources_with_energy(
+        game_logic::ResourceType::Crystal, crystal_level, planet.crystal_amount, planet.last_update,
+        energy_tech, plasma_tech, energy_ratio, config,
+    );
+    planet.deuterium_amount = game_logic::calculate_resources_with_energy(
+        game_logic::ResourceType::Deuterium, deuterium_level, planet.deuterium_amount, planet.last_update,
+        energy_tech, plasma_tech, energy_ratio, config,
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /planets/:id/tech-tree
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -58,8 +93,32 @@ pub async fn get_ship_types_handler(
     State(state): State<AppState>,
     Path(planet_id): Path<Uuid>,
 ) -> impl IntoResponse {
+    let config = state.config.read().unwrap().clone();
+    let shipyard_level =
+        tech_tree::get_planet_building_level(&state.db, planet_id, "shipyard")
+            .await
+            .unwrap_or(0);
+
     match tech_tree::get_ship_types_for_planet(&state.db, planet_id).await {
-        Ok(ship_types) => axum::Json(json!({ "ship_types": ship_types })).into_response(),
+        Ok(ship_types) => {
+            // Augment each ship with the dynamic build time (cost-based formula)
+            let ship_types_augmented: Vec<serde_json::Value> = ship_types
+                .iter()
+                .map(|s| {
+                    let build_time_per_unit =
+                        game_logic::get_ship_production_time(&s.ship_key, 1, shipyard_level, &config);
+                    let mut v = serde_json::to_value(s).unwrap_or_default();
+                    if let Some(obj) = v.as_object_mut() {
+                        obj.insert(
+                            "build_time_seconds".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(build_time_per_unit)),
+                        );
+                    }
+                    v
+                })
+                .collect();
+            axum::Json(json!({ "ship_types": ship_types_augmented })).into_response()
+        }
         Err(e) => {
             eprintln!(
                 "❌ Error fetching ship types for planet {}: {:?}",
@@ -179,9 +238,34 @@ pub async fn get_defense_types_handler(
     State(state): State<AppState>,
     Path(planet_id): Path<Uuid>,
 ) -> impl IntoResponse {
+    let config = state.config.read().unwrap().clone();
+    let shipyard_level =
+        tech_tree::get_planet_building_level(&state.db, planet_id, "shipyard")
+            .await
+            .unwrap_or(0);
+    let shipyard_factor = 1.0 + shipyard_level as f64 * 0.5;
+
     match tech_tree::get_defense_types_for_planet(&state.db, planet_id).await {
         Ok(defense_types) => {
-            axum::Json(json!({ "defense_types": defense_types })).into_response()
+            // Override build_time_seconds with the cost-based formula (matches build_defenses_handler)
+            let defense_types_augmented: Vec<serde_json::Value> = defense_types
+                .iter()
+                .map(|d| {
+                    let cost_total = (d.base_cost_metal + d.base_cost_crystal) as f64;
+                    let build_time = ((cost_total / (2500.0 * shipyard_factor) * 3600.0
+                        / config.ship_build_speed) as i64)
+                        .max(5);
+                    let mut v = serde_json::to_value(d).unwrap_or_default();
+                    if let Some(obj) = v.as_object_mut() {
+                        obj.insert(
+                            "build_time_seconds".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(build_time)),
+                        );
+                    }
+                    v
+                })
+                .collect();
+            axum::Json(json!({ "defense_types": defense_types_augmented })).into_response()
         }
         Err(e) => {
             eprintln!(
@@ -205,8 +289,8 @@ pub async fn start_research_handler(
     Path((planet_id, tech_key)): Path<(Uuid, String)>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    // Get planet
-    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+    // Get planet (avec lazy eval pour avoir des ressources à jour)
+    let mut planet = match Planet::find_by_id(planet_id).one(&state.db).await {
         Ok(Some(p)) => p,
         Ok(None) => {
             return (
@@ -223,6 +307,8 @@ pub async fn start_research_handler(
                 .into_response()
         }
     };
+    let config_for_eval = state.config.read().unwrap().clone();
+    apply_lazy_eval(&state.db, &mut planet, &config_for_eval).await;
 
     // Get technology
     let tech = match Technology::find()
@@ -444,8 +530,8 @@ pub async fn build_ships_handler(
             .into_response();
     }
 
-    // Get planet
-    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+    // Get planet (avec lazy eval pour avoir des ressources à jour)
+    let mut planet = match Planet::find_by_id(planet_id).one(&state.db).await {
         Ok(Some(p)) => p,
         Ok(None) => {
             return (
@@ -462,6 +548,10 @@ pub async fn build_ships_handler(
                 .into_response()
         }
     };
+    let config_for_eval = state.config.read().unwrap().clone();
+    // Acquire per-planet lock BEFORE resource check to prevent concurrent double-spend
+    let _build_guard = build_queue::acquire_planet_build_lock_pub(&state, planet_id).await;
+    apply_lazy_eval(&state.db, &mut planet, &config_for_eval).await;
 
     // Get ship type
     let ship = match ShipType::find()
@@ -596,9 +686,13 @@ pub async fn build_ships_handler(
         }
     }
 
-    let build_time_per_ship =
-        ship.build_time_seconds as f64 / ((config.speed_factor / 100.0) * config.construction_speed);
-    let additional_build_time = (build_time_per_ship * quantity as f64) as i64;
+    // Use the unified cost-based formula (same as what get_ship_types_handler exposes to frontend)
+    let shipyard_level =
+        tech_tree::get_planet_building_level(&state.db, planet_id, "shipyard")
+            .await
+            .unwrap_or(0);
+    let additional_build_time =
+        game_logic::get_ship_production_time(&ship_key, quantity, shipyard_level, &config);
 
     // If already building, add to the existing queue
     if let Some(ps) = &existing_build {
@@ -726,8 +820,8 @@ pub async fn build_defenses_handler(
             .into_response();
     }
 
-    // Get planet
-    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+    // Get planet (avec lazy eval pour avoir des ressources à jour)
+    let mut planet = match Planet::find_by_id(planet_id).one(&state.db).await {
         Ok(Some(p)) => p,
         Ok(None) => {
             return (
@@ -744,6 +838,10 @@ pub async fn build_defenses_handler(
                 .into_response()
         }
     };
+    let config_for_eval = state.config.read().unwrap().clone();
+    // Acquire per-planet lock BEFORE resource check to prevent concurrent double-spend
+    let _build_guard = build_queue::acquire_planet_build_lock_pub(&state, planet_id).await;
+    apply_lazy_eval(&state.db, &mut planet, &config_for_eval).await;
 
     // Get defense type
     let defense = match DefenseType::find()
@@ -878,9 +976,16 @@ pub async fn build_defenses_handler(
         }
     }
 
-    let build_time_per_defense = defense.build_time_seconds as f64
-        / ((config.speed_factor / 100.0) * config.construction_speed);
-    let additional_build_time = (build_time_per_defense * quantity as f64) as i64;
+    // Cost-based formula (same as ships) for consistent UI/backend sync
+    let shipyard_level =
+        tech_tree::get_planet_building_level(&state.db, planet_id, "shipyard")
+            .await
+            .unwrap_or(0);
+    let cost_total = (defense.base_cost_metal + defense.base_cost_crystal) as f64;
+    let shipyard_factor = 1.0 + shipyard_level as f64 * 0.5;
+    let base_secs_per_unit = cost_total / (2500.0 * shipyard_factor) * 3600.0;
+    let total_secs = base_secs_per_unit * quantity as f64 / config.ship_build_speed;
+    let additional_build_time = (total_secs as i64).max(5 * quantity as i64);
 
     // If already building, add to the existing queue
     if let Some(pd) = &existing_build {
@@ -1110,7 +1215,10 @@ pub async fn build_fleet_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let build_time = game_logic::get_ship_production_time(qty, &config);
+    let shipyard_level = crate::tech_tree::get_planet_building_level(&state.db, p.id, "shipyard")
+        .await
+        .unwrap_or(0);
+    let build_time = game_logic::get_ship_production_time(&type_ship, qty, shipyard_level, &config);
 
     let mut active: planet::ActiveModel = p.clone().into();
     active.metal_amount = Set(active.metal_amount.unwrap() - total_m);

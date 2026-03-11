@@ -19,8 +19,28 @@ use crate::{
     entities::{planet, user, planet_building, building_type, password_reset_token,
         prelude::{Planet, User, BuildingType, PasswordResetToken}},
     missions,
-    AppState
+    rate_limit::RateLimiter,
+    AppState,
 };
+
+/// Valide un nom d'utilisateur : 3–20 caractères, lettres/chiffres/underscore/tiret.
+fn validate_username(username: &str) -> Result<(), &'static str> {
+    let len = username.len();
+    if len < 3 { return Err("Le nom d'utilisateur doit faire au moins 3 caractères"); }
+    if len > 20 { return Err("Le nom d'utilisateur ne peut pas dépasser 20 caractères"); }
+    if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+        return Err("Le nom d'utilisateur ne peut contenir que des lettres, chiffres, _ et -");
+    }
+    Ok(())
+}
+
+/// Valide un mot de passe : 8 caractères minimum.
+fn validate_password(password: &str) -> Result<(), &'static str> {
+    if password.len() < 8 {
+        return Err("Le mot de passe doit faire au moins 8 caractères");
+    }
+    Ok(())
+}
 
 #[derive(Deserialize)]
 pub struct RegisterPayload {
@@ -143,14 +163,27 @@ fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
 #[debug_handler]
 pub async fn register_handler(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<RegisterPayload>,
 ) -> impl IntoResponse {
-    // Validation
-    if payload.username.is_empty() || payload.password.is_empty() || payload.email.is_empty() {
+    // Rate limiting : 5 tentatives / 60s par IP
+    let ip = RateLimiter::extract_ip(&headers);
+    if !state.rate_limit_auth.check(&ip) {
         return (
-            StatusCode::BAD_REQUEST, 
-            Json(json!({"error": "Tous les champs sont requis"}))
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": "Trop de tentatives. Réessayez dans quelques minutes."}))
         );
+    }
+
+    // Validation des champs
+    if payload.email.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "L'email est requis"})));
+    }
+    if let Err(e) = validate_username(&payload.username) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": e})));
+    }
+    if let Err(e) = validate_password(&payload.password) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": e})));
     }
 
     // Vérifier si l'utilisateur existe déjà
@@ -437,8 +470,18 @@ pub async fn reset_password_handler(
 
 pub async fn login_handler(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<LoginPayload>,
 ) -> impl IntoResponse {
+    // Rate limiting : 5 tentatives / 60s par IP (anti brute-force)
+    let ip = RateLimiter::extract_ip(&headers);
+    if !state.rate_limit_auth.check(&ip) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": "Trop de tentatives. Réessayez dans quelques minutes."}))
+        );
+    }
+
     let user = match User::find()
         .filter(
             Condition::any()
@@ -447,11 +490,11 @@ pub async fn login_handler(
         )
         .one(&state.db)
         .await
-        .unwrap() 
+        .unwrap_or(None)
     {
         Some(u) => u,
         None => return (
-            StatusCode::UNAUTHORIZED, 
+            StatusCode::UNAUTHORIZED,
             Json(json!({"error": "Identifiants incorrects"}))
         ),
     };
@@ -467,7 +510,7 @@ pub async fn login_handler(
         .filter(planet::Column::OwnerId.eq(user.id))
         .one(&state.db)
         .await
-        .unwrap();
+        .unwrap_or(None);
     
     let planet_id = match planet {
         Some(p) => p.id,

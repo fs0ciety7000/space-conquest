@@ -42,18 +42,6 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
   const [defenseTypes, setDefenseTypes] = useState<DefenseTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [isBuilding, setIsBuilding] = useState(false);
-  const [speedFactor, setSpeedFactor] = useState(1);
-  const [constructionSpeed, setConstructionSpeed] = useState(1);
-
-  useEffect(() => {
-    fetch(apiUrl('/config'))
-      .then(r => r.json())
-      .then(d => {
-        setSpeedFactor(d.speed_factor ?? 1);
-        setConstructionSpeed(d.construction_speed_multiplier ?? 1);
-      })
-      .catch(() => {});
-  }, []);
 
   const fetchDefenseTypes = async () => {
     const token = localStorage.getItem('token');
@@ -192,7 +180,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
   const totalM = selectedDefense.base_cost_metal * qty;
   const totalC = selectedDefense.base_cost_crystal * qty;
   const totalD = selectedDefense.base_cost_deuterium * qty;
-  const totalBuildTime = Math.ceil(selectedDefense.build_time_seconds * qty / (speedFactor * constructionSpeed));
+  const totalBuildTime = selectedDefense.build_time_seconds * qty;
   const canAfford = planet.metal_amount >= totalM && planet.crystal_amount >= totalC && planet.deuterium_amount >= totalD;
   const isBusy = timeLeft !== null && timeLeft > 0;
 

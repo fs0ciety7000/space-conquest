@@ -15,7 +15,7 @@ use axum::{
 use chrono::{Duration, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, IntoActiveModel,
-    PaginatorTrait, QueryFilter, QueryOrder, Set,
+    PaginatorTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
 };
 use sea_orm::DatabaseConnection;
 use serde_json::json;
@@ -172,8 +172,15 @@ async fn award_flagship_xp(db: &DatabaseConnection, user_id: Uuid, xp_gain: i32)
 async fn attack_v2_handler(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<AttackPayloadV2>,
 ) -> impl IntoResponse {
+    // Rate limiting : 10 lancements / 60s par IP (anti-flood)
+    let ip = backend::rate_limit::RateLimiter::extract_ip(&headers);
+    if !state.rate_limit_attack.check(&ip) {
+        return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": "Trop de requêtes. Attendez avant de relancer une attaque."}))).into_response();
+    }
+
     let attacker_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let attacker_id = match Uuid::parse_str(&attacker_id_str) {
         Ok(id) => id,
@@ -192,6 +199,9 @@ async fn attack_v2_handler(
 
     if payload.fleet.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "No ships selected"}))).into_response();
+    }
+    if payload.fleet.values().any(|&v| v <= 0) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ship counts must be positive"}))).into_response();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -319,7 +329,10 @@ async fn attack_v2_handler(
         fleet_data: Set(Some(fleet_json)),
         ..Default::default()
     };
-    new_mission.insert(&state.db).await.unwrap();
+    if let Err(e) = new_mission.insert(&state.db).await {
+        eprintln!("[ATTACK] Erreur insertion mission: {e:?}");
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors du lancement de la flotte"}))).into_response();
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // NOTIFICATION WEBSOCKET - Alerter le défenseur de l'attaque entrante
@@ -368,8 +381,8 @@ async fn spy_v2_handler(
     let attacker_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let attacker_id = Uuid::parse_str(&attacker_id_str).unwrap_or_default();
 
-    let att_planet_opt = Planet::find_by_id(attacker_id).one(&state.db).await.unwrap();
-    let def_planet_opt = Planet::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap();
+    let att_planet_opt = Planet::find_by_id(attacker_id).one(&state.db).await.unwrap_or(None);
+    let def_planet_opt = Planet::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap_or(None);
 
     let att_planet = match att_planet_opt {
         Some(p) => p,
@@ -382,6 +395,9 @@ async fn spy_v2_handler(
 
     if payload.fleet.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "No ships selected"}))).into_response();
+    }
+    if payload.fleet.values().any(|&v| v <= 0) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ship counts must be positive"}))).into_response();
     }
 
     let mut total_fuel_spy: f64 = 0.0;
@@ -485,8 +501,8 @@ async fn spy_v2_handler(
     }).to_string()));
     let _ = def_active.update(&state.db).await;
 
-    let att_user = User::find_by_id(att_planet.owner_id).one(&state.db).await.unwrap();
-    let def_user = User::find_by_id(def_planet.owner_id).one(&state.db).await.unwrap();
+    let att_user = User::find_by_id(att_planet.owner_id).one(&state.db).await.unwrap_or(None);
+    let def_user = User::find_by_id(def_planet.owner_id).one(&state.db).await.unwrap_or(None);
     let attacker_username = att_user.map(|u| u.username.clone()).unwrap_or("Inconnu".to_string());
     let defender_username = def_user.map(|u| u.username.clone()).unwrap_or("Inconnu".to_string());
 
@@ -690,17 +706,25 @@ async fn transport_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Impossible de transporter vers la même planète"}))).into_response();
     }
 
-    let source_model = match Planet::find_by_id(current_id).one(&state.db).await.unwrap() {
-        Some(p) => p,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète source inconnue"}))).into_response(),
+    let source_model = match Planet::find_by_id(current_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète source inconnue"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
     };
-    let target_model = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await.unwrap() {
-        Some(p) => p,
-        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète cible inconnue"}))).into_response(),
+    let target_model = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète cible inconnue"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
     };
 
-    let source_user = User::find_by_id(source_model.owner_id).one(&state.db).await.unwrap().unwrap();
-    let target_user = User::find_by_id(target_model.owner_id).one(&state.db).await.unwrap().unwrap();
+    let source_user = match User::find_by_id(source_model.owner_id).one(&state.db).await {
+        Ok(Some(u)) => u,
+        _ => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Propriétaire source introuvable"}))).into_response(),
+    };
+    let target_user = match User::find_by_id(target_model.owner_id).one(&state.db).await {
+        Ok(Some(u)) => u,
+        _ => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Propriétaire cible introuvable"}))).into_response(),
+    };
 
     // ═══════════════════════════════════════════════════════════════════════════
     // VÉRIFICATION ALLIANCE / AMITIÉ - Transfer vers autre joueur
@@ -710,12 +734,12 @@ async fn transport_handler(
             .filter(alliance_member::Column::UserId.eq(source_model.owner_id))
             .one(&state.db)
             .await
-            .unwrap();
+            .unwrap_or(None);
         let target_member = AllianceMember::find()
             .filter(alliance_member::Column::UserId.eq(target_model.owner_id))
             .one(&state.db)
             .await
-            .unwrap();
+            .unwrap_or(None);
         let same_alliance = matches!(
             (source_member, target_member),
             (Some(src), Some(tgt)) if src.alliance_id == tgt.alliance_id
@@ -738,7 +762,7 @@ async fn transport_handler(
             .filter(friendship::Column::Status.eq("accepted"))
             .one(&state.db)
             .await
-            .unwrap()
+            .unwrap_or(None)
             .is_some();
 
         if !same_alliance && !friendship_exists {
@@ -782,11 +806,16 @@ async fn transport_handler(
     let flight_duration = game_logic::calculate_flight_time(dist, flight_speed);
     let arrival = Utc::now().naive_utc() + Duration::seconds(flight_duration);
 
-    let _ = tech_tree::deduct_ships(&state.db, source_id, "transporter", payload.transporters).await;
+    // Snapshot des valeurs avant conversion en ActiveModel
+    let metal_before = source_model.metal_amount;
+    let crystal_before = source_model.crystal_amount;
+    let deuterium_before = source_model.deuterium_amount;
+    let owner_id = source_model.owner_id;
+
     let mut source: planet::ActiveModel = source_model.into();
-    source.metal_amount = Set(source.metal_amount.unwrap() - payload.metal);
-    source.crystal_amount = Set(source.crystal_amount.unwrap() - payload.crystal);
-    source.deuterium_amount = Set(source.deuterium_amount.unwrap() - payload.deuterium);
+    source.metal_amount = Set(metal_before - payload.metal);
+    source.crystal_amount = Set(crystal_before - payload.crystal);
+    source.deuterium_amount = Set(deuterium_before - payload.deuterium);
 
     let mission = fleet_mission::ActiveModel {
         id: Set(Uuid::new_v4()),
@@ -816,11 +845,23 @@ async fn transport_handler(
         date: Set(Utc::now().naive_utc()),
     };
 
-    let owner_id = source.owner_id.clone().unwrap();
-
-    let _ = source.update(&state.db).await;
-    let _ = mission.insert(&state.db).await;
-    let _ = log.insert(&state.db).await;
+    // Transaction atomique : déduction vaisseaux + ressources + création mission
+    let transporters = payload.transporters;
+    if let Err(e) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        let source = source.clone();
+        let mission = mission.clone();
+        let log = log.clone();
+        Box::pin(async move {
+            tech_tree::deduct_ships(txn, source_id, "transporter", transporters).await?;
+            source.update(txn).await?;
+            mission.insert(txn).await?;
+            log.insert(txn).await?;
+            Ok(())
+        })
+    }).await {
+        eprintln!("[TRANSPORT TXN FAILED] source={source_id}: {e:?}");
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors du lancement du transport"}))).into_response();
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // MISE À JOUR MISSIONS QUOTIDIENNES
@@ -1156,6 +1197,9 @@ async fn expedition_v2_handler(
     if payload.fleet.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "No ships selected"}))).into_response();
     }
+    if payload.fleet.values().any(|&v| v <= 0) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ship counts must be positive"}))).into_response();
+    }
 
     let mut expedition_fuel_per_unit: f64 = 0.0;
     for (ship_key, &count) in &payload.fleet {
@@ -1207,7 +1251,7 @@ async fn expedition_v2_handler(
 
     let config = state.config.read().unwrap().clone();
     let base_duration = config.get_config("expedition_base_duration", 600.0);
-    let speed_factor = config.speed_factor;
+    let speed_factor = config.production_speed * 2.0;
     let calm_bonus = config.get_config("expedition_calm_sector_bonus", 1.2);
     let recycler_mult = config.get_config("expedition_recycler_bonus_multiplier", 2.0);
 
@@ -1482,7 +1526,7 @@ async fn expedition_v2_handler(
 
     let duration = std::cmp::max(1, (base_duration / speed_factor) as i64);
     active.expedition_end = Set(Some(Utc::now().naive_utc() + Duration::seconds(duration)));
-    active.unread_report = Set(Some(serde_json::to_string(&expedition_report).unwrap()));
+    active.unread_report = Set(Some(serde_json::to_string(&expedition_report).unwrap_or_default()));
 
     if active.update(&state.db).await.is_err() {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to update planet"}))).into_response();

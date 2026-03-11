@@ -32,7 +32,11 @@
       "Bash(sed -i 's/^fn format_zone\\(/pub fn format_zone_public\\(event: \\\\&server_event::Model\\) -> String {\\\\n    format_zone\\(event\\)\\\\n}\\\\n\\\\nfn format_zone\\(/' /var/home/phantomhex/Documents/code/space-conquest/backend/src/server_events.rs)",
       "Bash(sed -i '/let state_pve_tick = state.clone\\(\\); \\\\/\\\\/ Pour le tick PVE events/d' /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs)",
       "Bash(sed -i '/^    let state = state;$/d' /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(wc -l /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/handlers/*.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/combat.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/game_logic.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/tick_system.rs)",
+      "Bash(grep -c \"unwrap\\(\\)\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/handlers/*.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/combat.rs /var/home/phantomhex/Documents/code/space-conquest/backend/src/trade_routes.rs)",
+      "Bash(wc -l /var/home/phantomhex/Documents/code/space-conquest/frontend/src/components/*.tsx)",
+      "Bash(ls /var/home/phantomhex/Documents/code/space-conquest/frontend/src/components/ExpeditionZone*.tsx)"
     ]
   }
 }

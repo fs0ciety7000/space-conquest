@@ -61,18 +61,6 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const [shipTypes, setShipTypes] = useState<ShipTypeInfo[]>([]);
   const [buildQueue, setBuildQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [speedFactor, setSpeedFactor] = useState(1);
-  const [constructionSpeed, setConstructionSpeed] = useState(1);
-
-  useEffect(() => {
-    fetch(apiUrl('/config'))
-      .then(r => r.json())
-      .then(d => {
-        setSpeedFactor(d.speed_factor ?? 1);
-        setConstructionSpeed(d.construction_speed_multiplier ?? 1);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     const fetchShipTypes = async () => {
@@ -378,7 +366,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
         <Timer size={10} /> Durée
       </span>
       <span className="text-sm font-mono font-black text-indigo-300">
-        {formatDuration(Math.ceil(ship.build_time_seconds * (qty[ship.ship_key] || 1) / (speedFactor * constructionSpeed)))}
+        {formatDuration(ship.build_time_seconds * (qty[ship.ship_key] || 1))}
       </span>
     </div>
   )}

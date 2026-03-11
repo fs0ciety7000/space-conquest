@@ -60,8 +60,7 @@ pub fn random_biome() -> &'static str {
     BIOMES[rng.gen_range(0..BIOMES.len())]
 }
 
-// ⚡ VITESSE DU JEU (200 = x2, 500 = x5)
-pub const SPEED_FACTOR: f64 = 500.0;
+// SPEED_FACTOR supprimé (v9.1) — utiliser config.production_speed / building_speed / etc.
 
 #[derive(Serialize, Clone)]
 pub struct Cost {
@@ -109,47 +108,32 @@ pub struct TechBonuses {
     pub cargo_multiplier: f64,    // 1.0 + (logistics_tech * 0.05)
 }
 
-// 📊 DIVISEUR DE COÛT BASÉ SUR VITESSE
-fn cost_scaling(config: &ServerConfigCache) -> f64 {
-    (config.speed_factor / 100.0).max(1.0)
-}
-
 // --- COÛTS DE BASE DES UNITÉS ---
+/// Retourne (métal, cristal) depuis la config DB, sans aucun scaling vitesse.
+/// Les coûts sont les valeurs brutes définies dans server_config.
 pub fn get_unit_cost(unit_type: &str, config: &ServerConfigCache) -> (f64, f64) {
-    // Lire les coûts depuis la config
     let (base_metal, base_crystal) = config.get_unit_cost(unit_type);
 
-    // Si non trouvé dans la config, utiliser les valeurs par défaut
-    let base = if base_metal == 0.0 && base_crystal == 0.0 {
+    if base_metal == 0.0 && base_crystal == 0.0 {
+        // Fallback hardcodé si absent de la DB
         match unit_type {
-            // 🚀 Vaisseaux de guerre
-            "light_hunter" => (3000.0, 1000.0),
-            "cruiser" => (20000.0, 7000.0),
-
-            // 🚀 Vaisseaux avancés - EXPANSION 2.0
-            "heavy_hunter" => (6000.0, 4000.0),
-            "battleship" => (45000.0, 15000.0),
-            "bomber" => (50000.0, 25000.0),
-            "destroyer" => (60000.0, 50000.0),
-
-            // 🛠️ Vaisseaux utilitaires
-            "transporter" => (4000.0, 4000.0),
-            "recycler" => (10000.0, 6000.0),
-            "spy_probe" => (1000.0, 0.0),
-            "colony_ship" => (10000.0, 20000.0),
-
-            // 🛡️ Défenses
-            "missile_launcher" => (10000.0, 2500.0),
-            "plasma_turret" => (50000.0, 50000.0),
-
-            _ => (0.0, 0.0),
+            "light_hunter"      => (3000.0, 1000.0),
+            "cruiser"           => (20000.0, 7000.0),
+            "heavy_hunter"      => (6000.0, 4000.0),
+            "battleship"        => (45000.0, 15000.0),
+            "bomber"            => (50000.0, 25000.0),
+            "destroyer"         => (60000.0, 50000.0),
+            "transporter"       => (4000.0, 4000.0),
+            "recycler"          => (10000.0, 6000.0),
+            "spy_probe"         => (1000.0, 0.0),
+            "colony_ship"       => (10000.0, 20000.0),
+            "missile_launcher"  => (10000.0, 2500.0),
+            "plasma_turret"     => (50000.0, 50000.0),
+            _                   => (0.0, 0.0),
         }
     } else {
         (base_metal, base_crystal)
-    };
-
-    let divider = cost_scaling(config);
-    (base.0 / divider, base.1 / divider)
+    }
 }
 
 // --- CALCULS RESSOURCES (Ratio 3:2:1) ---
@@ -209,7 +193,7 @@ pub fn calculate_resources(
     };
 
     // Production avec bonus tech, plasma, et efficacité énergétique
-    let production_per_sec = (base_production * tech_bonus * efficiency / 3600.0) * (config.speed_factor / 100.0) * config.mining_speed;
+    let production_per_sec = (base_production * tech_bonus * efficiency / 3600.0) * config.production_speed;
     current_amount + (production_per_sec * duration)
 }
 
@@ -275,7 +259,7 @@ pub fn calculate_resource_production(
             ResourceType::Crystal => config.get_config("production_crystal_passive", 10.0),
             ResourceType::Deuterium => config.get_config("production_deuterium_passive", 5.0),
         };
-        return passive * (config.speed_factor / 100.0) * config.mining_speed;
+        return passive * config.production_speed;
     }
 
     // Bonus technologie énergie (+1% par niveau)
@@ -306,7 +290,7 @@ pub fn calculate_resource_production(
     };
 
     // Production par heure avec tous les bonus
-    base_production * tech_bonus * energy_ratio * (config.speed_factor / 100.0) * config.mining_speed
+    base_production * tech_bonus * energy_ratio * config.production_speed
 }
 
 /// Calcule les ressources avec prise en compte du ratio énergétique
@@ -351,7 +335,7 @@ pub fn calculate_resources_with_energy(
     };
 
     // Application du ratio énergétique
-    let production_per_sec = (base_production * tech_bonus * energy_ratio / 3600.0) * (config.speed_factor / 100.0) * config.mining_speed;
+    let production_per_sec = (base_production * tech_bonus * energy_ratio / 3600.0) * config.production_speed;
     current_amount + (production_per_sec * duration)
 }
 
@@ -481,18 +465,11 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
         _ => Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 },
     };
 
-    // ✅ Applique le scaling de vitesse
-    let divider = cost_scaling(config);
-    Cost {
-        metal: base_cost.metal / divider,
-        crystal: base_cost.crystal / divider,
-        deuterium: base_cost.deuterium / divider,
-    }
+    base_cost
 }
 
 /// Temps de recherche avec bonus du laboratoire de recherche.
 /// Réduction : -5% par niveau de lab, max -50%.
-/// TODO (antigravity): remplacer les appels get_build_time() pour les recherches par get_research_time().
 pub fn get_research_time(metal_cost: f64, crystal_cost: f64, research_lab_level: i32, config: &ServerConfigCache) -> i64 {
     let total_resources = metal_cost + crystal_cost;
     let base_time = (total_resources / 2500.0 * 3600.0) as i64;
@@ -501,28 +478,32 @@ pub fn get_research_time(metal_cost: f64, crystal_cost: f64, research_lab_level:
     let time_reduction = 1.0 - (research_lab_level as f64 * 0.05).min(0.5);
     let final_time = (base_time as f64 * time_reduction) as i64;
 
-    let speed_factor = (config.speed_factor / 100.0) * config.construction_speed;
-    std::cmp::max(10, (final_time as f64 / speed_factor) as i64)
+    std::cmp::max(10, (final_time as f64 / config.research_speed) as i64)
 }
 
 // ⏱️ TEMPS DE CONSTRUCTION PROGRESSIF
 pub fn get_build_time(metal_cost: f64, crystal_cost: f64, facility_level: i32, config: &ServerConfigCache) -> i64 {
     let total_resources = metal_cost + crystal_cost;
-    let base_time = (total_resources / 2500.0 * 3600.0) as i64; // En secondes
+    let base_time = (total_resources / 2500.0 * 3600.0) as i64;
 
-    // 🏗️ Réduction selon niveau du chantier (max -50%)
+    // Réduction selon niveau du chantier (max -50%)
     let time_reduction = 1.0 - (facility_level as f64 * 0.05).min(0.5);
     let final_time = (base_time as f64 * time_reduction) as i64;
 
-    // ⚡ Ajusté au SPEED_FACTOR et construction_speed
-    let speed_factor = (config.speed_factor / 100.0) * config.construction_speed;
-    std::cmp::max(10, (final_time as f64 / speed_factor) as i64)
+    std::cmp::max(10, (final_time as f64 / config.building_speed) as i64)
 }
 
-pub fn get_ship_production_time(qty: i32, config: &ServerConfigCache) -> i64 {
-    let base_time = 30 * qty; // 30 secondes par unité
-    let speed_factor = (config.speed_factor / 100.0) * config.construction_speed;
-    std::cmp::max(5, (base_time as f64 / speed_factor) as i64)
+/// Temps de production d'un vaisseau/défense, basé sur son coût réel.
+/// Formule : (metal + crystal) / (2500 × shipyard_factor) × 3600 / ship_build_speed
+/// Le niveau du chantier spatial réduit le temps (×0.5 par niveau, non plafonné).
+pub fn get_ship_production_time(ship_type: &str, qty: i32, shipyard_level: i32, config: &ServerConfigCache) -> i64 {
+    let (metal, crystal) = get_unit_cost(ship_type, config);
+    let cost_per_unit = metal + crystal;
+    // Bonus chantier : chaque niveau réduit le temps (formule continue, non plafonnée)
+    let shipyard_factor = 1.0 + shipyard_level as f64 * 0.5;
+    let base_secs_per_unit = cost_per_unit / (2500.0 * shipyard_factor) * 3600.0;
+    let total_secs = base_secs_per_unit * qty as f64;
+    std::cmp::max(5 * qty as i64, (total_secs / config.ship_build_speed) as i64)
 }
 
 // 📦 CAPACITÉS
@@ -832,12 +813,11 @@ pub fn resolve_pvp(
 
         // Lire les paramètres de butin depuis la config
         let loot_percentage = config.get_config("combat_loot_percentage", 0.5);
-        let loot_max_per_resource = config.get_config("combat_loot_cap_per_resource", 50000.0);
 
-        // Calculer le butin potentiel avec les valeurs configurables
-        let potential_metal = (def_resources.metal * loot_percentage).min(loot_max_per_resource * cost_scaling(config));
-        let potential_crystal = (def_resources.crystal * loot_percentage).min(loot_max_per_resource * cost_scaling(config));
-        let potential_deuterium = (def_resources.deuterium * loot_percentage).min(loot_max_per_resource * cost_scaling(config));
+        // Butin = 50% des ressources défenseur — seul le cargo est limitant (v9.1)
+        let potential_metal     = def_resources.metal     * loot_percentage;
+        let potential_crystal   = def_resources.crystal   * loot_percentage;
+        let potential_deuterium = def_resources.deuterium * loot_percentage;
         let total_potential_loot = potential_metal + potential_crystal + potential_deuterium;
 
         // Si le butin potentiel dépasse la capacité, le réduire proportionnellement
@@ -972,7 +952,6 @@ pub fn calculate_flight_time(dist: f64, flight_speed_multiplier: f64) -> i64 {
     };
 
     // Apply flight speed multiplier (higher = faster travel)
-    // Default 5.0 = 5x speed (same as original with speed_factor=500)
     let seconds = base_time / flight_speed_multiplier;
     seconds.max(5.0) as i64
 }
@@ -1166,12 +1145,10 @@ pub fn get_slot_unlock_cost(slot_number: i32, config: &ServerConfigCache) -> Cos
     };
 
     let multiplier = slot_number as f64; // x1, x2, x3, x4
-    let divider = cost_scaling(config);
-
     Cost {
-        metal: (base_cost.metal * multiplier) / divider,
-        crystal: (base_cost.crystal * multiplier) / divider,
-        deuterium: (base_cost.deuterium * multiplier) / divider,
+        metal:     base_cost.metal     * multiplier,
+        crystal:   base_cost.crystal   * multiplier,
+        deuterium: base_cost.deuterium * multiplier,
     }
 }
 
@@ -1250,8 +1227,8 @@ pub fn calculate_resources_with_slots(
         },
     };
 
-    // Application du ratio énergétique, slots et speed_factor dynamique
-    let production_per_sec = (base_production * tech_bonus * energy_ratio * slot_bonus / 3600.0) * (config.speed_factor / 100.0) * config.mining_speed;
+    // Application du ratio énergétique, slots et production_speed
+    let production_per_sec = (base_production * tech_bonus * energy_ratio * slot_bonus / 3600.0) * config.production_speed;
     current_amount + (production_per_sec * duration)
 }
 
