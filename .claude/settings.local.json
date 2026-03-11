@@ -46,7 +46,8 @@
       "Bash(grep -n \"broadcast\\\\|maintenance\\\\|active_users\\\\|active_players\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -20\ngrep -n \"broadcast\\\\|maintenance\\\\|active_users\\\\|active_players\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/admin.rs | head -20)",
       "Bash(grep -n \"broadcast_global\\\\|broadcast_all\\\\|global_broadcast\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/websocket.rs | head -10\ngrep -n \"broadcast_global\\\\|broadcast_all\\\\|global_broadcast\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -10)",
       "Bash(grep -n \"active_users\\\\|active_players\\\\|last_seen\\\\|last_login\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/admin.rs | head -10\ngrep -n \"active_users\\\\|active_players\\\\|last_seen\\\\|last_login\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/entities/user.rs | head -10)",
-      "Bash(grep -n \"ws:\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -5\ngrep -n \"pub ws\\\\|ws: \" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -10)"
+      "Bash(grep -n \"ws:\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -5\ngrep -n \"pub ws\\\\|ws: \" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -10)",
+      "Bash(grep -n \"planet_galaxy\\\\|GalaxySlot\\\\|struct GalaxySlot\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/models.rs | head -10\ngrep -n \"planet_galaxy\\\\|pub galaxy\\\\|GalaxySlot\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/handlers/galaxy.rs | head -15)"
     ]
   }
 }
