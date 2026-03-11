@@ -229,7 +229,9 @@ async fn get_planet_handler(
         // BE-9 : utiliser get_sabotage_effects pour des multiplicateurs par mine individuels
         let sab_effects = sabotage::get_sabotage_effects(&state.db, id).await;
 
-        let plasma_tech_level = 0;
+        let plasma_tech_level = tech_tree::get_planet_tech_level(&state.db, id, "plasma_tech")
+            .await
+            .unwrap_or(0);
 
         let base_metal = game_logic::calculate_resources_with_slots(
             game_logic::ResourceType::Metal,
@@ -836,15 +838,21 @@ async fn get_planet_handler(
 
     // Calcul de la production horaire (nécessaire pour EmpireBar)
     let plasma_tech_level = tech_tree::get_planet_tech_level(&state.db, id, "plasma_tech").await.unwrap_or(0);
+    let metal_slot_bonus = game_logic::get_slot_bonus(
+        game_logic::count_slots_for_resource(&slot_1, &slot_2, &slot_3, &slot_4, "metal"), &config);
+    let crystal_slot_bonus = game_logic::get_slot_bonus(
+        game_logic::count_slots_for_resource(&slot_1, &slot_2, &slot_3, &slot_4, "crystal"), &config);
+    let deuterium_slot_bonus = game_logic::get_slot_bonus(
+        game_logic::count_slots_for_resource(&slot_1, &slot_2, &slot_3, &slot_4, "deuterium"), &config);
     let metal_production = game_logic::calculate_resource_production(
         game_logic::ResourceType::Metal, metal_mine_level, energy_tech_level, plasma_tech_level, energy_ratio, &config,
-    );
+    ) * metal_slot_bonus;
     let crystal_production = game_logic::calculate_resource_production(
         game_logic::ResourceType::Crystal, crystal_mine_level, energy_tech_level, plasma_tech_level, energy_ratio, &config,
-    );
+    ) * crystal_slot_bonus;
     let deuterium_production = game_logic::calculate_resource_production(
         game_logic::ResourceType::Deuterium, deuterium_mine_level, energy_tech_level, plasma_tech_level, energy_ratio, &config,
-    );
+    ) * deuterium_slot_bonus;
 
     let mut json_response = serde_json::to_value(&updated_model).unwrap();
     if let Some(obj) = json_response.as_object_mut() {
@@ -1656,6 +1664,27 @@ pub async fn get_production_details_handler(
         (energy_produced / energy_consumed).min(1.0)
     };
 
+    // Load production slots
+    let prod_slots = ResourceSlot::find()
+        .filter(resource_slot::Column::PlanetId.eq(planet_uuid))
+        .filter(resource_slot::Column::SlotNumber.gte(5))
+        .filter(resource_slot::Column::IsActive.eq(true))
+        .filter(resource_slot::Column::IsLocked.eq(false))
+        .all(db)
+        .await
+        .unwrap_or_default();
+    let pslot_1: Option<String> = prod_slots.iter().find(|s| s.slot_number == 5).map(|s| s.resource_type.clone());
+    let pslot_2: Option<String> = prod_slots.iter().find(|s| s.slot_number == 6).map(|s| s.resource_type.clone());
+    let pslot_3: Option<String> = prod_slots.iter().find(|s| s.slot_number == 7).map(|s| s.resource_type.clone());
+    let pslot_4: Option<String> = prod_slots.iter().find(|s| s.slot_number == 8).map(|s| s.resource_type.clone());
+
+    let metal_slot_bonus = game_logic::get_slot_bonus(
+        game_logic::count_slots_for_resource(&pslot_1, &pslot_2, &pslot_3, &pslot_4, "metal"), &config);
+    let crystal_slot_bonus = game_logic::get_slot_bonus(
+        game_logic::count_slots_for_resource(&pslot_1, &pslot_2, &pslot_3, &pslot_4, "crystal"), &config);
+    let deuterium_slot_bonus = game_logic::get_slot_bonus(
+        game_logic::count_slots_for_resource(&pslot_1, &pslot_2, &pslot_3, &pslot_4, "deuterium"), &config);
+
     // Per-resource production (energy_ratio already factored in by calculate_resource_production)
     let metal_rate = game_logic::calculate_resource_production(
         ResourceType::Metal,
@@ -1664,7 +1693,7 @@ pub async fn get_production_details_handler(
         plasma_tech_level,
         energy_ratio,
         &config,
-    );
+    ) * metal_slot_bonus;
     let crystal_rate = game_logic::calculate_resource_production(
         ResourceType::Crystal,
         crystal_mine_level,
@@ -1672,7 +1701,7 @@ pub async fn get_production_details_handler(
         plasma_tech_level,
         energy_ratio,
         &config,
-    );
+    ) * crystal_slot_bonus;
     let deuterium_rate = game_logic::calculate_resource_production(
         ResourceType::Deuterium,
         deuterium_mine_level,
@@ -1680,7 +1709,7 @@ pub async fn get_production_details_handler(
         plasma_tech_level,
         energy_ratio,
         &config,
-    );
+    ) * deuterium_slot_bonus;
 
     Json(json!({
         "planet_id": planet_id,
