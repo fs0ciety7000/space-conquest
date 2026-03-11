@@ -13,18 +13,35 @@ interface Announcement {
   updated_at: string;
 }
 
+const STORAGE_KEY = 'announcements_dismissed_ids';
+
+function getDismissedIds(): Set<number> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw) as number[]);
+  } catch {
+    return new Set();
+  }
+}
+
+function dismissId(id: number) {
+  const ids = getDismissedIds();
+  ids.add(id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
+}
+
 export default function AnnouncementBanner() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [hidden, setHidden] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    // Check localStorage for hidden state
-    const isHidden = localStorage.getItem('announcements_hidden') === 'true';
-    setHidden(isHidden);
-
-    if (!isHidden) {
-      fetchAnnouncements();
+    // Migrate old global-hide flag to per-id system
+    if (localStorage.getItem('announcements_hidden') === 'true') {
+      localStorage.removeItem('announcements_hidden');
     }
+    setDismissedIds(getDismissedIds());
+    fetchAnnouncements();
   }, []);
 
   const fetchAnnouncements = async () => {
@@ -39,12 +56,14 @@ export default function AnnouncementBanner() {
     }
   };
 
-  const handleHide = () => {
-    setHidden(true);
-    localStorage.setItem('announcements_hidden', 'true');
+  const handleHide = (id: number) => {
+    dismissId(id);
+    setDismissedIds(prev => new Set([...prev, id]));
   };
 
-  if (hidden || announcements.length === 0) {
+  const visible = announcements.filter(a => !dismissedIds.has(a.id));
+
+  if (visible.length === 0) {
     return null;
   }
 
@@ -72,27 +91,24 @@ export default function AnnouncementBanner() {
 
   const getGlowColor = (type: string) => {
     switch (type) {
-      case 'warning':
-        return 'via-orange-400';
-      case 'danger':
-        return 'via-red-400';
-      default:
-        return 'via-cyan-400';
+      case 'warning': return 'via-orange-400';
+      case 'danger': return 'via-red-400';
+      default: return 'via-cyan-400';
     }
   };
 
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ height: 0, opacity: 0 }}
-        animate={{ height: 'auto', opacity: 1 }}
-        exit={{ height: 0, opacity: 0 }}
-        transition={{ duration: 0.3 }}
-        className="w-full overflow-hidden"
-      >
-        {announcements.map((announcement) => (
+      {visible.map((announcement) => (
+        <motion.div
+          key={announcement.id}
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="w-full overflow-hidden"
+        >
           <div
-            key={announcement.id}
             className={`relative border-2 ${getTypeColor(announcement.announcement_type)} backdrop-blur-md overflow-hidden`}
           >
             {/* Animated background effects */}
@@ -123,20 +139,17 @@ export default function AnnouncementBanner() {
               {/* Scrolling content */}
               <div className="flex-1 overflow-hidden relative">
                 <motion.div
-                  animate={{
-                    x: [0, -2000]
-                  }}
+                  animate={{ x: [0, -2000] }}
                   transition={{
                     x: {
                       repeat: Infinity,
-                      repeatType: "loop",
+                      repeatType: 'loop',
                       duration: 30,
-                      ease: "linear"
-                    }
+                      ease: 'linear',
+                    },
                   }}
                   className="flex items-center gap-12 whitespace-nowrap"
                 >
-                  {/* Repeat content multiple times for seamless loop */}
                   {[...Array(5)].map((_, idx) => (
                     <div key={idx} className="flex items-center gap-3">
                       <span className="text-base font-black uppercase text-white tracking-wider drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">
@@ -154,7 +167,7 @@ export default function AnnouncementBanner() {
 
               {/* Close button */}
               <button
-                onClick={handleHide}
+                onClick={() => handleHide(announcement.id)}
                 className="flex-shrink-0 p-2.5 rounded-lg bg-black/60 border border-white/20 hover:border-red-500 hover:bg-red-500/20 transition-all duration-300 group hover:shadow-[0_0_20px_rgba(239,68,68,0.5)]"
               >
                 <X size={18} className="text-slate-300 group-hover:text-red-400 transition-colors" />
@@ -164,23 +177,21 @@ export default function AnnouncementBanner() {
             {/* Bottom glow effect */}
             <div className="absolute bottom-0 left-0 right-0 h-[3px] overflow-hidden">
               <motion.div
-                animate={{
-                  x: [-100, 400]
-                }}
+                animate={{ x: [-100, 400] }}
                 transition={{
                   x: {
                     repeat: Infinity,
-                    repeatType: "loop",
+                    repeatType: 'loop',
                     duration: 2,
-                    ease: "linear"
-                  }
+                    ease: 'linear',
+                  },
                 }}
                 className={`h-full w-1/4 bg-gradient-to-r from-transparent ${getGlowColor(announcement.announcement_type)} to-transparent opacity-75`}
               />
             </div>
           </div>
-        ))}
-      </motion.div>
+        </motion.div>
+      ))}
     </AnimatePresence>
   );
 }
