@@ -1,5 +1,24 @@
 # Changelog - Space Conquest
 
+## [10.5.0] - 2026-03-11 - Rééquilibrage Temps de Construction & Recherche
+
+### ⚙️ Temps de production des vaisseaux
+- **Correction majeure** : les vaisseaux ont maintenant des durées visiblement différentes selon leur coût — plus de "5s pour tout le monde"
+- Nouveau taux de base `BUILD_RATE = 3 600 res/h` (était 100 000), bonus chantier naval `0,10/niveau` (était 0,15)
+- Exemples au chantier naval L20 : Chasseur Léger **13s**, Croiseur **1m 30s**, Vaisseau de Guerre **3m 20s**, Destructeur **6m 06s**, Étoile de la Mort **8h 20m**
+
+### 🛡️ Temps de production des défenses
+- Même correction appliquée aux défenses : `defense_build_rate 2 500 → 1 800`, `defense_shipyard_bonus 0,50 → 0,08`
+- Les défenses bon marché restent rapides à déployer, les grosses installations (Tourelle Plasma, etc.) prennent quelques minutes
+
+### 🔬 Temps de recherche technologique
+- **Correction critique** : la formule exponentielle `base × multiplicateur^niveau` (sans diviseur de vitesse) pouvait donner des centaines de jours pour les hauts niveaux
+- Remplacement par une formule polynomiale `level^1.5` avec le diviseur `research_speed` correctement appliqué
+- Exemples (Labo L7) : Armement L10 **~26 min**, Armement L20 **~1h 13min**, Plasma L10 **~38 min**, Graviton L5 **~22 min**
+- Annulation de recherche : le remboursement est maintenant calculé correctement (était ~0% à cause du même bug)
+
+---
+
 ## [10.4.0] - 2026-03-11 - Intelligence : Sélection de cible sans UUID
 
 ### 🎯 Ciblage des missions d'espionnage/sabotage
