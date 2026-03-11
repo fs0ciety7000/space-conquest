@@ -1,5 +1,43 @@
 # Changelog - Space Conquest
 
+## [10.2.0] - 2026-03-11 - Refonte Intelligence & Espionnage
+
+### 🕵️ Nouveau système Intelligence
+
+Le système d'Espionnage / Sabotage / Casus Belli a été entièrement refondu avec une logique de progression cohérente et une nouvelle interface unifiée.
+
+#### Vue Intelligence
+Les 4 modales éparpillées (Espionnage, Sabotages déployés, Sabotages subis, Casus Belli) sont remplacées par une **vue complète à 4 onglets** accessible depuis la sidebar :
+- **Opérations** — Lancer une mission d'espionnage avec sélection du nombre de sondes
+- **Rapport Actif** — Rapport détaillé avec score de menace, recommandation tactique et boutons sabotage
+- **Mes Opérations** — Sabotages déployés actifs et historique
+- **Sécurité** — Sabotages subis + Casus Belli avec niveaux de tension
+
+#### Espionnage — Mécanique de sondes
+- Envoyer plus de sondes compense un désavantage technologique : `+⌊log₂(N)⌋` bonus de tech_diff
+- Si le défenseur a 3+ niveaux d'avantage : sondes interceptées et détruites
+- Score de menace calculé depuis la flotte + défenses révélées
+- Recommandation tactique automatique (de "Attaque recommandée" à "Retraite conseillée")
+
+#### Sabotage — Détection dynamique
+- Probabilité de détection calculée selon le niveau tech : `P_base × (1 - tech_diff × 0.12)` entre 5% et 95%
+- `disable_mine` : durée portée à 2h, choix de la mine ciblée (métal/cristal/deutérium)
+- **5 nouveaux effets** :
+  - `Bloquer Construction` — bloque la file de construction 1h (détection 20%)
+  - `Vol de Crédits` — vole 10-30% des crédits Syndicat (instantané, détection 35%)
+  - `Corruption Escadron` — détruit 5-15% d'une escadrille (instantané, détection 40%)
+  - `Saboter Recherche` — ralentit la recherche active de 40% pendant 4h (détection 30%)
+  - `Verrouillage Planétaire` — gèle toutes les mines 1h (détection 60%)
+
+#### Casus Belli — Escalade diplomatique
+- Système de tension par paire de joueurs sur 7 jours :
+  - **Niveau 1 — Tension** : 1 usage, 48h
+  - **Niveau 2 — Conflit** : 3 usages, 72h
+  - **Niveau 3 — Guerre** : usages illimités, 7 jours
+- Nouveau déclencheur : 5 espionnages en 24h → Casus Belli "Harcèlement"
+
+---
+
 ## [10.1.0] - 2026-03-11 - Rééquilibrage temps de construction & Correctifs
 
 ### ⚖️ Rééquilibrage — Temps de construction
