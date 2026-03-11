@@ -1,8 +1,8 @@
-# Build stage - Rust stable 1.83
-FROM rust:1.83-bookworm AS builder
+# Build stage - Rust stable 1.88
+FROM rust:1.88-bookworm AS builder
 
 # Cache buster - changer cette valeur pour forcer un rebuild
-ARG CACHE_BUST=2025-01-19-v2
+ARG CACHE_BUST=2026-03-11-v1
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -17,7 +17,6 @@ COPY backend/migration ./migration
 # Build le binaire de migration
 WORKDIR /app/migration
 RUN cargo generate-lockfile && \
-    cargo update -p home --precise 0.5.9 && \
     cargo build --release
 
 # Revenir à la racine pour le backend
@@ -31,8 +30,7 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # Générer Cargo.lock avec downgrade des crates problématiques
 RUN cargo generate-lockfile && \
-    cargo update -p base64ct --precise 1.6.0 && \
-    cargo update -p home --precise 0.5.9
+    cargo update -p base64ct --precise 1.6.0
 
 # Build les dépendances du backend (cache)
 RUN cargo build --release && rm -rf src target
@@ -49,6 +47,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -58,7 +57,7 @@ COPY --from=builder /app/backend/target/release/backend /app/backend
 COPY --from=builder /app/migration/target/release/migration /app/migration
 
 # Copier le script d'entrée
-COPY run_migrations.sh /app/run_migrations.sh
+COPY backend/run_migrations.sh /app/run_migrations.sh
 RUN chmod +x /app/run_migrations.sh
 
 # Exposer le port (optionnel, pour documentation)
