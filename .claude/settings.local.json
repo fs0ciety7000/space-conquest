@@ -39,7 +39,8 @@
       "Bash(ls /var/home/phantomhex/Documents/code/space-conquest/frontend/src/components/ExpeditionZone*.tsx)",
       "Bash(/tmp/inventory.txt:*)",
       "Read(//tmp/**)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
