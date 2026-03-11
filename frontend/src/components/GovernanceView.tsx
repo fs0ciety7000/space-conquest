@@ -325,7 +325,13 @@ function SurveyCard({
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((r) => r.ok ? r.json() : null)
-        .then((data) => { if (data) setResults(data.results ?? data); })
+        .then((data) => {
+          if (data) setResults({
+            survey_id: data.id ?? survey.id,
+            total_responses: data.total_responses ?? 0,
+            breakdown: data.results ?? {},
+          });
+        })
         .catch(() => {})
         .finally(() => setLoadingResults(false));
     }
