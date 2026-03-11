@@ -24,7 +24,6 @@ RUN cargo generate-lockfile && \
 # Build migration binary separately
 WORKDIR /app/migration
 RUN cargo generate-lockfile && \
-    cargo update -p home --precise 0.5.9 && \
     cargo build --release
 
 # Runtime stage
@@ -40,7 +39,7 @@ WORKDIR /app
 
 COPY --from=builder /app/backend/target/release/backend /app/backend
 COPY --from=builder /app/migration/target/release/migration /app/migration
-COPY run_migrations.sh /app/run_migrations.sh
+COPY backend/run_migrations.sh /app/run_migrations.sh
 RUN chmod +x /app/run_migrations.sh
 
 EXPOSE 8080
