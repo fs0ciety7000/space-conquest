@@ -343,7 +343,17 @@ function SurveyCard({
         },
         body: JSON.stringify({ answer: selectedAnswer }),
       });
-      if (!res.ok) throw new Error('Erreur');
+      if (!res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        const errData = ct.includes('json') ? await res.json() : {};
+        if (res.status === 409) {
+          toast.info(errData.error || 'Vous avez déjà répondu à ce sondage');
+          onAnswered(survey.id); // hide form since already answered
+        } else {
+          toast.error(errData.error || 'Impossible d\'enregistrer la réponse');
+        }
+        return;
+      }
       toast.success('Réponse enregistrée');
       onAnswered(survey.id);
     } catch {

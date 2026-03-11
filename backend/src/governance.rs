@@ -996,9 +996,11 @@ async fn delete_law_handler(
 
 /// GET /surveys — Liste les sondages actifs et fermés (pas archivés sauf ?include_archived=true)
 async fn list_surveys_handler(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Query(params): Query<SurveyListQuery>,
 ) -> impl IntoResponse {
+    let caller_id = extract_user_from_headers(&headers);
     let include_archived = params.include_archived.unwrap_or(false);
 
     let mut query = Survey::find().order_by_desc(survey::Column::CreatedAt);
@@ -1026,6 +1028,17 @@ async fn list_surveys_handler(
             .await
             .unwrap_or(0);
 
+        let user_answered = if let Some(uid) = caller_id {
+            SurveyResponse::find()
+                .filter(survey_response::Column::SurveyId.eq(s.id))
+                .filter(survey_response::Column::UserId.eq(uid))
+                .count(&state.db)
+                .await
+                .unwrap_or(0) > 0
+        } else {
+            false
+        };
+
         result.push(json!({
             "id": s.id,
             "title": s.title,
@@ -1037,6 +1050,7 @@ async fn list_surveys_handler(
             "status": s.status,
             "created_at": s.created_at,
             "response_count": response_count,
+            "user_answered": user_answered,
         }));
     }
 
