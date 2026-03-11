@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShoppingCart, TrendingUp, Activity, Globe } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -46,50 +45,49 @@ export default function Marketplace({ planet, userId, onUpdate }: MarketplacePro
   };
 
   const tabs = [
-    { id: "buy",     label: "Acheter",   icon: ShoppingCart },
-    { id: "sell",    label: "Vendre",    icon: TrendingUp   },
-    { id: "planets", label: "Planètes",  icon: Globe        },
-    { id: "history", label: "Historique",icon: Activity     },
+    { id: "buy",     label: "Acheter",    icon: ShoppingCart },
+    { id: "sell",    label: "Vendre",     icon: TrendingUp   },
+    { id: "planets", label: "Planètes",   icon: Globe        },
+    { id: "history", label: "Historique", icon: Activity     },
   ];
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {/* Header */}
-      <Card className="bg-slate-950 border border-indigo-500/30 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/20 to-transparent"></div>
-        <CardContent className="p-6 relative z-10">
+      <div className="relative overflow-hidden rounded-xl bg-[rgba(16,8,46,0.95)] border border-cyan-500/10 backdrop-blur-[12px]">
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/10 to-transparent pointer-events-none" />
+        <div className="p-6 relative z-10">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-lg border border-indigo-500/30 bg-indigo-900/20 text-indigo-400">
+            <div className="p-3 rounded-lg border border-cyan-500/20 bg-cyan-900/10 text-cyan-400">
               <ShoppingCart size={32} />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">Marché Galactique</h2>
-              <p className="text-sm text-gray-400">
+              <h2 className="text-2xl font-bold text-slate-200">Marché Galactique</h2>
+              <p className="text-sm text-slate-500">
                 Échangez vos ressources ou achetez des planètes entières.
               </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Price Overview (only on resource tabs) */}
       {!loading && stats && activeTab !== "planets" && <PriceOverview stats={stats} />}
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-white/10 pb-2">
+      <div className="flex gap-2 border-b border-cyan-500/10 pb-2">
         {tabs.map(tab => {
           const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
           return (
             <Button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as TabType)}
-              variant={activeTab === tab.id ? "default" : "ghost"}
+              variant={isActive ? "default" : "ghost"}
               className={`flex items-center gap-2 ${
-                activeTab === tab.id
-                  ? tab.id === "planets"
-                    ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
-                  : "text-gray-400 hover:text-white hover:bg-slate-800"
+                isActive
+                  ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-[rgba(10,5,32,0.85)]"
               }`}
             >
               <Icon size={16} />

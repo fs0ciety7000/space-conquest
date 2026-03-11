@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Users, UserPlus, UserCheck, UserX, Trash2, Send, Search, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,6 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  // Search
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -57,7 +57,6 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
     fetchFriends();
   }, [userId]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -167,19 +166,27 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
       : `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="max-w-3xl mx-auto p-6 space-y-6"
+    >
       <div className="flex items-center gap-3 mb-2">
-        <Users size={22} className="text-indigo-400" />
-        <h2 className="text-xl font-black text-white uppercase tracking-wide">Amis</h2>
+        <Users size={22} className="text-cyan-400" />
+        <h2 className="text-xl font-black text-slate-200 uppercase tracking-wide">Amis</h2>
         <span className="text-sm text-slate-400">({accepted.length} ami{accepted.length !== 1 ? "s" : ""})</span>
       </div>
 
       {/* Ajouter un ami — recherche live */}
-      <Card className="bg-slate-900/50 border border-white/10">
+      <Card className="bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px]">
         <CardContent className="p-5">
-          <h3 className="text-xs font-black uppercase text-indigo-400 mb-3 flex items-center gap-2">
-            <UserPlus size={14} /> Ajouter un ami
-          </h3>
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+            <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+            <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-2">
+              <UserPlus size={12} /> Ajouter un ami
+            </span>
+          </div>
 
           <div ref={searchRef} className="relative">
             <div className="flex gap-2">
@@ -194,12 +201,12 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
                   }}
                   onFocus={() => results.length > 0 && setShowDropdown(true)}
                   placeholder="Tapez les premières lettres d'un pseudo..."
-                  className="bg-slate-950 border-slate-700 text-white pl-8 pr-8"
+                  className="bg-[rgba(5,0,15,0.8)] border-cyan-500/10 text-slate-200 pl-8 pr-8 focus:border-cyan-500/30"
                 />
                 {query && (
                   <button
                     onClick={clearSearch}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200"
                   >
                     <X size={14} />
                   </button>
@@ -208,7 +215,7 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
               <Button
                 onClick={handleSendRequest}
                 disabled={sending || !query.trim()}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white"
+                className="bg-cyan-600 hover:bg-cyan-500 text-white"
               >
                 {sending
                   ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
@@ -218,28 +225,36 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
             </div>
 
             {/* Dropdown */}
-            {showDropdown && (
-              <div className="absolute top-full left-0 right-10 mt-1 z-50 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
-                {searching ? (
-                  <div className="flex justify-center py-3">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500" />
-                  </div>
-                ) : results.map(r => (
-                  <button
-                    key={r.user_id}
-                    onMouseDown={() => selectResult(r)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800 transition-colors text-left"
-                  >
-                    <img
-                      src={getAvatarSrc(r.username, r.avatar_url)}
-                      alt=""
-                      className="w-7 h-7 rounded-lg"
-                    />
-                    <span className="text-sm font-bold text-white">{r.username}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <AnimatePresence>
+              {showDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-full left-0 right-10 mt-1 z-50 bg-[rgba(16,8,46,0.95)] border border-cyan-500/10 rounded-xl overflow-hidden shadow-2xl backdrop-blur-[12px]"
+                >
+                  {searching ? (
+                    <div className="flex justify-center py-3">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-cyan-500" />
+                    </div>
+                  ) : results.map(r => (
+                    <button
+                      key={r.user_id}
+                      onMouseDown={() => selectResult(r)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-cyan-500/5 transition-colors text-left"
+                    >
+                      <img
+                        src={getAvatarSrc(r.username, r.avatar_url)}
+                        alt=""
+                        className="w-7 h-7 rounded-lg"
+                      />
+                      <span className="text-sm font-bold text-slate-200">{r.username}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <p className="text-xs text-slate-500 mt-2">
@@ -249,48 +264,58 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
       </Card>
 
       {/* Demandes reçues */}
-      {pendingReceived.length > 0 && (
-        <Card className="bg-amber-950/20 border border-amber-500/30">
-          <CardContent className="p-5">
-            <h3 className="text-xs font-black uppercase text-amber-400 mb-3 flex items-center gap-2">
-              <UserCheck size={14} /> Demandes reçues ({pendingReceived.length})
-            </h3>
-            <div className="space-y-3">
-              {pendingReceived.map((f) => (
-                <div key={f.friendship_id} className="flex items-center gap-3 bg-black/30 p-3 rounded-lg">
-                  <img src={getAvatarSrc(f.username, f.avatar_url)} alt="" className="w-10 h-10 rounded-xl" />
-                  <span className="flex-1 text-white font-bold">{f.username}</span>
-                  <button
-                    onClick={() => handleAccept(f.friendship_id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-bold transition-colors"
-                  >
-                    <UserCheck size={13} /> Accepter
-                  </button>
-                  <button
-                    onClick={() => handleDecline(f.friendship_id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold transition-colors"
-                  >
-                    <UserX size={13} /> Décliner
-                  </button>
+      <AnimatePresence>
+        {pendingReceived.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <Card className="bg-cyan-500/5 border border-cyan-500/15 backdrop-blur-[12px]">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+                  <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                  <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-2">
+                    <UserCheck size={12} /> Demandes reçues ({pendingReceived.length})
+                  </span>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                <div className="space-y-3">
+                  {pendingReceived.map((f) => (
+                    <div key={f.friendship_id} className="flex items-center gap-3 bg-black/30 p-3 rounded-lg border border-cyan-500/10">
+                      <img src={getAvatarSrc(f.username, f.avatar_url)} alt="" className="w-10 h-10 rounded-xl" />
+                      <span className="flex-1 text-slate-200 font-bold">{f.username}</span>
+                      <button
+                        onClick={() => handleAccept(f.friendship_id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-bold transition-colors"
+                      >
+                        <UserCheck size={13} /> Accepter
+                      </button>
+                      <button
+                        onClick={() => handleDecline(f.friendship_id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-colors"
+                      >
+                        <UserX size={13} /> Décliner
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Demandes envoyées */}
       {pendingSent.length > 0 && (
-        <Card className="bg-slate-900/30 border border-white/10">
+        <Card className="bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px]">
           <CardContent className="p-5">
-            <h3 className="text-xs font-black uppercase text-slate-400 mb-3 flex items-center gap-2">
-              <UserPlus size={14} /> Demandes envoyées ({pendingSent.length})
-            </h3>
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+              <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+              <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-2">
+                <UserPlus size={12} /> Demandes envoyées ({pendingSent.length})
+              </span>
+            </div>
             <div className="space-y-3">
               {pendingSent.map((f) => (
-                <div key={f.friendship_id} className="flex items-center gap-3 bg-black/30 p-3 rounded-lg">
+                <div key={f.friendship_id} className="flex items-center gap-3 bg-black/30 p-3 rounded-lg border border-cyan-500/10">
                   <img src={getAvatarSrc(f.username, f.avatar_url)} alt="" className="w-10 h-10 rounded-xl" />
-                  <span className="flex-1 text-white font-bold">{f.username}</span>
+                  <span className="flex-1 text-slate-200 font-bold">{f.username}</span>
                   <span className="text-xs text-slate-500 italic">En attente...</span>
                   <button
                     onClick={() => handleRemove(f.friendship_id, f.username)}
@@ -306,14 +331,17 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
       )}
 
       {/* Amis acceptés */}
-      <Card className="bg-slate-900/50 border border-white/10">
+      <Card className="bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px]">
         <CardContent className="p-5">
-          <h3 className="text-xs font-black uppercase text-indigo-400 mb-3 flex items-center gap-2">
-            <Users size={14} /> Mes amis ({accepted.length})
-          </h3>
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+            <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+            <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-2">
+              <Users size={12} /> Mes amis ({accepted.length})
+            </span>
+          </div>
           {loading ? (
             <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500" />
             </div>
           ) : accepted.length === 0 ? (
             <p className="text-slate-500 text-sm text-center py-6">
@@ -322,18 +350,24 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
           ) : (
             <div className="space-y-2">
               {accepted.map((f) => (
-                <div key={f.friendship_id} className="flex items-center gap-3 bg-black/20 hover:bg-black/40 p-3 rounded-lg transition-colors group">
+                <motion.div
+                  key={f.friendship_id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex items-center gap-3 bg-black/20 hover:bg-black/40 p-3 rounded-lg transition-colors group border-l-2 border-emerald-500/40"
+                >
                   <img src={getAvatarSrc(f.username, f.avatar_url)} alt="" className="w-10 h-10 rounded-xl" />
                   <div className="flex-1">
-                    <div className="text-white font-bold">{f.username}</div>
-                    <div className="text-[10px] text-slate-500">
+                    <div className="text-slate-200 font-bold">{f.username}</div>
+                    <div className="text-[10px] text-slate-500 font-mono">
                       Ami depuis le {new Date(f.created_at).toLocaleDateString("fr-FR")}
                     </div>
                   </div>
                   {onSendMessage && (
                     <button
                       onClick={() => onSendMessage(f.username)}
-                      className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-950/80 text-indigo-400 hover:text-indigo-200 text-xs font-bold border border-indigo-900/50 transition-all"
+                      className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-950/80 text-cyan-400 hover:text-cyan-200 text-xs font-bold border border-cyan-500/20 transition-all"
                     >
                       <Send size={11} /> Message
                     </button>
@@ -344,12 +378,12 @@ export default function FriendsView({ userId, onSendMessage }: FriendsViewProps)
                   >
                     <Trash2 size={14} />
                   </button>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
-    </div>
+    </motion.div>
   );
 }

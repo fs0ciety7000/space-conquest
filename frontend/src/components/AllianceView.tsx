@@ -1,22 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogDescription,
-  DialogFooter 
+  DialogFooter
 } from './ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
-import { 
-  Shield, Crown, Users, Star, Plus, Search, UserPlus, 
+import {
+  Shield, Crown, Users, Star, Plus, Search, UserPlus,
   LogOut, Settings, Trash2, UserMinus, ChevronUp, ChevronDown,
   Mail, Clock, Check, X, RefreshCw, Award, Swords
 } from 'lucide-react';
@@ -86,7 +87,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
   const [applications, setApplications] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -94,7 +95,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
   const [showConfirmDissolve, setShowConfirmDissolve] = useState(false);
-  
+
   // Form states
   const [createForm, setCreateForm] = useState({ name: '', tag: '', description: '' });
   const [inviteUsername, setInviteUsername] = useState('');
@@ -107,7 +108,6 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
     min_level_required: 0
   });
 
-  // Fetch functions
   const fetchMyAlliance = useCallback(async () => {
     try {
       const res = await fetch(apiUrl(`/alliances/my?user_id=${userId}`), {
@@ -115,7 +115,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
       });
       const data = await res.json();
       setMyAlliance(data);
-      
+
       if (data.has_alliance && data.alliance_id) {
         fetchAllianceDetails(data.alliance_id);
         setViewMode('detail');
@@ -174,7 +174,6 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
     }
   }, [userId, token]);
 
-  // Initial load
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -186,14 +185,12 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
     load();
   }, [fetchMyAlliance, fetchAlliances, fetchInvitations]);
 
-  // Refresh alliance details when viewing own alliance
   useEffect(() => {
     if (selectedAlliance?.is_member && (myAlliance?.user_role === 'leader' || myAlliance?.user_role === 'officer')) {
       fetchApplications(selectedAlliance.id);
     }
   }, [selectedAlliance, myAlliance, fetchApplications]);
 
-  // Actions
   const handleCreateAlliance = async () => {
     if (!createForm.name || !createForm.tag) {
       toast.error('Nom et tag requis');
@@ -203,15 +200,15 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
     try {
       const res = await fetch(apiUrl(`/alliances?user_id=${userId}`), {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(createForm)
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success('Alliance créée !', { description: data.message });
         setShowCreateModal(false);
@@ -230,15 +227,15 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
     try {
       const res = await fetch(apiUrl(`/alliances/apply?user_id=${userId}`), {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ alliance_id: allianceId, message: applyMessage || null })
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success(data.message || 'Candidature envoyée !');
         setShowApplyModal(false);
@@ -258,15 +255,15 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
     try {
       const res = await fetch(apiUrl(`/alliances/invitations/${invitationId}/respond?user_id=${userId}`), {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ accept })
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success(data.message);
         fetchInvitations();
@@ -283,19 +280,19 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
   const handleInvitePlayer = async () => {
     if (!inviteUsername || !selectedAlliance) return;
-    
+
     try {
       const res = await fetch(apiUrl(`/alliances/${selectedAlliance.id}/invite?user_id=${userId}`), {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ username: inviteUsername, message: inviteMessage || null })
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success(data.message || 'Invitation envoyée !');
         setShowInviteModal(false);
@@ -311,15 +308,15 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
   const handleLeaveAlliance = async () => {
     if (!selectedAlliance) return;
-    
+
     try {
       const res = await fetch(apiUrl(`/alliances/${selectedAlliance.id}/leave?user_id=${userId}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success(data.message);
         setShowConfirmLeave(false);
@@ -337,15 +334,15 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
   const handleDissolveAlliance = async () => {
     if (!selectedAlliance) return;
-    
+
     try {
       const res = await fetch(apiUrl(`/alliances/${selectedAlliance.id}?user_id=${userId}`), {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success(data.message || 'Alliance dissoute');
         setShowConfirmDissolve(false);
@@ -363,15 +360,15 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
   const handleKickMember = async (targetUserId: string) => {
     if (!selectedAlliance) return;
-    
+
     try {
       const res = await fetch(apiUrl(`/alliances/${selectedAlliance.id}/kick/${targetUserId}?user_id=${userId}`), {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success(data.message || 'Membre expulsé');
         fetchAllianceDetails(selectedAlliance.id);
@@ -385,19 +382,19 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
   const handleChangeRole = async (targetUserId: string, newRole: string) => {
     if (!selectedAlliance) return;
-    
+
     try {
       const res = await fetch(apiUrl(`/alliances/${selectedAlliance.id}/role/${targetUserId}?user_id=${userId}`), {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ role: newRole })
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success(data.message);
         fetchAllianceDetails(selectedAlliance.id);
@@ -411,15 +408,15 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
   const handleTransferLeadership = async (targetUserId: string) => {
     if (!selectedAlliance) return;
-    
+
     try {
       const res = await fetch(apiUrl(`/alliances/${selectedAlliance.id}/transfer/${targetUserId}?user_id=${userId}`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success(data.message);
         fetchMyAlliance();
@@ -434,19 +431,19 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
   const handleUpdateSettings = async () => {
     if (!selectedAlliance) return;
-    
+
     try {
       const res = await fetch(apiUrl(`/alliances/${selectedAlliance.id}?user_id=${userId}`), {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(settingsForm)
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         toast.success(data.message || 'Paramètres mis à jour');
         setShowSettingsModal(false);
@@ -459,13 +456,12 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
     }
   };
 
-  // Helpers
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'leader':
         return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/50"><Crown size={10} className="mr-1" /> Leader</Badge>;
       case 'officer':
-        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/50"><Shield size={10} className="mr-1" /> Officier</Badge>;
+        return <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/50"><Shield size={10} className="mr-1" /> Officier</Badge>;
       default:
         return <Badge className="bg-slate-500/20 text-slate-400 border-slate-500/50"><Users size={10} className="mr-1" /> Membre</Badge>;
     }
@@ -493,48 +489,53 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="w-8 h-8 animate-spin text-indigo-400" />
+        <RefreshCw className="w-8 h-8 animate-spin text-cyan-400" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25">
             <Shield className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-black text-white tracking-tight">ALLIANCES</h2>
+            <h2 className="text-2xl font-black text-slate-200 tracking-tight">ALLIANCES</h2>
             <p className="text-xs text-slate-400 font-mono">
-              {myAlliance?.has_alliance 
+              {myAlliance?.has_alliance
                 ? `[${myAlliance.alliance_tag}] ${myAlliance.alliance_name}`
                 : 'Rejoignez ou créez une alliance'}
             </p>
           </div>
         </div>
-        
+
         <div className="flex gap-2">
           {!myAlliance?.has_alliance && (
             <Button
               onClick={() => setShowCreateModal(true)}
-              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
+              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
             >
               <Plus size={16} className="mr-2" /> Créer
             </Button>
           )}
           <Button
             variant="outline"
-            onClick={() => { 
-              fetchAlliances(); 
-              fetchInvitations(); 
+            onClick={() => {
+              fetchAlliances();
+              fetchInvitations();
               if (myAlliance?.has_alliance && myAlliance.alliance_id) {
                 fetchAllianceDetails(myAlliance.alliance_id);
               }
             }}
-            className="border-white/10"
+            className="border-cyan-500/10 hover:border-cyan-500/30"
           >
             <RefreshCw size={16} />
           </Button>
@@ -542,41 +543,48 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
       </div>
 
       {/* Invitations reçues */}
-      {invitations.length > 0 && !myAlliance?.has_alliance && (
-        <Card className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border-yellow-500/30">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-yellow-400">
-              <Mail size={16} /> Invitations reçues ({invitations.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {invitations.map(inv => (
-              <div key={inv.id} className="flex items-center justify-between bg-black/30 rounded-lg p-3">
-                <div>
-                  <span className="font-bold text-white">[{inv.alliance_tag}] {inv.alliance_name}</span>
-                  {inv.message && <p className="text-xs text-slate-400 mt-1">{inv.message}</p>}
+      <AnimatePresence>
+        {invitations.length > 0 && !myAlliance?.has_alliance && (
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <Card className="bg-cyan-500/5 border border-cyan-500/15 backdrop-blur-[12px]">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2 pb-2 border-b border-cyan-500/10">
+                  <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                  <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-2">
+                    <Mail size={12} /> Invitations reçues ({invitations.length})
+                  </span>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => handleRespondToInvitation(inv.id, true)} className="bg-green-500/20 hover:bg-green-500/30 text-green-400">
-                    <Check size={14} />
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => handleRespondToInvitation(inv.id, false)} className="text-red-400 hover:bg-red-500/20">
-                    <X size={14} />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {invitations.map(inv => (
+                  <div key={inv.id} className="flex items-center justify-between bg-black/30 rounded-lg p-3 border border-cyan-500/10">
+                    <div>
+                      <span className="font-bold text-slate-200">[{inv.alliance_tag}] {inv.alliance_name}</span>
+                      {inv.message && <p className="text-xs text-slate-400 mt-1">{inv.message}</p>}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => handleRespondToInvitation(inv.id, true)} className="bg-green-500/20 hover:bg-green-500/30 text-green-400">
+                        <Check size={14} />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleRespondToInvitation(inv.id, false)} className="text-red-400 hover:bg-red-500/20">
+                        <X size={14} />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Navigation tabs */}
-      <div className="flex gap-2 border-b border-white/10 pb-2">
+      <div className="flex gap-2 border-b border-cyan-500/10 pb-2">
         <Button
           variant={viewMode === 'list' ? 'default' : 'ghost'}
           size="sm"
           onClick={() => setViewMode('list')}
-          className={viewMode === 'list' ? 'bg-indigo-500/20 text-indigo-400' : ''}
+          className={viewMode === 'list' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-slate-400 hover:text-slate-200'}
         >
           <Search size={14} className="mr-2" /> Rechercher
         </Button>
@@ -588,7 +596,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
               setViewMode('detail');
               if (myAlliance.alliance_id) fetchAllianceDetails(myAlliance.alliance_id);
             }}
-            className={viewMode === 'detail' ? 'bg-indigo-500/20 text-indigo-400' : ''}
+            className={viewMode === 'detail' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-slate-400 hover:text-slate-200'}
           >
             <Shield size={14} className="mr-2" /> Mon Alliance
           </Button>
@@ -598,25 +606,23 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
       {/* Liste des alliances */}
       {viewMode === 'list' && (
         <div className="space-y-4">
-          {/* Recherche */}
           <div className="flex gap-2">
             <Input
               placeholder="Rechercher par nom ou tag..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="bg-slate-900/50 border-white/10"
+              className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
             />
-            <Button onClick={fetchAlliances} className="bg-indigo-500/20 hover:bg-indigo-500/30">
+            <Button onClick={fetchAlliances} className="bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/20 text-cyan-400">
               <Search size={16} />
             </Button>
           </div>
 
-          {/* Liste */}
           <div className="grid gap-3">
             {alliances.map(alliance => (
-              <Card 
-                key={alliance.id} 
-                className="bg-slate-900/50 border-white/10 hover:border-indigo-500/50 transition-all cursor-pointer"
+              <Card
+                key={alliance.id}
+                className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 hover:border-cyan-500/30 transition-all cursor-pointer backdrop-blur-[12px] hover:shadow-[0_0_20px_rgba(6,182,212,0.08)]"
                 onClick={() => {
                   fetchAllianceDetails(alliance.id);
                   setViewMode('detail');
@@ -625,11 +631,11 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center border border-indigo-500/30">
-                        <span className="text-xs font-black text-indigo-400">{alliance.tag}</span>
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/20">
+                        <span className="text-xs font-black text-cyan-400">{alliance.tag}</span>
                       </div>
                       <div>
-                        <h3 className="font-bold text-white">{alliance.name}</h3>
+                        <h3 className="font-bold text-slate-200">{alliance.name}</h3>
                         <p className="text-xs text-slate-400">
                           <Crown size={10} className="inline mr-1" /> {alliance.leader_name}
                         </p>
@@ -637,11 +643,11 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                     </div>
                     <div className="flex items-center gap-4 text-right">
                       <div>
-                        <p className="text-lg font-black text-indigo-400">{formatScore(alliance.total_score)}</p>
+                        <p className="text-lg font-black text-cyan-400 tabular-nums font-mono">{formatScore(alliance.total_score)}</p>
                         <p className="text-[10px] text-slate-500 uppercase">Score</p>
                       </div>
                       <div>
-                        <p className="text-lg font-black text-white">{alliance.member_count}</p>
+                        <p className="text-lg font-black text-slate-200 tabular-nums font-mono">{alliance.member_count}</p>
                         <p className="text-[10px] text-slate-500 uppercase">Membres</p>
                       </div>
                       {getRecruitmentBadge(alliance.recruitment_policy)}
@@ -650,7 +656,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                 </CardContent>
               </Card>
             ))}
-            
+
             {alliances.length === 0 && (
               <div className="text-center py-12 text-slate-500">
                 <Shield size={48} className="mx-auto mb-4 opacity-30" />
@@ -663,17 +669,22 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
       {/* Détail d'une alliance */}
       {viewMode === 'detail' && selectedAlliance && (
-        <div className="space-y-6">
-          {/* Header de l'alliance */}
-          <Card className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border-indigo-500/30">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6"
+        >
+          {/* Alliance banner — glassmorphism elevated */}
+          <Card className="bg-[rgba(16,8,46,0.95)] border border-cyan-500/10 backdrop-blur-[12px] shadow-xl">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
                     <span className="text-xl font-black text-white">{selectedAlliance.tag}</span>
                   </div>
                   <div>
-                    <h2 className="text-2xl font-black text-white">{selectedAlliance.name}</h2>
+                    <h2 className="text-2xl font-black text-slate-200">{selectedAlliance.name}</h2>
                     <p className="text-sm text-slate-400 flex items-center gap-2">
                       <Crown size={14} className="text-yellow-400" /> {selectedAlliance.leader_name}
                       <span className="text-slate-600">•</span>
@@ -685,23 +696,23 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+                  <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tabular-nums font-mono">
                     {formatScore(selectedAlliance.total_score)}
                   </p>
                   <p className="text-xs text-slate-500 uppercase tracking-wider">Score total</p>
                   <div className="mt-2">{getRecruitmentBadge(selectedAlliance.recruitment_policy)}</div>
                 </div>
               </div>
-              
+
               {selectedAlliance.description && (
-                <p className="mt-4 text-sm text-slate-300 border-t border-white/10 pt-4">
+                <p className="mt-4 text-sm text-slate-300 border-t border-cyan-500/10 pt-4">
                   {selectedAlliance.description}
                 </p>
               )}
-              
+
               {selectedAlliance.is_member && selectedAlliance.internal_message && (
                 <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                  <p className="text-xs text-yellow-400 font-bold mb-1">📢 Message interne</p>
+                  <p className="text-xs text-yellow-400 font-bold mb-1">Message interne</p>
                   <p className="text-sm text-yellow-200">{selectedAlliance.internal_message}</p>
                 </div>
               )}
@@ -720,18 +731,18 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                   }
                 }}
                 disabled={selectedAlliance.recruitment_policy === 'closed'}
-                className="bg-gradient-to-r from-green-500 to-emerald-600"
+                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
               >
                 <UserPlus size={16} className="mr-2" />
                 {selectedAlliance.recruitment_policy === 'open' ? 'Rejoindre' : 'Postuler'}
               </Button>
             )}
-            
+
             {selectedAlliance.is_member && (
               <>
                 {(selectedAlliance.user_role === 'leader' || selectedAlliance.user_role === 'officer') && (
                   <>
-                    <Button onClick={() => setShowInviteModal(true)} variant="outline" className="border-indigo-500/30 text-indigo-400">
+                    <Button onClick={() => setShowInviteModal(true)} variant="outline" className="border-cyan-500/20 text-cyan-400 hover:border-cyan-500/40">
                       <UserPlus size={16} className="mr-2" /> Inviter
                     </Button>
                     <Button onClick={() => {
@@ -742,44 +753,47 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                         min_level_required: selectedAlliance.min_level_required
                       });
                       setShowSettingsModal(true);
-                    }} variant="outline" className="border-white/10">
+                    }} variant="outline" className="border-cyan-500/10 hover:border-cyan-500/20">
                       <Settings size={16} className="mr-2" /> Paramètres
                     </Button>
                   </>
                 )}
-                
+
                 {selectedAlliance.user_role === 'leader' ? (
-                  <Button onClick={() => setShowConfirmDissolve(true)} variant="outline" className="border-red-500/30 text-red-400">
+                  <Button onClick={() => setShowConfirmDissolve(true)} variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10">
                     <Trash2 size={16} className="mr-2" /> Dissoudre
                   </Button>
                 ) : (
-                  <Button onClick={() => setShowConfirmLeave(true)} variant="outline" className="border-red-500/30 text-red-400">
+                  <Button onClick={() => setShowConfirmLeave(true)} variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10">
                     <LogOut size={16} className="mr-2" /> Quitter
                   </Button>
                 )}
               </>
             )}
-            
-            <Button variant="ghost" onClick={() => setViewMode('list')} className="ml-auto">
+
+            <Button variant="ghost" onClick={() => setViewMode('list')} className="ml-auto text-slate-400 hover:text-slate-200">
               Retour à la liste
             </Button>
           </div>
 
           {/* Candidatures (pour leader/officier) */}
-          {selectedAlliance.is_member && 
+          {selectedAlliance.is_member &&
            (selectedAlliance.user_role === 'leader' || selectedAlliance.user_role === 'officer') &&
            applications.length > 0 && (
-            <Card className="bg-yellow-500/5 border-yellow-500/30">
+            <Card className="bg-yellow-500/5 border-yellow-500/20 backdrop-blur-[12px]">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2 text-yellow-400">
-                  <Mail size={16} /> Candidatures en attente ({applications.length})
-                </CardTitle>
+                <div className="flex items-center gap-2 pb-2 border-b border-cyan-500/10">
+                  <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                  <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-2">
+                    <Mail size={12} /> Candidatures en attente ({applications.length})
+                  </span>
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 {applications.filter(a => a.invitation_type === 'application').map(app => (
-                  <div key={app.id} className="flex items-center justify-between bg-black/30 rounded-lg p-3">
+                  <div key={app.id} className="flex items-center justify-between bg-black/30 rounded-lg p-3 border border-cyan-500/10">
                     <div>
-                      <span className="font-bold text-white">{app.username}</span>
+                      <span className="font-bold text-slate-200">{app.username}</span>
                       {app.message && <p className="text-xs text-slate-400 mt-1">"{app.message}"</p>}
                     </div>
                     <div className="flex gap-2">
@@ -797,39 +811,42 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
           )}
 
           {/* Liste des membres */}
-          <Card className="bg-slate-900/50 border-white/10">
+          <Card className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 backdrop-blur-[12px]">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users size={18} /> Membres ({selectedAlliance.members?.length || 0})
-              </CardTitle>
+              <div className="flex items-center gap-2 mb-1 pb-2 border-b border-cyan-500/10">
+                <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-2">
+                  <Users size={12} /> Membres ({selectedAlliance.members?.length || 0})
+                </span>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {selectedAlliance.members?.map(member => (
-                  <div key={member.user_id} className="flex items-center justify-between bg-black/30 rounded-lg p-3 hover:bg-black/50 transition-colors">
+                  <div key={member.user_id} className="flex items-center justify-between bg-black/20 rounded-lg p-3 hover:bg-cyan-500/5 hover:border-l-2 hover:border-cyan-500/30 border-l-2 border-transparent transition-all duration-200 group">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500/30 to-purple-500/30 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/10">
                         {member.role === 'leader' ? <Crown size={14} className="text-yellow-400" /> :
-                         member.role === 'officer' ? <Shield size={14} className="text-blue-400" /> :
+                         member.role === 'officer' ? <Shield size={14} className="text-cyan-400" /> :
                          <Users size={14} className="text-slate-400" />}
                       </div>
                       <div>
-                        <p className="font-bold text-white flex items-center gap-2">
+                        <p className="font-bold text-slate-200 flex items-center gap-2">
                           {member.username}
                           {getRoleBadge(member.role)}
                         </p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 font-mono tabular-nums">
                           Score: {formatScore(member.score)} • Membre depuis {new Date(member.joined_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       {onOpenMessage && member.user_id !== userId && (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); onOpenMessage(member.username); }}>
+                              <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); onOpenMessage(member.username); }} className="text-slate-400 hover:text-cyan-400">
                                 <Mail size={14} />
                               </Button>
                             </TooltipTrigger>
@@ -837,15 +854,14 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                           </Tooltip>
                         </TooltipProvider>
                       )}
-                      
-                      {/* Actions pour leader */}
+
                       {selectedAlliance.user_role === 'leader' && member.user_id !== userId && (
                         <>
                           {member.role === 'member' && (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button size="sm" variant="ghost" onClick={() => handleChangeRole(member.user_id, 'officer')} className="text-blue-400">
+                                  <Button size="sm" variant="ghost" onClick={() => handleChangeRole(member.user_id, 'officer')} className="text-cyan-400">
                                     <ChevronUp size={14} />
                                   </Button>
                                 </TooltipTrigger>
@@ -889,8 +905,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                           </TooltipProvider>
                         </>
                       )}
-                      
-                      {/* Actions pour officier */}
+
                       {selectedAlliance.user_role === 'officer' && member.role === 'member' && member.user_id !== userId && (
                         <TooltipProvider>
                           <Tooltip>
@@ -909,17 +924,17 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
               </div>
             </CardContent>
           </Card>
-        </div>
+        </motion.div>
       )}
 
       {/* Modal: Créer une alliance */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent className="bg-slate-900 border-white/10">
+        <DialogContent className="bg-[rgba(16,8,46,0.95)] border-cyan-500/10 backdrop-blur-[12px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-slate-200">
               <Plus size={20} /> Créer une alliance
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-slate-400">
               Fondez votre propre alliance et recrutez des membres
             </DialogDescription>
           </DialogHeader>
@@ -930,7 +945,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                 value={createForm.name}
                 onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="Empire Galactique"
-                className="mt-1 bg-black/30 border-white/10"
+                className="mt-1 bg-black/40 border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                 maxLength={20}
               />
             </div>
@@ -940,7 +955,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                 value={createForm.tag}
                 onChange={e => setCreateForm(f => ({ ...f, tag: e.target.value.toUpperCase() }))}
                 placeholder="EG"
-                className="mt-1 bg-black/30 border-white/10"
+                className="mt-1 bg-black/40 border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                 maxLength={5}
               />
               <p className="text-xs text-slate-500 mt-1">Affiché comme [{createForm.tag || 'TAG'}]</p>
@@ -951,14 +966,14 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                 value={createForm.description}
                 onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="Notre alliance conquiert la galaxie..."
-                className="mt-1 bg-black/30 border-white/10"
+                className="mt-1 bg-black/40 border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                 rows={3}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowCreateModal(false)}>Annuler</Button>
-            <Button onClick={handleCreateAlliance} className="bg-gradient-to-r from-indigo-500 to-purple-600">
+            <Button variant="ghost" onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-200">Annuler</Button>
+            <Button onClick={handleCreateAlliance} className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700">
               Créer l'alliance
             </Button>
           </DialogFooter>
@@ -967,9 +982,9 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
       {/* Modal: Inviter un joueur */}
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
-        <DialogContent className="bg-slate-900 border-white/10">
+        <DialogContent className="bg-[rgba(16,8,46,0.95)] border-cyan-500/10 backdrop-blur-[12px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-slate-200">
               <UserPlus size={20} /> Inviter un joueur
             </DialogTitle>
           </DialogHeader>
@@ -980,7 +995,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                 value={inviteUsername}
                 onChange={e => setInviteUsername(e.target.value)}
                 placeholder="Pseudo exact du joueur"
-                className="mt-1 bg-black/30 border-white/10"
+                className="mt-1 bg-black/40 border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
               />
             </div>
             <div>
@@ -989,13 +1004,13 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                 value={inviteMessage}
                 onChange={e => setInviteMessage(e.target.value)}
                 placeholder="Nous serions honorés de vous compter parmi nous..."
-                className="mt-1 bg-black/30 border-white/10"
+                className="mt-1 bg-black/40 border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                 rows={2}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowInviteModal(false)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setShowInviteModal(false)} className="text-slate-400 hover:text-slate-200">Annuler</Button>
             <Button onClick={handleInvitePlayer} className="bg-gradient-to-r from-green-500 to-emerald-600">
               Envoyer l'invitation
             </Button>
@@ -1005,9 +1020,9 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
       {/* Modal: Postuler */}
       <Dialog open={showApplyModal} onOpenChange={setShowApplyModal}>
-        <DialogContent className="bg-slate-900 border-white/10">
+        <DialogContent className="bg-[rgba(16,8,46,0.95)] border-cyan-500/10 backdrop-blur-[12px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-slate-200">
               <UserPlus size={20} /> Postuler à [{selectedAlliance?.tag}] {selectedAlliance?.name}
             </DialogTitle>
           </DialogHeader>
@@ -1018,13 +1033,13 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
                 value={applyMessage}
                 onChange={e => setApplyMessage(e.target.value)}
                 placeholder="Présentez-vous et expliquez pourquoi vous souhaitez rejoindre..."
-                className="mt-1 bg-black/30 border-white/10"
+                className="mt-1 bg-black/40 border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                 rows={4}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowApplyModal(false)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setShowApplyModal(false)} className="text-slate-400 hover:text-slate-200">Annuler</Button>
             <Button onClick={() => selectedAlliance && handleApplyToAlliance(selectedAlliance.id)} className="bg-gradient-to-r from-green-500 to-emerald-600">
               Envoyer ma candidature
             </Button>
@@ -1034,9 +1049,9 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
       {/* Modal: Paramètres */}
       <Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
-        <DialogContent className="bg-slate-900 border-white/10">
+        <DialogContent className="bg-[rgba(16,8,46,0.95)] border-cyan-500/10 backdrop-blur-[12px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-slate-200">
               <Settings size={20} /> Paramètres de l'alliance
             </DialogTitle>
           </DialogHeader>
@@ -1046,7 +1061,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
               <Textarea
                 value={settingsForm.description}
                 onChange={e => setSettingsForm(f => ({ ...f, description: e.target.value }))}
-                className="mt-1 bg-black/30 border-white/10"
+                className="mt-1 bg-black/40 border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                 rows={3}
               />
             </div>
@@ -1055,7 +1070,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
               <Textarea
                 value={settingsForm.internal_message}
                 onChange={e => setSettingsForm(f => ({ ...f, internal_message: e.target.value }))}
-                className="mt-1 bg-black/30 border-white/10"
+                className="mt-1 bg-black/40 border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                 rows={3}
               />
             </div>
@@ -1064,7 +1079,7 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
               <select
                 value={settingsForm.recruitment_policy}
                 onChange={e => setSettingsForm(f => ({ ...f, recruitment_policy: e.target.value }))}
-                className="mt-1 w-full bg-black/30 border border-white/10 rounded-md p-2 text-white"
+                className="mt-1 w-full bg-black/40 border border-cyan-500/10 rounded-md p-2 text-slate-200 focus:border-cyan-500/30"
               >
                 <option value="open">Ouvert (tout le monde peut rejoindre)</option>
                 <option value="invite_only">Sur invitation/candidature</option>
@@ -1073,8 +1088,8 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowSettingsModal(false)}>Annuler</Button>
-            <Button onClick={handleUpdateSettings} className="bg-gradient-to-r from-indigo-500 to-purple-600">
+            <Button variant="ghost" onClick={() => setShowSettingsModal(false)} className="text-slate-400 hover:text-slate-200">Annuler</Button>
+            <Button onClick={handleUpdateSettings} className="bg-gradient-to-r from-cyan-500 to-blue-600">
               Sauvegarder
             </Button>
           </DialogFooter>
@@ -1083,18 +1098,18 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
       {/* Modal: Confirmer quitter */}
       <Dialog open={showConfirmLeave} onOpenChange={setShowConfirmLeave}>
-        <DialogContent className="bg-slate-900 border-red-500/30">
+        <DialogContent className="bg-[rgba(16,8,46,0.95)] border-red-500/30 backdrop-blur-[12px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-400">
               <LogOut size={20} /> Quitter l'alliance ?
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-slate-400">
               Êtes-vous sûr de vouloir quitter [{selectedAlliance?.tag}] {selectedAlliance?.name} ?
               Cette action est irréversible.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowConfirmLeave(false)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setShowConfirmLeave(false)} className="text-slate-400 hover:text-slate-200">Annuler</Button>
             <Button onClick={handleLeaveAlliance} className="bg-red-500 hover:bg-red-600">
               Quitter l'alliance
             </Button>
@@ -1104,26 +1119,26 @@ export function AllianceView({ userId, token, onOpenMessage }: AllianceViewProps
 
       {/* Modal: Confirmer dissolution */}
       <Dialog open={showConfirmDissolve} onOpenChange={setShowConfirmDissolve}>
-        <DialogContent className="bg-slate-900 border-red-500/30">
+        <DialogContent className="bg-[rgba(16,8,46,0.95)] border-red-500/30 backdrop-blur-[12px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-400">
               <Trash2 size={20} /> Dissoudre l'alliance ?
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-slate-400">
               Êtes-vous sûr de vouloir DISSOUDRE [{selectedAlliance?.tag}] {selectedAlliance?.name} ?
               <br /><br />
               <strong className="text-red-400">ATTENTION:</strong> Tous les membres seront expulsés et l'alliance sera définitivement supprimée. Cette action est IRRÉVERSIBLE.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowConfirmDissolve(false)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setShowConfirmDissolve(false)} className="text-slate-400 hover:text-slate-200">Annuler</Button>
             <Button onClick={handleDissolveAlliance} className="bg-red-500 hover:bg-red-600">
               Dissoudre définitivement
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </motion.div>
   );
 }
 

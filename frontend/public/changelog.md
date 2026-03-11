@@ -1,5 +1,73 @@
 # Changelog - Space Conquest
 
+## [10.0.0] - 2026-03-11 - Refonte UI Cyberpunk / Modern Sci-Fi
+
+### 🎨 Nouveau Design System v2.0 — Cyberpunk / Modern Sci-Fi
+
+Space Conquest passe à un design system unifié inspiré du cyberpunk et du sci-fi moderne. L'ensemble de l'interface a été refondu de A à Z avec une cohérence visuelle totale.
+
+#### Palette de couleurs
+
+- **Fonds ultra-sombres** : nouvelle gamme de fonds quasi-noirs (`#020008` → `#160b3a`) remplaçant les anciens gris ardoise. Chaque surface a sa profondeur propre — void, base, panel, elevated, surface.
+- **Accents néon** : 8 couleurs néon codifiées par usage — **cyan électrique** (`#00f5ff`) pour les actions primaires, **magenta** pour les alertes critiques, **violet plasma** pour les technologies, **vert matrix** (`#00ff88`) pour les succès, **rouge danger** (`#ff003c`) pour les destructions, **orange combustion** (`#ff6600`) pour le métal.
+- **Ressources** : couleurs immuables et sémantiques — métal `orange`, cristal `cyan`, deutérium `vert`, énergie `jaune`, crédits syndicat `violet`.
+
+#### Effets visuels
+
+- **Glassmorphism** : tous les panneaux utilisent `backdrop-blur` avec des fonds semi-transparents (`rgba`), donnant une profondeur de verre teinté.
+- **Glow néon** : les éléments actifs, boutons primaires et valeurs importantes émettent un halo lumineux (box-shadow multicouche).
+- **Coins biseautés** (clip-path) : signature visuelle cyberpunk — les boutons et cartes importants ont un coin coupé à 45° plutôt que des bords arrondis.
+- **Scanlines** : texture CRT subtile sur les panneaux HUD pour l'ambiance rétro-futuriste.
+
+#### Typographie
+
+- **Valeurs de jeu** : police monospace (`JetBrains Mono` / `Fira Code`) avec `tabular-nums` sur tous les chiffres — ressources, scores, coordonnées, timers.
+- **Labels de section** : `UPPERCASE` + `letter-spacing` large + taille réduite (11px) — style terminal.
+- **Hiérarchie** : les titres de section ont un accent vertical coloré (barre de 3px dégradée) à leur gauche.
+
+#### Composants UI refondus
+
+- **Boutons** : 11 variantes cyberpunk (`default`, `secondary`, `destructive`, `success`, `cyber`, `hologram`, `neon`, `warning`, `ghost`, `outline`, `link`). Chaque bouton a un état hover avec glow + `translateY(-2px)` + changement de bordure simultanés. Framer Motion `whileHover/whileTap` intégré.
+- **Cartes** : nouveau composant `<CyberCard>` avec bevel clip-path et 5 accents couleur. Hover : élévation + glow subtil.
+- **Badges** : flat, uppercase, `rounded-[2px]`, bordure fine colorée. Prop `dot` pour indicateur pulsant.
+- **Inputs** : fond très sombre, bordure cyan subtile, focus ring + glow cyan.
+- **Progress bars** : 7 variantes sémantiques (metal/crystal/deuterium/energy/success/danger/default) avec gradient néon et box-shadow lumineux.
+- **Dialogs/Modales** : backdrop noir blur intense, bevel clip-path, ligne de scan animée en header, corner brackets décoratifs.
+
+#### Nouveaux composants
+
+- **`<DataCard>`** : carte de donnée HUD avec accent couleur, bevel, indicateur de tendance (▲/▼), valeur mono.
+- **`<StatusBadge>`** : badge d'état `online/offline/warning/danger/idle` avec dot pulsant.
+- **`<SectionHeader>`** : header de section standardisé avec barre accent verticale et slot action.
+
+#### Animations (Framer Motion)
+
+- **Entrées** : tous les composants principaux ont une animation d'apparition (`opacity 0→1` + `y 10→0`, 300ms).
+- **Listes** : stagger `staggerChildren: 0.04–0.05s` sur les grilles de vaisseaux, défenses, bâtiments, listings.
+- **Tech tree** : animation spring sur chaque nœud technologique.
+- **Messages** : `AnimatePresence` sur les bulles de conversation.
+
+### 🔄 Composants migrés (41 fichiers)
+
+**Vague 1 — Chrome permanent**
+`Sidebar`, `EmpireBar`, `PlanetOverview`
+
+**Vague 2 — Gameplay core**
+`Shipyard`, `Defenses`, `Facilities`, `BuildQueue`, `BuildQueueManager`, `FleetDispatcher`, `AttackModal`, `SpyModal`, `ColonizeModal`, `GalaxyView`, `TechTree`, `TechTreeVisual`, `Dashboard`
+
+**Vague 3 — Secondaire**
+`ReportsTerminal`, `Leaderboard`, `StatsPage`, `EconomyLog`, `ProductionStats`, `Marketplace`, `BuyView`, `SellView`, `ListingCard`, `NpcTradeCard`, `CreateListingModal`, `TransactionHistory`, `TradeRoutesView`, `UndergroundMarket`, `Achievements`, `MissionsView`, `Officers`, `CombatSimulator`, `BountyBoard`, `Settings`, `MessagesView`, `NotificationCenter`, `FriendsView`, `Alliances`, `AllianceView`
+
+### 🟣 Marché Underground — thème violet
+
+Le marché underground adopte un thème **violet plasma** exclusif (`#bf00ff`) pour le distinguer visuellement du reste du jeu. L'écran de verrouillage (accès refusé) utilise un glassmorphism violet sombre évocateur d'une zone interdite.
+
+### 💬 Messages & Social — bulles cyber
+
+Les bulles de conversation utilisent désormais le style cyberpunk : messages propres en `bg-cyan-500/15` avec bordure cyan, messages reçus en glassmorphism sombre. Les notifications ont des accents couleur par type (rouge combat, vert construction, ambre marché).
+
+---
+
 ## [9.1.0] - 2026-03-11 - Refactoring vitesses & Rééquilibrage du jeu
 
 ### ⚙️ Backend — Refactoring SPEED_FACTOR (breaking change interne)

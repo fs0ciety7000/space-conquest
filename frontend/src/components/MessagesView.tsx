@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Send, RotateCw, Plus, ArrowLeft, User, MessageCircle, Archive, ArchiveRestore, Inbox, Globe, Users, Bell, ShieldAlert, Coins, Hammer, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ interface Conversation {
     last_message_preview: string;
     last_message_at: string;
     unread_count: number;
-    is_archived: boolean; // ✅ AJOUT
+    is_archived: boolean;
 }
 
 interface ThreadMessage {
@@ -50,28 +51,23 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
     const [thread, setThread] = useState<ThreadMessage[]>([]);
     const [loading, setLoading] = useState(false);
 
-    // Gestion des vues
     const [viewMode, setViewMode] = useState<ViewMode>('inbox');
     const showArchived = viewMode === 'archived';
 
-    // Notifications (Historique complet)
     const [notifications, setNotifications] = useState<any[]>([]);
     const [selectedNotif, setSelectedNotif] = useState<any | null>(null);
 
-    // Chat galactique
     const [globalMessages, setGlobalMessages] = useState<GlobalChatMessage[]>([]);
     const [globalChatInput, setGlobalChatInput] = useState("");
     const [sendingGlobal, setSendingGlobal] = useState(false);
     const globalChatRef = useRef<HTMLDivElement>(null);
 
-    // Nouveau message
     const [isComposing, setIsComposing] = useState(false);
     const [newRecipient, setNewRecipient] = useState("");
     const [newSubject, setNewSubject] = useState("");
     const [newContent, setNewContent] = useState("");
     const [isSending, setIsSending] = useState(false);
 
-    // Réponse rapide
     const [replyContent, setReplyContent] = useState("");
 
     useEffect(() => {
@@ -90,11 +86,10 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
     const fetchConversations = async () => {
         setLoading(true);
         try {
-            // ✅ Ajouter le paramètre show_archived
-            const url = showArchived 
+            const url = showArchived
                 ? apiUrl(`/conversations?user_id=${userId}&show_archived=true`)
                 : apiUrl(`/conversations?user_id=${userId}`);
-                
+
             const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -113,12 +108,11 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
             });
             if (res.ok) {
                 setThread(await res.json());
-                // Marquer comme lu
                 await fetch(apiUrl(`/conversations/${convId}/read?user_id=${userId}`), {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                fetchConversations(); // Refresh unread count
+                fetchConversations();
             }
         } catch (e) {
             toast.error("Erreur chargement thread");
@@ -128,7 +122,6 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
     const fetchAllNotifications = async () => {
         setLoading(true);
         try {
-            // Pas de limite pour récupérer l'historique complet
             const res = await fetch(apiUrl(`/users/${userId}/notifications`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -143,23 +136,20 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
         }
     };
 
-    // ✅ NOUVELLE FONCTION : Archiver/Désarchiver
     const handleToggleArchive = async (convId: string, currentlyArchived: boolean) => {
         try {
             const res = await fetch(apiUrl(`/conversations/${convId}/archive?user_id=${userId}`), {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ archived: !currentlyArchived })
             });
-            
+
             if (res.ok) {
                 toast.success(currentlyArchived ? "Conversation restaurée" : "Conversation archivée");
                 fetchConversations();
-                
-                // Si on archive la conversation sélectionnée, la désélectionner
                 if (selectedConv?.id === convId && !currentlyArchived) {
                     setSelectedConv(null);
                 }
@@ -186,10 +176,10 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
             const res = await fetch(apiUrl(`/send-message-v2?user_id=${userId}`), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    recipient_name: newRecipient, 
-                    subject: newSubject || "Nouvelle discussion", 
-                    content: newContent 
+                body: JSON.stringify({
+                    recipient_name: newRecipient,
+                    subject: newSubject || "Nouvelle discussion",
+                    content: newContent
                 })
             });
 
@@ -201,8 +191,7 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                 setNewContent("");
                 setIsComposing(false);
                 fetchConversations();
-                
-                // Ouvrir la conversation créée
+
                 setTimeout(() => {
                     const conv = conversations.find(c => c.id === data.conversation_id);
                     if (conv) handleSelectConv(conv);
@@ -241,7 +230,6 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
         }
     };
 
-    // Charger le chat galactique
     const fetchGlobalChat = async () => {
         try {
             const res = await fetch(apiUrl(`/global-chat?user_id=${userId}`), {
@@ -250,7 +238,6 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
             if (res.ok) {
                 const data = await res.json();
                 setGlobalMessages(data);
-                // Scroll vers le bas
                 setTimeout(() => {
                     if (globalChatRef.current) {
                         globalChatRef.current.scrollTop = globalChatRef.current.scrollHeight;
@@ -262,7 +249,6 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
         }
     };
 
-    // Envoyer un message au chat galactique
     const handleSendGlobalChat = async () => {
         if (!globalChatInput.trim() || sendingGlobal) return;
 
@@ -295,7 +281,6 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
         if (userId && token) {
             if (viewMode === 'galactic') {
                 fetchGlobalChat();
-                // Rafraîchir le chat toutes les 5 secondes
                 const interval = setInterval(fetchGlobalChat, 5000);
                 return () => clearInterval(interval);
             } else if (viewMode === 'notifications') {
@@ -306,81 +291,80 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
         }
     }, [userId, token, viewMode]);
 
-    // ✅ Séparer les conversations actives et archivées
     const activeConversations = conversations.filter(c => !c.is_archived);
     const archivedConversations = conversations.filter(c => c.is_archived);
     const displayedConversations = showArchived ? archivedConversations : activeConversations;
 
     return (
-        <div className="flex flex-col lg:flex-row h-[calc(100vh-200px)] max-w-7xl mx-auto gap-2 lg:gap-4 px-2 lg:px-0 animate-fade-in">
+        <div className="flex flex-col lg:flex-row h-[calc(100vh-200px)] max-w-7xl mx-auto gap-2 lg:gap-4 px-2 lg:px-0">
 
-            {/* SIDEBAR : LISTE DES CONVERSATIONS */}
-            <div className={`${selectedConv || isComposing ? 'hidden lg:flex' : 'flex'} w-full lg:w-80 flex-col bg-slate-900/80 border border-white/10 rounded-xl overflow-hidden card-depth glass-card animate-slide-up hover:shadow-2xl transition-all duration-500`}>
-                <div className="p-3 lg:p-4 border-b border-white/10 bg-slate-950/50">
+            {/* SIDEBAR */}
+            <div className={`${selectedConv || isComposing ? 'hidden lg:flex' : 'flex'} w-full lg:w-80 flex-col bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-xl overflow-hidden backdrop-blur-[12px] card-depth`}>
+                <div className="p-3 lg:p-4 border-b border-cyan-500/10 bg-[rgba(16,8,46,0.95)]">
                     <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-black uppercase tracking-widest text-xs lg:text-sm text-white flex items-center gap-2">
-                            <MessageCircle size={16} className="lg:w-[18px] lg:h-[18px] text-indigo-400 animate-bounce-subtle"/>
+                        <h3 className="font-black uppercase tracking-widest text-xs lg:text-sm text-slate-200 flex items-center gap-2">
+                            <MessageCircle size={16} className="lg:w-[18px] lg:h-[18px] text-cyan-400" />
                             {showArchived ? "Archivées" : "Boîte de réception"}
                         </h3>
                         <div className="flex gap-1 lg:gap-2">
-                            <Button variant="ghost" size="icon" onClick={fetchConversations} className="h-6 w-6 lg:h-7 lg:w-7 hover:scale-110 transition-all duration-300 card-depth hover:shadow-lg">
-                                <RotateCw size={12} className={`lg:w-3.5 lg:h-3.5 ${loading ? "animate-spin" : ""}`}/>
+                            <Button variant="ghost" size="icon" onClick={fetchConversations} className="h-6 w-6 lg:h-7 lg:w-7 hover:scale-110 transition-all duration-300">
+                                <RotateCw size={12} className={`lg:w-3.5 lg:h-3.5 ${loading ? "animate-spin" : ""}`} />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(true)} className="h-6 w-6 lg:h-7 lg:w-7 text-indigo-400 hover:scale-110 transition-all duration-300 card-depth hover:shadow-lg">
-                                <Plus size={14} className="lg:w-4 lg:h-4"/>
+                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(true)} className="h-6 w-6 lg:h-7 lg:w-7 text-cyan-400 hover:scale-110 transition-all duration-300">
+                                <Plus size={14} className="lg:w-4 lg:h-4" />
                             </Button>
                         </div>
                     </div>
-                    
-                    {/* ONGLETS INBOX / GALACTIQUE / ARCHIVÉES */}
+
+                    {/* ONGLETS */}
                     <div className="flex gap-1 lg:gap-2">
                         <button
                             onClick={() => { setViewMode('inbox'); setSelectedConv(null); }}
-                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
+                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
                                 viewMode === 'inbox'
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
+                                    ? 'bg-cyan-600/20 text-cyan-400 border border-cyan-500/30'
+                                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
                             }`}
                         >
-                            <Inbox size={12} className="lg:w-3.5 lg:h-3.5"/>
+                            <Inbox size={12} className="lg:w-3.5 lg:h-3.5" />
                             <span className="hidden sm:inline">Inbox</span>
                             {activeConversations.length > 0 && (
-                                <span className="bg-indigo-500 text-white text-[9px] lg:text-[10px] px-1 lg:px-1.5 rounded-full">
+                                <span className="bg-cyan-500 text-white text-[9px] lg:text-[10px] px-1 lg:px-1.5 rounded-full">
                                     {activeConversations.length}
                                 </span>
                             )}
                         </button>
                         <button
                             onClick={() => { setViewMode('galactic'); setSelectedConv(null); setIsComposing(false); }}
-                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
+                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
                                 viewMode === 'galactic'
-                                    ? 'bg-purple-600 text-white'
-                                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
+                                    ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
+                                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
                             }`}
                         >
-                            <Globe size={12} className="lg:w-3.5 lg:h-3.5"/>
+                            <Globe size={12} className="lg:w-3.5 lg:h-3.5" />
                             <span className="hidden sm:inline">Galactique</span>
                         </button>
                         <button
                             onClick={() => { setViewMode('archived'); setSelectedConv(null); setSelectedNotif(null); }}
-                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
+                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
                                 viewMode === 'archived'
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
+                                    ? 'bg-cyan-600/20 text-cyan-400 border border-cyan-500/30'
+                                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
                             }`}
                         >
-                            <Archive size={12} className="lg:w-3.5 lg:h-3.5"/>
+                            <Archive size={12} className="lg:w-3.5 lg:h-3.5" />
                             <span className="hidden sm:inline">Archives</span>
                         </button>
                         <button
                             onClick={() => { setViewMode('notifications'); setSelectedConv(null); setSelectedNotif(null); setIsComposing(false); }}
-                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 card-depth ${
+                            className={`flex-1 flex items-center justify-center gap-1 px-1 lg:px-2 py-1.5 lg:py-2 rounded-lg text-[9px] lg:text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
                                 viewMode === 'notifications'
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800'
+                                    ? 'bg-cyan-600/20 text-cyan-400 border border-cyan-500/30'
+                                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
                             }`}
                         >
-                            <Bell size={12} className="lg:w-3.5 lg:h-3.5"/>
+                            <Bell size={12} className="lg:w-3.5 lg:h-3.5" />
                             <span className="hidden lg:inline">Alertes</span>
                         </button>
                     </div>
@@ -388,31 +372,27 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
 
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
                     {viewMode === 'galactic' ? (
-                        // CHAT GALACTIQUE INLINE (pour mobile)
                         <div className="flex flex-col h-full lg:hidden">
-                            <div
-                                ref={globalChatRef}
-                                className="flex-1 overflow-y-auto p-3 space-y-2"
-                            >
+                            <div ref={globalChatRef} className="flex-1 overflow-y-auto p-3 space-y-2">
                                 {globalMessages.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                                        <Globe size={32} className="mb-2 opacity-30 animate-pulse"/>
+                                        <Globe size={32} className="mb-2 opacity-30 animate-pulse" />
                                         <p className="text-xs font-mono">Aucun message</p>
                                         <p className="text-[10px] text-slate-600 mt-1">Soyez le premier !</p>
                                     </div>
                                 ) : (
                                     globalMessages.map(msg => (
-                                        <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                                        <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'}`}>
                                             <div className={`max-w-[80%] p-2 rounded-lg ${
                                                 msg.is_mine
-                                                    ? 'bg-purple-600 text-white'
-                                                    : 'bg-slate-800 text-slate-200'
+                                                    ? 'bg-cyan-500/15 border border-cyan-500/20 text-slate-200'
+                                                    : 'bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 text-slate-300'
                                             }`}>
                                                 {!msg.is_mine && (
                                                     <div className="text-[10px] font-bold text-purple-400 mb-1">{msg.sender_name}</div>
                                                 )}
                                                 <p className="text-xs whitespace-pre-wrap">{msg.content}</p>
-                                                <span className="text-[9px] opacity-50 block mt-1">
+                                                <span className="text-slate-600 font-mono text-xs block mt-1">
                                                     {new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
@@ -420,12 +400,12 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                                     ))
                                 )}
                             </div>
-                            <div className="p-2 border-t border-white/10 flex gap-2">
+                            <div className="p-2 border-t border-cyan-500/10 bg-[rgba(5,0,15,0.8)] flex gap-2">
                                 <Input
                                     placeholder="Message galactique..."
                                     value={globalChatInput}
                                     onChange={e => setGlobalChatInput(e.target.value)}
-                                    className="flex-1 bg-slate-950 border-slate-800 text-sm"
+                                    className="flex-1 bg-[rgba(5,0,15,0.8)] border-cyan-500/10 text-sm text-slate-200"
                                     maxLength={500}
                                     onKeyDown={e => {
                                         if (e.key === 'Enter' && !e.shiftKey) {
@@ -439,58 +419,70 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                                     disabled={!globalChatInput.trim() || sendingGlobal}
                                     className="bg-purple-600 hover:bg-purple-500 px-3"
                                 >
-                                    <Send size={14}/>
+                                    <Send size={14} />
                                 </Button>
                             </div>
                         </div>
                     ) : viewMode === 'notifications' ? (
                         notifications.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-slate-500 p-6 text-center">
-                                <Bell size={32} className="mb-2 opacity-30"/>
+                                <Bell size={32} className="mb-2 opacity-30" />
                                 <p className="text-xs font-mono">Aucune notification</p>
                             </div>
                         ) : (
-                            notifications.map(notif => (
-                                <div
-                                    key={notif.id}
-                                    className={`group border-b border-white/5 transition-all duration-300 hover:bg-white/5 hover:-translate-y-0.5 hover:shadow-lg animate-fade-in ${
-                                        selectedNotif?.id === notif.id ? 'bg-indigo-900/30 border-l-4 border-l-indigo-500' : ''
-                                    }`}
-                                >
-                                    <button
-                                        onClick={() => { setSelectedNotif(notif); setSelectedConv(null); }}
-                                        className="w-full p-2 lg:p-3 text-left flex gap-3"
+                            notifications.map(notif => {
+                                const isRead = notif.read;
+                                let accentClass = 'border-l-2 border-cyan-500/40';
+                                if (notif.type === 'combat') accentClass = 'border-l-2 border-red-500/40';
+                                else if (notif.type === 'build') accentClass = 'border-l-2 border-emerald-500/40';
+                                else if (notif.type === 'market') accentClass = 'border-l-2 border-amber-500/30';
+
+                                return (
+                                    <div
+                                        key={notif.id}
+                                        className={`group border-b border-cyan-500/10 transition-all duration-300 hover:bg-white/5 ${
+                                            selectedNotif?.id === notif.id
+                                                ? `bg-cyan-500/5 ${accentClass}`
+                                                : isRead
+                                                    ? 'bg-transparent border-l-2 border-transparent'
+                                                    : `bg-cyan-500/5 ${accentClass}`
+                                        }`}
                                     >
-                                        <div className="mt-1">
-                                            {notif.type === 'market' ? <Coins size={14} className="text-yellow-400" /> :
-                                             notif.type === 'combat' ? <ShieldAlert size={14} className="text-red-400" /> :
-                                             notif.type === 'build' ? <Hammer size={14} className="text-emerald-400" /> :
-                                             notif.type === 'expedition' ? <Rocket size={14} className="text-purple-400" /> :
-                                             <Bell size={14} className="text-indigo-400" />}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex justify-between items-start mb-1">
-                                                <span className={`font-bold text-xs lg:text-sm truncate pr-2 ${notif.read ? 'text-slate-300' : 'text-white'}`}>{notif.title}</span>
-                                                <span className="text-[9px] text-slate-600 font-mono whitespace-nowrap">
-                                                    {new Date(notif.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
-                                                </span>
+                                        <button
+                                            onClick={() => { setSelectedNotif(notif); setSelectedConv(null); }}
+                                            className="w-full p-2 lg:p-3 text-left flex gap-3"
+                                        >
+                                            <div className="mt-1">
+                                                {notif.type === 'market' ? <Coins size={14} className="text-yellow-400" /> :
+                                                 notif.type === 'combat' ? <ShieldAlert size={14} className="text-red-400" /> :
+                                                 notif.type === 'build' ? <Hammer size={14} className="text-emerald-400" /> :
+                                                 notif.type === 'expedition' ? <Rocket size={14} className="text-purple-400" /> :
+                                                 <Bell size={14} className="text-cyan-400" />}
                                             </div>
-                                            <p className="text-xs text-slate-400 line-clamp-2">{notif.message}</p>
-                                        </div>
-                                    </button>
-                                </div>
-                            ))
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className={`font-bold text-xs lg:text-sm truncate pr-2 ${isRead ? 'text-slate-300' : 'text-slate-200'}`}>{notif.title}</span>
+                                                    <span className="text-slate-600 font-mono text-xs whitespace-nowrap">
+                                                        {new Date(notif.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-400 line-clamp-2">{notif.message}</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                );
+                            })
                         )
                     ) : displayedConversations.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-slate-500 p-6 text-center">
                             {showArchived ? (
                                 <>
-                                    <Archive size={32} className="mb-2 opacity-30"/>
+                                    <Archive size={32} className="mb-2 opacity-30" />
                                     <p className="text-xs font-mono">Aucune conversation archivée</p>
                                 </>
                             ) : (
                                 <>
-                                    <Inbox size={32} className="mb-2 opacity-30"/>
+                                    <Inbox size={32} className="mb-2 opacity-30" />
                                     <p className="text-xs font-mono">Aucune conversation</p>
                                 </>
                             )}
@@ -499,8 +491,10 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                         displayedConversations.map(conv => (
                             <div
                                 key={conv.id}
-                                className={`group border-b border-white/5 transition-all duration-300 hover:bg-white/5 hover:-translate-y-0.5 hover:shadow-lg animate-fade-in ${
-                                    selectedConv?.id === conv.id ? 'bg-indigo-900/30 border-l-4 border-l-indigo-500' : ''
+                                className={`group border-b border-cyan-500/10 transition-all duration-300 hover:bg-white/5 ${
+                                    selectedConv?.id === conv.id
+                                        ? 'bg-cyan-500/5 border-l-2 border-cyan-500/40'
+                                        : 'border-l-2 border-transparent'
                                 }`}
                             >
                                 <button
@@ -508,10 +502,10 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                                     className="w-full p-2 lg:p-3 text-left"
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <span className="font-bold text-xs lg:text-sm text-white">{conv.other_user_name}</span>
+                                        <span className="font-bold text-xs lg:text-sm text-slate-200">{conv.other_user_name}</span>
                                         <div className="flex items-center gap-2">
                                             {conv.unread_count > 0 && (
-                                                <span className="bg-indigo-500 text-white text-[10px] px-1.5 rounded-full font-bold">
+                                                <span className="bg-cyan-500 text-white text-[10px] px-1.5 rounded-full font-bold">
                                                     {conv.unread_count}
                                                 </span>
                                             )}
@@ -520,7 +514,7 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                                                     e.stopPropagation();
                                                     handleToggleArchive(conv.id, conv.is_archived);
                                                 }}
-                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-700 rounded transition-all duration-300 hover:scale-110 card-depth"
+                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-700 rounded transition-all duration-300"
                                                 title={conv.is_archived ? "Restaurer" : "Archiver"}
                                             >
                                                 {conv.is_archived ? (
@@ -532,7 +526,7 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                                         </div>
                                     </div>
                                     <p className="text-xs text-slate-400 truncate">{conv.last_message_preview}</p>
-                                    <span className="text-[10px] text-slate-600 font-mono">
+                                    <span className="text-slate-600 font-mono text-xs">
                                         {new Date(conv.last_message_at).toLocaleString('fr-FR', {
                                             day: '2-digit',
                                             month: '2-digit',
@@ -548,72 +542,70 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
             </div>
 
             {/* ZONE PRINCIPALE */}
-            <div className={`${!selectedConv && !isComposing ? 'hidden lg:flex' : 'flex'} flex-1 flex-col bg-slate-900/40 border border-white/10 rounded-xl overflow-hidden card-depth glass-card animate-slide-up hover:shadow-2xl transition-all duration-500`}>
-                
+            <div className={`${!selectedConv && !isComposing ? 'hidden lg:flex' : 'flex'} flex-1 flex-col bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-xl overflow-hidden backdrop-blur-[12px] card-depth`}>
+
                 {isComposing ? (
-                    // FORMULAIRE NOUVEAU MESSAGE
                     <div className="flex-1 flex flex-col">
-                        <div className="p-4 border-b border-white/10 bg-slate-950/50 flex items-center gap-3">
-                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(false)} className="hover:scale-110 transition-all duration-300 card-depth">
-                                <ArrowLeft size={18}/>
+                        <div className="p-4 border-b border-cyan-500/10 bg-[rgba(16,8,46,0.95)] flex items-center gap-3">
+                            <Button variant="ghost" size="icon" onClick={() => setIsComposing(false)} className="hover:scale-110 transition-all duration-300">
+                                <ArrowLeft size={18} />
                             </Button>
-                            <h3 className="font-black uppercase text-sm tracking-widest text-indigo-400">
-                                Nouveau Message
-                            </h3>
+                            <div className="flex items-center gap-2">
+                                <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                                <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">Nouveau Message</span>
+                            </div>
                         </div>
-                        
+
                         <form onSubmit={handleSendNew} className="flex-1 flex flex-col p-6 gap-4">
                             <Input
                                 placeholder="Destinataire (pseudo)"
                                 value={newRecipient}
                                 onChange={e => setNewRecipient(e.target.value)}
-                                className="bg-slate-950 border-slate-800"
+                                className="bg-[rgba(5,0,15,0.8)] border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                             />
                             <Input
                                 placeholder="Sujet (optionnel)"
                                 value={newSubject}
                                 onChange={e => setNewSubject(e.target.value)}
-                                className="bg-slate-950 border-slate-800"
+                                className="bg-[rgba(5,0,15,0.8)] border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                             />
                             <Textarea
                                 placeholder="Votre message..."
                                 value={newContent}
                                 onChange={e => setNewContent(e.target.value)}
-                                className="flex-1 bg-slate-950 border-slate-800 resize-none font-mono"
+                                className="flex-1 bg-[rgba(5,0,15,0.8)] border-cyan-500/10 text-slate-200 resize-none font-mono focus:border-cyan-500/30"
                                 rows={10}
                             />
-                            <Button type="submit" disabled={isSending} className="bg-indigo-600 hover:bg-indigo-500 font-bold card-depth hover:scale-105 hover:-translate-y-1 transition-all duration-300 hover:shadow-2xl">
+                            <Button type="submit" disabled={isSending} className="bg-cyan-600 hover:bg-cyan-500 font-bold card-depth hover:scale-105 hover:-translate-y-1 transition-all duration-300">
                                 {isSending ? "Envoi en cours..." : "Envoyer le message"}
                             </Button>
                         </form>
                     </div>
                 ) : selectedConv ? (
-                    // VUE THREAD
                     <>
-                        <div className="p-3 lg:p-4 border-b border-white/10 bg-slate-950/50 flex items-center justify-between">
+                        <div className="p-3 lg:p-4 border-b border-cyan-500/10 bg-[rgba(16,8,46,0.95)] flex items-center justify-between">
                             <div className="flex items-center gap-2 lg:gap-3">
-                                <Button variant="ghost" size="icon" onClick={() => setSelectedConv(null)} className="h-7 w-7 lg:h-auto lg:w-auto lg:hidden hover:scale-110 transition-all duration-300 card-depth">
-                                    <ArrowLeft size={16} className="lg:w-[18px] lg:h-[18px]"/>
+                                <Button variant="ghost" size="icon" onClick={() => setSelectedConv(null)} className="h-7 w-7 lg:h-auto lg:w-auto lg:hidden hover:scale-110 transition-all duration-300">
+                                    <ArrowLeft size={16} />
                                 </Button>
-                                <User size={16} className="lg:w-[18px] lg:h-[18px] text-indigo-400 animate-bounce-subtle"/>
-                                <h3 className="font-bold text-sm lg:text-base text-white">{selectedConv.other_user_name}</h3>
+                                <User size={16} className="lg:w-[18px] lg:h-[18px] text-cyan-400" />
+                                <h3 className="font-bold text-sm lg:text-base text-slate-200">{selectedConv.other_user_name}</h3>
                             </div>
 
-                            {/* ✅ BOUTON ARCHIVAGE DANS LE HEADER */}
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleToggleArchive(selectedConv.id, selectedConv.is_archived)}
-                                className="text-slate-400 hover:text-white hover:scale-105 transition-all duration-300 card-depth hover:shadow-lg"
+                                className="text-slate-400 hover:text-slate-200 hover:scale-105 transition-all duration-300"
                             >
                                 {selectedConv.is_archived ? (
                                     <>
-                                        <ArchiveRestore size={16} className="mr-2"/>
+                                        <ArchiveRestore size={16} className="mr-2" />
                                         Restaurer
                                     </>
                                 ) : (
                                     <>
-                                        <Archive size={16} className="mr-2"/>
+                                        <Archive size={16} className="mr-2" />
                                         Archiver
                                     </>
                                 )}
@@ -621,31 +613,39 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-2 lg:p-4 space-y-2 lg:space-y-3 scrollbar-thin scrollbar-thumb-slate-800">
-                            {thread.map(msg => (
-                                <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                                    <div className={`max-w-[85%] lg:max-w-[70%] p-2 lg:p-3 rounded-xl hover:-translate-y-0.5 transition-all duration-300 hover:shadow-lg card-depth ${
-                                        msg.is_mine
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-slate-800 text-slate-200'
-                                    }`}>
-                                        <p className="text-xs lg:text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                                        <span className="text-[9px] lg:text-[10px] opacity-60 block mt-1">
-                                            {new Date(msg.created_at).toLocaleTimeString('fr-FR', {
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
+                            <AnimatePresence>
+                                {thread.map(msg => (
+                                    <motion.div
+                                        key={msg.id}
+                                        initial={{ opacity: 0, y: 6 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'}`}
+                                    >
+                                        <div className={`max-w-[85%] lg:max-w-[70%] p-2 lg:p-3 rounded-xl hover:-translate-y-0.5 transition-all duration-300 ${
+                                            msg.is_mine
+                                                ? 'bg-cyan-500/15 border border-cyan-500/20 text-slate-200'
+                                                : 'bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 text-slate-300'
+                                        }`}>
+                                            <p className="text-xs lg:text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                            <span className="text-slate-600 font-mono text-xs block mt-1">
+                                                {new Date(msg.created_at).toLocaleTimeString('fr-FR', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </span>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
                         </div>
 
-                        <div className="p-2 lg:p-4 border-t border-white/10 flex gap-2">
+                        <div className="p-2 lg:p-4 border-t border-cyan-500/10 bg-[rgba(5,0,15,0.8)] flex gap-2">
                             <Textarea
                                 placeholder="Répondre..."
                                 value={replyContent}
                                 onChange={e => setReplyContent(e.target.value)}
-                                className="flex-1 bg-slate-950 border-slate-800 resize-none text-sm"
+                                className="flex-1 bg-[rgba(5,0,15,0.8)] border-cyan-500/10 text-slate-200 resize-none text-sm focus:border-cyan-500/30"
                                 rows={2}
                                 onKeyDown={e => {
                                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -656,18 +656,17 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                             />
                             <Button
                                 onClick={handleReply}
-                                className="bg-indigo-600 hover:bg-indigo-500 px-3 lg:px-6 card-depth hover:scale-110 hover:-translate-y-1 transition-all duration-300 hover:shadow-2xl"
+                                className="bg-cyan-600 hover:bg-cyan-500 px-3 lg:px-6 card-depth hover:scale-110 hover:-translate-y-1 transition-all duration-300"
                                 disabled={!replyContent.trim()}
                             >
-                                <Send size={14} className="lg:w-4 lg:h-4"/>
+                                <Send size={14} className="lg:w-4 lg:h-4" />
                             </Button>
                         </div>
                     </>
                 ) : viewMode === 'galactic' ? (
-                    // VUE CHAT GALACTIQUE (Desktop)
                     <div className="flex-1 flex flex-col">
-                        <div className="p-4 border-b border-white/10 bg-purple-950/30 flex items-center gap-3">
-                            <Globe size={20} className="text-purple-400 animate-pulse"/>
+                        <div className="p-4 border-b border-cyan-500/10 bg-[rgba(16,8,46,0.95)] flex items-center gap-3">
+                            <Globe size={20} className="text-purple-400 animate-pulse" />
                             <div>
                                 <h3 className="font-black uppercase text-sm tracking-widest text-purple-300">
                                     Canal Galactique
@@ -675,37 +674,34 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                                 <p className="text-[10px] text-purple-400/60">Chat en temps réel • Tous les joueurs</p>
                             </div>
                             <div className="ml-auto flex items-center gap-2 text-[10px] text-purple-400/60">
-                                <Users size={12}/>
+                                <Users size={12} />
                                 <span>Public</span>
                             </div>
                         </div>
 
-                        <div
-                            ref={globalChatRef}
-                            className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-slate-800"
-                        >
+                        <div ref={globalChatRef} className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-slate-800">
                             {globalMessages.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                                    <Globe size={48} className="mb-3 opacity-30 animate-pulse"/>
+                                    <Globe size={48} className="mb-3 opacity-30 animate-pulse" />
                                     <p className="text-sm font-mono">Aucun message dans le chat galactique</p>
                                     <p className="text-xs text-slate-600 mt-2">Soyez le premier à envoyer un message !</p>
                                 </div>
                             ) : (
                                 globalMessages.map(msg => (
-                                    <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                                    <div key={msg.id} className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'}`}>
                                         <div className={`max-w-[70%] p-3 rounded-xl transition-all hover:shadow-lg ${
                                             msg.is_mine
-                                                ? 'bg-purple-600 text-white'
-                                                : 'bg-slate-800 text-slate-200'
+                                                ? 'bg-cyan-500/15 border border-cyan-500/20 text-slate-200'
+                                                : 'bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 text-slate-300'
                                         }`}>
                                             {!msg.is_mine && (
                                                 <div className="text-[10px] font-bold text-purple-400 mb-1 flex items-center gap-1">
-                                                    <User size={10}/>
+                                                    <User size={10} />
                                                     {msg.sender_name}
                                                 </div>
                                             )}
                                             <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                                            <span className="text-[10px] opacity-60 block mt-1">
+                                            <span className="text-slate-600 font-mono text-xs block mt-1">
                                                 {new Date(msg.created_at).toLocaleTimeString('fr-FR', {
                                                     hour: '2-digit',
                                                     minute: '2-digit'
@@ -717,13 +713,13 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                             )}
                         </div>
 
-                        <div className="p-4 border-t border-white/10 bg-slate-950/50">
+                        <div className="p-4 border-t border-cyan-500/10 bg-[rgba(5,0,15,0.8)]">
                             <div className="flex gap-2">
                                 <Input
                                     placeholder="Envoyer un message à tous les joueurs..."
                                     value={globalChatInput}
                                     onChange={e => setGlobalChatInput(e.target.value)}
-                                    className="flex-1 bg-slate-900 border-purple-800/50 focus:border-purple-500"
+                                    className="flex-1 bg-[rgba(5,0,15,0.8)] border-cyan-500/10 text-slate-200 focus:border-cyan-500/30"
                                     maxLength={500}
                                     onKeyDown={e => {
                                         if (e.key === 'Enter' && !e.shiftKey) {
@@ -737,7 +733,7 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                                     disabled={!globalChatInput.trim() || sendingGlobal}
                                     className="bg-purple-600 hover:bg-purple-500 px-6 card-depth hover:scale-105 transition-all"
                                 >
-                                    <Send size={16}/>
+                                    <Send size={16} />
                                 </Button>
                             </div>
                             <p className="text-[9px] text-slate-600 mt-2 text-center">
@@ -746,49 +742,52 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                         </div>
                     </div>
                 ) : selectedNotif ? (
-                    // VUE DÉTAIL NOTIFICATION
-                    <div className="flex-1 flex flex-col p-4 md:p-8 animate-fade-in">
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="flex-1 flex flex-col p-4 md:p-8"
+                    >
                         <div className="max-w-3xl w-full mx-auto space-y-6">
-                            <Button variant="ghost" size="icon" onClick={() => setSelectedNotif(null)} className="lg:hidden hover:scale-110 transition-all duration-300 card-depth mb-4">
-                                <ArrowLeft size={18}/>
+                            <Button variant="ghost" size="icon" onClick={() => setSelectedNotif(null)} className="lg:hidden hover:scale-110 transition-all duration-300 mb-4">
+                                <ArrowLeft size={18} />
                             </Button>
-                            
-                            <div className="flex items-center gap-4 border-b border-white/10 pb-6">
-                                <div className="p-3 lg:p-4 rounded-xl border border-white/10 bg-slate-900 shadow-lg">
+
+                            <div className="flex items-center gap-4 border-b border-cyan-500/10 pb-6">
+                                <div className="p-3 lg:p-4 rounded-xl border border-cyan-500/10 bg-[rgba(10,5,32,0.85)] shadow-lg">
                                     {selectedNotif.type === 'market' ? <Coins size={24} className="text-yellow-400" /> :
                                      selectedNotif.type === 'combat' ? <ShieldAlert size={24} className="text-red-400" /> :
                                      selectedNotif.type === 'build' ? <Hammer size={24} className="text-emerald-400" /> :
                                      selectedNotif.type === 'expedition' ? <Rocket size={24} className="text-purple-400" /> :
-                                     <Bell size={24} className="text-indigo-400" />}
+                                     <Bell size={24} className="text-cyan-400" />}
                                 </div>
                                 <div>
-                                    <h2 className="text-xl lg:text-2xl font-black uppercase text-white tracking-wide">{selectedNotif.title}</h2>
-                                    <div className="text-xs text-slate-500 font-mono mt-1 flex items-center gap-4">
+                                    <h2 className="text-xl lg:text-2xl font-black uppercase text-slate-200 tracking-wide">{selectedNotif.title}</h2>
+                                    <div className="text-slate-600 font-mono text-xs mt-1 flex items-center gap-4">
                                         <span>Rapport Réglementaire</span>
                                         <span>•</span>
                                         <span>{new Date(selectedNotif.created_at).toLocaleString('fr-FR')}</span>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div className="bg-slate-900/60 border border-white/5 rounded-xl p-6 shadow-inner whitespace-pre-wrap leading-relaxed text-sm lg:text-base text-slate-300">
+
+                            <div className="bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-xl p-6 shadow-inner whitespace-pre-wrap leading-relaxed text-sm lg:text-base text-slate-300">
                                 {selectedNotif.message}
                             </div>
-                            
+
                             <div className="flex justify-end pt-4">
-                                <Button 
+                                <Button
                                     onClick={() => setSelectedNotif(null)}
-                                    className="bg-slate-800 hover:bg-slate-700 text-white border border-white/10 font-bold uppercase tracking-wider text-xs px-6"
+                                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-cyan-500/10 font-bold uppercase tracking-wider text-xs px-6"
                                 >
                                     Fermer
                                 </Button>
                             </div>
                         </div>
-                    </div>
+                    </motion.div>
                 ) : (
-                    // NO SELECTION & NOT GALACTIC
-                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-6 text-center animate-fade-in">
-                        <MessageCircle size={48} className="mb-4 opacity-20"/>
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
+                        <MessageCircle size={48} className="mb-4 opacity-20" />
                         <h3 className="text-lg font-bold text-slate-400 mb-2">Messagerie Royale</h3>
                         <p className="text-sm max-w-sm">
                             Sélectionnez une conversation, une transmission galactique ou une notification à consulter.

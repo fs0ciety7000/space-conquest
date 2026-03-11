@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { apiUrl } from "@/config/api";
 
@@ -30,6 +31,15 @@ interface BountyBoardProps {
   planetId: string;
   planet: { metal_amount: number; crystal_amount: number; deuterium_amount: number };
 }
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+};
+const item = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0 },
+};
 
 export default function BountyBoard({ userId, planetId, planet }: BountyBoardProps) {
   const [bounties, setBounties] = useState<Bounty[]>([]);
@@ -150,9 +160,9 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
     url ? apiUrl(url) : `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 
   const statusColor = (s: string) => ({
-    open: "text-amber-400 bg-amber-950/40 border-amber-700/40",
+    open: "text-amber-400 bg-amber-500/5 border-red-500/20",
     accepted: "text-blue-400 bg-blue-950/40 border-blue-700/40",
-    completed: "text-green-400 bg-green-950/40 border-green-700/40",
+    completed: "text-emerald-400 bg-emerald-500/5 border-emerald-500/20",
     cancelled: "text-slate-500 bg-slate-900/40 border-slate-700/40",
     expired: "text-slate-600 bg-slate-900/30 border-slate-800/40",
   }[s] || "text-slate-400");
@@ -162,7 +172,7 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+          <h1 className="text-2xl font-black text-slate-200 uppercase tracking-tight flex items-center gap-3">
             <Crosshair className="text-amber-400" size={24} />
             Tableau des Primes
           </h1>
@@ -171,8 +181,9 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
           </p>
         </div>
         <Button
+          variant="warning"
           onClick={() => setShowCreate(s => !s)}
-          className="bg-amber-600 hover:bg-amber-500 text-white font-bold flex items-center gap-2"
+          className="font-bold flex items-center gap-2"
         >
           {showCreate ? <X size={14} /> : <Plus size={14} />}
           {showCreate ? "Annuler" : "Placer une prime"}
@@ -181,11 +192,13 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
 
       {/* Create form */}
       {showCreate && (
-        <Card className="bg-amber-950/20 border border-amber-700/40">
+        <Card className="bg-red-500/5 border border-red-500/20 backdrop-blur-[12px]">
           <CardContent className="p-5 space-y-4">
-            <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
-              <AlertTriangle size={14} /> Nouveau contrat
-            </h3>
+            {/* Section header */}
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+              <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+              <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">NOUVEAU CONTRAT</span>
+            </div>
 
             {/* Target search */}
             <div className="relative">
@@ -194,24 +207,24 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
                 value={targetUsername}
                 onChange={e => handleTargetSearch(e.target.value)}
                 placeholder="Nom du joueur..."
-                className="bg-slate-950 border-amber-900/50 text-white"
+                className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200"
               />
               {searchResults.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
+                <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-[rgba(16,8,46,0.95)] border border-cyan-500/10 rounded-xl overflow-hidden shadow-2xl backdrop-blur-[12px]">
                   {searchResults.map(r => (
                     <button
                       key={r.user_id}
                       onMouseDown={() => selectTarget(r)}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800 transition-colors text-left"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-cyan-500/5 transition-colors text-left"
                     >
                       <img src={getAvatarSrc(r.username, r.avatar_url)} alt="" className="w-7 h-7 rounded-lg" />
-                      <span className="text-sm font-bold text-white">{r.username}</span>
+                      <span className="text-sm font-bold text-slate-200">{r.username}</span>
                     </button>
                   ))}
                 </div>
               )}
               {targetId && (
-                <div className="mt-1 flex items-center gap-1.5 text-xs text-green-400">
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-emerald-400">
                   <Check size={11} /> Cible sélectionnée
                 </div>
               )}
@@ -223,17 +236,17 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Métal</div>
-                  <Input type="number" min="0" value={metal} onChange={e => setMetal(e.target.value)} placeholder="0" className="bg-slate-950 border-slate-700 text-white" />
+                  <Input type="number" min="0" value={metal} onChange={e => setMetal(e.target.value)} placeholder="0" className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200" />
                   <div className="text-[10px] text-slate-600 mt-0.5">Dispo : {planet.metal_amount.toLocaleString()}</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Cristal</div>
-                  <Input type="number" min="0" value={crystal} onChange={e => setCrystal(e.target.value)} placeholder="0" className="bg-slate-950 border-slate-700 text-white" />
+                  <Input type="number" min="0" value={crystal} onChange={e => setCrystal(e.target.value)} placeholder="0" className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200" />
                   <div className="text-[10px] text-slate-600 mt-0.5">Dispo : {planet.crystal_amount.toLocaleString()}</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Deutérium</div>
-                  <Input type="number" min="0" value={deuterium} onChange={e => setDeuterium(e.target.value)} placeholder="0" className="bg-slate-950 border-slate-700 text-white" />
+                  <Input type="number" min="0" value={deuterium} onChange={e => setDeuterium(e.target.value)} placeholder="0" className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200" />
                   <div className="text-[10px] text-slate-600 mt-0.5">Dispo : {planet.deuterium_amount.toLocaleString()}</div>
                 </div>
               </div>
@@ -246,7 +259,7 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
                 value={reason}
                 onChange={e => setReason(e.target.value.slice(0, 300))}
                 placeholder="Décrivez ce que cet agresseur vous a fait..."
-                className="bg-slate-950 border-slate-700 text-white resize-none min-h-[60px]"
+                className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200 resize-none min-h-[60px]"
               />
               <div className="text-right text-xs text-slate-600 mt-0.5">{reason.length}/300</div>
             </div>
@@ -256,9 +269,10 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
             </p>
 
             <Button
+              variant="warning"
               onClick={handleCreate}
               disabled={submitting || !targetId}
-              className="w-full bg-amber-600 hover:bg-amber-500 text-white font-black"
+              className="w-full font-black"
             >
               {submitting ? "Envoi..." : "Placer la prime"}
             </Button>
@@ -272,7 +286,11 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${filter === s ? "bg-amber-600 text-white" : "bg-slate-900 text-slate-400 hover:text-white"}`}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors border ${
+              filter === s
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                : "bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-400 hover:text-slate-200 hover:border-cyan-500/20"
+            }`}
           >
             {s === "open" ? "Ouvertes" : s === "accepted" ? "En cours" : "Complétées"}
           </button>
@@ -282,7 +300,7 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
       {/* Bounties list */}
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-amber-500" />
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-400" />
         </div>
       ) : bounties.length === 0 ? (
         <div className="text-center py-16 text-slate-600">
@@ -290,12 +308,18 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
           <p className="font-bold">Aucune prime {filter === "open" ? "disponible" : filter === "accepted" ? "en cours" : "complétée"}</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <motion.div
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="space-y-3"
+        >
           {bounties.map(b => {
             const isMyBounty = b.poster_id === userId;
             const isTarget = b.target_id === userId;
             const isMercenary = b.mercenary_id === userId;
             const expired = new Date(b.expires_at) < new Date();
+            const isCompleted = b.status === "completed";
             const rewards = [
               formatRes(b.reward_metal) && `${formatRes(b.reward_metal)} métal`,
               formatRes(b.reward_crystal) && `${formatRes(b.reward_crystal)} cristal`,
@@ -303,75 +327,85 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
             ].filter(Boolean);
 
             return (
-              <Card key={b.id} className={`border ${isTarget ? "border-red-900/50 bg-red-950/10" : "bg-slate-900/50 border-white/8"}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
-                    {/* Target avatar */}
-                    <div className="relative shrink-0">
-                      <img
-                        src={getAvatarSrc(b.target_username, b.target_avatar_url)}
-                        alt=""
-                        className="w-12 h-12 rounded-xl"
-                      />
-                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-600 rounded-full flex items-center justify-center">
-                        <Crosshair size={10} className="text-white" />
-                      </div>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-black text-white">{b.target_username}</span>
-                        {isTarget && <span className="text-xs text-red-400 font-bold">(Vous)</span>}
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${statusColor(b.status)}`}>
-                          {b.status}
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-400 mt-0.5">
-                        Posté par <span className="text-white font-bold">{b.poster_username}</span>
-                        {isMyBounty && <span className="text-amber-400 ml-1">(vous)</span>}
-                        {b.mercenary_username && <span className="ml-2">• Mercenaire: <span className="text-blue-400 font-bold">{b.mercenary_username}</span>{isMercenary && <span className="text-blue-300 ml-1">(vous)</span>}</span>}
-                      </div>
-
-                      {b.reason && (
-                        <p className="text-xs text-slate-500 italic mt-1 line-clamp-2">"{b.reason}"</p>
-                      )}
-
-                      <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <div className="flex items-center gap-2 bg-amber-950/30 border border-amber-800/30 rounded-lg px-3 py-1">
-                          <span className="text-xs font-black text-amber-400">{rewards.join(" + ")}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[10px] text-slate-600">
-                          <Clock size={10} />
-                          {expired ? "Expirée" : `Expire le ${new Date(b.expires_at).toLocaleDateString("fr-FR")}`}
+              <motion.div key={b.id} variants={item}>
+                <Card className={`border backdrop-blur-[12px] ${
+                  isCompleted
+                    ? "border-emerald-500/20 bg-emerald-500/5 opacity-70"
+                    : isTarget
+                    ? "border-red-500/20 bg-red-500/5"
+                    : "bg-[rgba(10,5,32,0.85)] border-cyan-500/10"
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-4">
+                      {/* Target avatar */}
+                      <div className="relative shrink-0">
+                        <img
+                          src={getAvatarSrc(b.target_username, b.target_avatar_url)}
+                          alt=""
+                          className="w-12 h-12 rounded-xl"
+                        />
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500/20 border border-amber-500/30 rounded-full flex items-center justify-center">
+                          <Crosshair size={10} className="text-amber-400" />
                         </div>
                       </div>
-                    </div>
 
-                    {/* Actions */}
-                    <div className="flex flex-col gap-2 shrink-0">
-                      {b.status === "open" && isMyBounty && (
-                        <button
-                          onClick={() => handleCancel(b)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-400 text-xs font-bold transition-colors"
-                        >
-                          <X size={12} /> Annuler
-                        </button>
-                      )}
-                      {b.status === "open" && !isMyBounty && !isTarget && (
-                        <button
-                          onClick={() => handleAccept(b)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold transition-colors"
-                        >
-                          <Shield size={12} /> Accepter le contrat
-                        </button>
-                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-black text-red-400 font-medium">{b.target_username}</span>
+                          {isTarget && <span className="text-xs text-red-400 font-bold">(Vous)</span>}
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${statusColor(b.status)}`}>
+                            {b.status}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          Posté par <span className="text-slate-200 font-bold">{b.poster_username}</span>
+                          {isMyBounty && <span className="text-amber-400 ml-1">(vous)</span>}
+                          {b.mercenary_username && <span className="ml-2">• Mercenaire: <span className="text-blue-400 font-bold">{b.mercenary_username}</span>{isMercenary && <span className="text-blue-300 ml-1">(vous)</span>}</span>}
+                        </div>
+
+                        {b.reason && (
+                          <p className="text-xs text-slate-500 italic mt-1 line-clamp-2">"{b.reason}"</p>
+                        )}
+
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          <div className="flex items-center gap-2 bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-lg px-3 py-1">
+                            <span className="text-xs font-black text-amber-400 font-mono tabular-nums">{rewards.join(" + ")}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-600">
+                            <Clock size={10} />
+                            {expired ? "Expirée" : `Expire le ${new Date(b.expires_at).toLocaleDateString("fr-FR")}`}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex flex-col gap-2 shrink-0">
+                        {b.status === "open" && isMyBounty && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleCancel(b)}
+                          >
+                            <X size={12} /> Annuler
+                          </Button>
+                        )}
+                        {b.status === "open" && !isMyBounty && !isTarget && (
+                          <Button
+                            variant="warning"
+                            size="sm"
+                            onClick={() => handleAccept(b)}
+                          >
+                            <Shield size={12} /> Accepter le contrat
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       )}
     </div>
   );

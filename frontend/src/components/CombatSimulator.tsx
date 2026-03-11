@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Swords, TrendingUp, AlertTriangle, Shield, Zap, X } from 'lucide-react';
+import { Button } from './ui/button';
 
 interface Fleet {
   hunters: number;
@@ -13,11 +14,11 @@ interface CombatSimulatorProps {
   onConfirmAttack?: (hunters: number, cruisers: number) => void;
 }
 
-export function CombatSimulator({ 
-  myFleet, 
-  enemyFleet, 
+export function CombatSimulator({
+  myFleet,
+  enemyFleet,
   onClose,
-  onConfirmAttack 
+  onConfirmAttack
 }: CombatSimulatorProps) {
   const [attackerHunters, setAttackerHunters] = useState(myFleet.hunters);
   const [attackerCruisers, setAttackerCruisers] = useState(myFleet.cruisers);
@@ -30,24 +31,19 @@ export function CombatSimulator({
 
   // Simulation de combat
   const simulate = () => {
-    // Puissance d'attaque
     const attackerPower = (attackerHunters * HUNTER_POWER) + (attackerCruisers * CRUISER_POWER);
     const defenderPower = (enemyFleet.hunters * HUNTER_POWER) + (enemyFleet.cruisers * CRUISER_POWER);
 
-    // Points de coque totaux
     const attackerHull = (attackerHunters * HUNTER_HULL) + (attackerCruisers * CRUISER_HULL);
     const defenderHull = (enemyFleet.hunters * HUNTER_HULL) + (enemyFleet.cruisers * CRUISER_HULL);
 
-    // Calcul de la probabilité de victoire (simplifié)
     const totalPower = attackerPower + defenderPower;
     const attackerWinChance = totalPower > 0 ? (attackerPower / totalPower) * 100 : 50;
 
-    // Estimation des pertes (formule simplifiée)
     const lossFactor = 1 - (attackerWinChance / 100);
     const estimatedHunterLosses = Math.floor(attackerHunters * lossFactor * 0.4);
     const estimatedCruiserLosses = Math.floor(attackerCruisers * lossFactor * 0.35);
 
-    // Estimation du butin (30% des ressources ennemies si victoire)
     const estimatedLoot = attackerWinChance > 50 ? {
       metal: Math.floor(defenderHull * 0.3),
       crystal: Math.floor(defenderHull * 0.2),
@@ -69,19 +65,20 @@ export function CombatSimulator({
   };
 
   const result = simulate();
-  const isViable = result.winChance >= 30; // Considéré comme viable si >30%
+  const isViable = result.winChance >= 30;
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-indigo-500/30 rounded-xl max-w-3xl w-full shadow-2xl shadow-indigo-900/20 max-h-[90vh] overflow-y-auto">
+      <div className="bg-[rgba(16,8,46,0.95)] backdrop-blur-[12px] border border-cyan-500/10 rounded-xl max-w-3xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+
         {/* Header */}
-        <div className="sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-indigo-500/20 p-6 flex items-center justify-between">
+        <div className="sticky top-0 bg-[rgba(10,5,32,0.95)] backdrop-blur-[12px] border-b border-cyan-500/10 p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-indigo-600/20 rounded-lg">
-              <Swords className="text-indigo-400" size={24} />
+            <div className="p-3 bg-cyan-500/10 border border-cyan-500/10 rounded-lg">
+              <Swords className="text-cyan-400" size={24} />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white">
+              <h2 className="text-2xl font-black text-slate-200">
                 SIMULATEUR DE COMBAT
               </h2>
               <p className="text-sm text-slate-400 mt-1">Analysez vos chances avant l'attaque</p>
@@ -89,40 +86,44 @@ export function CombatSimulator({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white"
+            className="p-2 hover:bg-cyan-500/5 rounded-lg transition-colors text-slate-400 hover:text-slate-200 border border-transparent hover:border-cyan-500/10"
           >
             <X size={20} />
           </button>
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Configuration de la flotte */}
-          <div className="bg-slate-800/50 rounded-lg p-5 border border-slate-700/30">
-            <h3 className="font-bold text-indigo-400 mb-4 flex items-center gap-2">
-              <Zap size={18} />
-              COMPOSITION DE VOTRE FLOTTE D'ATTAQUE
-            </h3>
+          {/* Fleet configuration */}
+          <div className="bg-[rgba(10,5,32,0.85)] rounded-lg p-5 border border-cyan-500/10 backdrop-blur-[12px]">
+            {/* Section header */}
+            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-cyan-500/10">
+              <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+              <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">
+                COMPOSITION DE VOTRE FLOTTE D'ATTAQUE
+              </span>
+              <Zap size={12} className="text-cyan-400 ml-1" />
+            </div>
 
             <div className="space-y-4">
               {/* Chasseurs Légers */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm text-slate-300 font-semibold">
-                    🚀 Chasseurs Légers
+                    Chasseurs Légers
                   </label>
-                  <span className="text-lg font-bold text-white font-mono">
+                  <span className="text-lg font-bold text-slate-200 font-mono tabular-nums">
                     {attackerHunters} / {myFleet.hunters}
                   </span>
                 </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max={myFleet.hunters} 
+                <input
+                  type="range"
+                  min="0"
+                  max={myFleet.hunters}
                   value={attackerHunters}
                   onChange={(e) => setAttackerHunters(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  className="w-full h-1.5 bg-cyan-500/5 border border-cyan-500/10 rounded-full appearance-none cursor-pointer accent-cyan-400"
                 />
-                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                <div className="flex justify-between text-xs text-slate-500 mt-1 font-mono tabular-nums">
                   <span>0</span>
                   <span>{myFleet.hunters}</span>
                 </div>
@@ -132,21 +133,21 @@ export function CombatSimulator({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm text-slate-300 font-semibold">
-                    🛸 Croiseurs
+                    Croiseurs
                   </label>
-                  <span className="text-lg font-bold text-white font-mono">
+                  <span className="text-lg font-bold text-slate-200 font-mono tabular-nums">
                     {attackerCruisers} / {myFleet.cruisers}
                   </span>
                 </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max={myFleet.cruisers} 
+                <input
+                  type="range"
+                  min="0"
+                  max={myFleet.cruisers}
                   value={attackerCruisers}
                   onChange={(e) => setAttackerCruisers(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                  className="w-full h-1.5 bg-cyan-500/5 border border-cyan-500/10 rounded-full appearance-none cursor-pointer accent-cyan-400"
                 />
-                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                <div className="flex justify-between text-xs text-slate-500 mt-1 font-mono tabular-nums">
                   <span>0</span>
                   <span>{myFleet.cruisers}</span>
                 </div>
@@ -154,17 +155,17 @@ export function CombatSimulator({
             </div>
           </div>
 
-          {/* Résultats de la simulation */}
-          <div className={`rounded-lg border-2 p-5 transition-all ${
-            result.winChance >= 70 ? 'bg-green-950/20 border-green-500/50' :
-            result.winChance >= 40 ? 'bg-yellow-950/20 border-yellow-500/50' :
-            'bg-red-950/20 border-red-500/50'
+          {/* Simulation results */}
+          <div className={`rounded-lg border-2 p-5 transition-all backdrop-blur-[12px] ${
+            result.winChance >= 70 ? 'bg-emerald-500/5 border-emerald-500/30' :
+            result.winChance >= 40 ? 'bg-amber-500/5 border-amber-500/30' :
+            'bg-red-500/5 border-red-500/30'
           }`}>
-            {/* Probabilité de victoire */}
+            {/* Win chance */}
             <div className="text-center mb-6">
-              <div className={`text-6xl font-black mb-2 ${
-                result.winChance >= 70 ? 'text-green-400' :
-                result.winChance >= 40 ? 'text-yellow-400' :
+              <div className={`text-6xl font-black mb-2 font-mono tabular-nums ${
+                result.winChance >= 70 ? 'text-emerald-400' :
+                result.winChance >= 40 ? 'text-amber-400' :
                 'text-red-400'
               }`}>
                 {result.winChance.toFixed(1)}%
@@ -172,19 +173,19 @@ export function CombatSimulator({
               <div className="text-slate-300 font-semibold text-lg">Chances de Victoire</div>
               <div className="mt-2">
                 {result.winChance >= 70 && (
-                  <div className="inline-flex items-center gap-2 bg-green-900/30 px-4 py-2 rounded-full text-green-300 text-sm">
+                  <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-full text-emerald-400 text-sm">
                     <TrendingUp size={16} />
                     Victoire Hautement Probable
                   </div>
                 )}
                 {result.winChance >= 40 && result.winChance < 70 && (
-                  <div className="inline-flex items-center gap-2 bg-yellow-900/30 px-4 py-2 rounded-full text-yellow-300 text-sm">
+                  <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-full text-amber-400 text-sm">
                     <AlertTriangle size={16} />
                     Combat Incertain
                   </div>
                 )}
                 {result.winChance < 40 && (
-                  <div className="inline-flex items-center gap-2 bg-red-900/30 px-4 py-2 rounded-full text-red-300 text-sm">
+                  <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-full text-red-400 text-sm">
                     <Shield size={16} />
                     Victoire Peu Probable
                   </div>
@@ -192,79 +193,91 @@ export function CombatSimulator({
               </div>
             </div>
 
-            {/* Détails */}
+            {/* Detail panels */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Votre flotte */}
-              <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/30">
-                <h4 className="text-sm font-bold text-indigo-400 mb-3">⚡ VOTRE FLOTTE</h4>
+              {/* Your fleet */}
+              <div className="bg-[rgba(10,5,32,0.85)] rounded-lg p-4 border border-cyan-500/10">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+                  <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                  <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">VOTRE FLOTTE</span>
+                </div>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Puissance:</span>
-                    <span className="font-mono font-bold text-indigo-300">{result.attackerPower.toLocaleString()}</span>
+                    <span className="font-mono tabular-nums font-bold text-cyan-400">{result.attackerPower.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Coque Totale:</span>
-                    <span className="font-mono font-bold text-indigo-300">{result.attackerHull.toLocaleString()}</span>
+                    <span className="font-mono tabular-nums font-bold text-cyan-400">{result.attackerHull.toLocaleString()}</span>
                   </div>
-                  <div className="pt-2 border-t border-slate-700/50">
+                  <div className="pt-2 border-t border-cyan-500/10">
                     <div className="text-slate-500 mb-1">Composition:</div>
-                    <div className="text-white">🚀 {attackerHunters} Chasseurs</div>
-                    <div className="text-white">🛸 {attackerCruisers} Croiseurs</div>
+                    <div className="text-slate-200 font-mono tabular-nums">{attackerHunters} Chasseurs</div>
+                    <div className="text-slate-200 font-mono tabular-nums">{attackerCruisers} Croiseurs</div>
                   </div>
                 </div>
               </div>
 
-              {/* Flotte ennemie */}
-              <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/30">
-                <h4 className="text-sm font-bold text-red-400 mb-3">🛡️ FLOTTE ENNEMIE</h4>
+              {/* Enemy fleet */}
+              <div className="bg-[rgba(10,5,32,0.85)] rounded-lg p-4 border border-red-500/15">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-red-500/10">
+                  <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-red-400 to-transparent flex-shrink-0" />
+                  <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-red-500/70">FLOTTE ENNEMIE</span>
+                </div>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Puissance:</span>
-                    <span className="font-mono font-bold text-red-300">{result.defenderPower.toLocaleString()}</span>
+                    <span className="font-mono tabular-nums font-bold text-red-400">{result.defenderPower.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Coque Totale:</span>
-                    <span className="font-mono font-bold text-red-300">{result.defenderHull.toLocaleString()}</span>
+                    <span className="font-mono tabular-nums font-bold text-red-400">{result.defenderHull.toLocaleString()}</span>
                   </div>
-                  <div className="pt-2 border-t border-slate-700/50">
+                  <div className="pt-2 border-t border-red-500/10">
                     <div className="text-slate-500 mb-1">Composition:</div>
-                    <div className="text-white">🚀 {enemyFleet.hunters} Chasseurs</div>
-                    <div className="text-white">🛸 {enemyFleet.cruisers} Croiseurs</div>
+                    <div className="text-slate-200 font-mono tabular-nums">{enemyFleet.hunters} Chasseurs</div>
+                    <div className="text-slate-200 font-mono tabular-nums">{enemyFleet.cruisers} Croiseurs</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Pertes estimées */}
-            <div className="mt-4 bg-slate-900/50 rounded-lg p-4 border border-slate-700/30">
-              <h4 className="text-sm font-bold text-orange-400 mb-3">💥 PERTES ESTIMÉES</h4>
+            {/* Estimated losses */}
+            <div className="mt-4 bg-[rgba(10,5,32,0.85)] rounded-lg p-4 border border-cyan-500/10">
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+                <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">PERTES ESTIMÉES</span>
+              </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <div className="text-slate-400 mb-1">Chasseurs:</div>
-                  <div className="text-orange-300 font-mono font-bold">-{result.losses.hunters} unités</div>
+                  <div className="text-orange-400 font-mono tabular-nums font-bold">-{result.losses.hunters} unités</div>
                 </div>
                 <div>
                   <div className="text-slate-400 mb-1">Croiseurs:</div>
-                  <div className="text-orange-300 font-mono font-bold">-{result.losses.cruisers} unités</div>
+                  <div className="text-orange-400 font-mono tabular-nums font-bold">-{result.losses.cruisers} unités</div>
                 </div>
               </div>
             </div>
 
-            {/* Butin estimé */}
+            {/* Estimated loot */}
             {result.winChance > 50 && (
-              <div className="mt-4 bg-gradient-to-r from-yellow-950/30 to-amber-950/30 rounded-lg p-4 border border-yellow-500/30">
-                <h4 className="text-sm font-bold text-yellow-400 mb-3">💰 BUTIN ESTIMÉ</h4>
+              <div className="mt-4 bg-amber-500/5 rounded-lg p-4 border border-amber-500/20">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-amber-500/10">
+                  <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-amber-400 to-transparent flex-shrink-0" />
+                  <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-amber-500/70">BUTIN ESTIMÉ</span>
+                </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="text-center">
-                    <div className="text-orange-300 font-mono font-bold text-lg">{result.loot.metal.toLocaleString()}</div>
+                    <div className="text-orange-400 font-mono tabular-nums font-bold text-lg">{result.loot.metal.toLocaleString()}</div>
                     <div className="text-slate-400 text-xs">Métal</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-cyan-300 font-mono font-bold text-lg">{result.loot.crystal.toLocaleString()}</div>
+                    <div className="text-cyan-400 font-mono tabular-nums font-bold text-lg">{result.loot.crystal.toLocaleString()}</div>
                     <div className="text-slate-400 text-xs">Cristal</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-green-300 font-mono font-bold text-lg">{result.loot.deuterium.toLocaleString()}</div>
+                    <div className="text-emerald-400 font-mono tabular-nums font-bold text-lg">{result.loot.deuterium.toLocaleString()}</div>
                     <div className="text-slate-400 text-xs">Deutérium</div>
                   </div>
                 </div>
@@ -272,14 +285,14 @@ export function CombatSimulator({
             )}
           </div>
 
-          {/* Avertissement */}
+          {/* High-risk warning */}
           {!isViable && (
-            <div className="bg-red-950/30 border border-red-500/50 rounded-lg p-4">
+            <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="text-red-400 flex-shrink-0 mt-0.5" size={20} />
                 <div>
                   <div className="font-bold text-red-400 mb-1">ATTENTION - MISSION À HAUT RISQUE</div>
-                  <p className="text-sm text-red-300/80">
+                  <p className="text-sm text-red-400/70">
                     Cette attaque a de faibles chances de succès. Vous risquez de perdre une partie importante de votre flotte.
                   </p>
                 </div>
@@ -289,36 +302,31 @@ export function CombatSimulator({
 
           {/* Actions */}
           <div className="flex gap-3">
-            <button
+            <Button
+              variant="secondary"
               onClick={onClose}
-              className="flex-1 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg transition-all border border-slate-600 hover:border-slate-500"
+              className="flex-1"
             >
               Annuler
-            </button>
+            </Button>
             {onConfirmAttack && (
-              <button
+              <Button
+                variant="default"
+                shine
                 onClick={() => onConfirmAttack(attackerHunters, attackerCruisers)}
                 disabled={attackerHunters === 0 && attackerCruisers === 0}
-                className={`flex-1 px-6 py-3 font-bold rounded-lg transition-all ${
-                  attackerHunters === 0 && attackerCruisers === 0
-                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                    : result.winChance >= 70
-                    ? 'bg-green-600 hover:bg-green-500 text-white'
-                    : result.winChance >= 40
-                    ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                    : 'bg-red-600 hover:bg-red-500 text-white'
-                }`}
+                className="flex-1"
               >
-                {result.winChance >= 70 ? '✅ Lancer l\'Attaque' : 
-                 result.winChance >= 40 ? '⚠️ Attaquer Quand Même' : 
-                 '☠️ Attaque Risquée'}
-              </button>
+                {result.winChance >= 70 ? 'Lancer l\'Attaque' :
+                 result.winChance >= 40 ? 'Attaquer Quand Même' :
+                 'Attaque Risquée'}
+              </Button>
             )}
           </div>
 
           {/* Note */}
-          <p className="text-xs text-center text-slate-500">
-            💡 Ces prédictions sont basées sur une simulation. Les résultats réels peuvent varier.
+          <p className="text-xs text-center text-slate-500 font-mono">
+            Ces prédictions sont basées sur une simulation. Les résultats réels peuvent varier.
           </p>
         </div>
       </div>

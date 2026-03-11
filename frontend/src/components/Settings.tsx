@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { Save, User, Globe, Shield, Terminal, LogOut, Mail, Fingerprint, Moon, Sun, Volume2, VolumeX, GraduationCap, Music, Speaker, Calendar, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,16 +43,13 @@ export default function Settings({
   const username = localStorage.getItem('username') || "Commandant";
   const userId = localStorage.getItem('user_id') || "unknown";
   const email = localStorage.getItem('email') || "commandant@space-conquest.galaxy";
-  
-  // Avatar personnalisé
+
   const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
 
-  // ✅ Fetch du profil utilisateur au chargement
   useEffect(() => {
     const fetchUserStats = async () => {
       if (userId !== "unknown") {
         try {
-          // Passer viewer_id pour que le backend reconnaisse le profil comme le sien
           const res = await fetch(apiUrl(`/players/${userId}/profile?viewer_id=${userId}`));
           if (res.ok) {
             const data = await res.json();
@@ -65,12 +63,10 @@ export default function Settings({
     fetchUserStats();
   }, [userId]);
 
-  // ✅ Calcul des jours depuis inscription
-  const daysSince = userStats?.created_at 
+  const daysSince = userStats?.created_at
     ? Math.floor((Date.now() - new Date(userStats.created_at).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
-  // Fonction pour obtenir la couleur du badge
   const getRankColor = (badge: string) => {
     if (badge?.includes("Empereur")) return "from-yellow-500 to-orange-600";
     if (badge?.includes("Seigneur")) return "from-purple-500 to-pink-600";
@@ -120,7 +116,6 @@ export default function Settings({
         localStorage.setItem('username', data.username);
         toast.success("Identité mise à jour", { description: `Nouveau nom : ${data.username}` });
         setNewUsername("");
-        // Recharger la page pour mettre à jour l'avatar et le nom partout
         setTimeout(() => window.location.reload(), 1000);
       } else {
         const data = await res.json();
@@ -138,24 +133,28 @@ export default function Settings({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 max-w-4xl mx-auto">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6 pb-20 max-w-4xl mx-auto"
+    >
       {/* --- PROFIL COMMANDANT --- */}
-      <Card className="bg-slate-950 dark:bg-slate-900 border-white/10 overflow-hidden">
-        <div className="h-24 bg-gradient-to-r from-indigo-900 to-purple-900 opacity-50"></div>
+      <Card className="bg-[rgba(16,8,46,0.95)] border-cyan-500/10 overflow-hidden backdrop-blur-[12px]">
+        <div className="h-24 bg-gradient-to-r from-cyan-900/40 to-purple-900/40 opacity-80"></div>
         <CardContent className="relative pt-0">
           <div className="flex flex-col md:flex-row items-center md:items-end gap-6 -mt-12 mb-6">
-            <div className="w-32 h-32 rounded-2xl bg-slate-900 border-4 border-slate-950 shadow-2xl overflow-hidden">
+            <div className="w-32 h-32 rounded-2xl bg-[rgba(10,5,32,0.85)] border-4 border-[rgba(16,8,46,0.95)] shadow-2xl overflow-hidden">
               <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
             </div>
             <div className="pb-2 text-center md:text-left space-y-2">
-              <h2 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3 justify-center md:justify-start">
-                {username} <Shield size={20} className="text-indigo-400" />
+              <h2 className="text-3xl font-black text-slate-200 uppercase tracking-tighter flex items-center gap-3 justify-center md:justify-start">
+                {username} <Shield size={20} className="text-cyan-400" />
               </h2>
               <p className="text-slate-400 font-mono text-xs flex items-center gap-2 justify-center md:justify-start">
                 <Fingerprint size={12} /> ID-CORE: {userId.substring(0, 8)}...
               </p>
-              
-              {/* ✅ Badge de rang dynamique */}
+
               {userStats && (
                 <div className="flex justify-center md:justify-start">
                   <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r ${getRankColor(userStats.rank_badge)} text-white font-bold text-sm shadow-lg`}>
@@ -167,37 +166,35 @@ export default function Settings({
             </div>
           </div>
 
-          {/* ✅ Statistiques de l'empire */}
           {userStats && (
-            <div className="mb-6 p-4 bg-gradient-to-br from-indigo-950/30 to-purple-950/30 rounded-xl border border-indigo-500/20">
+            <div className="mb-6 p-4 bg-gradient-to-br from-cyan-950/20 to-purple-950/20 rounded-xl border border-cyan-500/10">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <StatBox label="Points Totaux" value={userStats.total_points.toLocaleString()} color="text-yellow-400" />
                 <StatBox label="Économie" value={userStats.economy_points.toLocaleString()} color="text-green-400" />
                 <StatBox label="Militaire" value={userStats.military_points.toLocaleString()} color="text-red-400" />
-                <StatBox label="Planètes" value={userStats.planet_count} color="text-blue-400" />
+                <StatBox label="Planètes" value={userStats.planet_count} color="text-cyan-400" />
               </div>
-              
-              {/* ✅ Ancienneté */}
-              <div className="flex items-center justify-center gap-2 text-xs text-slate-400 border-t border-white/5 pt-3">
+
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-400 border-t border-cyan-500/10 pt-3">
                 <Calendar size={14} />
                 <span>Commandant depuis {daysSince} jour{daysSince !== 1 ? 's' : ''}</span>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-white/5 pt-6">
-            <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-cyan-500/10 pt-6">
+            <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-cyan-500/10">
               <Mail className="text-slate-500" size={18} />
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Canal de communication</p>
-                <p className="text-sm text-white font-mono">{email}</p>
+                <p className="text-sm text-slate-200 font-mono">{email}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5">
+            <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-cyan-500/10">
               <Globe className="text-slate-500" size={18} />
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Planète Capitale</p>
-                <p className="text-sm text-white font-mono">{planet.name}</p>
+                <p className="text-sm text-slate-200 font-mono">{planet.name}</p>
               </div>
             </div>
           </div>
@@ -206,16 +203,17 @@ export default function Settings({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* --- GESTION DU COMPTE --- */}
-        <Card className="bg-slate-900/50 border-white/10 text-white backdrop-blur-md">
+        <Card className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200 backdrop-blur-[12px]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-cyan-400">
-              <User size={16} /> Identité du Commandant
-            </CardTitle>
+            <div className="flex items-center gap-2 mb-1 pb-2 border-b border-cyan-500/10">
+              <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+              <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">Identité du Commandant</span>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Nom d'utilisateur actuel</label>
-              <div className="p-3 bg-black/40 border border-white/10 rounded text-white font-mono text-sm">
+              <div className="p-3 bg-black/40 border border-cyan-500/10 rounded text-slate-200 font-mono text-sm">
                 {username}
               </div>
             </div>
@@ -226,7 +224,7 @@ export default function Settings({
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
                   placeholder="Entrez un nouveau nom..."
-                  className="bg-black/40 border-white/10 text-white font-mono focus:border-cyan-500"
+                  className="bg-black/40 border-cyan-500/10 text-slate-200 font-mono focus:border-cyan-500/30"
                 />
                 <Button
                   onClick={handleUsernameChange}
@@ -237,7 +235,7 @@ export default function Settings({
                 </Button>
               </div>
             </div>
-            <div className="p-3 bg-cyan-500/5 rounded border border-cyan-500/20">
+            <div className="p-3 bg-cyan-500/5 rounded border border-cyan-500/10">
               <p className="text-[10px] text-cyan-300 leading-relaxed italic">
                 "Votre identité sera mise à jour dans tous les systèmes de la galaxie. Choisissez avec soin."
               </p>
@@ -246,11 +244,12 @@ export default function Settings({
         </Card>
 
         {/* --- CONFIGURATION PLANÈTE --- */}
-        <Card className="bg-slate-900/50 border-white/10 text-white backdrop-blur-md">
+        <Card className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200 backdrop-blur-[12px]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-indigo-400">
-              <Globe size={16} /> Identifiant Planétaire
-            </CardTitle>
+            <div className="flex items-center gap-2 mb-1 pb-2 border-b border-cyan-500/10">
+              <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+              <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">Identifiant Planétaire</span>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -259,19 +258,19 @@ export default function Settings({
                 <Input
                   value={planetName}
                   onChange={(e) => setPlanetName(e.target.value)}
-                  className="bg-black/40 border-white/10 text-white font-mono focus:border-indigo-500"
+                  className="bg-black/40 border-cyan-500/10 text-slate-200 font-mono focus:border-cyan-500/30"
                 />
                 <Button
                   onClick={handleRename}
                   disabled={loading || planetName === planet.name}
-                  className="bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20"
+                  className="bg-cyan-600 hover:bg-cyan-500 shadow-lg shadow-cyan-500/20"
                 >
                   <Save size={16} />
                 </Button>
               </div>
             </div>
-            <div className="p-3 bg-indigo-500/5 rounded border border-indigo-500/20">
-              <p className="text-[10px] text-indigo-300 leading-relaxed italic">
+            <div className="p-3 bg-cyan-500/5 rounded border border-cyan-500/10">
+              <p className="text-[10px] text-cyan-300 leading-relaxed italic">
                 "La désignation officielle de votre planète est transmise aux relais subspatiaux et sera visible par tous les commandants de la galaxie."
               </p>
             </div>
@@ -279,11 +278,12 @@ export default function Settings({
         </Card>
 
         {/* --- APPARENCE & ACTIONS --- */}
-        <Card className="bg-slate-900/50 border-white/10 text-white backdrop-blur-md">
+        <Card className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200 backdrop-blur-[12px]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-purple-400">
-              <Terminal size={16} /> Interface & Sécurité
-            </CardTitle>
+            <div className="flex items-center gap-2 mb-1 pb-2 border-b border-cyan-500/10">
+              <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+              <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">Interface & Sécurité</span>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Toggle thème */}
@@ -294,7 +294,7 @@ export default function Settings({
                   variant="outline"
                   size="sm"
                   onClick={() => setTheme('light')}
-                  className={`flex-1 ${theme === 'light' ? 'bg-white/20 border-white/30' : 'bg-white/5 border-white/10'}`}
+                  className={`flex-1 border-cyan-500/10 ${theme === 'light' ? 'bg-cyan-500/10 border-cyan-500/30 text-slate-200' : 'bg-white/5 text-slate-400'}`}
                 >
                   <Sun size={16} className="mr-2" />
                   Clair
@@ -303,7 +303,7 @@ export default function Settings({
                   variant="outline"
                   size="sm"
                   onClick={() => setTheme('dark')}
-                  className={`flex-1 ${theme === 'dark' ? 'bg-white/20 border-white/30' : 'bg-white/5 border-white/10'}`}
+                  className={`flex-1 border-cyan-500/10 ${theme === 'dark' ? 'bg-cyan-500/10 border-cyan-500/30 text-slate-200' : 'bg-white/5 text-slate-400'}`}
                 >
                   <Moon size={16} className="mr-2" />
                   Sombre
@@ -319,7 +319,7 @@ export default function Settings({
                   variant="outline"
                   size="sm"
                   onClick={() => onToggleSound(true)}
-                  className={`flex-1 ${soundEnabled ? 'bg-white/20 border-white/30' : 'bg-white/5 border-white/10'}`}
+                  className={`flex-1 border-cyan-500/10 ${soundEnabled ? 'bg-cyan-500/10 border-cyan-500/30 text-slate-200' : 'bg-white/5 text-slate-400'}`}
                 >
                   <Volume2 size={16} className="mr-2" />
                   Activé
@@ -328,7 +328,7 @@ export default function Settings({
                   variant="outline"
                   size="sm"
                   onClick={() => onToggleSound(false)}
-                  className={`flex-1 ${!soundEnabled ? 'bg-white/20 border-white/30' : 'bg-white/5 border-white/10'}`}
+                  className={`flex-1 border-cyan-500/10 ${!soundEnabled ? 'bg-cyan-500/10 border-cyan-500/30 text-slate-200' : 'bg-white/5 text-slate-400'}`}
                 >
                   <VolumeX size={16} className="mr-2" />
                   Désactivé
@@ -338,51 +338,49 @@ export default function Settings({
 
             {/* Contrôles de volume */}
             {soundEnabled && onVolumeChange && (
-              <div className="space-y-4 pt-2 border-t border-white/5">
-                {/* Volume musique */}
+              <div className="space-y-4 pt-2 border-t border-cyan-500/10">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
                       <Music size={12} /> Musique d'ambiance
                     </label>
-                    <span className="text-xs text-indigo-400 font-mono">{Math.round(musicVolume * 100)}%</span>
+                    <span className="text-xs text-cyan-400 font-mono">{Math.round(musicVolume * 100)}%</span>
                   </div>
-                  <input 
+                  <input
                     type="range"
                     min="0"
                     max="1"
                     step="0.05"
                     value={musicVolume}
                     onChange={(e) => onVolumeChange('music', parseFloat(e.target.value))}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
                   />
                 </div>
 
-                {/* Volume SFX */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
                       <Speaker size={12} /> Effets sonores
                     </label>
-                    <span className="text-xs text-purple-400 font-mono">{Math.round(sfxVolume * 100)}%</span>
+                    <span className="text-xs text-cyan-400 font-mono">{Math.round(sfxVolume * 100)}%</span>
                   </div>
-                  <input 
+                  <input
                     type="range"
                     min="0"
                     max="1"
                     step="0.05"
                     value={sfxVolume}
                     onChange={(e) => onVolumeChange('sfx', parseFloat(e.target.value))}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
                   />
                 </div>
               </div>
             )}
 
-            <div className="space-y-3 pt-4 border-t border-white/5">
-              <Button 
+            <div className="space-y-3 pt-4 border-t border-cyan-500/10">
+              <Button
                 variant="outline"
-                className="w-full border-indigo-500/30 bg-indigo-950/30 hover:bg-indigo-900/50 text-xs text-indigo-300 flex items-center justify-between"
+                className="w-full border-cyan-500/20 bg-cyan-950/20 hover:bg-cyan-900/30 text-xs text-cyan-300 flex items-center justify-between"
                 onClick={onStartTutorial}
               >
                 <span className="flex items-center gap-2">
@@ -391,15 +389,15 @@ export default function Settings({
                 </span>
                 <ArrowRight size={14} />
               </Button>
-              <Button 
+              <Button
                 variant="outline"
-                className="w-full border-white/5 bg-white/5 hover:bg-white/10 text-xs text-slate-300 flex items-center justify-between"
+                className="w-full border-cyan-500/10 bg-white/5 hover:bg-white/10 text-xs text-slate-300 flex items-center justify-between"
                 onClick={() => toast.info("Module en développement", { description: "Le cryptage de mot de passe est déjà actif." })}
               >
                 CHANGER LE MOT DE PASSE <ArrowRight size={14} />
               </Button>
-              <Button 
-                variant="destructive" 
+              <Button
+                variant="destructive"
                 className="w-full bg-red-950/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 flex items-center gap-2 justify-center font-bold tracking-widest text-xs"
                 onClick={onLogout}
               >
@@ -409,15 +407,14 @@ export default function Settings({
           </CardContent>
         </Card>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-// Composant pour afficher une statistique
 function StatBox({ label, value, color }: { label: string, value: string | number, color: string }) {
   return (
     <div className="text-center">
-      <div className={`text-2xl font-black ${color} font-mono`}>{value}</div>
+      <div className={`text-2xl font-black ${color} font-mono tabular-nums`}>{value}</div>
       <div className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">{label}</div>
     </div>
   );

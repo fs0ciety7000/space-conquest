@@ -2,6 +2,7 @@ import { ShoppingCart, Coins, Users, Bot } from "lucide-react";
 import { useState, useEffect } from "react";
 import { apiUrl } from '@/config/api';
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import NpcTradeCard from "./NpcTradeCard";
 import ListingCard from "./ListingCard";
 
@@ -12,6 +13,12 @@ interface BuyViewProps {
   onUpdate: () => void;
   onStatsUpdate: () => void;
 }
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
+};
+const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 
 export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate }: BuyViewProps) {
   const [listings, setListings] = useState<any[]>([]);
@@ -45,7 +52,6 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
         const data = await res.json();
         const items = data.listings || [];
         setListings(prev => reset ? items : [...prev, ...items]);
-        // Backend returns { listings, total, page, limit } — use total for accurate hasMore
         setListingTotal(data.total ?? items.length);
       }
     } catch (e) {
@@ -72,10 +78,9 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
       });
 
       if (res.ok) {
-        toast.success("✅ Achat réussi !");
+        toast.success("Achat réussi !");
         onUpdate();
         onStatsUpdate();
-        // After a purchase, reset to page 1 and refresh
         loadListings(1, true);
         setListingPage(1);
       } else {
@@ -91,20 +96,24 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
   return (
     <div className="space-y-6">
       {/* Section PNJ */}
-      <div className="relative overflow-hidden border-t-4 border-purple-500/50 bg-gradient-to-b from-slate-950 to-purple-950/20 shadow-2xl rounded-lg group">
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
-        <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
+      <div className="relative overflow-hidden rounded-xl bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px] group">
+        <div className="absolute -right-6 -top-6 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity pointer-events-none">
           <Bot size={150} className="text-purple-400" />
         </div>
 
         <div className="p-6 relative z-10">
+          <div className="flex items-center gap-2 mb-6 pb-2 border-b border-cyan-500/10">
+            <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-purple-400 to-transparent flex-shrink-0" />
+            <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-purple-400/70">Commerce PNJ</span>
+          </div>
+
           <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 rounded-lg border border-purple-500/30 bg-black/20 text-purple-400">
+            <div className="p-3 rounded-lg border border-purple-500/20 bg-purple-950/10 text-purple-400">
               <Bot size={24} />
             </div>
             <div>
-              <h3 className="text-lg font-black uppercase tracking-wider text-white">Commerce PNJ</h3>
-              <p className="text-xs text-slate-400">Échangez avec des prix garantis</p>
+              <h3 className="text-lg font-black uppercase tracking-wider text-slate-200">Commerce PNJ</h3>
+              <p className="text-xs text-slate-500">Échangez avec des prix garantis</p>
             </div>
           </div>
 
@@ -125,32 +134,36 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
       </div>
 
       {/* Section Marché Joueurs */}
-      <div className="relative overflow-hidden border-t-4 border-indigo-500/50 bg-gradient-to-b from-slate-950 to-indigo-950/20 shadow-2xl rounded-lg group">
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
-        <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-          <Users size={150} className="text-indigo-400" />
+      <div className="relative overflow-hidden rounded-xl bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px] group">
+        <div className="absolute -right-6 -top-6 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity pointer-events-none">
+          <Users size={150} className="text-cyan-400" />
         </div>
 
         <div className="p-6 relative z-10">
+          <div className="flex items-center gap-2 mb-6 pb-2 border-b border-cyan-500/10">
+            <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+            <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">Marché P2P</span>
+          </div>
+
           <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 rounded-lg border border-indigo-500/30 bg-black/20 text-indigo-400">
+            <div className="p-3 rounded-lg border border-cyan-500/20 bg-cyan-950/10 text-cyan-400">
               <Users size={24} />
             </div>
             <div>
-              <h3 className="text-lg font-black uppercase tracking-wider text-white">Marché P2P</h3>
-              <p className="text-xs text-slate-400">
+              <h3 className="text-lg font-black uppercase tracking-wider text-slate-200">Marché P2P</h3>
+              <p className="text-xs text-slate-500">
                 {listings.length} offre{listings.length > 1 ? 's' : ''} disponible{listings.length > 1 ? 's' : ''}
               </p>
             </div>
           </div>
 
           {loading ? (
-            <div className="text-center py-12 border border-white/5 rounded-lg bg-black/20">
-              <div className="animate-spin mx-auto mb-4 h-12 w-12 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
+            <div className="text-center py-12 border border-cyan-500/10 rounded-lg bg-[rgba(10,5,32,0.5)]">
+              <div className="animate-spin mx-auto mb-4 h-12 w-12 border-4 border-cyan-500 border-t-transparent rounded-full" />
               <p className="text-slate-500 text-sm font-bold uppercase">Chargement...</p>
             </div>
           ) : listings.length === 0 ? (
-            <div className="text-center py-12 border border-white/5 rounded-lg bg-black/20">
+            <div className="text-center py-12 border border-cyan-500/10 rounded-lg bg-[rgba(10,5,32,0.5)]">
               <Coins size={48} className="mx-auto mb-4 text-slate-600" />
               <p className="text-slate-400 mb-2 font-bold uppercase text-sm">Aucune offre disponible</p>
               <p className="text-xs text-slate-600">
@@ -158,18 +171,25 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <motion.div
+              variants={container}
+              initial="hidden"
+              animate="show"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            >
               {listings.map(listing => (
-                <ListingCard
-                  key={listing.id}
-                  listing={listing}
-                  onBuy={handleBuyListing}
-                  canBuy={listing.seller_user_id !== userId}
-                />
+                <motion.div key={listing.id} variants={item}>
+                  <ListingCard
+                    listing={listing}
+                    onBuy={handleBuyListing}
+                    canBuy={listing.seller_user_id !== userId}
+                  />
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
-          {/* Show More: driven by real backend total */}
+
+          {/* Show More */}
           {listings.length < listingTotal && (
             <div className="flex justify-center pt-4">
               <button
@@ -178,7 +198,7 @@ export default function BuyView({ planet, userId, stats, onUpdate, onStatsUpdate
                   setListingPage(next);
                   loadListings(next);
                 }}
-                className="text-xs text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 px-4 py-1.5 rounded-lg hover:bg-indigo-500/10 transition-all"
+                className="text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-500/20 px-4 py-1.5 rounded-lg hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-all"
               >
                 Afficher plus ({listingTotal - listings.length} autres offres)
               </button>

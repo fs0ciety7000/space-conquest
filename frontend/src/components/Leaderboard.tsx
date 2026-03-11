@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe, UserCircle, Truck, X, Info, ChevronDown, ChevronUp, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -65,18 +66,15 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
         try {
             const res = await fetch(apiUrl(`/ranking?current_planet_id=${currentPlanetId}&type=${category}&page=${pageNum}&limit=${LIMIT}`));
             const data = await res.json();
-            
+
             if (data && data.data) {
-                // Backend returns { data, total, page, limit } — use total for accurate hasMore
                 if (isReset) {
                     setRanking(data.data);
                 } else {
                     setRanking(prev => [...prev, ...data.data]);
                 }
-                // hasMore = there are still unloaded items beyond the current page
                 setHasMore(pageNum * LIMIT < (data.total ?? 0));
             } else if (Array.isArray(data)) {
-                // Fallback for old plain-array response (compatibility)
                 if (isReset) {
                     setRanking(data);
                 } else {
@@ -103,7 +101,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
         if (rank === 1) return <Medal className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]" size={24} />;
         if (rank === 2) return <Medal className="text-slate-300 drop-shadow-[0_0_8px_rgba(203,213,225,0.5)]" size={24} />;
         if (rank === 3) return <Medal className="text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" size={24} />;
-        return <span className="font-mono text-slate-500 font-bold">#{rank}</span>;
+        return <span className="font-mono tabular-nums text-slate-500 font-bold">#{rank}</span>;
     };
 
     const toggleExpanded = (userId: string) => {
@@ -118,7 +116,12 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
 
     return (
         <>
-            <div className="bg-slate-900/80 p-6 rounded-xl border border-white/10 backdrop-blur-xl shadow-2xl card-depth glass-card animate-fade-in hover:shadow-3xl transition-all duration-500">
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] p-6 rounded-xl border border-cyan-500/10 shadow-2xl"
+            >
                 {/* Header et Filtres */}
                 <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                     <div className="flex items-center gap-3">
@@ -126,46 +129,58 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                             <Trophy className="text-yellow-500" size={28} />
                         </div>
                         <div>
-                            <h2 className="text-2xl font-black text-white uppercase tracking-widest">Classement</h2>
+                            <h2 className="text-2xl font-black text-slate-200 uppercase tracking-widest">Classement</h2>
                             <p className="text-xs text-slate-400">Données impériales en temps réel</p>
                         </div>
                     </div>
 
-                    <div className="flex bg-slate-950/50 p-1 rounded-lg border border-white/10 card-depth">
+                    <div className="flex bg-[rgba(10,5,32,0.85)] p-1 rounded-lg border border-cyan-500/10">
                         <button
                             onClick={() => setCategory('general')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'general' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
+                                category === 'general'
+                                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shadow-lg'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-cyan-500/5'
+                            }`}
                         >
                             <Globe size={14} /> Général
                         </button>
                         <button
                             onClick={() => setCategory('economy')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'economy' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
+                                category === 'economy'
+                                    ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-lg'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-cyan-500/5'
+                            }`}
                         >
                             <TrendingUp size={14} /> Économie
                         </button>
                         <button
                             onClick={() => setCategory('military')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${category === 'military' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
+                                category === 'military'
+                                    ? 'bg-red-600/20 text-red-400 border border-red-500/30 shadow-lg'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-cyan-500/5'
+                            }`}
                         >
                             <ShieldAlert size={14} /> Militaire
                         </button>
                     </div>
                 </div>
-                
+
                 {/* Formule de calcul du score */}
-                <div className="mb-6 rounded-xl border border-indigo-500/20 bg-indigo-950/20 overflow-hidden">
+                <div className="mb-6 rounded-xl border border-cyan-500/10 bg-[rgba(16,8,46,0.95)] overflow-hidden">
                     <button
-                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-indigo-500/10 transition-colors"
+                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-cyan-500/5 transition-colors duration-150"
                         onClick={() => setShowFormula(v => !v)}
                     >
-                        <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-400">
+                        <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-cyan-500/70">
                             <Info size={14} /> Formule de calcul des points
                         </span>
-                        {showFormula ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
+                        {showFormula ? <ChevronUp size={14} className="text-cyan-500/70" /> : <ChevronDown size={14} className="text-cyan-500/70" />}
                     </button>
                     {showFormula && (
-                        <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] border-t border-indigo-500/20 pt-4">
+                        <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] border-t border-cyan-500/10 pt-4">
                             {/* Économie */}
                             <div>
                                 <div className="text-emerald-400 font-black uppercase tracking-widest mb-2 flex items-center gap-1">
@@ -173,18 +188,18 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                 </div>
                                 <div className="space-y-1 text-slate-400">
                                     <p className="font-bold text-slate-300">Bâtiments (par planète) :</p>
-                                    <p>Mine de Métal : <span className="font-mono text-emerald-400">niv² × 10</span></p>
-                                    <p>Mine de Cristal : <span className="font-mono text-emerald-400">niv² × 15</span></p>
-                                    <p>Mine de Deutérium : <span className="font-mono text-emerald-400">niv² × 25</span></p>
-                                    <p>Centrale Solaire : <span className="font-mono text-emerald-400">niv² × 5</span></p>
-                                    <p>Chantier Spatial : <span className="font-mono text-emerald-400">niv² × 40</span></p>
-                                    <p>Laboratoire : <span className="font-mono text-emerald-400">niv² × 50</span></p>
-                                    <p>Hangar : <span className="font-mono text-emerald-400">niv² × 35</span></p>
+                                    <p>Mine de Métal : <span className="font-mono tabular-nums text-emerald-400">niv² × 10</span></p>
+                                    <p>Mine de Cristal : <span className="font-mono tabular-nums text-emerald-400">niv² × 15</span></p>
+                                    <p>Mine de Deutérium : <span className="font-mono tabular-nums text-emerald-400">niv² × 25</span></p>
+                                    <p>Centrale Solaire : <span className="font-mono tabular-nums text-emerald-400">niv² × 5</span></p>
+                                    <p>Chantier Spatial : <span className="font-mono tabular-nums text-emerald-400">niv² × 40</span></p>
+                                    <p>Laboratoire : <span className="font-mono tabular-nums text-emerald-400">niv² × 50</span></p>
+                                    <p>Hangar : <span className="font-mono tabular-nums text-emerald-400">niv² × 35</span></p>
                                     <p className="font-bold text-slate-300 mt-2">Technologies :</p>
-                                    <p>Énergie/Laser/Info : <span className="font-mono text-emerald-400">niv² × 40–50</span></p>
-                                    <p>Armement/Bouclier/Blindage : <span className="font-mono text-emerald-400">niv² × 70–85</span></p>
-                                    <p>Plasma/Hyperspatiale : <span className="font-mono text-emerald-400">niv² × 90–100</span></p>
-                                    <p>Graviton : <span className="font-mono text-emerald-400">niv² × 150</span></p>
+                                    <p>Énergie/Laser/Info : <span className="font-mono tabular-nums text-emerald-400">niv² × 40–50</span></p>
+                                    <p>Armement/Bouclier/Blindage : <span className="font-mono tabular-nums text-emerald-400">niv² × 70–85</span></p>
+                                    <p>Plasma/Hyperspatiale : <span className="font-mono tabular-nums text-emerald-400">niv² × 90–100</span></p>
+                                    <p>Graviton : <span className="font-mono tabular-nums text-emerald-400">niv² × 150</span></p>
                                     <p className="font-bold text-slate-300 mt-2">Production horaire :</p>
                                     <p>Métal ÷ 1000 × 1</p>
                                     <p>Cristal ÷ 1000 × 1.5</p>
@@ -203,11 +218,11 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                 <div className="space-y-1 text-slate-400">
                                     <p className="font-bold text-slate-300">Défenses planétaires :</p>
                                     <p>Valeur unitaire :</p>
-                                    <p className="font-mono text-red-300 pl-2">(attaque + bouclier/2 + blindage/10) ÷ 1000</p>
+                                    <p className="font-mono tabular-nums text-red-300 pl-2">(attaque + bouclier/2 + blindage/10) ÷ 1000</p>
                                     <p className="mt-1 text-slate-500 italic">Multiplié par le nombre d'unités présentes.</p>
                                     <p className="font-bold text-slate-300 mt-3 flex items-center gap-1"><Swords size={11} /> Score de Combat (all-time) :</p>
-                                    <p>Par victoire PvP : <span className="font-mono text-emerald-400">+100 pts</span></p>
-                                    <p>Par défaite PvP : <span className="font-mono text-red-400">−25 pts</span></p>
+                                    <p>Par victoire PvP : <span className="font-mono tabular-nums text-emerald-400">+100 pts</span></p>
+                                    <p>Par défaite PvP : <span className="font-mono tabular-nums text-red-400">−25 pts</span></p>
                                     <p className="text-slate-500 italic">Plancher à 0 — ne peut pas être négatif.</p>
                                 </div>
                             </div>
@@ -217,21 +232,21 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                     <Info size={12} /> Informations
                                 </div>
                                 <div className="space-y-2 text-slate-400">
-                                    <div className="bg-slate-900/60 rounded-lg p-3 border border-white/5">
+                                    <div className="bg-[rgba(10,5,32,0.85)] rounded-lg p-3 border border-cyan-500/10">
                                         <p className="font-bold text-slate-300 mb-1">Vaisseaux</p>
                                         <p>Non inclus dans le classement — les flottes en mission ne font pas baisser votre rang.</p>
                                         <p className="text-slate-500 mt-1 italic">Visibles sur la fiche profil (Puissance de Flotte).</p>
                                     </div>
-                                    <div className="bg-slate-900/60 rounded-lg p-3 border border-white/5">
+                                    <div className="bg-[rgba(10,5,32,0.85)] rounded-lg p-3 border border-cyan-500/10">
                                         <p className="font-bold text-slate-300 mb-1">Mise à jour</p>
-                                        <p>Les scores sont recalculés toutes les <span className="text-indigo-300 font-bold">5 minutes</span>.</p>
+                                        <p>Les scores sont recalculés toutes les <span className="text-cyan-400 font-bold">5 minutes</span>.</p>
                                     </div>
-                                    <div className="bg-indigo-900/20 rounded-lg p-3 border border-indigo-500/20">
-                                        <p className="font-bold text-indigo-300 mb-1">Score Total</p>
-                                        <p className="font-mono text-white">= Économie + Militaire</p>
-                                        <p className="font-mono text-white">= (Bâtiments + Technos</p>
-                                        <p className="font-mono text-white pl-2">+ Production + Stocks)</p>
-                                        <p className="font-mono text-white">+ (Défenses + Combat)</p>
+                                    <div className="bg-cyan-900/10 rounded-lg p-3 border border-cyan-500/10">
+                                        <p className="font-bold text-cyan-400 mb-1">Score Total</p>
+                                        <p className="font-mono tabular-nums text-slate-200">= Économie + Militaire</p>
+                                        <p className="font-mono tabular-nums text-slate-200">= (Bâtiments + Technos</p>
+                                        <p className="font-mono tabular-nums text-slate-200 pl-2">+ Production + Stocks)</p>
+                                        <p className="font-mono tabular-nums text-slate-200">+ (Défenses + Combat)</p>
                                     </div>
                                 </div>
                             </div>
@@ -240,10 +255,10 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                 </div>
 
                 {/* Tableau */}
-                <div className="overflow-x-auto rounded-lg border border-white/5 bg-slate-950/30 card-depth animate-slide-up">
+                <div className="overflow-x-auto rounded-lg border border-cyan-500/10 bg-[rgba(10,5,32,0.85)]">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-white/5 text-slate-400 text-[10px] uppercase tracking-wider font-bold">
+                            <tr className="bg-[rgba(10,5,32,0.85)] text-slate-400 text-[10px] uppercase tracking-wider font-bold">
                                 <th className="p-2 md:p-4 w-12 md:w-16 text-center">Rang</th>
                                 <th className="p-2 md:p-4">Joueur</th>
                                 <th className="p-2 md:p-4 hidden sm:table-cell">Planètes</th>
@@ -251,13 +266,17 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                 <th className="p-2 md:p-4 text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="text-sm">
+                        <tbody className="text-sm divide-y divide-cyan-500/5">
                             {ranking.map((player) => (
                                 <>
                                     {/* Ligne principale du joueur */}
                                     <tr
                                         key={player.owner_id}
-                                        className={`transition-all duration-300 hover:bg-white/5 hover:-translate-y-0.5 hover:shadow-lg border-b border-white/5 animate-fade-in ${player.is_me ? 'bg-indigo-500/10 hover:bg-indigo-500/20' : ''}`}
+                                        className={`transition-colors duration-150 hover:bg-cyan-500/5 ${
+                                            player.is_me
+                                                ? 'bg-cyan-500/5 border-l-2 border-cyan-500/30'
+                                                : ''
+                                        }`}
                                     >
                                         <td className="p-2 md:p-4 text-center">
                                             <div className="flex justify-center items-center">
@@ -281,31 +300,33 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                                 <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-1 ring-slate-900 animate-pulse" />
                                                             )}
                                                         </div>
-                                                        <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-indigo-400' : 'text-white'} group-hover:underline decoration-2 underline-offset-2 group-hover:scale-105 transition-transform duration-300`}>
+                                                        <span className={`font-bold text-sm md:text-base ${player.is_me ? 'text-cyan-400' : 'text-slate-200'} group-hover:underline decoration-2 underline-offset-2 group-hover:scale-105 transition-transform duration-300`}>
                                                             {player.display_name || player.username}
                                                         </span>
                                                     </button>
-                                                    {player.is_me && <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-bold tracking-wider w-fit">VOUS</span>}
+                                                    {player.is_me && (
+                                                        <span className="text-[9px] bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/30 font-bold tracking-wider w-fit">VOUS</span>
+                                                    )}
                                                 </div>
-                                                <span className="text-[10px] text-yellow-500/80 font-semibold uppercase tracking-wide">
+                                                <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wide">
                                                     {player.rank_badge}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="p-2 md:p-4 text-slate-400 font-mono text-xs hidden sm:table-cell">
+                                        <td className="p-2 md:p-4 text-slate-400 font-mono tabular-nums text-xs hidden sm:table-cell">
                                             <button
                                                 onClick={() => toggleExpanded(player.owner_id)}
-                                                className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                                                className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-all duration-300 hover:scale-105"
                                             >
-                                                <Globe size={12} className="group-hover:animate-bounce-subtle" />
+                                                <Globe size={12} />
                                                 {player.planets.length} planète{player.planets.length > 1 ? 's' : ''}
                                                 {expandedUsers.has(player.owner_id) ? ' ▼' : ' ►'}
                                             </button>
                                         </td>
                                         <td className="p-2 md:p-4 text-right">
-                                            <span className={`font-mono font-bold text-sm md:text-base ${
+                                            <span className={`font-mono tabular-nums font-bold text-sm md:text-base ${
                                                 category === 'economy' ? 'text-emerald-400' :
-                                                category === 'military' ? 'text-red-400' : 'text-yellow-400'
+                                                category === 'military' ? 'text-red-400' : 'text-cyan-400'
                                             }`}>
                                                 {category === 'general' ? player.total_score.toLocaleString() :
                                                  category === 'economy' ? player.economy_score.toLocaleString() :
@@ -317,7 +338,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-7 w-7 md:h-8 md:w-8 hover:bg-purple-500/20 hover:text-purple-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
+                                                    className="h-7 w-7 md:h-8 md:w-8 hover:bg-purple-500/20 hover:text-purple-400 transition-all duration-150 hover:scale-110 hover:-translate-y-0.5"
                                                     onClick={() => setSelectedPlayer(player.owner_id)}
                                                     title="Voir le profil"
                                                 >
@@ -328,7 +349,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                     <Button
                                                         size="icon"
                                                         variant="ghost"
-                                                        className="h-7 w-7 md:h-8 md:w-8 hover:bg-indigo-500/20 hover:text-indigo-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
+                                                        className="h-7 w-7 md:h-8 md:w-8 hover:bg-cyan-500/20 hover:text-cyan-400 transition-all duration-150 hover:scale-110 hover:-translate-y-0.5"
                                                         onClick={() => onSendMessage(player.username)}
                                                         title="Envoyer un message"
                                                     >
@@ -343,13 +364,13 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                     {expandedUsers.has(player.owner_id) && player.planets.map((planet) => (
                                         <tr
                                             key={planet.id}
-                                            className="bg-slate-950/50 hover:bg-slate-900/50 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg border-b border-white/5 glass-card animate-fade-in"
+                                            className="bg-[rgba(16,8,46,0.95)] hover:bg-cyan-500/5 transition-colors duration-150"
                                         >
                                             <td className="p-2 md:p-4"></td>
                                             <td className="p-2 md:p-4 pl-8 md:pl-12">
                                                 <span className="text-slate-400 font-mono text-xs">↳ {planet.name}</span>
                                             </td>
-                                            <td className="p-2 md:p-4 text-cyan-500 font-mono text-[10px] hidden sm:table-cell">
+                                            <td className="p-2 md:p-4 text-cyan-400 font-mono tabular-nums text-[10px] hidden sm:table-cell">
                                                 <button
                                                     onClick={() => setSelectedPlanet(planet)}
                                                     className="hover:text-cyan-300 hover:underline transition-colors"
@@ -358,7 +379,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                 </button>
                                             </td>
                                             <td className="p-2 md:p-4 text-right">
-                                                <span className="font-mono text-xs text-slate-400">
+                                                <span className="font-mono tabular-nums text-xs text-slate-400">
                                                     {category === 'general' ? planet.total_score.toLocaleString() :
                                                      category === 'economy' ? planet.economy_score.toLocaleString() :
                                                      planet.military_score.toLocaleString()}
@@ -370,7 +391,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                         <Button
                                                             size="icon"
                                                             variant="ghost"
-                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-blue-500/20 hover:text-blue-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
+                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-blue-500/20 hover:text-blue-400 transition-all duration-150 hover:scale-110"
                                                             onClick={() => onSpy(planet.id)}
                                                             title="Espionner"
                                                         >
@@ -379,7 +400,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                         <Button
                                                             size="icon"
                                                             variant="ghost"
-                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-red-500/20 hover:text-red-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
+                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-red-500/20 hover:text-red-400 transition-all duration-150 hover:scale-110"
                                                             onClick={() => onAttack(planet.id, planet.name)}
                                                             title="Attaquer"
                                                         >
@@ -388,7 +409,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                         <Button
                                                             size="icon"
                                                             variant="ghost"
-                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-emerald-500/20 hover:text-emerald-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
+                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-emerald-500/20 hover:text-emerald-400 transition-all duration-150 hover:scale-110"
                                                             onClick={() => onTransport(planet.id, planet.name, planet.galaxy, planet.system, planet.position)}
                                                             title="Ravitailler"
                                                         >
@@ -400,7 +421,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                         <Button
                                                             size="icon"
                                                             variant="ghost"
-                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-emerald-500/20 hover:text-emerald-400 transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 hover:shadow-lg card-depth"
+                                                            className="h-6 w-6 md:h-7 md:w-7 hover:bg-emerald-500/20 hover:text-emerald-400 transition-all duration-150 hover:scale-110"
                                                             onClick={() => onTransport(planet.id, planet.name, planet.galaxy, planet.system, planet.position)}
                                                             title="Ravitailler"
                                                         >
@@ -415,23 +436,23 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                             ))}
                         </tbody>
                     </table>
-                    
+
                     {hasMore && (
-                        <div className="flex justify-center p-6 border-t border-white/5">
-                            <Button 
-                                variant="outline" 
-                                onClick={loadMore} 
+                        <div className="flex justify-center p-6 border-t border-cyan-500/10">
+                            <Button
+                                variant="outline"
+                                onClick={loadMore}
                                 disabled={isLoading}
-                                className="bg-slate-900/50 border-white/10 hover:bg-slate-800 text-slate-300 hover:text-white"
+                                className="bg-[rgba(10,5,32,0.85)] border-cyan-500/30 hover:bg-cyan-500/10 hover:border-cyan-500/50 text-slate-400 hover:text-slate-200 transition-all duration-150"
                             >
                                 {isLoading ? "Chargement..." : "Afficher plus"}
                             </Button>
                         </div>
                     )}
                 </div>
-            </div>
+            </motion.div>
 
-            {/* ✅ Modal Profil Joueur */}
+            {/* Modal Profil Joueur */}
             {selectedPlayer && (
                 <UniversalProfile
                   userId={selectedPlayer}
@@ -440,41 +461,47 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                 />
             )}
 
-            {/* ✅ Modal Détails Planète */}
+            {/* Modal Détails Planète */}
             {selectedPlanet && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedPlanet(null)}>
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-w-md w-full card-depth glass-card" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-6 border-b border-white/10">
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedPlanet(null)}>
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="bg-[rgba(16,8,46,0.95)] backdrop-blur-[12px] border border-cyan-500/10 rounded-2xl shadow-2xl max-w-md w-full"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="p-6 border-b border-cyan-500/10">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h3 className="font-bold text-white text-xl">{selectedPlanet.name}</h3>
-                                    <p className="text-sm text-slate-400 font-mono mt-1">
+                                    <h3 className="font-bold text-slate-200 text-xl">{selectedPlanet.name}</h3>
+                                    <p className="text-sm text-slate-400 font-mono tabular-nums mt-1">
                                         [{selectedPlanet.galaxy}:{selectedPlanet.system}:{selectedPlanet.position}]
                                     </p>
                                 </div>
-                                <button onClick={() => setSelectedPlanet(null)} className="text-slate-500 hover:text-white transition-colors">
+                                <button onClick={() => setSelectedPlanet(null)} className="text-slate-500 hover:text-slate-200 transition-colors">
                                     <X size={24} />
                                 </button>
                             </div>
                         </div>
                         <div className="p-6 space-y-4">
-                            <div className="bg-slate-950/50 p-4 rounded-lg border border-white/5">
+                            <div className="bg-[rgba(10,5,32,0.85)] p-4 rounded-lg border border-cyan-500/10">
                                 <div className="grid grid-cols-3 gap-3 text-center">
                                     <div>
                                         <p className="text-xs text-slate-500 uppercase mb-1">Total</p>
-                                        <p className="text-lg font-bold text-yellow-400 font-mono">
+                                        <p className="text-lg font-bold text-cyan-400 font-mono tabular-nums">
                                             {selectedPlanet.total_score.toLocaleString()}
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 uppercase mb-1">Économie</p>
-                                        <p className="text-lg font-bold text-emerald-400 font-mono">
+                                        <p className="text-lg font-bold text-emerald-400 font-mono tabular-nums">
                                             {selectedPlanet.economy_score.toLocaleString()}
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 uppercase mb-1">Militaire</p>
-                                        <p className="text-lg font-bold text-red-400 font-mono">
+                                        <p className="text-lg font-bold text-red-400 font-mono tabular-nums">
                                             {selectedPlanet.military_score.toLocaleString()}
                                         </p>
                                     </div>
@@ -525,7 +552,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                 )}
                             </div>
                         </div>
-                    </div>
+                    </motion.div>
                 </div>
             )}
         </>

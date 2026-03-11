@@ -7,6 +7,7 @@ import {
   ChevronRight, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 import Inventory from "./Inventory";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -56,21 +57,27 @@ const EFFECT_LABELS: Record<string, string> = {
 const UNIMPLEMENTED_EFFECTS = new Set(["stealth", "coordinate_jam", "eco_virus", "resource_boost"]);
 
 const EFFECT_COLORS: Record<string, string> = {
-  orbital_strike: "text-red-400 border-red-500/40 bg-red-950/20",
-  resource_boost: "text-amber-400 border-amber-500/40 bg-amber-950/20",
-  stealth: "text-slate-300 border-slate-500/40 bg-slate-800/30",
-  coordinate_jam: "text-cyan-400 border-cyan-500/40 bg-cyan-950/20",
-  eco_virus: "text-green-400 border-green-500/40 bg-green-950/20",
+  orbital_strike: "text-red-400 border-red-500/30 bg-red-950/15",
+  resource_boost: "text-amber-400 border-amber-500/30 bg-amber-950/15",
+  stealth: "text-slate-300 border-slate-500/30 bg-slate-800/20",
+  coordinate_jam: "text-purple-400 border-purple-500/30 bg-purple-950/15",
+  eco_virus: "text-emerald-400 border-emerald-500/30 bg-emerald-950/15",
 };
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
+};
+const itemVariant = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 
 function PriceIndicator({ pct }: { pct: number }) {
   if (pct > 5) return (
-    <span className="flex items-center gap-0.5 text-red-400 text-xs font-mono font-bold">
+    <span className="flex items-center gap-0.5 text-red-400 text-xs font-mono tabular-nums font-bold">
       <TrendingUp size={11} /> +{pct.toFixed(0)}%
     </span>
   );
   if (pct < -5) return (
-    <span className="flex items-center gap-0.5 text-emerald-400 text-xs font-mono font-bold">
+    <span className="flex items-center gap-0.5 text-emerald-400 text-xs font-mono tabular-nums font-bold">
       <TrendingDown size={11} /> {pct.toFixed(0)}%
     </span>
   );
@@ -155,7 +162,7 @@ export default function UndergroundMarket({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="animate-spin text-red-400" size={28} />
+        <RefreshCw className="animate-spin text-purple-400" size={28} />
       </div>
     );
   }
@@ -165,17 +172,17 @@ export default function UndergroundMarket({
     const cur = denied.current;
     const req = denied.requires;
     return (
-      <div className="relative overflow-hidden rounded-2xl border border-red-900/30 bg-slate-950">
+      <div className="relative overflow-hidden rounded-2xl bg-[rgba(191,0,255,0.05)] border border-purple-500/20 backdrop-blur-[12px]">
         {/* Background skull watermark */}
         <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none">
-          <Skull size={300} className="text-red-500" />
+          <Skull size={300} className="text-purple-500" />
         </div>
 
         <div className="relative p-8 text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full border-2 border-red-900/50 bg-red-950/30 mb-6">
-            <Lock size={36} className="text-red-400" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full border-2 border-purple-500/20 bg-purple-950/20 mb-6">
+            <Lock size={36} className="text-purple-400" />
           </div>
-          <h2 className="text-2xl font-black uppercase tracking-widest text-red-400 mb-2">Accès Refusé</h2>
+          <h2 className="text-2xl font-black uppercase tracking-widest text-purple-400 mb-2">Accès Refusé</h2>
           <p className="text-slate-500 text-sm mb-8">Le Marché Underground n'accepte que les agents suffisamment qualifiés.</p>
 
           <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
@@ -188,14 +195,14 @@ export default function UndergroundMarket({
               return (
                 <div
                   key={key}
-                  className={`p-4 rounded-xl border ${met ? "border-emerald-500/30 bg-emerald-950/20" : "border-red-900/30 bg-red-950/10"}`}
+                  className={`p-4 rounded-xl border ${met ? "border-emerald-500/20 bg-emerald-950/10" : "border-purple-500/15 bg-purple-950/10"}`}
                 >
                   <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">{label}</p>
-                  <p className={`text-2xl font-black font-mono ${met ? "text-emerald-400" : "text-red-400"}`}>
+                  <p className={`text-2xl font-black font-mono tabular-nums ${met ? "text-emerald-400" : "text-purple-400"}`}>
                     {current}<span className="text-slate-600 text-sm">/{required}</span>
                   </p>
                   {!met && (
-                    <p className="text-[9px] text-red-500 mt-1">
+                    <p className="text-[9px] text-purple-500 mt-1">
                       {required - current} niveau{required - current > 1 ? "x" : ""} manquant{required - current > 1 ? "s" : ""}
                     </p>
                   )}
@@ -214,27 +221,27 @@ export default function UndergroundMarket({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-red-900/40 bg-gradient-to-br from-slate-950 via-red-950/10 to-slate-950 p-6">
-        <div className="absolute -right-8 -top-8 opacity-[0.04] pointer-events-none">
-          <Skull size={200} className="text-red-500" />
+      <div className="relative overflow-hidden rounded-2xl bg-[rgba(16,8,46,0.95)] border border-purple-500/15 backdrop-blur-[12px] p-6">
+        <div className="absolute -right-8 -top-8 opacity-[0.03] pointer-events-none">
+          <Skull size={200} className="text-purple-500" />
         </div>
         <div className="relative flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl border border-red-800/40 bg-red-950/30">
-              <Skull size={28} className="text-red-400" />
+            <div className="p-3 rounded-xl border border-purple-500/20 bg-purple-950/20">
+              <Skull size={28} className="text-purple-400" />
             </div>
             <div>
-              <h2 className="text-xl font-black uppercase tracking-widest text-red-400">Marché Underground</h2>
+              <h2 className="text-xl font-black uppercase tracking-widest text-purple-400">Marché Underground</h2>
               <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Syndicat des Ombres — Accès Confidentiel</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-yellow-600/30 bg-yellow-950/20">
-            <Coins size={16} className="text-yellow-400" />
-            <span className="text-yellow-400 font-black font-mono text-lg">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-purple-500/20 bg-purple-950/15">
+            <Coins size={16} className="text-purple-400" />
+            <span className="text-purple-400 font-black font-mono tabular-nums text-lg">
               {data.syndicate_credits.toFixed(0)}
             </span>
-            <span className="text-yellow-600 text-xs font-bold uppercase">SC</span>
+            <span className="text-purple-500/60 text-xs font-bold uppercase">SC</span>
           </div>
         </div>
 
@@ -245,12 +252,12 @@ export default function UndergroundMarket({
       </div>
 
       {/* Tab switcher */}
-      <div className="flex gap-1 p-1 rounded-xl border border-slate-800/50 bg-slate-950/60 w-fit">
+      <div className="flex gap-1 p-1 rounded-xl border border-purple-500/10 bg-[rgba(10,5,32,0.6)] backdrop-blur-[12px] w-fit">
         <button
           onClick={() => setTab('catalogue')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
             tab === 'catalogue'
-              ? 'bg-red-950/60 border border-red-800/50 text-red-300'
+              ? 'bg-purple-950/60 border border-purple-500/30 text-purple-300'
               : 'text-slate-500 hover:text-slate-300'
           }`}
         >
@@ -260,7 +267,7 @@ export default function UndergroundMarket({
           onClick={() => setTab('inventory')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
             tab === 'inventory'
-              ? 'bg-red-950/60 border border-red-800/50 text-red-300'
+              ? 'bg-purple-950/60 border border-purple-500/30 text-purple-300'
               : 'text-slate-500 hover:text-slate-300'
           }`}
         >
@@ -275,20 +282,31 @@ export default function UndergroundMarket({
 
       {/* Catalogue tab */}
       {tab === 'catalogue' && (<>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+      >
         {data.items.map((item) => {
-          const colorClass = EFFECT_COLORS[item.effect_type] || "text-slate-400 border-slate-600/40 bg-slate-900/20";
+          const colorClass = EFFECT_COLORS[item.effect_type] || "text-slate-400 border-slate-600/30 bg-slate-900/15";
           const isSelected = selectedItem?.id === item.id;
           const canAfford = data.syndicate_credits >= item.current_price;
           const isUnimplemented = UNIMPLEMENTED_EFFECTS.has(item.effect_type);
+          const isDanger = item.effect_type === 'orbital_strike';
 
           return (
-            <div
+            <motion.div
               key={item.id}
-              className={`group relative overflow-hidden rounded-xl border transition-all duration-200 cursor-pointer ${
-                isSelected
-                  ? "border-red-500/60 bg-red-950/20 ring-1 ring-red-500/30"
-                  : "border-slate-700/40 bg-slate-900/40 hover:border-slate-600/60 hover:bg-slate-900/60"
+              variants={itemVariant}
+              className={`group relative overflow-hidden rounded-xl transition-all duration-200 cursor-pointer ${
+                isDanger
+                  ? isSelected
+                    ? 'border border-red-500/40 bg-red-950/15 ring-1 ring-red-500/20'
+                    : 'border border-red-500/15 bg-[rgba(10,5,32,0.85)] hover:border-red-500/30 hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(220,38,38,0.08)]'
+                  : isSelected
+                    ? 'border border-purple-500/40 bg-purple-950/15 ring-1 ring-purple-500/20'
+                    : 'border border-purple-500/15 bg-[rgba(10,5,32,0.85)] hover:border-purple-500/25 hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(168,85,247,0.08)]'
               }`}
               onClick={() => setSelectedItem(isSelected ? null : item)}
             >
@@ -301,7 +319,7 @@ export default function UndergroundMarket({
 
               <div className="p-4">
                 {/* Name */}
-                <h3 className="text-white font-black text-sm pr-20 mb-1 leading-tight">{item.name}</h3>
+                <h3 className="text-slate-200 font-black text-sm pr-20 mb-1 leading-tight">{item.name}</h3>
                 <p className="text-slate-500 text-xs leading-relaxed mb-4 line-clamp-2">{item.description}</p>
 
                 {/* Price row */}
@@ -309,52 +327,54 @@ export default function UndergroundMarket({
                   <div>
                     <p className="text-[9px] uppercase text-slate-600 font-bold mb-0.5">Prix actuel</p>
                     <div className="flex items-baseline gap-2">
-                       <span className={`text-2xl font-black font-mono ${isUnimplemented ? "text-slate-600" : canAfford ? "text-yellow-400" : "text-red-400"}`}>
+                      <span className={`text-2xl font-black font-mono tabular-nums ${isUnimplemented ? "text-slate-600" : canAfford ? "text-purple-400" : "text-red-400"}`}>
                         {item.current_price.toFixed(0)}
                       </span>
-                      <span className={`text-xs font-bold ${isUnimplemented ? "text-slate-700" : "text-yellow-600"}`}>SC</span>
+                      <span className={`text-xs font-bold ${isUnimplemented ? "text-slate-700" : "text-purple-500/60"}`}>SC</span>
                     </div>
                     {!isUnimplemented && (
-                        <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5">
                         <PriceIndicator pct={item.price_change_pct} />
-                        <span className="text-[9px] text-slate-700">base: {item.base_price.toFixed(0)}</span>
-                        </div>
+                        <span className="text-[9px] text-slate-700 font-mono tabular-nums">base: {item.base_price.toFixed(0)}</span>
+                      </div>
                     )}
                   </div>
 
                   {isUnimplemented ? (
-                    <div className="text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-900/50 border border-slate-700/50 text-slate-500 cursor-not-allowed flex items-center gap-1.5 opacity-80 backdrop-blur-sm">
+                    <div className="text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[rgba(10,5,32,0.5)] border border-purple-500/10 text-slate-500 cursor-not-allowed flex items-center gap-1.5 opacity-80">
                       <Lock size={12} className="text-slate-600" /> Bientôt
                     </div>
                   ) : (
-                  <Button
-                    onClick={(e) => { e.stopPropagation(); handleBuy(item); }}
-                    disabled={!canAfford || buying === item.id}
-                    className={`text-xs font-black uppercase tracking-wider transition-all ${
-                      canAfford
-                        ? "bg-red-950/60 border border-red-700/50 hover:bg-red-900/80 hover:border-red-500/70 text-red-300 shadow-[0_0_12px_rgba(220,38,38,0.2)] hover:shadow-[0_0_20px_rgba(220,38,38,0.4)]"
-                        : "bg-slate-800/40 border border-slate-700/30 text-slate-600 cursor-not-allowed"
-                    }`}
-                  >
-                    {buying === item.id ? (
-                      <RefreshCw size={13} className="animate-spin" />
-                    ) : (
-                      <><ShoppingCart size={13} className="mr-1.5" />Acheter</>
-                    )}
-                  </Button>
+                    <Button
+                      onClick={(e) => { e.stopPropagation(); handleBuy(item); }}
+                      disabled={!canAfford || buying === item.id}
+                      className={`text-xs font-black uppercase tracking-wider transition-all ${
+                        canAfford
+                          ? isDanger
+                            ? "bg-red-950/40 border border-red-500/30 hover:bg-red-950/60 hover:border-red-400/50 text-red-300 shadow-[0_0_12px_rgba(220,38,38,0.1)] hover:shadow-[0_0_20px_rgba(220,38,38,0.2)]"
+                            : "bg-purple-950/40 border border-purple-500/30 hover:bg-purple-950/60 hover:border-purple-400/50 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.1)] hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"
+                          : "bg-[rgba(10,5,32,0.4)] border border-purple-500/10 text-slate-600 cursor-not-allowed"
+                      }`}
+                    >
+                      {buying === item.id ? (
+                        <RefreshCw size={13} className="animate-spin" />
+                      ) : (
+                        <><ShoppingCart size={13} className="mr-1.5" />Acheter</>
+                      )}
+                    </Button>
                   )}
                 </div>
               </div>
 
               {/* Expanded details */}
               {isSelected && (
-                <div className="border-t border-slate-700/40 p-4 bg-black/20">
+                <div className="border-t border-purple-500/10 p-4 bg-[rgba(10,5,32,0.4)]">
                   <p className="text-[10px] uppercase font-bold text-slate-500 mb-2 flex items-center gap-1">
                     <Info size={10} /> Paramètres de l'effet
                   </p>
                   <div className="space-y-1">
                     {Object.entries(item.effect_params).map(([k, v]) => (
-                      <div key={k} className="flex justify-between text-xs font-mono">
+                      <div key={k} className="flex justify-between text-xs font-mono tabular-nums">
                         <span className="text-slate-600">{k.replace(/_/g, " ")}</span>
                         <span className="text-slate-400 font-bold">{String(v)}</span>
                       </div>
@@ -362,16 +382,16 @@ export default function UndergroundMarket({
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
       {/* Footer tip */}
-      <div className="flex items-start gap-3 p-4 rounded-xl border border-slate-800/40 bg-slate-950/40 text-xs text-slate-600">
-        <Zap size={13} className="text-yellow-600 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 p-4 rounded-xl border border-purple-500/10 bg-[rgba(10,5,32,0.6)] backdrop-blur-[12px] text-xs text-slate-600">
+        <Zap size={13} className="text-purple-500/60 shrink-0 mt-0.5" />
         <p>
-          Les <span className="text-yellow-500 font-bold">Crédits du Syndicat (SC)</span> sont une monnaie exclusive obtenue
+          Les <span className="text-purple-400 font-bold">Crédits du Syndicat (SC)</span> sont une monnaie exclusive obtenue
           aléatoirement lors des expéditions (1–2 SC par expédition, 50% de chances).
           Ils ne peuvent pas être échangés avec d'autres ressources.
         </p>

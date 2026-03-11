@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 import { apiUrl } from '@/config/api';
 import {
-  Target, Gift, Flame, Trophy, Star, Clock, Check, 
+  Target, Gift, Flame, Trophy, Star, Clock, Check,
   Swords, Pickaxe, Rocket, Telescope, Shield, Users,
-  Sparkles, Crown, RefreshCw, ChevronRight, Zap
+  Sparkles, Crown, RefreshCw, Zap
 } from 'lucide-react';
 
 interface MissionsViewProps {
@@ -81,6 +82,15 @@ interface MissionsOverview {
 
 type Tab = 'missions' | 'achievements';
 
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+};
+const item = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0 },
+};
+
 export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>('missions');
   const [overview, setOverview] = useState<MissionsOverview | null>(null);
@@ -126,7 +136,7 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
     load();
   }, [fetchMissions, fetchAchievements]);
 
-  // --- PARICLES SYSTEM ---
+  // --- PARTICLES SYSTEM ---
   const [particles, setParticles] = useState<{ id: string; x: number; y: number; color: string }[]>([]);
 
   const spawnParticles = (e: React.MouseEvent | HTMLElement, color: string = 'bg-amber-400') => {
@@ -148,7 +158,6 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
       }));
       setParticles(prev => [...prev, ...newParticles]);
 
-      // Remove after animation
       setTimeout(() => {
           setParticles(prev => prev.filter(p => !newParticles.find(n => n.id === p.id)));
       }, 1000);
@@ -164,7 +173,7 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
       const data = await res.json();
       if (res.ok) {
         spawnParticles(event, 'bg-amber-400');
-        toast.success('🎁 Récompense réclamée !', {
+        toast.success('Récompense réclamée !', {
           description: `+${data.rewards.metal.toLocaleString()} métal, +${data.rewards.crystal.toLocaleString()} cristal`
         });
         fetchMissions();
@@ -185,7 +194,7 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
       const data = await res.json();
       if (res.ok) {
         spawnParticles(event, 'bg-orange-500');
-        toast.success('🔥 Récompense de streak réclamée !', {
+        toast.success('Récompense de streak réclamée !', {
           description: `+${data.rewards.metal.toLocaleString()} métal, +${data.rewards.crystal.toLocaleString()} cristal`
         });
         fetchMissions();
@@ -210,23 +219,23 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
     }
   };
 
-  const getDifficultyColor = (difficulty: string) => {
+  const getDifficultyVariant = (difficulty: string): "success" | "warning" | "destructive" | "secondary" => {
     switch (difficulty) {
-      case 'easy': return 'bg-green-500/20 text-green-400 border-green-500/50';
-      case 'medium': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
-      case 'hard': return 'bg-red-500/20 text-red-400 border-red-500/50';
-      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
+      case 'easy': return 'success';
+      case 'medium': return 'warning';
+      case 'hard': return 'destructive';
+      default: return 'secondary';
     }
   };
 
-  const getRarityColor = (rarity: string) => {
+  const getRarityCardClass = (rarity: string, unlocked: boolean) => {
+    if (!unlocked) return 'border-slate-700/20 opacity-50 bg-[rgba(10,5,32,0.85)]';
     switch (rarity) {
-      case 'common': return 'border-slate-500/50 bg-slate-500/10';
-      case 'uncommon': return 'border-green-500/50 bg-green-500/10';
-      case 'rare': return 'border-blue-500/50 bg-blue-500/10';
-      case 'epic': return 'border-purple-500/50 bg-purple-500/10';
-      case 'legendary': return 'border-yellow-500/50 bg-yellow-500/10 animate-pulse';
-      default: return 'border-slate-500/50';
+      case 'uncommon': return 'border-green-500/30 bg-green-500/5';
+      case 'rare': return 'border-blue-500/30 bg-blue-500/5';
+      case 'epic': return 'border-purple-500/30 bg-purple-500/5';
+      case 'legendary': return 'border-amber-500/30 bg-amber-500/5 animate-pulse';
+      default: return 'border-cyan-500/20 bg-cyan-500/5';
     }
   };
 
@@ -242,37 +251,32 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="w-8 h-8 animate-spin text-indigo-400" />
+        <RefreshCw className="w-8 h-8 animate-spin text-cyan-400" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 relative">
+    <div className="space-y-6 relative">
       {/* PARTICLES */}
       {particles.map(p => {
          const angle = Math.random() * Math.PI * 2;
          const velocity = 50 + Math.random() * 100;
          const tx = Math.cos(angle) * velocity;
          const ty = Math.sin(angle) * velocity;
-         
+
          return (
-             <div 
+             <div
                  key={p.id}
                  className={`fixed w-2 h-2 rounded-full ${p.color} shadow-[0_0_10px_currentColor] pointer-events-none z-[100]`}
                  style={{
                      left: p.x,
                      top: p.y,
-                     // Approximated animation using CSS variables and an inline custom style 
-                     // since pure inline keyframes aren't well supported in React style objects
-                     // We'll use a hack with transition
                      transform: `translate(-50%, -50%)`,
                      transition: 'all 1s cubic-bezier(0, 0, 0.2, 1)',
-                     // Use a setTimeout effect trick or simply let it jump via initial vs next tick rendering
                  }}
                  ref={(el) => {
                      if (el) {
-                         // Force a reflow then apply translation to trigger CSS transition
                          requestAnimationFrame(() => {
                             el.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(0)`;
                             el.style.opacity = '0';
@@ -290,7 +294,7 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
             <Target className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-black text-white tracking-tight">MISSIONS & SUCCÈS</h2>
+            <h2 className="text-2xl font-black text-slate-200 tracking-tight">MISSIONS & SUCCÈS</h2>
             <p className="text-xs text-slate-400 font-mono">
               {overview?.missions_completed_today || 0} missions complétées aujourd'hui
             </p>
@@ -300,7 +304,6 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
         <Button
           variant="outline"
           onClick={() => { fetchMissions(); fetchAchievements(); }}
-          className="border-white/10"
         >
           <RefreshCw size={16} />
         </Button>
@@ -308,30 +311,28 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
 
       {/* Tier Badge */}
       {overview && (
-        <div className="flex items-center gap-4 px-4 py-3 rounded-xl bg-black/40 border border-white/5">
-          {/* Tier label */}
+        <div className="flex items-center gap-4 px-4 py-3 rounded-xl bg-[rgba(10,5,32,0.85)] backdrop-blur-[12px] border border-cyan-500/10">
           <div className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
-            overview.player_tier === 4 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' :
-            overview.player_tier === 3 ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
-            overview.player_tier === 2 ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
-                                         'bg-slate-500/20 text-slate-300 border-slate-500/40'
+            overview.player_tier === 4 ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+            overview.player_tier === 3 ? 'bg-purple-500/10 text-purple-300 border-purple-500/30' :
+            overview.player_tier === 2 ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' :
+                                         'bg-slate-500/10 text-slate-300 border-slate-500/20'
           }`}>
             {overview.player_tier === 4 ? '⭐' : overview.player_tier === 3 ? '💎' : overview.player_tier === 2 ? '🔵' : '⚪'} Tier {overview.player_tier} — {overview.player_tier_name}
           </div>
-          {/* Progress to next tier */}
           {overview.missions_to_next_tier !== null ? (
             <p className="text-xs text-slate-400">
-              <span className="text-white font-bold">{overview.missions_to_next_tier}</span> missions à réclamer pour passer au tier suivant
+              <span className="text-slate-200 font-bold">{overview.missions_to_next_tier}</span> missions à réclamer pour passer au tier suivant
             </p>
           ) : (
-            <p className="text-xs text-yellow-400 font-bold">Niveau maximum atteint</p>
+            <p className="text-xs text-amber-400 font-bold">Niveau maximum atteint</p>
           )}
         </div>
       )}
 
       {/* Streak Card */}
       {overview?.streak && (
-        <Card className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/30">
+        <Card className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20 backdrop-blur-[12px]">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -339,12 +340,12 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
                   <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg">
                     <Flame className="w-8 h-8 text-white" />
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-black border-2 border-orange-500 flex items-center justify-center">
-                    <span className="text-xs font-black text-orange-400">{overview.streak.current_streak}</span>
+                  <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[rgba(10,5,32,0.85)] border-2 border-orange-500 flex items-center justify-center">
+                    <span className="text-xs font-black text-orange-400 font-mono tabular-nums">{overview.streak.current_streak}</span>
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-white">Streak de connexion</h3>
+                  <h3 className="text-xl font-black text-slate-200">Streak de connexion</h3>
                   <p className="text-sm text-slate-400">
                     {overview.streak.current_streak} jour{overview.streak.current_streak > 1 ? 's' : ''} consécutif{overview.streak.current_streak > 1 ? 's' : ''}
                   </p>
@@ -365,12 +366,9 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
                   </div>
                 </div>
                 <Button
+                  variant={overview.streak.daily_reward_claimed ? "secondary" : "warning"}
                   onClick={handleClaimDailyReward}
                   disabled={overview.streak.daily_reward_claimed}
-                  className={overview.streak.daily_reward_claimed 
-                    ? 'bg-slate-700 cursor-not-allowed' 
-                    : 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700'
-                  }
                 >
                   {overview.streak.daily_reward_claimed ? (
                     <><Check size={14} className="mr-2" /> Réclamé</>
@@ -384,11 +382,11 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
             <div className="mt-4 pt-4 border-t border-orange-500/20 flex gap-6 text-xs">
               <div>
                 <span className="text-slate-500">Meilleur streak:</span>
-                <span className="ml-2 font-bold text-white">{overview.streak.best_streak} jours</span>
+                <span className="ml-2 font-bold text-slate-200 font-mono tabular-nums">{overview.streak.best_streak} jours</span>
               </div>
               <div>
                 <span className="text-slate-500">Total connexions:</span>
-                <span className="ml-2 font-bold text-white">{overview.streak.total_login_days} jours</span>
+                <span className="ml-2 font-bold text-slate-200 font-mono tabular-nums">{overview.streak.total_login_days} jours</span>
               </div>
             </div>
           </CardContent>
@@ -396,12 +394,11 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-white/10 pb-2">
+      <div className="flex gap-2 border-b border-cyan-500/10 pb-2">
         <Button
           variant={activeTab === 'missions' ? 'default' : 'ghost'}
           size="sm"
           onClick={() => setActiveTab('missions')}
-          className={activeTab === 'missions' ? 'bg-amber-500/20 text-amber-400' : ''}
         >
           <Target size={14} className="mr-2" /> Missions ({overview?.daily_missions.length || 0})
         </Button>
@@ -409,7 +406,6 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
           variant={activeTab === 'achievements' ? 'default' : 'ghost'}
           size="sm"
           onClick={() => setActiveTab('achievements')}
-          className={activeTab === 'achievements' ? 'bg-purple-500/20 text-purple-400' : ''}
         >
           <Trophy size={14} className="mr-2" /> Succès ({achievements.filter(a => a.unlocked).length}/{achievements.length})
         </Button>
@@ -417,84 +413,91 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
 
       {/* Missions Tab */}
       {activeTab === 'missions' && overview && (
-        <div className="grid gap-4">
+        <motion.div
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="grid gap-4"
+        >
           {overview.daily_missions.map(mission => {
             const progress = Math.min(100, (mission.current_progress / mission.required_amount) * 100);
             const isCompleted = mission.status === 'completed';
             const isClaimed = mission.status === 'claimed';
 
             return (
-              <Card 
-                key={mission.id} 
-                className={`bg-slate-900/50 border transition-all ${
-                  isClaimed ? 'border-green-500/30 opacity-60' :
-                  isCompleted ? 'border-amber-500/50 animate-pulse' :
-                  'border-white/10 hover:border-white/20'
-                }`}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        isClaimed ? 'bg-green-500/20 text-green-400' :
-                        isCompleted ? 'bg-amber-500/20 text-amber-400' :
-                        'bg-slate-800 text-slate-400'
-                      }`}>
-                        {isClaimed ? <Check size={20} /> : getMissionIcon(mission.mission_type)}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-bold text-white">{mission.name}</h4>
-                          <Badge className={getDifficultyColor(mission.difficulty)}>
-                            {mission.difficulty}
-                          </Badge>
+              <motion.div key={mission.id} variants={item}>
+                <Card
+                  className={`backdrop-blur-[12px] border transition-all ${
+                    isClaimed ? 'border-emerald-500/20 bg-emerald-500/5' :
+                    isCompleted ? 'border-cyan-500/20 bg-cyan-500/5' :
+                    'bg-[rgba(10,5,32,0.85)] border-cyan-500/10 hover:border-cyan-500/20'
+                  }`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 flex-1">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          isClaimed ? 'bg-emerald-500/10 text-emerald-400' :
+                          isCompleted ? 'bg-cyan-500/10 text-cyan-400' :
+                          'bg-[rgba(16,8,46,0.95)] text-slate-400'
+                        }`}>
+                          {isClaimed ? <Check size={20} /> : getMissionIcon(mission.mission_type)}
                         </div>
-                        <p className="text-xs text-slate-400 mb-3">{mission.description}</p>
-                        
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-slate-500">Progression</span>
-                            <span className="font-mono text-white">
-                              {mission.current_progress} / {mission.required_amount}
-                            </span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-bold text-slate-200">{mission.name}</h4>
+                            <Badge variant={getDifficultyVariant(mission.difficulty)}>
+                              {mission.difficulty}
+                            </Badge>
                           </div>
-                          <Progress value={progress} className="h-2" />
-                        </div>
+                          <p className="text-xs text-slate-400 mb-3">{mission.description}</p>
 
-                        <div className="flex gap-4 mt-3 text-[10px] text-slate-500">
-                          {mission.reward_metal > 0 && (
-                            <span>+{Math.floor(mission.reward_metal * (overview?.speed_factor || 5.0) * (overview?.streak.streak_bonus_multiplier || 1)).toLocaleString()} métal</span>
-                          )}
-                          {mission.reward_crystal > 0 && (
-                            <span>+{Math.floor(mission.reward_crystal * (overview?.speed_factor || 5.0) * (overview?.streak.streak_bonus_multiplier || 1)).toLocaleString()} cristal</span>
-                          )}
-                          {mission.reward_deuterium > 0 && (
-                            <span>+{Math.floor(mission.reward_deuterium * (overview?.speed_factor || 5.0) * (overview?.streak.streak_bonus_multiplier || 1)).toLocaleString()} deutérium</span>
-                          )}
-                          {mission.reward_xp > 0 && (
-                            <span className="text-amber-400">+{mission.reward_xp} XP</span>
-                          )}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">Progression</span>
+                              <span className="font-mono tabular-nums text-slate-200">
+                                {mission.current_progress} / {mission.required_amount}
+                              </span>
+                            </div>
+                            <Progress variant="default" value={progress} className="h-2" />
+                          </div>
+
+                          <div className="flex gap-4 mt-3 text-[10px] text-slate-500">
+                            {mission.reward_metal > 0 && (
+                              <span>+{Math.floor(mission.reward_metal * (overview?.speed_factor || 5.0) * (overview?.streak.streak_bonus_multiplier || 1)).toLocaleString()} métal</span>
+                            )}
+                            {mission.reward_crystal > 0 && (
+                              <span>+{Math.floor(mission.reward_crystal * (overview?.speed_factor || 5.0) * (overview?.streak.streak_bonus_multiplier || 1)).toLocaleString()} cristal</span>
+                            )}
+                            {mission.reward_deuterium > 0 && (
+                              <span>+{Math.floor(mission.reward_deuterium * (overview?.speed_factor || 5.0) * (overview?.streak.streak_bonus_multiplier || 1)).toLocaleString()} deutérium</span>
+                            )}
+                            {mission.reward_xp > 0 && (
+                              <span className="text-amber-400 font-mono tabular-nums">+{mission.reward_xp} XP</span>
+                            )}
+                          </div>
                         </div>
                       </div>
+
+                      {isCompleted && !isClaimed && (
+                        <Button
+                          variant="warning"
+                          onClick={(e) => handleClaimMission(mission.id, e)}
+                          className="animate-bounce"
+                        >
+                          <Gift size={14} className="mr-2" /> Réclamer
+                        </Button>
+                      )}
+
+                      {isClaimed && (
+                        <div className="flex items-center gap-2 text-emerald-400 text-sm">
+                          <Check size={16} /> Terminé
+                        </div>
+                      )}
                     </div>
-
-                    {isCompleted && !isClaimed && (
-                      <Button
-                        onClick={(e) => handleClaimMission(mission.id, e)}
-                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 animate-bounce"
-                      >
-                        <Gift size={14} className="mr-2" /> Réclamer
-                      </Button>
-                    )}
-
-                    {isClaimed && (
-                      <div className="flex items-center gap-2 text-green-400 text-sm">
-                        <Check size={16} /> Terminé
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </motion.div>
             );
           })}
 
@@ -504,7 +507,7 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
               <p>Aucune mission disponible</p>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* Achievements Tab */}
@@ -518,7 +521,6 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
                 variant={selectedCategory === cat.id ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setSelectedCategory(cat.id)}
-                className={selectedCategory === cat.id ? 'bg-purple-500/20 text-purple-400' : ''}
               >
                 {cat.icon}
                 <span className="ml-1">{cat.name}</span>
@@ -527,88 +529,93 @@ export function MissionsView({ userId, planetId, token }: MissionsViewProps) {
           </div>
 
           {/* Achievements grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <motion.div
+            variants={container}
+            initial="hidden"
+            animate="show"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          >
             {achievements
               .filter(a => selectedCategory === 'all' || a.category === selectedCategory)
               .map(achievement => {
                 const progress = Math.min(100, (achievement.current_progress / achievement.condition_value) * 100);
 
                 return (
-                  <TooltipProvider key={achievement.id}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Card className={`cursor-pointer transition-all hover:-translate-y-1 ${
-                          getRarityColor(achievement.rarity)
-                        } ${achievement.unlocked ? 'opacity-100' : 'opacity-60'}`}>
-                          <CardContent className="p-4">
-                            <div className="flex items-start gap-3">
-                              <div 
-                                className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
-                                  achievement.unlocked 
-                                    ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/30' 
-                                    : 'bg-slate-800/50'
-                                }`}
-                                style={{ 
-                                  boxShadow: achievement.unlocked 
-                                    ? `0 0 20px ${achievement.color}40` 
-                                    : 'none' 
-                                }}
-                              >
-                                {achievement.icon}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h4 className={`font-bold truncate ${
-                                    achievement.unlocked ? 'text-white' : 'text-slate-400'
-                                  }`}>
-                                    {achievement.name}
-                                  </h4>
-                                  {achievement.unlocked && (
-                                    <Check size={14} className="text-green-400 flex-shrink-0" />
-                                  )}
+                  <motion.div key={achievement.id} variants={item}>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Card className={`cursor-pointer transition-all hover:-translate-y-1 border backdrop-blur-[12px] ${getRarityCardClass(achievement.rarity, achievement.unlocked)}`}>
+                            <CardContent className="p-4">
+                              <div className="flex items-start gap-3">
+                                <div
+                                  className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
+                                    achievement.unlocked
+                                      ? 'bg-[rgba(16,8,46,0.95)]'
+                                      : 'bg-[rgba(10,5,32,0.85)]'
+                                  }`}
+                                  style={{
+                                    boxShadow: achievement.unlocked
+                                      ? `0 0 20px ${achievement.color}40`
+                                      : 'none'
+                                  }}
+                                >
+                                  {achievement.icon}
                                 </div>
-                                <p className="text-[10px] text-slate-500 truncate">
-                                  {achievement.description}
-                                </p>
-                                
-                                {!achievement.unlocked && (
-                                  <div className="mt-2">
-                                    <Progress value={progress} className="h-1" />
-                                    <p className="text-[9px] text-slate-600 mt-1">
-                                      {achievement.current_progress} / {achievement.condition_value}
-                                    </p>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className={`font-bold truncate ${
+                                      achievement.unlocked ? 'text-slate-200' : 'text-slate-400'
+                                    }`}>
+                                      {achievement.name}
+                                    </h4>
+                                    {achievement.unlocked && (
+                                      <Check size={14} className="text-emerald-400 flex-shrink-0" />
+                                    )}
                                   </div>
-                                )}
+                                  <p className="text-[10px] text-slate-500 truncate">
+                                    {achievement.description}
+                                  </p>
 
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Badge className={`text-[9px] ${getRarityColor(achievement.rarity)}`}>
-                                    {achievement.rarity}
-                                  </Badge>
-                                  <span className="text-[9px] text-amber-400">
-                                    +{achievement.points} pts
-                                  </span>
+                                  {!achievement.unlocked && (
+                                    <div className="mt-2">
+                                      <Progress variant="default" value={progress} className="h-1" />
+                                      <p className="text-[9px] text-slate-600 mt-1 font-mono tabular-nums">
+                                        {achievement.current_progress} / {achievement.condition_value}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <Badge variant="secondary" className="text-[9px]">
+                                      {achievement.rarity}
+                                    </Badge>
+                                    <Badge variant="warning" className="text-[9px]">
+                                      +{achievement.points} pts
+                                    </Badge>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="bg-slate-900 border-white/10 max-w-xs">
-                        <div className="space-y-1">
-                          <p className="font-bold">{achievement.name}</p>
-                          <p className="text-xs text-slate-400">{achievement.description}</p>
-                          {achievement.unlocked && achievement.unlocked_at && (
-                            <p className="text-[10px] text-green-400">
-                              Débloqué le {new Date(achievement.unlocked_at).toLocaleDateString()}
-                            </p>
-                          )}
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                            </CardContent>
+                          </Card>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="bg-[rgba(16,8,46,0.95)] border-cyan-500/10 max-w-xs backdrop-blur-[12px]">
+                          <div className="space-y-1">
+                            <p className="font-bold text-slate-200">{achievement.name}</p>
+                            <p className="text-xs text-slate-400">{achievement.description}</p>
+                            {achievement.unlocked && achievement.unlocked_at && (
+                              <p className="text-[10px] text-emerald-400">
+                                Débloqué le {new Date(achievement.unlocked_at).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </motion.div>
                 );
               })}
-          </div>
+          </motion.div>
 
           {achievements.filter(a => selectedCategory === 'all' || a.category === selectedCategory).length === 0 && (
             <div className="text-center py-12 text-slate-500">

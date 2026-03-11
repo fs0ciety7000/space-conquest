@@ -33,15 +33,9 @@ const resourceLabels: Record<string, string> = {
 };
 
 const resourceBorders: Record<string, string> = {
-  metal: "border-slate-500/50",
-  crystal: "border-cyan-500/50",
-  deuterium: "border-emerald-500/50",
-};
-
-const resourceGradients: Record<string, string> = {
-  metal: "from-slate-950 to-slate-900/20",
-  crystal: "from-slate-950 to-cyan-950/20",
-  deuterium: "from-slate-950 to-emerald-950/20",
+  metal: "border-slate-500/20",
+  crystal: "border-cyan-500/20",
+  deuterium: "border-emerald-500/20",
 };
 
 export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUpdate, onStatsUpdate }: NpcTradeCardProps) {
@@ -52,8 +46,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
 
   const Icon = resourceIcons[resource] || Stone;
   const color = resourceColors[resource] || "text-slate-400";
-  const border = resourceBorders[resource] || "border-slate-500/50";
-  const gradient = resourceGradients[resource] || "from-slate-950 to-slate-900/20";
+  const border = resourceBorders[resource] || "border-slate-500/20";
 
   const availableAmount = (() => {
     switch (resource) {
@@ -64,19 +57,16 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
     }
   })();
 
-  // Calculate exchange rate
   const getExchangeRate = () => {
     if (!buyResource || !npcPrices) return null;
-    const sellPrice = npcPrices.npc_buy_price; // Déjà avec marge NPC (×0.85)
-    const buyPrice = npcPrices.buy_prices?.[buyResource]; // Déjà avec marge NPC (×1.18)
+    const sellPrice = npcPrices.npc_buy_price;
+    const buyPrice = npcPrices.buy_prices?.[buyResource];
     if (!buyPrice) return null;
-    // Les prix contiennent déjà la marge NPC, pas besoin de l'appliquer à nouveau
     return sellPrice / buyPrice;
   };
 
   const exchangeRate = getExchangeRate();
 
-  // Quand on modifie la quantité à vendre
   const handleSellQuantityChange = (value: number) => {
     const clamped = Math.max(0, Math.min(availableAmount, value));
     setSellQuantity(clamped);
@@ -86,7 +76,6 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
     }
   };
 
-  // Quand on modifie la quantité à obtenir
   const handleBuyQuantityChange = (value: number) => {
     setBuyQuantity(Math.max(0, value));
     setLastEdited('buy');
@@ -96,10 +85,8 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
     }
   };
 
-  // Recalculer quand la ressource à acheter change
   const handleBuyResourceChange = (newResource: string) => {
     setBuyResource(newResource);
-    // Recalculer selon le dernier champ édité
     if (newResource && npcPrices) {
       const sellPrice = npcPrices.npc_buy_price;
       const buyPrice = npcPrices.buy_prices?.[newResource];
@@ -115,15 +102,12 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
     }
   };
 
-  // Calculate exchange preview
   const exchangePreview = (() => {
     if (!buyResource || !npcPrices || !exchangeRate) return null;
-
     const sellPrice = npcPrices.npc_buy_price;
     const buyPrice = npcPrices.buy_prices?.[buyResource];
-
     return {
-      exchangeRate: exchangeRate / 0.85, // taux brut avant marge
+      exchangeRate: exchangeRate / 0.85,
       finalAmount: buyQuantity,
       sellPrice,
       buyPrice
@@ -135,12 +119,10 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
       toast.error("Sélectionnez la ressource à acheter");
       return;
     }
-
     if (resource === buyResource) {
       toast.error("Ressources identiques");
       return;
     }
-
     if (sellQuantity > availableAmount) {
       toast.error("Ressources insuffisantes");
       return;
@@ -165,7 +147,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
 
       if (res.ok) {
         const data = await res.json();
-        toast.success(`⚡ Échange réussi! Reçu: ${data.exchanged.bought_quantity.toFixed(0)} ${buyResource}`);
+        toast.success(`Échange réussi! Reçu: ${data.exchanged.bought_quantity.toFixed(0)} ${buyResource}`);
         onUpdate();
         onStatsUpdate();
       } else {
@@ -179,10 +161,9 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
   };
 
   return (
-    <div className={`relative overflow-hidden border-t-4 ${border} bg-gradient-to-b ${gradient} shadow-2xl group rounded-lg`}>
-      <div className="absolute inset-0 bg-gradient-to-r from-slate-950 to-transparent z-0"></div>
-      <div className="absolute -right-6 -top-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-        <Icon size={120} className={color} />
+    <div className={`relative overflow-hidden rounded-lg bg-[rgba(10,5,32,0.85)] border ${border} hover:border-cyan-500/20 hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(0,245,255,0.08)] transition-all duration-200 group backdrop-blur-[12px]`}>
+      <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity pointer-events-none">
+        <Icon size={100} className={color} />
       </div>
 
       <div className="p-5 relative z-10">
@@ -190,11 +171,11 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg border ${border} bg-black/20 ${color}`}>
+              <div className={`p-2 rounded-lg border ${border} bg-[rgba(10,5,32,0.6)] ${color}`}>
                 <Icon size={20} />
               </div>
               <div>
-                <h4 className="font-black uppercase tracking-wider text-white text-sm capitalize">{resource}</h4>
+                <h4 className="font-black uppercase tracking-wider text-slate-200 text-sm capitalize">{resource}</h4>
                 <p className="text-[9px] text-slate-500 uppercase font-bold">Disponible: {availableAmount.toLocaleString()}</p>
               </div>
             </div>
@@ -203,31 +184,31 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
 
           {/* NPC Prices Info */}
           {npcPrices && (
-            <div className="bg-black/30 border border-white/5 rounded-lg p-3 space-y-2">
+            <div className="bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded-lg p-3 space-y-2">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500 uppercase font-bold">Prix achat NPC:</span>
-                <span className="text-emerald-400 font-mono font-bold">{npcPrices.npc_buy_price?.toFixed(2)}</span>
+                <span className="text-emerald-400 font-mono tabular-nums font-bold">{npcPrices.npc_buy_price?.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500 uppercase font-bold">Prix vente NPC:</span>
-                <span className="text-red-400 font-mono font-bold">{npcPrices.npc_sell_price?.toFixed(2)}</span>
+                <span className="text-red-400 font-mono tabular-nums font-bold">{npcPrices.npc_sell_price?.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between items-center text-xs border-t border-white/5 pt-2">
+              <div className="flex justify-between items-center text-xs border-t border-cyan-500/10 pt-2">
                 <span className="text-slate-500 uppercase font-bold">Prix marché:</span>
-                <span className="text-yellow-400 font-mono font-bold">{npcPrices.market_price?.toFixed(2)}</span>
+                <span className="text-cyan-400 font-mono tabular-nums font-bold">{npcPrices.market_price?.toFixed(2)}</span>
               </div>
             </div>
           )}
 
           {/* Trade Setup */}
           <div className="space-y-3">
-            {/* Ressource à acheter - en premier */}
+            {/* Ressource à acheter */}
             <div>
               <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Ressource à acheter:</label>
               <select
                 value={buyResource}
                 onChange={(e) => handleBuyResourceChange(e.target.value)}
-                className="w-full p-2 bg-black/30 border border-white/10 rounded text-white text-sm font-mono hover:border-white/20 transition-colors"
+                className="w-full p-2 bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded text-slate-200 text-sm font-mono hover:border-cyan-500/20 transition-colors"
               >
                 <option value="">Choisir...</option>
                 {resource !== 'metal' && <option value="metal">Métal</option>}
@@ -245,7 +226,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
                 <button
                   type="button"
                   onClick={() => handleSellQuantityChange(availableAmount)}
-                  className={`text-[9px] font-black tracking-widest uppercase hover:text-white transition-colors ${availableAmount > 0 ? color : 'text-slate-600'}`}
+                  className={`text-[9px] font-black tracking-widest uppercase hover:text-slate-200 transition-colors ${availableAmount > 0 ? color : 'text-slate-600'}`}
                 >
                   MAX: {availableAmount.toLocaleString()}
                 </button>
@@ -257,7 +238,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
                   max={availableAmount}
                   value={sellQuantity}
                   onChange={(e) => handleSellQuantityChange(parseInt(e.target.value) || 0)}
-                  className={`bg-black/30 border-white/10 text-white font-mono hover:border-white/20 transition-colors pr-12 ${lastEdited === 'sell' ? 'border-indigo-500/50' : ''}`}
+                  className={`bg-[rgba(10,5,32,0.6)] border-cyan-500/10 text-slate-200 font-mono hover:border-cyan-500/20 transition-colors pr-12 ${lastEdited === 'sell' ? 'border-cyan-500/30' : ''}`}
                 />
                 <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${color}`}>
                   <Icon size={16} />
@@ -268,7 +249,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
               )}
             </div>
 
-            {/* Quantité à obtenir - éditable */}
+            {/* Quantité à obtenir */}
             {buyResource && (
               <div>
                 <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">
@@ -280,7 +261,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
                     min={0}
                     value={buyQuantity}
                     onChange={(e) => handleBuyQuantityChange(parseInt(e.target.value) || 0)}
-                    className={`bg-black/30 border-white/10 text-white font-mono hover:border-white/20 transition-colors pr-12 ${lastEdited === 'buy' ? 'border-indigo-500/50' : ''}`}
+                    className={`bg-[rgba(10,5,32,0.6)] border-cyan-500/10 text-slate-200 font-mono hover:border-cyan-500/20 transition-colors pr-12 ${lastEdited === 'buy' ? 'border-cyan-500/30' : ''}`}
                   />
                   <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${resourceColors[buyResource]}`}>
                     {(() => {
@@ -294,12 +275,12 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
 
             {/* Exchange Preview */}
             {exchangePreview && (
-              <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3">
+              <div className="bg-[rgba(10,5,32,0.8)] border border-purple-500/20 rounded-lg p-3">
                 <div className="text-[10px] uppercase font-bold text-purple-400 mb-2">Récapitulatif:</div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Icon size={14} className={color} />
-                    <span className="text-white font-mono text-sm">{sellQuantity.toLocaleString()}</span>
+                    <span className="text-slate-200 font-mono tabular-nums text-sm">{sellQuantity.toLocaleString()}</span>
                   </div>
                   <ArrowRight size={16} className="text-purple-400" />
                   <div className="flex items-center gap-2">
@@ -307,7 +288,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
                       const BuyIcon = resourceIcons[buyResource] || Stone;
                       return <BuyIcon size={14} className={resourceColors[buyResource]} />;
                     })()}
-                    <span className={`font-mono text-sm font-bold ${resourceColors[buyResource]}`}>
+                    <span className={`font-mono tabular-nums text-sm font-bold ${resourceColors[buyResource]}`}>
                       {Math.floor(exchangePreview.finalAmount).toLocaleString()}
                     </span>
                   </div>
@@ -321,7 +302,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
             <Button
               onClick={handleNpcTrade}
               disabled={!buyResource || sellQuantity > availableAmount}
-              className="w-full font-black uppercase tracking-widest bg-gradient-to-r from-purple-950/60 to-indigo-950/60 hover:from-purple-900/80 hover:to-indigo-900/80 border border-purple-500/50 hover:border-purple-400/80 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full font-black uppercase tracking-widest bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 hover:border-purple-400/50 text-purple-300 hover:text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.1)] hover:shadow-[0_0_20px_rgba(168,85,247,0.2)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Zap size={14} className="mr-2" />
               Échanger

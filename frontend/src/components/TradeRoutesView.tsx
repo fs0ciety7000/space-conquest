@@ -4,7 +4,6 @@ import {
   Package, Clock, AlertTriangle, CheckCircle2, Truck, Info,
   RefreshCw, Warehouse, Navigation, ArrowRight, Pencil, X, Check
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { apiUrl } from '@/config/api';
@@ -70,9 +69,9 @@ const RESOURCE_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  success: 'text-green-400',
+  success: 'text-emerald-400',
   intercepted: 'text-red-400',
-  no_resources: 'text-yellow-400',
+  no_resources: 'text-amber-400',
   paused: 'text-slate-400',
 };
 
@@ -104,7 +103,7 @@ function getTransitStatus(route: TradeRoute, now: number, intervalHours: number)
   const travelMs = route.travel_time_seconds * 1000;
   const intervalMs = intervalHours * 3600 * 1000;
   const departureMs = arrivalMs - travelMs;
-  const nextDepartureMs = arrivalMs + travelMs; // fleet returning, departs again after full round-trip
+  const nextDepartureMs = arrivalMs + travelMs;
 
   if (now >= departureMs && now < arrivalMs) {
     const remainingSec = Math.max(0, Math.floor((arrivalMs - now) / 1000));
@@ -147,7 +146,6 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
   } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Form state
   const [form, setForm] = useState({
     name: '',
     source_planet_id: planetId,
@@ -336,7 +334,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="animate-spin text-indigo-400" size={32} />
+        <RefreshCw className="animate-spin text-cyan-400" size={32} />
       </div>
     );
   }
@@ -346,10 +344,10 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Route className="text-amber-400" size={28} /> Routes Commerciales
+          <h2 className="text-2xl font-bold text-slate-200 flex items-center gap-2">
+            <Route className="text-cyan-400" size={28} /> Routes Commerciales
           </h2>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-slate-500 text-sm mt-1">
             Automatisez le transfert de ressources entre vos planètes via vos Grands Cargos.
           </p>
         </div>
@@ -357,7 +355,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
           onClick={() => setShowCreateForm(!showCreateForm)}
           disabled={!hubInfo || hubInfo.max_routes === 0}
           title={!hubInfo || hubInfo.max_routes === 0 ? 'Prérequis non remplis : Hangar 20, Stockage Ressources 15, Tech Industrielle 3' : undefined}
-          className="bg-amber-600 hover:bg-amber-500 text-white gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/20 hover:border-cyan-500/30 text-cyan-300 gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           <Plus size={16} /> Nouvelle Route
         </Button>
@@ -365,57 +363,58 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
 
       {/* Hub info banner */}
       {hubInfo && (
-        <Card className="bg-amber-950/20 border border-amber-500/20">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Warehouse className="text-amber-400" size={20} />
-              <div>
-                <div className="text-amber-300 font-semibold text-sm">
-                  Hub Logistique niveau {hubInfo.hub_level} — planète source sélectionnée
-                </div>
-                <div className="text-amber-400/70 text-xs mt-0.5">
-                  {hubInfo.max_routes === 0
-                    ? 'Construisez un Hub Logistique (prérequis: Hangar 20, Stockage 15, Tech Industrielle 3) pour activer les routes.'
-                    : `${routes.filter(r => r.source_planet_id === form.source_planet_id).length} / ${hubInfo.max_routes} routes utilisées depuis cette planète`}
-                </div>
+        <div className="rounded-lg bg-[rgba(10,5,32,0.85)] border border-emerald-500/15 backdrop-blur-[12px] p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Warehouse className="text-emerald-400" size={20} />
+            <div>
+              <div className="text-emerald-300 font-semibold text-sm">
+                Hub Logistique niveau {hubInfo.hub_level} — planète source sélectionnée
+              </div>
+              <div className="text-emerald-400/60 text-xs mt-0.5">
+                {hubInfo.max_routes === 0
+                  ? 'Construisez un Hub Logistique (prérequis: Hangar 20, Stockage 15, Tech Industrielle 3) pour activer les routes.'
+                  : `${routes.filter(r => r.source_planet_id === form.source_planet_id).length} / ${hubInfo.max_routes} routes utilisées depuis cette planète`}
               </div>
             </div>
-            <div className="text-slate-400 text-xs text-right">
-              Cargo: {formatNumber(cargoCapacity)}/vaisseau
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="text-slate-500 text-xs text-right font-mono tabular-nums">
+            Cargo: {formatNumber(cargoCapacity)}/vaisseau
+          </div>
+        </div>
       )}
 
       {/* Create form */}
       {showCreateForm && (
-        <Card className="bg-slate-900/60 border border-amber-500/30">
-          <CardHeader>
-            <CardTitle className="text-amber-300 text-base flex items-center gap-2">
-              <Plus size={16} /> Créer une Route Commerciale
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="rounded-xl bg-[rgba(16,8,46,0.95)] border border-cyan-500/15 backdrop-blur-[12px] overflow-hidden">
+          <div className="p-5 border-b border-cyan-500/10">
+            <div className="flex items-center gap-2">
+              <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+              <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-1.5">
+                <Plus size={11} /> Créer une Route Commerciale
+              </span>
+            </div>
+          </div>
+          <div className="p-5 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Name */}
               <div className="md:col-span-2">
-                <label className="text-slate-300 text-sm font-medium mb-1 block">Nom de la route</label>
+                <label className="text-slate-400 text-sm font-medium mb-1 block">Nom de la route</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Ex: Route métal Andromède→Kepler"
-                  className="w-full bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500/50"
+                  className="w-full bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-cyan-500/30 transition-colors"
                 />
               </div>
 
               {/* Source planet */}
               <div>
-                <label className="text-slate-300 text-sm font-medium mb-1 block">Planète source</label>
+                <label className="text-slate-400 text-sm font-medium mb-1 block">Planète source</label>
                 <select
                   value={form.source_planet_id}
                   onChange={e => setForm(f => ({ ...f, source_planet_id: e.target.value, target_planet_id: '' }))}
-                  className="w-full bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500/50"
+                  className="w-full bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-cyan-500/30 transition-colors"
                 >
                   {myPlanets.map(p => (
                     <option key={p.id} value={p.id}>
@@ -432,11 +431,11 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
 
               {/* Target planet */}
               <div>
-                <label className="text-slate-300 text-sm font-medium mb-1 block">Planète destination</label>
+                <label className="text-slate-400 text-sm font-medium mb-1 block">Planète destination</label>
                 <select
                   value={form.target_planet_id}
                   onChange={e => setForm(f => ({ ...f, target_planet_id: e.target.value }))}
-                  className="w-full bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500/50"
+                  className="w-full bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-cyan-500/30 transition-colors"
                 >
                   <option value="">-- Choisir --</option>
                   {myPlanets
@@ -451,7 +450,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
 
               {/* Ship count */}
               <div>
-                <label className="text-slate-300 text-sm font-medium mb-1 block">
+                <label className="text-slate-400 text-sm font-medium mb-1 block">
                   Nombre de Grands Cargos ({form.ship_count})
                 </label>
                 <input
@@ -460,18 +459,18 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                   max={Math.max(availableCargo, 1)}
                   value={form.ship_count}
                   onChange={e => setForm(f => ({ ...f, ship_count: Number(e.target.value) }))}
-                  className="w-full accent-amber-500"
+                  className="w-full accent-cyan-500"
                 />
-                <div className="flex justify-between text-xs text-slate-500 mt-0.5">
+                <div className="flex justify-between text-xs text-slate-500 mt-0.5 font-mono tabular-nums">
                   <span>1</span>
-                  <span className="text-amber-400">Capacité totale: {formatNumber(form.ship_count * cargoCapacity)}</span>
+                  <span className="text-cyan-400">Capacité totale: {formatNumber(form.ship_count * cargoCapacity)}</span>
                   <span>{Math.max(availableCargo, 1)}</span>
                 </div>
               </div>
 
               {/* Ratios */}
               <div className="md:col-span-2 space-y-3">
-                <p className="text-slate-300 text-sm font-medium">Ressources à transférer</p>
+                <p className="text-slate-400 text-sm font-medium">Ressources à transférer</p>
                 {(['metal', 'crystal', 'deuterium'] as const).map(r => {
                   const ratioKey = `${r}_ratio` as 'metal_ratio' | 'crystal_ratio' | 'deuterium_ratio';
                   const val = form[ratioKey];
@@ -485,9 +484,9 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                         step={0.05}
                         value={val}
                         onChange={e => setForm(f => ({ ...f, [ratioKey]: Number(e.target.value) }))}
-                        className="flex-1 accent-amber-500"
+                        className="flex-1 accent-cyan-500"
                       />
-                      <span className="text-amber-300 text-sm w-12 text-right">{Math.round(val * 100)}%</span>
+                      <span className="text-cyan-300 text-sm w-12 text-right font-mono tabular-nums">{Math.round(val * 100)}%</span>
                     </div>
                   );
                 })}
@@ -497,9 +496,9 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
               </div>
 
               {/* Schedule */}
-              <div className="md:col-span-2 space-y-3 border-t border-slate-700/30 pt-4">
-                <p className="text-slate-300 text-sm font-medium flex items-center gap-2">
-                  <Clock size={14} className="text-indigo-400" /> Fréquence d'exécution
+              <div className="md:col-span-2 space-y-3 border-t border-cyan-500/10 pt-4">
+                <p className="text-slate-400 text-sm font-medium flex items-center gap-2">
+                  <Clock size={14} className="text-cyan-400" /> Fréquence d'exécution
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -507,8 +506,8 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                     onClick={() => setForm(f => ({ ...f, schedule_type: 'interval' }))}
                     className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${
                       form.schedule_type === 'interval'
-                        ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-300'
-                        : 'bg-slate-800/40 border-slate-600/40 text-slate-400 hover:border-slate-500/60'
+                        ? 'bg-cyan-950/30 border-cyan-500/30 text-cyan-300'
+                        : 'bg-[rgba(10,5,32,0.4)] border-cyan-500/10 text-slate-400 hover:border-cyan-500/20'
                     }`}
                   >
                     Toutes les N heures
@@ -518,8 +517,8 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                     onClick={() => setForm(f => ({ ...f, schedule_type: 'daily' }))}
                     className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${
                       form.schedule_type === 'daily'
-                        ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-300'
-                        : 'bg-slate-800/40 border-slate-600/40 text-slate-400 hover:border-slate-500/60'
+                        ? 'bg-cyan-950/30 border-cyan-500/30 text-cyan-300'
+                        : 'bg-[rgba(10,5,32,0.4)] border-cyan-500/10 text-slate-400 hover:border-cyan-500/20'
                     }`}
                   >
                     Chaque jour à heure fixe
@@ -532,13 +531,13 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                     <select
                       value={form.interval_hours}
                       onChange={e => setForm(f => ({ ...f, interval_hours: Number(e.target.value) }))}
-                      className="bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-indigo-500/50"
+                      className="bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-cyan-500/30 transition-colors"
                     >
                       {[1, 2, 4, 6, 8, 12, 24, 48, 72].map(h => (
                         <option key={h} value={h}>{h}h</option>
                       ))}
                     </select>
-                    <span className="text-indigo-300 text-xs">
+                    <span className="text-cyan-300/70 text-xs font-mono">
                       → Prochain exécution dans ~{form.interval_hours}h après chaque transfert
                     </span>
                   </div>
@@ -548,21 +547,21 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                     <select
                       value={form.daily_hour}
                       onChange={e => setForm(f => ({ ...f, daily_hour: Number(e.target.value) }))}
-                      className="bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-indigo-500/50"
+                      className="bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-cyan-500/30 transition-colors"
                     >
                       {Array.from({ length: 24 }, (_, h) => (
                         <option key={h} value={h}>{String(h).padStart(2, '0')}:00 UTC</option>
                       ))}
                     </select>
-                    <span className="text-indigo-300 text-xs">→ Une fois par jour à cette heure</span>
+                    <span className="text-cyan-300/70 text-xs font-mono">→ Une fois par jour à cette heure</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Hub limit check */}
+            {/* Hub limit warnings */}
             {hubInfo && hubInfo.max_routes > 0 && routesFromSource >= hubInfo.max_routes && (
-              <div className="flex items-center gap-2 text-red-400 text-sm bg-red-950/20 border border-red-500/20 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-red-400 text-sm bg-red-950/15 border border-red-500/15 rounded-lg p-3">
                 <AlertTriangle size={16} />
                 Limite atteinte : {hubInfo.max_routes} route(s) max depuis cette planète (Hub Logistique niv. {hubInfo.hub_level}).
                 Améliorez votre Hub ou supprimez une route existante.
@@ -570,7 +569,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
             )}
 
             {hubInfo && hubInfo.max_routes === 0 && (
-              <div className="flex items-center gap-2 text-amber-400 text-sm bg-amber-950/20 border border-amber-500/20 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-amber-400 text-sm bg-amber-950/15 border border-amber-500/15 rounded-lg p-3">
                 <AlertTriangle size={16} />
                 Cette planète n'a pas de Hub Logistique. Construisez-en un dans les Installations (prérequis: Hangar 20 + Stockage 15 + Tech Industrielle 3).
               </div>
@@ -580,30 +579,32 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
               <Button
                 onClick={handleCreate}
                 disabled={creating || (hubInfo?.max_routes === 0)}
-                className="bg-amber-600 hover:bg-amber-500 text-white"
+                className="bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/20 hover:border-cyan-500/30 text-cyan-300 transition-all"
               >
                 {creating ? <RefreshCw size={14} className="animate-spin mr-2" /> : null}
                 Créer la route
               </Button>
-              <Button variant="outline" onClick={() => setShowCreateForm(false)} className="border-slate-600 text-slate-300">
+              <Button
+                variant="outline"
+                onClick={() => setShowCreateForm(false)}
+                className="border-cyan-500/10 text-slate-400 hover:text-slate-200 hover:border-cyan-500/20 transition-colors"
+              >
                 Annuler
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Routes list */}
       {routes.length === 0 ? (
-        <Card className="bg-slate-900/40 border border-slate-700/30">
-          <CardContent className="p-12 text-center">
-            <Truck className="mx-auto text-slate-600 mb-4" size={48} />
-            <p className="text-slate-400 text-lg font-medium">Aucune route commerciale</p>
-            <p className="text-slate-500 text-sm mt-2">
-              Créez votre première route pour automatiser vos transferts de ressources.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px] p-12 text-center">
+          <Truck className="mx-auto text-slate-600 mb-4" size={48} />
+          <p className="text-slate-400 text-lg font-medium">Aucune route commerciale</p>
+          <p className="text-slate-500 text-sm mt-2">
+            Créez votre première route pour automatiser vos transferts de ressources.
+          </p>
+        </div>
       ) : (
         <div className="space-y-4">
           {routes.map(route => {
@@ -612,68 +613,72 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
             const transit = getTransitStatus(route, now, intervalHours);
 
             return (
-              <Card
+              <div
                 key={route.id}
-                className={`border transition-colors ${
+                className={`rounded-xl backdrop-blur-[12px] border transition-all duration-200 ${
                   route.is_active
-                    ? 'bg-slate-900/60 border-amber-500/20 hover:border-amber-500/40'
-                    : 'bg-slate-900/30 border-slate-700/20 opacity-70'
+                    ? 'bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/30'
+                    : 'bg-amber-500/5 border-amber-500/20 opacity-70'
                 }`}
               >
-                <CardContent className="p-5">
+                <div className="p-5">
                   <div className="flex items-start justify-between gap-4">
                     {/* Route info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${route.is_active ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`} />
-                        <h3 className="text-white font-semibold truncate">{route.name}</h3>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${route.is_active ? 'bg-green-900/40 text-green-400' : 'bg-slate-800 text-slate-400'}`}>
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${route.is_active ? 'bg-emerald-400 animate-pulse' : 'bg-amber-500'}`} />
+                        <h3 className="text-slate-200 font-semibold truncate">{route.name}</h3>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          route.is_active
+                            ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-amber-900/20 text-amber-400 border border-amber-500/20'
+                        }`}>
                           {route.is_active ? 'Active' : 'Suspendue'}
                         </span>
                       </div>
 
                       {/* Route direction */}
                       <div className="flex items-center gap-2 text-sm text-slate-300 mb-3">
-                        <Package size={14} className="text-amber-400 flex-shrink-0" />
-                        <span className="font-medium text-amber-200">{route.source_planet_name || route.source_planet_id.slice(0, 8)}</span>
+                        <Package size={14} className="text-cyan-400 flex-shrink-0" />
+                        <span className="font-medium text-cyan-200">{route.source_planet_name || route.source_planet_id.slice(0, 8)}</span>
                         <span className="text-slate-500">→</span>
-                        <span className="font-medium text-cyan-200">{route.target_planet_name || route.target_planet_id.slice(0, 8)}</span>
+                        <span className="font-medium text-slate-300">{route.target_planet_name || route.target_planet_id.slice(0, 8)}</span>
                       </div>
 
                       {/* Stats */}
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
-                        <span className="flex items-center gap-1">
-                          <Truck size={11} className="text-amber-400" />
+                        <span className="flex items-center gap-1 font-mono tabular-nums">
+                          <Truck size={11} className="text-cyan-400" />
                           {route.ship_count} Grands Cargos
                           <span className="text-slate-500">({formatNumber(route.ship_count * cargoCapacity)} capacité)</span>
                         </span>
                         {route.metal_ratio > 0 && (
-                          <span>Métal: {Math.round(route.metal_ratio * 100)}%</span>
+                          <span className="font-mono tabular-nums">Métal: {Math.round(route.metal_ratio * 100)}%</span>
                         )}
                         {route.crystal_ratio > 0 && (
-                          <span>Cristal: {Math.round(route.crystal_ratio * 100)}%</span>
+                          <span className="font-mono tabular-nums">Cristal: {Math.round(route.crystal_ratio * 100)}%</span>
                         )}
                         {route.deuterium_ratio > 0 && (
-                          <span>Deutérium: {Math.round(route.deuterium_ratio * 100)}%</span>
+                          <span className="font-mono tabular-nums">Deutérium: {Math.round(route.deuterium_ratio * 100)}%</span>
                         )}
                       </div>
 
                       {/* Schedule + next run */}
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
-                        <span className="flex items-center gap-1 text-xs text-slate-500">
-                          <Clock size={11} className="text-indigo-400" />
+                        <span className="flex items-center gap-1 text-xs text-slate-500 font-mono tabular-nums">
+                          <Clock size={11} className="text-cyan-400" />
                           {route.schedule_type === 'daily' && route.daily_hour != null
                             ? `Quotidien à ${String(route.daily_hour).padStart(2, '0')}:00 UTC`
                             : `Toutes les ${intervalHours}h`}
                         </span>
                         {route.travel_time_seconds && (
-                          <span className="text-xs text-slate-500">
-                            Trajet : <span className="text-amber-400/70">{formatSec(route.travel_time_seconds)}</span>
+                          <span className="text-xs text-slate-500 font-mono tabular-nums">
+                            Trajet : <span className="text-cyan-400/70">{formatSec(route.travel_time_seconds)}</span>
                           </span>
                         )}
                         {route.is_active && route.next_run_at && !transit && (
-                          <span className="text-xs text-slate-400">
-                            Collecte : <span className="text-indigo-300 font-medium">{formatTimeUntil(route.next_run_at)}</span>
+                          <span className="text-xs text-slate-400 font-mono tabular-nums">
+                            Collecte : <span className="text-cyan-400 font-medium">{formatTimeUntil(route.next_run_at)}</span>
                           </span>
                         )}
                       </div>
@@ -682,23 +687,23 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                       {transit && (
                         <div className="mt-3">
                           <div className={`flex items-center gap-2 mb-1.5 text-xs font-medium ${
-                            transit.phase === 'outbound' ? 'text-amber-300' : 'text-cyan-300'
+                            transit.phase === 'outbound' ? 'text-cyan-300' : 'text-emerald-300'
                           }`}>
                             <Navigation size={12} className="animate-pulse" />
                             {transit.phase === 'outbound'
                               ? <>Flotte en route → <span className="font-semibold">{route.target_planet_name}</span></>
                               : <>Flotte en retour → <span className="font-semibold">{route.source_planet_name}</span></>
                             }
-                            <span className="ml-auto text-slate-400 font-normal">
-                              ETA : <span className={transit.phase === 'outbound' ? 'text-amber-300' : 'text-cyan-300'}>{formatSec(transit.remainingSec)}</span>
+                            <span className="ml-auto text-slate-400 font-normal font-mono tabular-nums">
+                              ETA : <span className={transit.phase === 'outbound' ? 'text-cyan-300' : 'text-emerald-300'}>{formatSec(transit.remainingSec)}</span>
                             </span>
                           </div>
-                          <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                          <div className="h-1.5 bg-[rgba(10,5,32,0.6)] rounded-full overflow-hidden border border-cyan-500/10">
                             <div
                               className={`h-full rounded-full transition-all duration-1000 ${
                                 transit.phase === 'outbound'
-                                  ? 'bg-linear-to-r from-amber-500 to-amber-300'
-                                  : 'bg-linear-to-r from-cyan-600 to-cyan-400'
+                                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-400'
+                                  : 'bg-gradient-to-r from-emerald-600 to-emerald-400'
                               }`}
                               style={{ width: `${transit.progress}%` }}
                             />
@@ -711,14 +716,14 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleToggleLogs(route.id)}
-                        className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800/50 transition-colors"
+                        className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-[rgba(10,5,32,0.6)] transition-colors"
                         title="Voir l'historique"
                       >
                         {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </button>
                       <button
                         onClick={() => editingRouteId === route.id ? (setEditingRouteId(null), setEditForm(null)) : startEdit(route)}
-                        className={`p-1.5 rounded-lg transition-colors ${editingRouteId === route.id ? 'text-amber-400 bg-amber-900/20' : 'text-slate-400 hover:text-amber-300 hover:bg-amber-900/20'}`}
+                        className={`p-1.5 rounded-lg transition-colors ${editingRouteId === route.id ? 'text-cyan-400 bg-cyan-900/20' : 'text-slate-400 hover:text-cyan-300 hover:bg-cyan-900/20'}`}
                         title="Modifier"
                       >
                         <Pencil size={16} />
@@ -727,8 +732,8 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                         onClick={() => handleToggleActive(route)}
                         className={`p-1.5 rounded-lg transition-colors ${
                           route.is_active
-                            ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-900/20'
-                            : 'text-green-400 hover:text-green-300 hover:bg-green-900/20'
+                            ? 'text-amber-400 hover:text-amber-300 hover:bg-amber-900/20'
+                            : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-900/20'
                         }`}
                         title={route.is_active ? 'Suspendre' : 'Réactiver'}
                       >
@@ -746,10 +751,13 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
 
                   {/* Edit form */}
                   {editingRouteId === route.id && editForm && (
-                    <div className="mt-4 border-t border-amber-500/20 pt-4 space-y-3">
-                      <p className="text-amber-300 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
-                        <Pencil size={11} /> Modifier la route
-                      </p>
+                    <div className="mt-4 border-t border-cyan-500/10 pt-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                        <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-1.5">
+                          <Pencil size={11} /> Modifier la route
+                        </span>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="md:col-span-2">
                           <label className="text-slate-400 text-xs mb-1 block">Nom</label>
@@ -757,7 +765,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                             type="text"
                             value={editForm.name}
                             onChange={e => setEditForm(f => f && ({ ...f, name: e.target.value }))}
-                            className="w-full bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-amber-500/50"
+                            className="w-full bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-cyan-500/30 transition-colors"
                           />
                         </div>
                         <div>
@@ -765,7 +773,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                           <input
                             type="range" min={1} max={200} value={editForm.ship_count}
                             onChange={e => setEditForm(f => f && ({ ...f, ship_count: Number(e.target.value) }))}
-                            className="w-full accent-amber-500"
+                            className="w-full accent-cyan-500"
                           />
                         </div>
                         <div className="space-y-1.5">
@@ -777,8 +785,8 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                                 <span className="text-slate-500 text-xs w-16">{RESOURCE_LABELS[r]}</span>
                                 <input type="range" min={0} max={1} step={0.05} value={editForm[k]}
                                   onChange={e => setEditForm(f => f && ({ ...f, [k]: Number(e.target.value) }))}
-                                  className="flex-1 accent-amber-500" />
-                                <span className="text-amber-300 text-xs w-8 text-right">{Math.round(editForm[k] * 100)}%</span>
+                                  className="flex-1 accent-cyan-500" />
+                                <span className="text-cyan-300 text-xs w-8 text-right font-mono tabular-nums">{Math.round(editForm[k] * 100)}%</span>
                               </div>
                             );
                           })}
@@ -791,8 +799,8 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                                 onClick={() => setEditForm(f => f && ({ ...f, schedule_type: st }))}
                                 className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium border transition-colors ${
                                   editForm.schedule_type === st
-                                    ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-300'
-                                    : 'bg-slate-800/40 border-slate-600/40 text-slate-400 hover:border-slate-500/60'
+                                    ? 'bg-cyan-950/30 border-cyan-500/30 text-cyan-300'
+                                    : 'bg-[rgba(10,5,32,0.4)] border-cyan-500/10 text-slate-400 hover:border-cyan-500/20'
                                 }`}>
                                 {st === 'interval' ? 'Toutes les N heures' : 'Heure fixe quotidienne'}
                               </button>
@@ -803,7 +811,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                               <span className="text-slate-500 text-xs">Intervalle :</span>
                               <select value={editForm.interval_hours}
                                 onChange={e => setEditForm(f => f && ({ ...f, interval_hours: Number(e.target.value) }))}
-                                className="bg-slate-800/60 border border-slate-600/50 rounded px-2 py-1 text-white text-xs focus:outline-none">
+                                className="bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/30 transition-colors">
                                 {[1, 2, 4, 6, 8, 12, 24, 48, 72].map(h => <option key={h} value={h}>{h}h</option>)}
                               </select>
                             </div>
@@ -812,7 +820,7 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                               <span className="text-slate-500 text-xs">Heure UTC :</span>
                               <select value={editForm.daily_hour}
                                 onChange={e => setEditForm(f => f && ({ ...f, daily_hour: Number(e.target.value) }))}
-                                className="bg-slate-800/60 border border-slate-600/50 rounded px-2 py-1 text-white text-xs focus:outline-none">
+                                className="bg-[rgba(10,5,32,0.6)] border border-cyan-500/10 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/30 transition-colors">
                                 {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
                               </select>
                             </div>
@@ -821,12 +829,12 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                       </div>
                       <div className="flex gap-2 pt-1">
                         <Button onClick={handleUpdate} disabled={saving}
-                          className="bg-amber-600 hover:bg-amber-500 text-white text-xs">
+                          className="bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/20 hover:border-cyan-500/30 text-cyan-300 text-xs transition-all">
                           {saving ? <RefreshCw size={12} className="animate-spin mr-1" /> : <Check size={12} className="mr-1" />}
                           Enregistrer
                         </Button>
                         <Button variant="outline" onClick={() => { setEditingRouteId(null); setEditForm(null); }}
-                          className="border-slate-600 text-slate-300 text-xs">
+                          className="border-cyan-500/10 text-slate-400 hover:text-slate-200 hover:border-cyan-500/20 text-xs transition-colors">
                           <X size={12} className="mr-1" /> Annuler
                         </Button>
                       </div>
@@ -835,8 +843,11 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
 
                   {/* Logs accordion */}
                   {isExpanded && (
-                    <div className="mt-4 border-t border-slate-700/30 pt-4">
-                      <p className="text-slate-400 text-xs font-medium mb-3 uppercase tracking-wide">Historique des transferts</p>
+                    <div className="mt-4 border-t border-cyan-500/10 pt-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+                        <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">Historique des transferts</span>
+                      </div>
                       {routeLogs.length === 0 ? (
                         <p className="text-slate-500 text-sm">Aucun transfert effectué pour l'instant.</p>
                       ) : (
@@ -844,20 +855,20 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                           {routeLogs.map(log => (
                             <div
                               key={log.id}
-                              className="flex items-center justify-between text-xs bg-slate-800/40 rounded-lg px-3 py-2"
+                              className="flex items-center justify-between text-xs bg-[rgba(10,5,32,0.5)] border border-cyan-500/10 rounded-lg px-3 py-2"
                             >
                               <div className="flex items-center gap-2">
-                                {log.status === 'success' && <CheckCircle2 size={12} className="text-green-400" />}
+                                {log.status === 'success' && <CheckCircle2 size={12} className="text-emerald-400" />}
                                 {log.status === 'intercepted' && <AlertTriangle size={12} className="text-red-400" />}
-                                {log.status === 'no_resources' && <AlertTriangle size={12} className="text-yellow-400" />}
+                                {log.status === 'no_resources' && <AlertTriangle size={12} className="text-amber-400" />}
                                 <span className={`font-medium ${STATUS_COLORS[log.status] || 'text-slate-300'}`}>
                                   {STATUS_LABELS[log.status] || log.status}
                                 </span>
                                 {log.piracy_loss_ratio && log.piracy_loss_ratio > 0 && (
-                                  <span className="text-red-400">(-{Math.round(log.piracy_loss_ratio * 100)}% piraterie)</span>
+                                  <span className="text-red-400 font-mono tabular-nums">(-{Math.round(log.piracy_loss_ratio * 100)}% piraterie)</span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-3 text-slate-400">
+                              <div className="flex items-center gap-3 text-slate-400 font-mono tabular-nums">
                                 {log.metal_transferred > 0 && (
                                   <span className="text-orange-300">{formatNumber(log.metal_transferred)} M</span>
                                 )}
@@ -879,28 +890,29 @@ export default function TradeRoutesView({ userId, planetId }: TradeRoutesViewPro
                       )}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
         </div>
       )}
 
       {/* Info panel */}
-      <Card className="bg-slate-900/20 border border-slate-700/20">
-        <CardContent className="p-4">
-          <p className="text-slate-400 text-xs font-medium uppercase tracking-wide mb-3 flex items-center gap-2">
-            <Info size={12} /> Comment fonctionnent les Routes Commerciales ?
-          </p>
-          <ul className="text-slate-500 text-xs space-y-1.5">
-            <li>• Chaque route s'exécute automatiquement selon la fréquence choisie (toutes les N heures ou une fois par jour à heure fixe UTC).</li>
-            <li>• Chaque Grand Cargo transporte jusqu'à <strong className="text-slate-400">{formatNumber(cargoCapacity)}</strong> unités de ressources.</li>
-            <li>• Les ratios (0-100%) définissent quelle fraction du stock disponible est embarquée pour chaque ressource.</li>
-            <li>• Une flotte ennemie en embuscade dans le système solaire cible peut <strong className="text-red-400">intercepter</strong> les cargos et voler une partie des ressources.</li>
-            <li>• Le nombre de routes disponibles dépend du niveau de votre <strong className="text-amber-400">Hub Logistique</strong> sur la planète source (niv. 1 → 2 routes, niv. 3 → 6, niv. 5 → 12…).</li>
-          </ul>
-        </CardContent>
-      </Card>
+      <div className="rounded-xl bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 backdrop-blur-[12px] p-4">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
+          <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
+          <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70 flex items-center gap-1.5">
+            <Info size={11} /> Comment fonctionnent les Routes Commerciales ?
+          </span>
+        </div>
+        <ul className="text-slate-500 text-xs space-y-1.5">
+          <li>• Chaque route s'exécute automatiquement selon la fréquence choisie (toutes les N heures ou une fois par jour à heure fixe UTC).</li>
+          <li>• Chaque Grand Cargo transporte jusqu'à <strong className="text-slate-400 font-mono tabular-nums">{formatNumber(cargoCapacity)}</strong> unités de ressources.</li>
+          <li>• Les ratios (0-100%) définissent quelle fraction du stock disponible est embarquée pour chaque ressource.</li>
+          <li>• Une flotte ennemie en embuscade dans le système solaire cible peut <strong className="text-red-400">intercepter</strong> les cargos et voler une partie des ressources.</li>
+          <li>• Le nombre de routes disponibles dépend du niveau de votre <strong className="text-cyan-400">Hub Logistique</strong> sur la planète source (niv. 1 → 2 routes, niv. 3 → 6, niv. 5 → 12…).</li>
+        </ul>
+      </div>
     </div>
   );
 }
