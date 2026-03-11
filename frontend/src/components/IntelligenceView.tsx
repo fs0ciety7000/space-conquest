@@ -263,7 +263,7 @@ function OperationsTab({ currentPlanet, token, onReportReady, initialTarget }: O
     }
     setLoading(true);
     try {
-      const res = await fetch(apiUrl('/spy/v2'), {
+      const res = await fetch(apiUrl(`/spy/v2?current_planet_id=${currentPlanet.id}`), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
