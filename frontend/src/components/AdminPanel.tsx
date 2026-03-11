@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
-import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery, Radio, Skull, Plus, Trash2, RefreshCw, Swords } from 'lucide-react';
+import { Search, Edit, Save, X, AlertTriangle, Database, Users, Zap, BarChart3, Settings, Rocket, Shield, TrendingUp, Crosshair, Target, Award, Package, Box, Map, Warehouse, Battery, Radio, Skull, Plus, Trash2, RefreshCw, Swords, Scale } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -122,7 +122,7 @@ interface Announcement {
   updated_at: string;
 }
 
-type AdminTab = 'players' | 'stats' | 'users' | 'config' | 'announcements' | 'content' | 'black_market' | 'pve_events';
+type AdminTab = 'players' | 'stats' | 'users' | 'config' | 'announcements' | 'content' | 'black_market' | 'pve_events' | 'governance';
 
 interface ConfigCategory {
   id: string;
@@ -913,6 +913,18 @@ export default function AdminPanel() {
         >
           <Swords size={16} />
           Événements PVE
+        </Button>
+        <Button
+          variant={activeTab === 'governance' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('governance')}
+          className={`flex items-center gap-2 transition-all duration-300 ${
+            activeTab === 'governance'
+              ? 'bg-yellow-700 hover:bg-yellow-600 text-white card-depth shadow-lg'
+              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
+          }`}
+        >
+          <Scale size={16} />
+          Gouvernance
         </Button>
       </div>
 
@@ -2607,6 +2619,12 @@ export default function AdminPanel() {
       {activeTab === 'pve_events' && (
         <AdminPvePanel />
       )}
+
+      {/* TAB GOVERNANCE */}
+      {activeTab === 'governance' && (
+        <AdminGovernancePanel />
+      )}
+
       <ConfirmModal
         isOpen={confirmState.open}
         title={confirmState.title}
@@ -2884,6 +2902,528 @@ function ConfigInput({ label, value, onChange, color, description, compact, step
       {description && !compact && (
         <p className="text-xs text-slate-500 mt-1">{description}</p>
       )}
+    </div>
+  );
+}
+
+// ─── Admin Governance Panel ────────────────────────────────────────────────────
+
+const GOVERNANCE_EFFECT_KEYS = [
+  { value: 'production_speed_multiplier', label: 'Production' },
+  { value: 'building_speed_multiplier', label: 'Construction' },
+  { value: 'research_speed_multiplier', label: 'Recherche' },
+  { value: 'ship_build_speed_multiplier', label: 'Vaisseaux' },
+  { value: 'expedition_syndicate_credit_chance', label: 'Crédits Syndicat' },
+] as const;
+
+interface AdminLaw {
+  id: string;
+  title: string;
+  status: string;
+  yes_count: number;
+  no_count: number;
+  vote_end: string;
+}
+
+interface AdminSurvey {
+  id: string;
+  title: string;
+  status: string;
+  ends_at: string;
+}
+
+interface LawEffectForm {
+  config_key: string;
+  operation: 'multiply' | 'add';
+  delta: number;
+  duration_hours: number | '';
+}
+
+function AdminGovernancePanel() {
+  const token = localStorage.getItem('token') || '';
+  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  // --- Laws state ---
+  const [laws, setLaws] = useState<AdminLaw[]>([]);
+  const [loadingLaws, setLoadingLaws] = useState(false);
+  const [lawForm, setLawForm] = useState({
+    title: '',
+    description: '',
+    vote_end: '',
+    effects: [{ config_key: 'production_speed_multiplier', operation: 'multiply' as const, delta: 1.5, duration_hours: 48 as number | '' }] as LawEffectForm[],
+  });
+
+  // --- Surveys state ---
+  const [surveys, setSurveys] = useState<AdminSurvey[]>([]);
+  const [loadingSurveys, setLoadingSurveys] = useState(false);
+  const [surveyForm, setSurveyForm] = useState({
+    title: '',
+    description: '',
+    survey_type: 'yes_no' as 'yes_no' | 'multiple_choice' | 'rating',
+    options: '',
+    ends_at: '',
+  });
+
+  // --- Confirm ---
+  const [govConfirm, setGovConfirm] = useState<{
+    open: boolean; title: string; message: string; onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
+
+  const openConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setGovConfirm({ open: true, title, message, onConfirm });
+  };
+
+  const fetchLaws = async () => {
+    setLoadingLaws(true);
+    try {
+      const res = await fetch(apiUrl('/admin/laws'), { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      setLaws(Array.isArray(data) ? data : []);
+    } catch {
+      toast.error('Impossible de charger les lois');
+    } finally {
+      setLoadingLaws(false);
+    }
+  };
+
+  const fetchSurveys = async () => {
+    setLoadingSurveys(true);
+    try {
+      const res = await fetch(apiUrl('/admin/surveys'), { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      setSurveys(Array.isArray(data) ? data : []);
+    } catch {
+      toast.error('Impossible de charger les sondages');
+    } finally {
+      setLoadingSurveys(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLaws();
+    fetchSurveys();
+  }, []);
+
+  // --- Law form handlers ---
+  const addEffect = () => {
+    setLawForm((f) => ({
+      ...f,
+      effects: [...f.effects, { config_key: 'production_speed_multiplier', operation: 'multiply', delta: 1.0, duration_hours: '' }],
+    }));
+  };
+
+  const removeEffect = (i: number) => {
+    setLawForm((f) => ({ ...f, effects: f.effects.filter((_, idx) => idx !== i) }));
+  };
+
+  const updateEffect = (i: number, patch: Partial<LawEffectForm>) => {
+    setLawForm((f) => ({
+      ...f,
+      effects: f.effects.map((e, idx) => (idx === i ? { ...e, ...patch } : e)),
+    }));
+  };
+
+  const handleCreateLaw = async () => {
+    if (!lawForm.title || !lawForm.vote_end) {
+      toast.error('Titre et date de fin de vote requis');
+      return;
+    }
+    try {
+      const payload = {
+        ...lawForm,
+        effects: lawForm.effects.map((e) => ({
+          ...e,
+          duration_hours: e.duration_hours === '' ? null : e.duration_hours,
+        })),
+      };
+      const res = await fetch(apiUrl('/admin/laws'), {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Erreur création loi');
+      toast.success('Loi créée');
+      setLawForm({ title: '', description: '', vote_end: '', effects: [{ config_key: 'production_speed_multiplier', operation: 'multiply', delta: 1.5, duration_hours: 48 }] });
+      fetchLaws();
+    } catch {
+      toast.error('Impossible de créer la loi');
+    }
+  };
+
+  const patchLaw = async (id: string, status: string) => {
+    try {
+      const res = await fetch(apiUrl(`/admin/laws/${id}`), {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(`Loi mise à jour: ${status}`);
+      fetchLaws();
+    } catch {
+      toast.error('Impossible de mettre à jour la loi');
+    }
+  };
+
+  const deleteLaw = async (id: string) => {
+    try {
+      const res = await fetch(apiUrl(`/admin/laws/${id}`), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Loi supprimée');
+      fetchLaws();
+    } catch {
+      toast.error('Impossible de supprimer la loi');
+    }
+  };
+
+  // --- Survey form handlers ---
+  const handleCreateSurvey = async () => {
+    if (!surveyForm.title || !surveyForm.ends_at) {
+      toast.error('Titre et date de fin requis');
+      return;
+    }
+    try {
+      const payload = {
+        ...surveyForm,
+        options: surveyForm.survey_type === 'multiple_choice'
+          ? surveyForm.options.split(',').map((o) => o.trim()).filter(Boolean)
+          : [],
+      };
+      const res = await fetch(apiUrl('/admin/surveys'), {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Sondage créé');
+      setSurveyForm({ title: '', description: '', survey_type: 'yes_no', options: '', ends_at: '' });
+      fetchSurveys();
+    } catch {
+      toast.error('Impossible de créer le sondage');
+    }
+  };
+
+  const patchSurvey = async (id: string, status: string) => {
+    try {
+      const res = await fetch(apiUrl(`/admin/surveys/${id}`), {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(`Sondage: ${status}`);
+      fetchSurveys();
+    } catch {
+      toast.error('Impossible de mettre à jour le sondage');
+    }
+  };
+
+  const deleteSurvey = async (id: string) => {
+    try {
+      const res = await fetch(apiUrl(`/admin/surveys/${id}`), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Sondage supprimé');
+      fetchSurveys();
+    } catch {
+      toast.error('Impossible de supprimer le sondage');
+    }
+  };
+
+  const STATUS_COLORS: Record<string, string> = {
+    voting: 'text-blue-300 bg-blue-500/10 border-blue-500/30',
+    passed: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30',
+    failed: 'text-red-400 bg-red-500/10 border-red-500/30',
+    expired: 'text-slate-400 bg-slate-500/10 border-slate-500/30',
+    cancelled: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
+    active: 'text-blue-300 bg-blue-500/10 border-blue-500/30',
+    closed: 'text-slate-400 bg-slate-500/10 border-slate-500/30',
+    archived: 'text-slate-500 bg-slate-700/10 border-slate-600/30',
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* ── LOIS ── */}
+      <Card className="bg-gradient-to-br from-slate-950 to-yellow-950/10 border-yellow-500/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-yellow-300">
+            <Scale size={18} />
+            Lois &amp; Propositions
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Create law form */}
+          <div className="bg-slate-900/50 border border-white/10 rounded-lg p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-slate-300">Nouvelle proposition de loi</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Titre</label>
+                <Input
+                  value={lawForm.title}
+                  onChange={(e) => setLawForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="Titre de la loi"
+                  className="bg-black/40 border-white/10 text-white"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Fin du vote (datetime-local)</label>
+                <Input
+                  type="datetime-local"
+                  value={lawForm.vote_end}
+                  onChange={(e) => setLawForm((f) => ({ ...f, vote_end: e.target.value }))}
+                  className="bg-black/40 border-white/10 text-white"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Description</label>
+              <textarea
+                value={lawForm.description}
+                onChange={(e) => setLawForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Description détaillée..."
+                rows={2}
+                className="w-full bg-black/40 border border-white/10 rounded-md px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-500/50"
+              />
+            </div>
+
+            {/* Effects builder */}
+            <div className="space-y-2">
+              <label className="text-xs text-slate-400 block">Effets</label>
+              {lawForm.effects.map((effect, i) => (
+                <div key={i} className="flex flex-wrap gap-2 items-center">
+                  <select
+                    value={effect.config_key}
+                    onChange={(e) => updateEffect(i, { config_key: e.target.value })}
+                    className="bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none"
+                  >
+                    {GOVERNANCE_EFFECT_KEYS.map((k) => (
+                      <option key={k.value} value={k.value}>{k.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={effect.operation}
+                    onChange={(e) => updateEffect(i, { operation: e.target.value as 'multiply' | 'add' })}
+                    className="bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none"
+                  >
+                    <option value="multiply">×</option>
+                    <option value="add">+</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={effect.delta}
+                    onChange={(e) => updateEffect(i, { delta: parseFloat(e.target.value) || 0 })}
+                    step="0.1"
+                    min="0"
+                    className="w-20 bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Durée (h, vide=permanent)"
+                    value={effect.duration_hours}
+                    onChange={(e) => updateEffect(i, { duration_hours: e.target.value === '' ? '' : parseInt(e.target.value, 10) })}
+                    className="w-40 bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => removeEffect(i)}
+                    className="text-red-400 hover:text-red-300 text-xs px-2 py-1.5 border border-red-500/30 rounded hover:bg-red-500/10 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={addEffect}
+                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+              >
+                <Plus size={12} />
+                Ajouter effet
+              </button>
+            </div>
+
+            <Button onClick={handleCreateLaw} className="bg-yellow-700 hover:bg-yellow-600 text-white">
+              <Plus size={14} className="mr-1" />
+              Créer la loi
+            </Button>
+          </div>
+
+          {/* Laws list */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-slate-300">Toutes les lois ({laws.length})</h3>
+            {loadingLaws ? (
+              <p className="text-xs text-slate-500">Chargement...</p>
+            ) : laws.length === 0 ? (
+              <p className="text-xs text-slate-500 italic">Aucune loi</p>
+            ) : (
+              laws.map((law) => (
+                <div key={law.id} className="flex flex-wrap items-center gap-2 bg-slate-900/40 border border-white/10 rounded-lg px-3 py-2">
+                  <span className="text-sm text-white flex-1 min-w-0 truncate">{law.title}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded border font-bold ${STATUS_COLORS[law.status] || 'text-slate-400 border-slate-600'}`}>
+                    {law.status.toUpperCase()}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {law.yes_count}✓ / {law.no_count}✗
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => patchLaw(law.id, 'passed')}
+                    className="text-xs h-7 bg-emerald-900/20 border-emerald-500/30 text-emerald-300 hover:bg-emerald-900/40"
+                  >
+                    Forcer passage
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => patchLaw(law.id, 'cancelled')}
+                    className="text-xs h-7 bg-orange-900/20 border-orange-500/30 text-orange-300 hover:bg-orange-900/40"
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openConfirm('Supprimer la loi', `Supprimer "${law.title}" ?`, () => deleteLaw(law.id))}
+                    className="text-xs h-7 bg-red-900/20 border-red-500/30 text-red-300 hover:bg-red-900/40"
+                  >
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── SONDAGES ── */}
+      <Card className="bg-gradient-to-br from-slate-950 to-blue-950/10 border-blue-500/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-blue-300">
+            <BarChart3 size={18} />
+            Sondages
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Create survey form */}
+          <div className="bg-slate-900/50 border border-white/10 rounded-lg p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-slate-300">Nouveau sondage</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Titre</label>
+                <Input
+                  value={surveyForm.title}
+                  onChange={(e) => setSurveyForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="Titre du sondage"
+                  className="bg-black/40 border-white/10 text-white"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Type</label>
+                <select
+                  value={surveyForm.survey_type}
+                  onChange={(e) => setSurveyForm((f) => ({ ...f, survey_type: e.target.value as 'yes_no' | 'multiple_choice' | 'rating' }))}
+                  className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none"
+                >
+                  <option value="yes_no">Oui / Non</option>
+                  <option value="multiple_choice">Choix multiple</option>
+                  <option value="rating">Note (1-5)</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Description</label>
+              <textarea
+                value={surveyForm.description}
+                onChange={(e) => setSurveyForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Description..."
+                rows={2}
+                className="w-full bg-black/40 border border-white/10 rounded-md px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50"
+              />
+            </div>
+            {surveyForm.survey_type === 'multiple_choice' && (
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Options (séparées par des virgules)</label>
+                <Input
+                  value={surveyForm.options}
+                  onChange={(e) => setSurveyForm((f) => ({ ...f, options: e.target.value }))}
+                  placeholder="Option A, Option B, Option C"
+                  className="bg-black/40 border-white/10 text-white"
+                />
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Fin du sondage</label>
+              <Input
+                type="datetime-local"
+                value={surveyForm.ends_at}
+                onChange={(e) => setSurveyForm((f) => ({ ...f, ends_at: e.target.value }))}
+                className="bg-black/40 border-white/10 text-white"
+              />
+            </div>
+            <Button onClick={handleCreateSurvey} className="bg-blue-700 hover:bg-blue-600 text-white">
+              <Plus size={14} className="mr-1" />
+              Créer le sondage
+            </Button>
+          </div>
+
+          {/* Surveys list */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-slate-300">Tous les sondages ({surveys.length})</h3>
+            {loadingSurveys ? (
+              <p className="text-xs text-slate-500">Chargement...</p>
+            ) : surveys.length === 0 ? (
+              <p className="text-xs text-slate-500 italic">Aucun sondage</p>
+            ) : (
+              surveys.map((survey) => (
+                <div key={survey.id} className="flex flex-wrap items-center gap-2 bg-slate-900/40 border border-white/10 rounded-lg px-3 py-2">
+                  <span className="text-sm text-white flex-1 min-w-0 truncate">{survey.title}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded border font-bold ${STATUS_COLORS[survey.status] || 'text-slate-400 border-slate-600'}`}>
+                    {survey.status.toUpperCase()}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => patchSurvey(survey.id, 'closed')}
+                    className="text-xs h-7 bg-slate-900/20 border-slate-500/30 text-slate-300 hover:bg-slate-800/40"
+                  >
+                    Fermer
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => patchSurvey(survey.id, 'archived')}
+                    className="text-xs h-7 bg-slate-900/20 border-slate-500/30 text-slate-400 hover:bg-slate-800/40"
+                  >
+                    Archiver
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openConfirm('Supprimer le sondage', `Supprimer "${survey.title}" ?`, () => deleteSurvey(survey.id))}
+                    className="text-xs h-7 bg-red-900/20 border-red-500/30 text-red-300 hover:bg-red-900/40"
+                  >
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Local confirm modal */}
+      <ConfirmModal
+        isOpen={govConfirm.open}
+        title={govConfirm.title}
+        message={govConfirm.message}
+        variant="danger"
+        onConfirm={() => { govConfirm.onConfirm(); setGovConfirm((s) => ({ ...s, open: false })); }}
+        onCancel={() => setGovConfirm((s) => ({ ...s, open: false }))}
+      />
     </div>
   );
 }

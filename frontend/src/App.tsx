@@ -41,6 +41,7 @@ const UndergroundMarket = lazy(() => import('./components/UndergroundMarket'));
 const StatsPage = lazy(() => import('./components/StatsPage'));
 const Achievements = lazy(() => import('./components/Achievements'));
 const IntelligenceView = lazy(() => import('./components/IntelligenceView'));
+const GovernanceView = lazy(() => import('./components/GovernanceView'));
 import PirateExtortionModal from './components/PirateExtortionModal';
 import { Sidebar, type MenuItem } from './components/Sidebar';
 import SpyModal from './components/SpyModal';
@@ -60,7 +61,7 @@ import WebSocketOverlay from './components/WebSocketOverlay';
 import {
   LayoutDashboard, Pickaxe, Hammer, Loader2,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck, Layers,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap, Crosshair, Star, Skull, Award
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap, Crosshair, Star, Skull, Award, Scale
 } from "lucide-react";
 import { PlanetProvider, usePlanet } from './contexts/PlanetContext';
 import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext';
@@ -76,7 +77,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground' | 'dashboard' | 'achievements' | 'intelligence';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground' | 'dashboard' | 'achievements' | 'intelligence' | 'governance';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -674,6 +675,7 @@ function AppContent({
     { id: 'alliance', label: 'Alliances', icon: Shield, category: 'DONNÉES' },
     { id: 'achievements', label: 'Succès', icon: Award, category: 'DONNÉES' },
     { id: 'missions', label: 'Missions', icon: Telescope, category: 'DONNÉES' },
+    { id: 'governance', label: 'Sénat', icon: Scale, category: 'DONNÉES' },
     { id: 'officers', label: 'Officiers', icon: Users, category: 'DONNÉES' },
     { id: 'stats', label: 'Statistiques', icon: Activity, category: 'DONNÉES' },
     { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
@@ -930,6 +932,9 @@ function AppContent({
                               onActionSuccess={fetchPlanet}
                               initialTarget={dispatchMission === 'spy' && dispatchTarget ? { id: dispatchTarget.id, name: dispatchTarget.name, galaxy: dispatchTarget.galaxy, system: dispatchTarget.system, position: dispatchTarget.position } : undefined}
                             />
+                          )}
+                          {activeTab === 'governance' && token && (
+                            <GovernanceView token={token} currentPlanet={planet} />
                           )}
                           {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} initialView={reportsInitialView} />}
                           {activeTab === 'changelog' && <Changelog />}

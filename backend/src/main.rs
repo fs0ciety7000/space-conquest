@@ -43,7 +43,7 @@ use sea_orm::sea_query::extension::postgres::PgExpr;
 // Utiliser les modules de la lib pour éviter la double compilation
 use backend::{
     auth, game_logic, combat, entities, config, admin, admin_content,
-    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, black_market, economy_log, notifications, analytics, server_events, AppState
+    messaging, market, websocket, alliance, missions, officers, sabotage, tech_tree, tick_system, maintenance, protection, trade_routes, build_queue, planet_market, black_market, economy_log, notifications, analytics, server_events, governance, AppState
 };
 
 // Cancel handlers for ship/defense builds
@@ -473,6 +473,7 @@ async fn main() {
         .merge(handlers::planets::router(state.clone()))
         .merge(handlers::server_events::router(state.clone()))
         .merge(handlers::game_catalog::router(state.clone()))
+        .merge(governance::router(state.clone()))
 
         .layer(TraceLayer::new_for_http())
         .with_state(state.clone());
@@ -489,6 +490,17 @@ async fn main() {
         }
     });
     println!("⚔️  PVE Events tick démarré (intervalle: 30s)");
+
+    // Governance tick (toutes les 60s — expiration votes lois, réversion effets, fermeture sondages)
+    let state_governance = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            governance::governance_tick(&state_governance).await;
+        }
+    });
+    println!("🗳️  Governance tick démarré (intervalle: 60s)");
 
     // Rate limiter cleanup (prevent memory growth from many unique IPs)
     {

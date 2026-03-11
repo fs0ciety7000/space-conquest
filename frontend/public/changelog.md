@@ -1,5 +1,44 @@
 # Changelog - Space Conquest
 
+## [10.7.0] - 2026-03-11 - Sénat Galactique : Lois, Sondages & Annonces
+
+### 🏛️ Sénat Galactique (nouveau)
+Nouvelle section accessible depuis la navigation principale.
+
+#### Système de Lois
+- L'admin propose des lois avec effets configurables (production, construction, recherche, vaisseaux, crédits Syndicat)
+- Les joueurs votent POUR ou CONTRE pendant la période de vote
+- Si majorité POUR → loi adoptée → effets appliqués automatiquement sur le serveur
+- Lois temporaires (ex: "Production ×1.5 pendant 48h") ou permanentes
+- Barre de vote live visible par tous pendant le scrutin
+- Archive de toutes les lois passées avec résultats
+
+#### Système de Sondages
+- L'admin crée des sondages non-contraignants (Oui/Non, choix multiple, notation 1-5)
+- Les joueurs répondent une seule fois (UNIQUE en DB)
+- Résultats visibles après vote avec barres de progression et pourcentages
+- Archive des sondages passés
+
+#### Annonces automatiques
+- Loi soumise au vote → annonce broadcast + notification cloche à tous les joueurs
+- Loi adoptée/rejetée → annonce automatique avec résultats
+- Sondage ouvert/fermé → annonce automatique
+- Visibles dans l'AnnouncementBanner pour les joueurs hors-ligne
+
+### 🛠️ Panel Admin — Gouvernance
+- Créer une loi avec builder d'effets (sélection clé config, opérateur ×/+, valeur, durée)
+- Forcer le passage / Annuler / Supprimer une loi
+- Créer un sondage avec type et options
+- Fermer / Archiver / Supprimer un sondage
+
+### ⚙️ DB (migration `m20260314_000001`)
+- 5 nouvelles tables : `law_proposal`, `law_vote`, `law_effect`, `survey`, `survey_response`
+- UNIQUE constraints : un vote par joueur par loi, une réponse par joueur par sondage
+- `ServerConfigCache` applique les `law_effect` actifs au-dessus de la config de base
+- Tick gouvernance (60s) : résolution automatique des votes expirés + revert des lois temporaires
+
+---
+
 ## [10.6.0] - 2026-03-11 - Rapports, Notifications & Alertes Militaires
 
 ### 📋 Notifications liées aux rapports

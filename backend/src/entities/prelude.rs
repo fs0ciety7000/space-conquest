@@ -92,3 +92,10 @@ pub use super :: server_event_type :: Entity as ServerEventType ;
 pub use super :: server_event :: Entity as ServerEvent ;
 pub use super :: server_event_participation :: Entity as ServerEventParticipation ;
 pub use super :: server_event_action :: Entity as ServerEventAction ;
+
+// Governance system (Lois + Sondages)
+pub use super :: law_proposal :: Entity as LawProposal ;
+pub use super :: law_vote :: Entity as LawVote ;
+pub use super :: law_effect :: Entity as LawEffect ;
+pub use super :: survey :: Entity as Survey ;
+pub use super :: survey_response :: Entity as SurveyResponse ;

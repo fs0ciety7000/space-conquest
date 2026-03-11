@@ -98,3 +98,10 @@ pub mod server_event_type;
 pub mod server_event;
 pub mod server_event_participation;
 pub mod server_event_action;
+
+// Governance system (Lois + Sondages)
+pub mod law_proposal;
+pub mod law_vote;
+pub mod law_effect;
+pub mod survey;
+pub mod survey_response;

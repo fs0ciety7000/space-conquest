@@ -90,6 +90,7 @@ mod m20260312_000001_refactor_speed_config;
 mod m20260312_000002_entity_metadata;
 mod m20260312_000003_enhance_casus_belli;
 mod m20260313_000001_notification_report_id_mission_departure;
+mod m20260314_000001_governance_laws_surveys;
 
 pub struct Migrator;
 
@@ -187,6 +188,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260312_000002_entity_metadata::Migration),
             Box::new(m20260312_000003_enhance_casus_belli::Migration),
             Box::new(m20260313_000001_notification_report_id_mission_departure::Migration),
+            Box::new(m20260314_000001_governance_laws_surveys::Migration),
         ]
     }
 }

@@ -1,5 +1,6 @@
 // Imports pour les structures partagées
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Condition};
+use chrono::Utc;
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 
@@ -29,9 +30,10 @@ pub mod notifications;
 pub mod analytics;
 pub mod server_events;
 pub mod rate_limit;
+pub mod governance;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
-use entities::{prelude::ServerConfig, server_config};
+use entities::{prelude::{ServerConfig, LawEffect}, server_config, law_effect};
 
 #[derive(Clone)]
 pub struct ServerConfigCache {
@@ -93,6 +95,60 @@ impl ServerConfigCache {
                         "mining_speed_multiplier"       => cache.mining_speed = val,
                         _ => {}
                     }
+                }
+            }
+        }
+
+        // ── Apply active law effects on top of base config ───────────────────
+        // Active = expires_at IS NULL (permanent) or expires_at > NOW()
+        let now_naive = Utc::now().naive_utc();
+        if let Ok(active_effects) = LawEffect::find()
+            .filter(
+                Condition::any()
+                    .add(law_effect::Column::ExpiresAt.is_null())
+                    .add(law_effect::Column::ExpiresAt.gt(now_naive)),
+            )
+            .all(db)
+            .await
+        {
+            // Hardcoded defaults for known config keys (mirrors ServerConfigCache::default)
+            let known_defaults: std::collections::HashMap<&str, f64> = [
+                ("production_speed_multiplier", 250.0),
+                ("building_speed_multiplier", 50.0),
+                ("research_speed_multiplier", 25.0),
+                ("ship_build_speed_multiplier", 100.0),
+                ("ship_build_rate", 1.0),
+                ("defense_build_rate", 1.0),
+                ("expedition_syndicate_credit_chance", 0.35),
+                ("construction_speed_multiplier", 1.0),
+                ("mining_speed_multiplier", 1.0),
+            ]
+            .into_iter()
+            .collect();
+
+            for effect in active_effects {
+                let base = cache.configs.get(&effect.config_key).copied()
+                    .or_else(|| known_defaults.get(effect.config_key.as_str()).copied())
+                    .unwrap_or(effect.base_value);
+
+                let new_val = match effect.operation.as_str() {
+                    "multiply" => base * effect.delta,
+                    "add"      => base + effect.delta,
+                    "set"      => effect.delta,
+                    _          => base,
+                };
+
+                cache.configs.insert(effect.config_key.clone(), new_val);
+
+                // Also propagate to named fields for immediate effect
+                match effect.config_key.as_str() {
+                    "production_speed_multiplier"   => cache.production_speed = new_val,
+                    "building_speed_multiplier"     => cache.building_speed = new_val,
+                    "research_speed_multiplier"     => cache.research_speed = new_val,
+                    "ship_build_speed_multiplier"   => cache.ship_build_speed = new_val,
+                    "construction_speed_multiplier" => cache.construction_speed = new_val,
+                    "mining_speed_multiplier"       => cache.mining_speed = new_val,
+                    _ => {}
                 }
             }
         }
