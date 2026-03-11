@@ -11,6 +11,7 @@ use sea_orm::{
     ActiveModelTrait,
     DatabaseConnection,
     Database,
+    DbErr,
     EntityTrait,
     Set,
     NotSet,
