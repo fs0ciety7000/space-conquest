@@ -1,5 +1,23 @@
 # Changelog - Space Conquest
 
+## [10.1.0] - 2026-03-11 - Rééquilibrage temps de construction & Correctifs
+
+### ⚖️ Rééquilibrage — Temps de construction
+
+Les temps de construction étaient calculés à partir du coût des ressources, ce qui créait une progression exponentielle incontrôlable (ex : mine métal niveau 30 = des années). Les formules ont été refondues pour être basées sur le **niveau** de la construction, garantissant des temps raisonnables à tous les stades du jeu.
+
+- **Bâtiments** : formule `L^1.4 × 30 min` — maximum ~21h à niveau 30, même sans chantier
+- **Vaisseaux & Défenses** : taux de production ×5 plus élevé — 100 chasseurs légers ≈ 52 min à chantier niveau 8
+- **Technologies** : formule `L^1.5 × 40 min` avec facteurs par catégorie (techs de fin de jeu comme Graviton ×2.5)
+- Le niveau du Chantier Spatial et du Laboratoire de Recherche réduit toujours le temps (jusqu'à -60%)
+
+### 🐛 Correctifs
+
+- **Transport de ressources** : corrigé un bug où le transport était systématiquement refusé ("Pas de cargo disponible") même si la planète possédait des transporteurs. La validation envoyait le total de tous les vaisseaux sélectionnés au lieu du seul compte de transporteurs.
+- **File de construction** : corrigé la barre de progression qui affichait des valeurs incorrectes (>100% ou négatives). Elle affiche désormais une animation "En cours" — le countdown reste le vrai indicateur.
+
+---
+
 ## [10.0.0] - 2026-03-11 - Refonte UI Cyberpunk / Modern Sci-Fi
 
 ### 🎨 Nouveau Design System v2.0 — Cyberpunk / Modern Sci-Fi
