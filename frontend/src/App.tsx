@@ -40,10 +40,8 @@ const BuildQueueManager = lazy(() => import('./components/BuildQueueManager'));
 const UndergroundMarket = lazy(() => import('./components/UndergroundMarket'));
 const StatsPage = lazy(() => import('./components/StatsPage'));
 const Achievements = lazy(() => import('./components/Achievements'));
+const IntelligenceView = lazy(() => import('./components/IntelligenceView'));
 import PirateExtortionModal from './components/PirateExtortionModal';
-import { SabotagesDashboard } from './components/SabotagesDashboard';
-import { SabotagesSufferedDashboard } from './components/SabotagesSufferedDashboard';
-import { CasusBelliList } from './components/CasusBelliList';
 import { Sidebar, type MenuItem } from './components/Sidebar';
 import SpyModal from './components/SpyModal';
 import MaintenancePage from './components/MaintenancePage';
@@ -78,7 +76,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground' | 'dashboard' | 'achievements';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground' | 'dashboard' | 'achievements' | 'intelligence';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -139,9 +137,6 @@ function AppContent({
   const [dispatchTarget, setDispatchTarget] = useState<{id: string, name: string, galaxy?: number, system?: number, position?: number} | null>(null);
   const [dispatchMission, setDispatchMission] = useState<'attack' | 'spy' | 'transport'>('attack');
   const [spyReport, setSpyReport] = useState<any>(null);
-  const [showSabotagesDashboard, setShowSabotagesDashboard] = useState(false);
-  const [showSabotagesSufferedDashboard, setShowSabotagesSufferedDashboard] = useState(false);
-  const [showCasusBelliList, setShowCasusBelliList] = useState(false);
   const prevPlanetRef = useRef<any>(null);
   const processingReportRef = useRef(false);
 
@@ -673,9 +668,7 @@ function AppContent({
     { id: 'defenses', label: 'Défense', icon: ShieldCheck, category: 'MILITAIRE' },
     { id: 'expedition', label: 'Expéditions', icon: Telescope, category: 'MILITAIRE' },
 
-    { id: 'sabotages', label: 'Mes Sabotages', icon: Eye, category: 'ESPIONNAGE', onClick: () => setShowSabotagesDashboard(true) },
-    { id: 'sabotages-suffered', label: 'Sabotages Subis', icon: ShieldAlert, category: 'ESPIONNAGE', onClick: () => setShowSabotagesSufferedDashboard(true) },
-    { id: 'casus-belli', label: 'Casus Belli', icon: Swords, category: 'ESPIONNAGE', onClick: () => setShowCasusBelliList(true) },
+    { id: 'intelligence', label: 'Intelligence', icon: ShieldAlert, category: 'ESPIONNAGE' },
 
     { id: 'ranking', label: 'Classement', icon: Trophy, category: 'DONNÉES' },
     { id: 'alliance', label: 'Alliances', icon: Shield, category: 'DONNÉES' },
@@ -745,27 +738,6 @@ function AppContent({
               onClose={() => setSpyReport(null)}
               targetPlanetId={spyReport.target_planet_id}
               onSabotage={handleSabotage}
-          />
-        )}
-
-        {showSabotagesDashboard && token && (
-          <SabotagesDashboard
-            token={token}
-            onClose={() => setShowSabotagesDashboard(false)}
-          />
-        )}
-
-        {showSabotagesSufferedDashboard && token && (
-          <SabotagesSufferedDashboard
-            token={token}
-            onClose={() => setShowSabotagesSufferedDashboard(false)}
-          />
-        )}
-
-        {showCasusBelliList && token && (
-          <CasusBelliList
-            token={token}
-            onClose={() => setShowCasusBelliList(false)}
           />
         )}
 
@@ -950,6 +922,14 @@ function AppContent({
                           {activeTab === 'defenses' && <Defenses planet={planet} onBuild={fetchPlanet} />}
                           {activeTab === 'expedition' && <ExpeditionZoneV2 planet={planet} onAction={fetchPlanet} />}
 
+                          {activeTab === 'intelligence' && planet && token && (
+                            <IntelligenceView
+                              currentPlanet={planet}
+                              userPlanets={[]}
+                              token={token}
+                              onActionSuccess={fetchPlanet}
+                            />
+                          )}
                           {activeTab === 'reports' && <ReportsTerminal planetId={planet.id} initialView={reportsInitialView} />}
                           {activeTab === 'changelog' && <Changelog />}
                           {activeTab === 'settings' && (

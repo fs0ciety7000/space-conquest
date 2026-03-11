@@ -3,12 +3,12 @@ use axum::{
     http::{StatusCode, HeaderMap},
     response::{IntoResponse, Json},
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, DbErr, PaginatorTrait, Condition};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, DbErr, PaginatorTrait, Condition, TransactionTrait};
 use chrono::{Utc, Duration};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::entities::{prelude::*, planet, sabotage_effect, combat_log};
+use crate::entities::{prelude::*, planet, user, sabotage_effect, casus_belli, combat_log, construction_queue};
 use crate::AppState;
 
 /// Helper: extraire user_id depuis le header Authorization
@@ -35,7 +35,8 @@ fn extract_user_id_from_headers(headers: &HeaderMap) -> Result<Uuid, StatusCode>
 #[derive(Deserialize)]
 pub struct SabotagePayload {
     pub target_planet_id: String,
-    pub action_type: String, // "disable_mine" ou "steal_tech"
+    pub action_type: String, // "disable_mine", "steal_tech", "jam_construction", "steal_credits", "corrupt_fleet", "sabotage_research", "planet_lock"
+    pub mine_target: Option<String>, // Pour "disable_mine" : "metal_mine" | "crystal_mine" | "deuterium_mine"
 }
 
 #[derive(Serialize)]
@@ -45,6 +46,23 @@ pub struct SabotageResponse {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub casus_belli: Option<bool>,
+}
+
+/// Calcule la probabilité de détection selon le type d'effet et l'avantage tech (BE-2)
+pub fn detection_prob_for_effect(effect_type: &str, tech_diff_eff: i32) -> f64 {
+    let p_base: f64 = match effect_type {
+        "disable_mine"      => 0.25,
+        "jam_construction"  => 0.20,
+        "steal_credits"     => 0.35,
+        "corrupt_fleet"     => 0.40,
+        "steal_tech"        => 0.25,
+        "sabotage_research" => 0.30,
+        "planet_lock"       => 0.60,
+        "blackout"          => 0.70,
+        _                   => 0.30,
+    };
+    let adjusted = p_base * (1.0 - tech_diff_eff as f64 * 0.12);
+    adjusted.clamp(0.05, 0.95)
 }
 
 /// Endpoint pour tenter une action de sabotage
@@ -64,6 +82,15 @@ pub async fn attempt_sabotage(
         Ok(id) => id,
         Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "ID planète invalide"}))).into_response(),
     };
+
+    // Valider le type d'action (Sprint 3)
+    let valid_actions = [
+        "disable_mine", "steal_tech", "jam_construction",
+        "steal_credits", "corrupt_fleet", "sabotage_research", "planet_lock",
+    ];
+    if !valid_actions.contains(&payload.action_type.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Type d'action invalide"}))).into_response();
+    }
 
     // Récupérer la planète cible
     let target_planet = match Planet::find_by_id(target_planet_id)
@@ -96,6 +123,26 @@ pub async fn attempt_sabotage(
         Ok(Some(u)) => u,
         _ => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Utilisateur non trouvé"}))).into_response(),
     };
+
+    // Récupérer les niveaux d'espionnage pour la détection dynamique (BE-2)
+    let att_espionage_level = crate::tech_tree::get_planet_tech_level(&state.db, attacker_planet.id, "espionage_tech")
+        .await.unwrap_or(0);
+    let def_espionage_level = crate::tech_tree::get_planet_tech_level(&state.db, target_planet_id, "espionage_tech")
+        .await.unwrap_or(0);
+    let tech_diff_eff = att_espionage_level - def_espionage_level;
+
+    // Vérification niveau espionnage requis (Sprint 3 — BE-8)
+    let required_spy_level: i32 = match payload.action_type.as_str() {
+        "disable_mine" | "jam_construction"                                                  => 5,
+        "steal_credits" | "corrupt_fleet" | "steal_tech" | "sabotage_research"              => 8,
+        "planet_lock"                                                                        => 13,
+        _                                                                                    => 99,
+    };
+    if att_espionage_level < required_spy_level {
+        return (StatusCode::FORBIDDEN, Json(json!({
+            "error": format!("Espionnage niveau {} requis", required_spy_level)
+        }))).into_response();
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // COOLDOWN SABOTAGE - configurable, par paire attaquant/planète cible
@@ -154,29 +201,28 @@ pub async fn attempt_sabotage(
         metadata: Set(None),
     }.insert(&state.db).await;
 
-    // Probabilité de détection fixe à 30%
-    let detected = rand::random::<f64>() * 100.0 < 30.0_f64;
+    // Détection dynamique selon type et avantage tech (BE-2)
+    let p_detect = detection_prob_for_effect(&payload.action_type, tech_diff_eff);
+    let detected = rand::random::<f64>() < p_detect;
 
     // Si détecté
     if detected {
-        // Accorder Casus Belli à la victime
-        let reason = format!("Sabotage détecté sur planète {}", target_planet.name);
-        if let Err(e) = grant_casus_belli(&state.db, target_planet.owner_id, user_id, &reason).await {
-            eprintln!("⚠️ Erreur lors de l'attribution du Casus Belli: {:?}", e);
+        // Accorder Casus Belli à la victime (avec type "sabotage_detected")
+        if let Err(e) = grant_casus_belli(&state.db, target_planet.owner_id, user_id, "sabotage_detected").await {
+            eprintln!("Erreur lors de l'attribution du Casus Belli: {:?}", e);
         }
 
         // Notifier via WebSocket: sabotage détecté + casus belli accordé
         if let Some(ref ws) = state.ws {
-            // 1. Notifier la victime que son système de défense a détecté un sabotage
+            let reason = format!("Sabotage détecté sur planète {}", target_planet.name);
             crate::websocket::notify_sabotage_detected(
                 ws,
                 target_planet.owner_id,
-                &attacker_user.username, // Nom de l'attaquant révélé car détecté
+                &attacker_user.username,
                 &target_planet.name,
                 &payload.action_type,
             ).await;
 
-            // 2. Notifier la victime qu'elle a obtenu un Casus Belli
             crate::websocket::notify_casus_belli_granted(
                 ws,
                 target_planet.owner_id,
@@ -193,26 +239,172 @@ pub async fn attempt_sabotage(
         })).into_response();
     }
 
-    // Sabotage réussi, non détecté
-    let effect_duration = match payload.action_type.as_str() {
-        "disable_mine" => 3600, // 1 heure en secondes
-        "steal_tech" => 86400 * 7, // 7 jours (jusqu'à utilisation)
-        _ => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Type d'action invalide"}))).into_response(),
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VALIDATION SPÉCIFIQUE PAR TYPE + EFFETS INSTANTANÉS (Sprint 3)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // disable_mine : valider mine_target (BE-3)
+    if payload.action_type == "disable_mine" {
+        let mine = payload.mine_target.as_deref().unwrap_or("");
+        if !["metal_mine", "crystal_mine", "deuterium_mine"].contains(&mine) {
+            return (StatusCode::BAD_REQUEST, Json(json!({
+                "error": "mine_target doit être 'metal_mine', 'crystal_mine' ou 'deuterium_mine'"
+            }))).into_response();
+        }
+    }
+
+    // jam_construction : vérifier qu'il y a une construction en cours (BE-8)
+    if payload.action_type == "jam_construction" {
+        use crate::entities::prelude::ConstructionQueue;
+        use crate::entities::construction_queue as cq;
+        let has_queue = ConstructionQueue::find()
+            .filter(cq::Column::PlanetId.eq(target_planet_id))
+            .count(&state.db)
+            .await
+            .unwrap_or(0);
+        if has_queue == 0 {
+            return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({
+                "error": "La cible n'a aucune construction en cours"
+            }))).into_response();
+        }
+    }
+
+    // steal_credits : effet instantané — transférer 10-30% des crédits Syndicat (BE-8)
+    if payload.action_type == "steal_credits" {
+        let victim_user = match User::find_by_id(target_planet.owner_id).one(&state.db).await {
+            Ok(Some(u)) => u,
+            _ => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+        };
+        if victim_user.syndicate_credits <= 0.0 {
+            return (StatusCode::BAD_REQUEST, Json(json!({
+                "error": "La cible n'a pas de crédits Syndicat"
+            }))).into_response();
+        }
+        let stolen_pct = 0.10 + rand::random::<f64>() * 0.20;
+        let stolen_amount = (victim_user.syndicate_credits * stolen_pct).round();
+
+        let attacker_id_copy = user_id;
+        let victim_id_copy = target_planet.owner_id;
+        let stolen = stolen_amount;
+
+        let txn_result = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            Box::pin(async move {
+                // Déduire les crédits de la victime
+                let victim_model = User::find_by_id(victim_id_copy).one(txn).await?
+                    .ok_or(sea_orm::DbErr::RecordNotFound("victim user".to_string()))?;
+                let mut victim_active: user::ActiveModel = victim_model.into();
+                victim_active.syndicate_credits = Set(
+                    (victim_active.syndicate_credits.as_ref() - stolen).max(0.0)
+                );
+                victim_active.update(txn).await?;
+
+                // Créditer l'attaquant
+                let att_model = User::find_by_id(attacker_id_copy).one(txn).await?
+                    .ok_or(sea_orm::DbErr::RecordNotFound("attacker user".to_string()))?;
+                let mut att_active: user::ActiveModel = att_model.into();
+                att_active.syndicate_credits = Set(att_active.syndicate_credits.as_ref() + stolen);
+                att_active.update(txn).await?;
+
+                Ok(())
+            })
+        }).await;
+
+        if txn_result.is_err() {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors du transfert de crédits"}))).into_response();
+        }
+
+        // Créer un log sans effet durable
+        let _ = sabotage_effect::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            target_planet_id: Set(target_planet_id),
+            attacker_user_id: Set(Some(user_id)),
+            effect_type: Set("steal_credits".to_string()),
+            created_at: Set(now_dt),
+            expires_at: Set(now_dt + Duration::seconds(1)),
+            was_detected: Set(false),
+            metadata: Set(Some(json!({ "amount": stolen_amount }))),
+        }.insert(&state.db).await;
+
+        return (StatusCode::OK, Json(SabotageResponse {
+            success: true,
+            detected: false,
+            message: format!("Vol de crédits réussi ! Vous avez dérobé {:.0} crédits Syndicat.", stolen_amount),
+            casus_belli: None,
+        })).into_response();
+    }
+
+    // corrupt_fleet : effet instantané — détruire 5-15% d'une escadrille aléatoire (BE-8)
+    if payload.action_type == "corrupt_fleet" {
+        let ships = crate::tech_tree::get_all_planet_ship_counts(&state.db, target_planet_id)
+            .await
+            .unwrap_or_default();
+        let non_empty: Vec<(&String, &i32)> = ships.iter().filter(|(_, &c)| c > 0).collect();
+        if non_empty.is_empty() {
+            return (StatusCode::BAD_REQUEST, Json(json!({
+                "error": "La cible n'a aucun vaisseau"
+            }))).into_response();
+        }
+
+        let idx = (rand::random::<f64>() * non_empty.len() as f64) as usize;
+        let idx = idx.min(non_empty.len() - 1);
+        let (ship_key, &ship_count) = non_empty[idx];
+        let destroyed_pct = 0.05 + rand::random::<f64>() * 0.10;
+        let destroyed = ((ship_count as f64 * destroyed_pct).floor() as i32).max(0);
+
+        if destroyed > 0 {
+            let _ = crate::tech_tree::deduct_ships(&state.db, target_planet_id, ship_key, destroyed).await;
+        }
+
+        let _ = sabotage_effect::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            target_planet_id: Set(target_planet_id),
+            attacker_user_id: Set(Some(user_id)),
+            effect_type: Set("corrupt_fleet".to_string()),
+            created_at: Set(now_dt),
+            expires_at: Set(now_dt + Duration::seconds(1)),
+            was_detected: Set(false),
+            metadata: Set(Some(json!({ "ship_key": ship_key, "destroyed": destroyed }))),
+        }.insert(&state.db).await;
+
+        return (StatusCode::OK, Json(SabotageResponse {
+            success: true,
+            detected: false,
+            message: format!("Corruption de flotte réussie ! {} {} détruits.", destroyed, ship_key),
+            casus_belli: None,
+        })).into_response();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EFFETS DURABLES — insérer un sabotage_effect avec expiration
+    // ═══════════════════════════════════════════════════════════════════════════
+    let effect_duration: i64 = match payload.action_type.as_str() {
+        "disable_mine"      => 7200,       // 2h (BE-3)
+        "steal_tech"        => 604800,     // 7 jours
+        "jam_construction"  => 3600,       // 1h
+        "sabotage_research" => 14400,      // 4h
+        "planet_lock"       => 3600,       // 1h
+        _                   => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Type d'action invalide"}))).into_response(),
     };
 
-    let expires_at = Utc::now().naive_utc() + Duration::seconds(effect_duration);
+    let expires_at = now_dt + Duration::seconds(effect_duration);
 
-    // Créer l'effet de sabotage
-    let sabotage_id = Uuid::new_v4();
+    // Métadonnée pour disable_mine : quelle mine est ciblée (BE-3)
+    let metadata = if payload.action_type == "disable_mine" {
+        let mine = payload.mine_target.as_deref().unwrap_or("metal_mine");
+        Some(json!({ "mine": mine }))
+    } else {
+        None
+    };
+
     let sabotage_model = sabotage_effect::ActiveModel {
-        id: Set(sabotage_id),
+        id: Set(Uuid::new_v4()),
         target_planet_id: Set(target_planet_id),
-        attacker_user_id: Set(Some(user_id)), // Stocké mais pas révélé
+        attacker_user_id: Set(Some(user_id)),
         effect_type: Set(payload.action_type.clone()),
-        created_at: Set(Utc::now().naive_utc()),
+        created_at: Set(now_dt),
         expires_at: Set(expires_at),
         was_detected: Set(false),
-        metadata: Set(None),
+        metadata: Set(metadata),
     };
 
     if let Err(_) = sabotage_model.insert(&state.db).await {
@@ -221,9 +413,15 @@ pub async fn attempt_sabotage(
 
     // Message de succès selon le type
     let success_message = match payload.action_type.as_str() {
-        "disable_mine" => "Sabotage réussi ! Une mine ennemie a été désactivée (-50% production pendant 1h).",
-        "steal_tech" => "Espionnage industriel réussi ! Vous avez volé des données techniques (-20% temps recherche suivante).",
-        _ => "Sabotage réussi",
+        "disable_mine" => {
+            let mine = payload.mine_target.as_deref().unwrap_or("metal_mine");
+            format!("Sabotage réussi ! La {} ennemie a été désactivée (-50% production pendant 2h).", mine)
+        },
+        "steal_tech"        => "Espionnage industriel réussi ! Vous avez volé des données techniques (-20% temps recherche suivante).".to_string(),
+        "jam_construction"  => "Sabotage réussi ! La file de construction ennemie est bloquée pendant 1h.".to_string(),
+        "sabotage_research" => "Sabotage réussi ! Le temps de recherche ennemi est majoré de 40% pendant 4h.".to_string(),
+        "planet_lock"       => "Sabotage réussi ! La production ennemie est totalement suspendue pendant 1h.".to_string(),
+        _                   => "Sabotage réussi".to_string(),
     };
 
     // Notifier silencieusement la victime (sans révéler l'attaquant)
@@ -241,7 +439,7 @@ pub async fn attempt_sabotage(
     (StatusCode::OK, Json(SabotageResponse {
         success: true,
         detected: false,
-        message: success_message.to_string(),
+        message: success_message,
         casus_belli: None,
     })).into_response()
 }
@@ -373,28 +571,47 @@ pub async fn apply_research_bonus(
 // SYSTÈME CASUS BELLI
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Créer un casus belli quand un saboteur est détecté
-/// victim_user_id: le joueur qui a détecté le sabotage (qui gagne le droit d'attaque)
-/// aggressor_user_id: le saboteur attrapé
+/// Créer un casus belli quand un saboteur est détecté ou un espionnage est répété
+/// victim_user_id : le joueur qui a détecté le sabotage (qui gagne le droit d'attaque)
+/// aggressor_user_id : le saboteur attrapé
+/// cb_type : "sabotage_detected" | "spy_harassment"
 pub async fn grant_casus_belli(
     db: &sea_orm::DatabaseConnection,
     victim_user_id: Uuid,
     aggressor_user_id: Uuid,
-    reason: &str,
+    cb_type: &str,
 ) -> Result<(), DbErr> {
-    use crate::entities::casus_belli;
+    // Compter les CB existants en 7j pour escalade de tension (BE-6)
+    let recent_count = CasusBelli::find()
+        .filter(casus_belli::Column::VictimUserId.eq(victim_user_id))
+        .filter(casus_belli::Column::AggressorUserId.eq(aggressor_user_id))
+        .filter(casus_belli::Column::CreatedAt.gt(Utc::now().naive_utc() - Duration::days(7)))
+        .count(db)
+        .await
+        .unwrap_or(0);
 
-    // Durée de validité: 48 heures
-    let expires_at = Utc::now().naive_utc() + Duration::hours(48);
+    let (tension_level, duration_hours, is_multi_use, uses_remaining) = match recent_count {
+        0 | 1 => (1i32, 48i64,  false, 1i32),
+        2     => (2i32, 72i64,  true,  3i32),
+        _     => (3i32, 168i64, true,  i32::MAX),
+    };
+
+    let now_dt = Utc::now().naive_utc();
+    let expires_at = now_dt + Duration::hours(duration_hours);
+    let reason = format!("CB niveau {} — {}", tension_level, cb_type);
 
     let casus_belli_model = casus_belli::ActiveModel {
         id: Set(Uuid::new_v4()),
         victim_user_id: Set(victim_user_id),
         aggressor_user_id: Set(aggressor_user_id),
-        reason: Set(reason.to_string()),
-        created_at: Set(Utc::now().naive_utc()),
+        reason: Set(reason),
+        created_at: Set(now_dt),
         expires_at: Set(expires_at),
         was_used: Set(false),
+        tension_level: Set(tension_level),
+        cb_type: Set(cb_type.to_string()),
+        is_multi_use: Set(is_multi_use),
+        uses_remaining: Set(uses_remaining),
     };
 
     casus_belli_model.insert(db).await?;
@@ -410,33 +627,29 @@ pub async fn has_casus_belli(
     attacker_user_id: Uuid,
     defender_user_id: Uuid,
 ) -> Result<bool, DbErr> {
-    use crate::entities::{prelude::CasusBelli, casus_belli};
-
     let now = Utc::now().naive_utc();
 
     // Le casus belli permet à la victime (victim) d'attaquer l'agresseur (aggressor)
-    let count = CasusBelli::find()
+    // Pour les multi-usage, uses_remaining > 0 (was_used reste false tant qu'il reste des usages)
+    let found = CasusBelli::find()
         .filter(casus_belli::Column::VictimUserId.eq(attacker_user_id))
         .filter(casus_belli::Column::AggressorUserId.eq(defender_user_id))
         .filter(casus_belli::Column::ExpiresAt.gt(now))
         .filter(casus_belli::Column::WasUsed.eq(false))
-        .count(db)
+        .one(db)
         .await?;
 
-    Ok(count > 0)
+    Ok(found.is_some())
 }
 
-/// Marquer un casus belli comme utilisé après une attaque
+/// Marquer un casus belli comme utilisé après une attaque (supporte multi-usage)
 pub async fn consume_casus_belli(
     db: &sea_orm::DatabaseConnection,
     attacker_user_id: Uuid,
     defender_user_id: Uuid,
 ) -> Result<(), DbErr> {
-    use crate::entities::{prelude::CasusBelli, casus_belli};
-
     let now = Utc::now().naive_utc();
 
-    // Trouver le premier casus belli actif
     if let Some(cb) = CasusBelli::find()
         .filter(casus_belli::Column::VictimUserId.eq(attacker_user_id))
         .filter(casus_belli::Column::AggressorUserId.eq(defender_user_id))
@@ -445,9 +658,17 @@ pub async fn consume_casus_belli(
         .one(db)
         .await?
     {
-        // Marquer comme utilisé
         let mut active_cb: casus_belli::ActiveModel = cb.into();
-        active_cb.was_used = Set(true);
+        if *active_cb.is_multi_use.as_ref() {
+            let remaining = active_cb.uses_remaining.as_ref() - 1;
+            active_cb.uses_remaining = Set(remaining);
+            if remaining <= 0 {
+                active_cb.was_used = Set(true);
+            }
+        } else {
+            active_cb.was_used = Set(true);
+            active_cb.uses_remaining = Set(0);
+        }
         active_cb.update(db).await?;
     }
 
@@ -456,8 +677,6 @@ pub async fn consume_casus_belli(
 
 /// Nettoyer les casus belli expirés (à appeler périodiquement)
 pub async fn cleanup_expired_casus_belli(db: &sea_orm::DatabaseConnection) -> Result<u64, DbErr> {
-    use crate::entities::{prelude::CasusBelli, casus_belli};
-
     let now = Utc::now().naive_utc();
 
     let result = CasusBelli::delete_many()
@@ -473,8 +692,6 @@ pub async fn get_active_casus_belli(
     db: &sea_orm::DatabaseConnection,
     user_id: Uuid,
 ) -> Result<Vec<crate::entities::casus_belli::Model>, DbErr> {
-    use crate::entities::{prelude::CasusBelli, casus_belli};
-
     let now = Utc::now().naive_utc();
 
     CasusBelli::find()
@@ -560,7 +777,6 @@ pub async fn get_casus_belli_handler(
     };
 
     // Enrichir avec les informations de l'agresseur
-    use crate::entities::prelude::User;
     let mut casus_belli_with_info = Vec::new();
 
     for cb in casus_belli_list {
@@ -577,6 +793,11 @@ pub async fn get_casus_belli_handler(
             "created_at": cb.created_at,
             "expires_at": cb.expires_at,
             "was_used": cb.was_used,
+            // Champs Sprint 2 (BE-7)
+            "tension_level": cb.tension_level,
+            "cb_type": cb.cb_type,
+            "is_multi_use": cb.is_multi_use,
+            "uses_remaining": cb.uses_remaining,
         }));
     }
 
@@ -655,4 +876,74 @@ pub async fn get_sabotages_suffered_handler(
     (StatusCode::OK, Json(json!({
         "sabotages": sabotages_with_info
     }))).into_response()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EFFETS DE PRODUCTION — Sprint 3 (BE-9)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Effets de sabotage actifs affectant la production et la construction d'une planète
+pub struct SabotageProductionEffects {
+    pub metal_mult: f64,
+    pub crystal_mult: f64,
+    pub deuterium_mult: f64,
+    pub research_time_mult: f64,
+    pub construction_blocked: bool,
+    pub disabled_mine: Option<String>,
+}
+
+/// Calculer tous les effets de sabotage actifs sur une planète (hors cooldown markers)
+pub async fn get_sabotage_effects(
+    db: &sea_orm::DatabaseConnection,
+    planet_id: Uuid,
+) -> SabotageProductionEffects {
+    let effects = SabotageEffect::find()
+        .filter(sabotage_effect::Column::TargetPlanetId.eq(planet_id))
+        .filter(sabotage_effect::Column::ExpiresAt.gt(Utc::now().naive_utc()))
+        .filter(sabotage_effect::Column::EffectType.ne("sabotage_cooldown"))
+        .all(db)
+        .await
+        .unwrap_or_default();
+
+    let mut result = SabotageProductionEffects {
+        metal_mult: 1.0,
+        crystal_mult: 1.0,
+        deuterium_mult: 1.0,
+        research_time_mult: 1.0,
+        construction_blocked: false,
+        disabled_mine: None,
+    };
+
+    for effect in &effects {
+        match effect.effect_type.as_str() {
+            "disable_mine" => {
+                let mine = effect
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m["mine"].as_str().map(String::from))
+                    .unwrap_or_else(|| "metal_mine".to_string());
+                result.disabled_mine = Some(mine.clone());
+                match mine.as_str() {
+                    "metal_mine"     => result.metal_mult = 0.5,
+                    "crystal_mine"   => result.crystal_mult = 0.5,
+                    "deuterium_mine" => result.deuterium_mult = 0.5,
+                    _ => {}
+                }
+            }
+            "planet_lock" => {
+                result.metal_mult = 0.0;
+                result.crystal_mult = 0.0;
+                result.deuterium_mult = 0.0;
+            }
+            "sabotage_research" => {
+                result.research_time_mult = 1.4;
+            }
+            "jam_construction" => {
+                result.construction_blocked = true;
+            }
+            _ => {}
+        }
+    }
+
+    result
 }

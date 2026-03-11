@@ -19,7 +19,7 @@ use sea_orm::{
 use serde_json::json;
 use uuid::Uuid;
 
-use backend::{build_queue, game_logic, tech_tree, AppState};
+use backend::{build_queue, game_logic, sabotage, tech_tree, AppState};
 use backend::entities::{
     prelude::{
         BuildingType, DefenseType, Planet, PlanetDefense, PlanetShip, PlanetTechnology,
@@ -552,6 +552,18 @@ pub async fn build_ships_handler(
     // Acquire per-planet lock BEFORE resource check to prevent concurrent double-spend
     let _build_guard = build_queue::acquire_planet_build_lock_pub(&state, planet_id).await;
     apply_lazy_eval(&state.db, &mut planet, &config_for_eval).await;
+
+    // BE-9 : Vérifier si la construction est bloquée par un sabotage actif
+    {
+        let sab_effects = sabotage::get_sabotage_effects(&state.db, planet_id).await;
+        if sab_effects.construction_blocked {
+            return (
+                StatusCode::LOCKED,
+                axum::Json(json!({"error": "Construction bloquée par un sabotage actif"})),
+            )
+                .into_response();
+        }
+    }
 
     // Get ship type
     let ship = match ShipType::find()

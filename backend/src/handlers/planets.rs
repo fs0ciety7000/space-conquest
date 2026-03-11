@@ -226,9 +226,8 @@ async fn get_planet_handler(
 
     let elapsed = now.signed_duration_since(p.last_update).num_seconds();
     if elapsed > 0 {
-        let production_multiplier = sabotage::get_production_multiplier(&state.db, id)
-            .await
-            .unwrap_or(1.0);
+        // BE-9 : utiliser get_sabotage_effects pour des multiplicateurs par mine individuels
+        let sab_effects = sabotage::get_sabotage_effects(&state.db, id).await;
 
         let plasma_tech_level = 0;
 
@@ -281,9 +280,10 @@ async fn get_planet_handler(
 
         let biome_mults = game_logic::get_biome_multipliers(p.biome.as_deref());
 
-        active.metal_amount = Set(p.metal_amount + (production_metal * production_multiplier * biome_mults.metal));
-        active.crystal_amount = Set(p.crystal_amount + (production_crystal * production_multiplier * biome_mults.crystal));
-        active.deuterium_amount = Set(p.deuterium_amount + (production_deuterium * production_multiplier * biome_mults.deuterium));
+        // Appliquer les multiplicateurs de sabotage par mine individuellement (BE-9)
+        active.metal_amount = Set(p.metal_amount + (production_metal * sab_effects.metal_mult * biome_mults.metal));
+        active.crystal_amount = Set(p.crystal_amount + (production_crystal * sab_effects.crystal_mult * biome_mults.crystal));
+        active.deuterium_amount = Set(p.deuterium_amount + (production_deuterium * sab_effects.deuterium_mult * biome_mults.deuterium));
 
         let storage_cap = game_logic::get_storage_capacity(resource_storage_level, &config);
         let new_metal = active.metal_amount.clone().unwrap();
@@ -1205,7 +1205,9 @@ async fn upgrade_mine_handler(
         let research_bonus = sabotage::apply_research_bonus(&state.db, p.owner_id)
             .await
             .unwrap_or(1.0);
-        build_time = (build_time as f64 * research_bonus) as i64;
+        // BE-9 : appliquer également le malus de sabotage_research si actif
+        let sab_research = sabotage::get_sabotage_effects(&state.db, p.id).await;
+        build_time = (build_time as f64 * research_bonus * sab_research.research_time_mult) as i64;
     }
 
     let mut active: planet::ActiveModel = p.clone().into();

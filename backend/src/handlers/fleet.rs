@@ -400,6 +400,9 @@ async fn spy_v2_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Ship counts must be positive"}))).into_response();
     }
 
+    // BE-1 : Compter les sondes envoyées (somme de toutes les valeurs de la flotte)
+    let probe_count = payload.fleet.values().copied().sum::<i32>().max(1);
+
     let mut total_fuel_spy: f64 = 0.0;
     for (ship_key, &count) in &payload.fleet {
         if count <= 0 {
@@ -467,14 +470,33 @@ async fn spy_v2_handler(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to load defender data"}))).into_response(),
     };
 
-    let tech_diff = att_data.tech_level("espionage_tech") - def_data.tech_level("espionage_tech");
+    let att_espionage = att_data.tech_level("espionage_tech");
+    let def_espionage = def_data.tech_level("espionage_tech");
+    let tech_diff = att_espionage - def_espionage;
+
+    // BE-1 : Bonus sonde — log2(probe_count) niveaux d'espionnage supplémentaires
+    let probe_bonus = (probe_count as f64).log2().floor() as i32;
+    let tech_diff_eff = tech_diff + probe_bonus;
+
+    // BE-1 : Destruction de sonde si défenseur est largement supérieur
+    if def_espionage - att_espionage >= 3 {
+        return (StatusCode::OK, Json(json!({
+            "success": false,
+            "probe_destroyed": true,
+            "was_detected": false,
+            "message": "Vos sondes ont été interceptées et détruites par les défenses ennemies.",
+            "probe_count": probe_count,
+            "tech_diff_eff": tech_diff_eff,
+        }))).into_response();
+    }
 
     let mut detection = "none";
     let mut resources = None;
-    let mut fleet = None;
+    let mut fleet_report = None;
     let mut defense = None;
 
-    if tech_diff >= -1 {
+    // Utiliser tech_diff_eff pour les seuils de révélation (BE-1, BE-4)
+    if tech_diff_eff >= -1 {
         detection = "resources";
         resources = Some(game_logic::Cost {
             metal: def_planet.metal_amount,
@@ -483,15 +505,57 @@ async fn spy_v2_handler(
         });
     }
 
-    if tech_diff >= 1 {
+    if tech_diff_eff >= 1 {
         detection = "fleet";
-        fleet = Some(def_data.ships.clone());
+        fleet_report = Some(def_data.ships.clone());
     }
 
-    if tech_diff >= 2 {
+    if tech_diff_eff >= 2 {
         detection = "full";
         let total_defense: i32 = def_data.defenses.values().sum();
         defense = Some(total_defense);
+    }
+
+    // BE-4 : Score de menace et recommandation tactique
+    let mut threat_score: f64 = 0.0;
+    let mut att_score: f64 = 0.0;
+    let mut recommendation: Option<&str> = None;
+
+    if tech_diff_eff >= 1 {
+        let config = state.config.read().unwrap().clone();
+
+        for (ship_key, &count) in &def_data.ships {
+            if count > 0 {
+                let stats = game_logic::get_unit_base_stats(ship_key, &config);
+                threat_score += count as f64 * (stats.attack + stats.shield / 2.0 + stats.hull / 10.0);
+            }
+        }
+        if tech_diff_eff >= 2 {
+            for (def_key, &count) in &def_data.defenses {
+                if count > 0 {
+                    let stats = game_logic::get_unit_base_stats(def_key, &config);
+                    threat_score += count as f64 * (stats.attack + stats.shield / 2.0 + stats.hull / 10.0);
+                }
+            }
+        }
+        threat_score /= 1000.0;
+
+        for (ship_key, &count) in &att_data.ships {
+            if count > 0 {
+                let stats = game_logic::get_unit_base_stats(ship_key, &config);
+                att_score += count as f64 * (stats.attack + stats.shield / 2.0 + stats.hull / 10.0);
+            }
+        }
+        att_score /= 1000.0;
+
+        let ratio = if threat_score > 0.0 { att_score / threat_score } else { f64::MAX };
+        recommendation = Some(match ratio {
+            r if r > 2.0 => "ATTAQUE_RECOMMANDEE",
+            r if r > 1.2 => "AVANTAGE_LEGER",
+            r if r > 0.8 => "EQUILIBRE",
+            r if r > 0.5 => "DESAVANTAGE",
+            _             => "RETRAITE_CONSEILLEE",
+        });
     }
 
     let mut def_active: planet::ActiveModel = def_planet.clone().into();
@@ -513,10 +577,14 @@ async fn spy_v2_handler(
         "target_player": defender_username,
         "coordinates": format!("[{}:{}:{}]", def_planet.galaxy, def_planet.system, def_planet.position),
         "tech_difference": tech_diff,
+        "tech_diff_eff": tech_diff_eff,
+        "probe_count": probe_count,
         "detection_level": detection,
         "resources": resources,
-        "fleet": fleet,
-        "defense": defense
+        "fleet": fleet_report,
+        "defense": defense,
+        "threat_score": threat_score,
+        "recommendation": recommendation,
     });
 
     let spy_log_attacker = combat_log::ActiveModel {
@@ -556,6 +624,26 @@ async fn spy_v2_handler(
     };
     let _ = spy_log_defender.insert(&state.db).await;
 
+    // BE-2 : CB harcèlement espionnage — compter les espionnages des 24h
+    let recent_spy_count = CombatLog::find()
+        .filter(combat_log::Column::PlanetId.eq(def_planet.id))
+        .filter(combat_log::Column::MissionType.eq("spy_defense"))
+        .filter(combat_log::Column::OpponentUsername.eq(&attacker_username))
+        .filter(combat_log::Column::Date.gt(Utc::now().naive_utc() - Duration::hours(24)))
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
+    if recent_spy_count >= 4 {
+        // La 5e fois déclenche le CB harcèlement (on vient d'insérer le log défenseur)
+        sabotage::grant_casus_belli(
+            &state.db,
+            def_planet.owner_id,
+            att_planet.owner_id,
+            "spy_harassment",
+        ).await.ok();
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // NOTIFICATION WEBSOCKET
     // ═══════════════════════════════════════════════════════════════════════════
@@ -570,11 +658,17 @@ async fn spy_v2_handler(
         "status": "success",
         "report": {
             "success": true,
+            "probe_destroyed": false,
+            "was_detected": false,
+            "probe_count": probe_count,
             "tech_difference": tech_diff,
+            "tech_diff_eff": tech_diff_eff,
             "detection_level": detection,
             "resources": resources,
-            "fleet": fleet,
-            "defense": defense
+            "fleet": fleet_report,
+            "defense": defense,
+            "threat_score": threat_score,
+            "recommendation": recommendation,
         }
     }))).into_response()
 }
