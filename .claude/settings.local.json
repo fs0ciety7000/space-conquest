@@ -42,7 +42,11 @@
       "Bash(ls:*)",
       "Bash(git checkout:*)",
       "Bash(grep -rn \"slot\\\\|Slot\" /var/home/phantomhex/Documents/code/space-conquest/frontend/src --include=\"*.tsx\" --include=\"*.ts\" -l 2>/dev/null | grep -v node_modules | head -10)",
-      "Bash(grep -n \"calculate_tech_time\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/*.rs)"
+      "Bash(grep -n \"calculate_tech_time\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/*.rs)",
+      "Bash(grep -n \"broadcast\\\\|maintenance\\\\|active_users\\\\|active_players\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -20\ngrep -n \"broadcast\\\\|maintenance\\\\|active_users\\\\|active_players\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/admin.rs | head -20)",
+      "Bash(grep -n \"broadcast_global\\\\|broadcast_all\\\\|global_broadcast\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/websocket.rs | head -10\ngrep -n \"broadcast_global\\\\|broadcast_all\\\\|global_broadcast\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -10)",
+      "Bash(grep -n \"active_users\\\\|active_players\\\\|last_seen\\\\|last_login\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/admin.rs | head -10\ngrep -n \"active_users\\\\|active_players\\\\|last_seen\\\\|last_login\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/entities/user.rs | head -10)",
+      "Bash(grep -n \"ws:\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -5\ngrep -n \"pub ws\\\\|ws: \" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -10)"
     ]
   }
 }

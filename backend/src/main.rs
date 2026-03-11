@@ -205,6 +205,7 @@ pub struct UserResponse {
     username: String,
     email: String,
     syndicate_credits: f64,
+    role: String,
 }
 
 
@@ -334,6 +335,7 @@ async fn main() {
         .route("/admin/user/:id/reset-password", post(admin::reset_password_handler))
         .route("/admin/user/:id/syndicate-credits", patch(admin::update_syndicate_credits_handler))
         .route("/admin/user/:id", delete(admin::delete_user_handler))
+        .route("/admin/broadcast", post(admin::admin_broadcast_handler))
         // Announcements
         .route("/admin/announcements", get(admin::get_announcements_handler))
         .route("/admin/announcements", post(admin::create_announcement_handler))
@@ -2909,6 +2911,7 @@ pub async fn get_user_by_id(
                 username: u.username,
                 email: u.email,
                 syndicate_credits: u.syndicate_credits,
+                role: u.role,
             };
             (StatusCode::OK, Json(response)).into_response()
         }

@@ -21,6 +21,7 @@ interface Player {
   id: string;
   username: string;
   email: string;
+  role: string;
   planets: PlanetInfo[];
   total_points: number;
   syndicate_credits: number;
@@ -398,6 +399,21 @@ const CONFIG_CATEGORIES: ConfigCategory[] = [
       { key: 'production_crystal_growth', label: 'Cristal - Croissance', description: 'Facteur croissance exponentielle', defaultValue: '1.1' },
       { key: 'production_deuterium_base', label: 'Production deutérium (base par niveau)', description: 'Production base deutérium — valeur de base par niveau de mine (ratio 3:2:1)', defaultValue: '15' },
       { key: 'production_deuterium_growth', label: 'Deutérium - Croissance', description: 'Facteur croissance exponentielle (plus rare)', defaultValue: '1.05' },
+      { key: 'production_speed_multiplier', label: 'Multiplicateur vitesse production globale', description: 'Multiplicateur appliqué à toute la production (x1 = normal)', defaultValue: '1.0' },
+      { key: 'building_speed_multiplier', label: 'Multiplicateur vitesse construction', description: 'Accélère la construction des bâtiments', defaultValue: '1.0' },
+      { key: 'research_speed_multiplier', label: 'Multiplicateur vitesse recherche', description: 'Accélère les recherches technologiques', defaultValue: '1.0' },
+      { key: 'ship_build_speed_multiplier', label: 'Multiplicateur vitesse production vaisseaux', description: 'Accélère la construction de vaisseaux', defaultValue: '1.0' },
+    ]
+  },
+  {
+    id: 'governance',
+    title: 'Gouvernance & Syndicat',
+    icon: Scale,
+    color: 'yellow',
+    configs: [
+      { key: 'expedition_syndicate_credit_chance', label: 'Chance crédits Syndicat (expéditions)', description: 'Probabilité de trouver des crédits Syndicat en expédition (0.35 = 35%)', defaultValue: '0.35' },
+      { key: 'expedition_syndicate_credit_min', label: 'Crédits Syndicat min', description: 'Nombre minimum de crédits Syndicat trouvables', defaultValue: '1' },
+      { key: 'expedition_syndicate_credit_max', label: 'Crédits Syndicat max', description: 'Nombre maximum de crédits Syndicat trouvables', defaultValue: '2' },
     ]
   },
   {
@@ -437,6 +453,12 @@ export default function AdminPanel() {
     open: boolean; title: string; message: string; variant: 'danger' | 'default'; onConfirm: () => void;
   }>({ open: false, title: '', message: '', variant: 'danger', onConfirm: () => {} });
 
+  // Broadcast & maintenance state
+  const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', notif_type: 'system' });
+  const [broadcastLoading, setBroadcastLoading] = useState(false);
+  const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+
   // Black market CRUD state
   const [bmItems, setBmItems] = useState<any[]>([]);
   const [bmLoading, setBmLoading] = useState(false);
@@ -448,11 +470,11 @@ export default function AdminPanel() {
   });
 
   const token = localStorage.getItem('token');
-  const currentUsername = localStorage.getItem('username');
+  const currentUserRole = localStorage.getItem('userRole');
   const userId = localStorage.getItem('user_id');
 
   // Vérification sécurité
-  if (currentUsername !== 'phantomhex') {
+  if (currentUserRole !== 'admin') {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Card className="bg-red-950/20 border-red-500/50">
@@ -476,6 +498,7 @@ export default function AdminPanel() {
     if (activeTab === 'stats' || activeTab === 'config') {
       fetchStats();
       fetchConfig();
+      fetchMaintenanceStatus();
     }
     if (activeTab === 'announcements') {
       fetchAnnouncements();
@@ -484,6 +507,59 @@ export default function AdminPanel() {
       fetchBmItems();
     }
   }, [activeTab]);
+
+  const fetchMaintenanceStatus = async () => {
+    try {
+      const res = await fetch(apiUrl('/maintenance/status'));
+      if (res.ok) {
+        const data = await res.json();
+        setMaintenanceEnabled(data.enabled ?? false);
+      }
+    } catch { /* ignore */ }
+  };
+
+  const toggleMaintenance = async (enabled: boolean) => {
+    setMaintenanceLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/admin/config?user_id=${userId}`), {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maintenance_enabled: String(enabled) }),
+      });
+      if (res.ok) {
+        setMaintenanceEnabled(enabled);
+        toast.success(enabled ? 'Maintenance activée' : 'Maintenance désactivée');
+      } else {
+        toast.error('Erreur lors de la modification');
+      }
+    } catch { toast.error('Erreur réseau'); } finally {
+      setMaintenanceLoading(false);
+    }
+  };
+
+  const sendBroadcast = async () => {
+    if (!broadcastForm.title.trim() || !broadcastForm.message.trim()) {
+      toast.error('Titre et message requis');
+      return;
+    }
+    setBroadcastLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/admin/broadcast?user_id=${userId}`), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(broadcastForm),
+      });
+      if (res.ok) {
+        toast.success('Broadcast envoyé à tous les joueurs');
+        setBroadcastForm({ title: '', message: '', notif_type: 'system' });
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Erreur');
+      }
+    } catch { toast.error('Erreur réseau'); } finally {
+      setBroadcastLoading(false);
+    }
+  };
 
   // ── Black Market admin functions ──────────────────────────────────────────
   const fetchBmItems = async () => {
@@ -804,128 +880,42 @@ export default function AdminPanel() {
   return (
     <div className="space-y-6 pb-20">
       {/* Header */}
-      <Card className="bg-gradient-to-r from-red-950/20 to-orange-950/20 border-red-500/30 card-depth">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-3 text-red-400">
-            <Database size={24} />
-            <div>
-              <h1 className="text-2xl font-black uppercase tracking-wider">PANNEAU D'ADMINISTRATION</h1>
-              <p className="text-xs text-slate-500 font-normal mt-1">Accès réservé • phantomhex</p>
-            </div>
-          </CardTitle>
-        </CardHeader>
-      </Card>
+      <div className="p-5 bg-[#0a0520] border border-cyan-500/12 rounded-lg">
+        <div className="flex items-center gap-3">
+          <Database size={24} className="text-cyan-400" />
+          <div>
+            <h1 className="text-xl font-black uppercase tracking-widest text-cyan-400">PANNEAU D'ADMINISTRATION</h1>
+            <p className="text-xs text-slate-500 font-normal mt-0.5">Accès restreint — zone système</p>
+          </div>
+        </div>
+      </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 flex-wrap">
-        <Button
-          variant={activeTab === 'stats' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('stats')}
-          className={`flex items-center gap-2 transition-all duration-300 ${
-            activeTab === 'stats'
-              ? 'bg-indigo-600 hover:bg-indigo-500 text-white card-depth shadow-lg'
-              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
-          }`}
-        >
-          <BarChart3 size={16} />
-          Statistiques
-        </Button>
-        <Button
-          variant={activeTab === 'config' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('config')}
-          className={`flex items-center gap-2 transition-all duration-300 ${
-            activeTab === 'config'
-              ? 'bg-purple-600 hover:bg-purple-500 text-white card-depth shadow-lg'
-              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
-          }`}
-        >
-          <Settings size={16} />
-          Configuration Jeu
-        </Button>
-        <Button
-          variant={activeTab === 'players' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('players')}
-          className={`flex items-center gap-2 transition-all duration-300 ${
-            activeTab === 'players'
-              ? 'bg-cyan-600 hover:bg-cyan-500 text-white card-depth shadow-lg'
-              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
-          }`}
-        >
-          <Users size={16} />
-          Gestion Planètes
-        </Button>
-        <Button
-          variant={activeTab === 'users' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 transition-all duration-300 ${
-            activeTab === 'users'
-              ? 'bg-orange-600 hover:bg-orange-500 text-white card-depth shadow-lg'
-              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
-          }`}
-        >
-          <Users size={16} />
-          Gestion Utilisateurs
-        </Button>
-        <Button
-          variant={activeTab === 'announcements' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('announcements')}
-          className={`flex items-center gap-2 transition-all duration-300 ${
-            activeTab === 'announcements'
-              ? 'bg-emerald-600 hover:bg-emerald-500 text-white card-depth shadow-lg'
-              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
-          }`}
-        >
-          <Radio size={16} />
-          Annonces
-        </Button>
-        <Button
-          variant={activeTab === 'content' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('content')}
-          className={`flex items-center gap-2 transition-all duration-300 ${
-            activeTab === 'content'
-              ? 'bg-amber-600 hover:bg-amber-500 text-white card-depth shadow-lg'
-              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
-          }`}
-        >
-          <Package size={16} />
-          Contenu
-        </Button>
-        <Button
-          variant={activeTab === 'black_market' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('black_market')}
-          className={`flex items-center gap-2 transition-all duration-300 ${
-            activeTab === 'black_market'
-              ? 'bg-red-700 hover:bg-red-600 text-white card-depth shadow-lg'
-              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
-          }`}
-        >
-          <Skull size={16} />
-          Marché Underground
-        </Button>
-        <Button
-          variant={activeTab === 'pve_events' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('pve_events')}
-          className={`flex items-center gap-2 transition-all duration-300 ${
-            activeTab === 'pve_events'
-              ? 'bg-orange-700 hover:bg-orange-600 text-white card-depth shadow-lg'
-              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
-          }`}
-        >
-          <Swords size={16} />
-          Événements PVE
-        </Button>
-        <Button
-          variant={activeTab === 'governance' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('governance')}
-          className={`flex items-center gap-2 transition-all duration-300 ${
-            activeTab === 'governance'
-              ? 'bg-yellow-700 hover:bg-yellow-600 text-white card-depth shadow-lg'
-              : 'bg-slate-900/50 border-white/10 hover:bg-slate-800'
-          }`}
-        >
-          <Scale size={16} />
-          Gouvernance
-        </Button>
+      <div className="flex gap-0 flex-wrap border-b border-white/5">
+        {([
+          { id: 'stats', label: 'Statistiques', icon: BarChart3 },
+          { id: 'config', label: 'Configuration', icon: Settings },
+          { id: 'players', label: 'Planètes', icon: Users },
+          { id: 'users', label: 'Utilisateurs', icon: Users },
+          { id: 'announcements', label: 'Annonces', icon: Radio },
+          { id: 'content', label: 'Contenu', icon: Package },
+          { id: 'black_market', label: 'Underground', icon: Skull },
+          { id: 'pve_events', label: 'PVE', icon: Swords },
+          { id: 'governance', label: 'Gouvernance', icon: Scale },
+        ] as { id: AdminTab; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all ${
+              activeTab === id
+                ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-400/5'
+                : 'text-slate-400 hover:text-cyan-300 border-b-2 border-transparent'
+            }`}
+          >
+            <Icon size={13} />
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* TAB STATS */}
@@ -937,77 +927,134 @@ export default function AdminPanel() {
             </div>
           ) : stats ? (
             <>
-              <Card className="bg-gradient-to-br from-blue-950/40 to-blue-900/20 border-blue-500/30 card-depth hover:-translate-y-1 transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Joueurs</p>
-                      <p className="text-3xl font-black text-white">{stats.total_users}</p>
-                    </div>
-                    <Users size={32} className="text-blue-500 opacity-30" />
+              <div className="p-5 bg-[#0a0520] border border-cyan-500/12 rounded-lg hover:-translate-y-1 transition-all duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-cyan-400 mb-1">Joueurs</p>
+                    <p className="text-3xl font-black text-slate-200 font-mono tabular-nums">{stats.total_users}</p>
                   </div>
-                </CardContent>
-              </Card>
+                  <Users size={32} className="text-cyan-500/20" />
+                </div>
+              </div>
 
-              <Card className="bg-gradient-to-br from-purple-950/40 to-purple-900/20 border-purple-500/30 card-depth hover:-translate-y-1 transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-purple-400 mb-1">Planètes</p>
-                      <p className="text-3xl font-black text-white">{stats.total_planets}</p>
-                    </div>
-                    <Database size={32} className="text-purple-500 opacity-30" />
+              <div className="p-5 bg-[#0a0520] border border-cyan-500/12 rounded-lg hover:-translate-y-1 transition-all duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-cyan-400 mb-1">Planètes</p>
+                    <p className="text-3xl font-black text-slate-200 font-mono tabular-nums">{stats.total_planets}</p>
                   </div>
-                </CardContent>
-              </Card>
+                  <Database size={32} className="text-cyan-500/20" />
+                </div>
+              </div>
 
-              <Card className="bg-gradient-to-br from-cyan-950/40 to-cyan-900/20 border-cyan-500/30 card-depth hover:-translate-y-1 transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-1">Vaisseaux</p>
-                      <p className="text-3xl font-black text-white">{stats.total_ships.toLocaleString()}</p>
-                    </div>
-                    <Zap size={32} className="text-cyan-500 opacity-30" />
+              <div className="p-5 bg-[#0a0520] border border-cyan-500/12 rounded-lg hover:-translate-y-1 transition-all duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-cyan-400 mb-1">Vaisseaux</p>
+                    <p className="text-3xl font-black text-slate-200 font-mono tabular-nums">{stats.total_ships.toLocaleString()}</p>
                   </div>
-                </CardContent>
-              </Card>
+                  <Zap size={32} className="text-cyan-500/20" />
+                </div>
+              </div>
 
-              <Card className="bg-gradient-to-br from-red-950/40 to-red-900/20 border-red-500/30 card-depth hover:-translate-y-1 transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-red-400 mb-1">Défenses</p>
-                      <p className="text-3xl font-black text-white">{stats.total_defenses.toLocaleString()}</p>
-                    </div>
-                    <AlertTriangle size={32} className="text-red-500 opacity-30" />
+              <div className="p-5 bg-[#0a0520] border border-cyan-500/12 rounded-lg hover:-translate-y-1 transition-all duration-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-1">Défenses</p>
+                    <p className="text-3xl font-black text-slate-200 font-mono tabular-nums">{stats.total_defenses.toLocaleString()}</p>
                   </div>
-                </CardContent>
-              </Card>
+                  <AlertTriangle size={32} className="text-red-500/20" />
+                </div>
+              </div>
 
-              <Card className="col-span-full bg-slate-950 border-white/10 card-depth">
-                <CardHeader>
-                  <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-400">
-                    Ressources Totales
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-orange-950/20 border border-orange-500/30 rounded-lg p-4 hover:-translate-y-1 transition-all duration-300 card-depth">
-                      <p className="text-xs text-orange-400 font-bold mb-1">MÉTAL</p>
-                      <p className="text-2xl font-mono font-black text-white">{Math.floor(stats.total_metal).toLocaleString()}</p>
-                    </div>
-                    <div className="bg-cyan-950/20 border border-cyan-500/30 rounded-lg p-4 hover:-translate-y-1 transition-all duration-300 card-depth">
-                      <p className="text-xs text-cyan-400 font-bold mb-1">CRISTAL</p>
-                      <p className="text-2xl font-mono font-black text-white">{Math.floor(stats.total_crystal).toLocaleString()}</p>
-                    </div>
-                    <div className="bg-green-950/20 border border-green-500/30 rounded-lg p-4 hover:-translate-y-1 transition-all duration-300 card-depth">
-                      <p className="text-xs text-green-400 font-bold mb-1">DEUTÉRIUM</p>
-                      <p className="text-2xl font-mono font-black text-white">{Math.floor(stats.total_deuterium).toLocaleString()}</p>
-                    </div>
+              <div className="col-span-full bg-[#0a0520] border border-cyan-500/12 rounded-lg p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-cyan-400 border-b border-cyan-500/20 pb-2 mb-4">Ressources Totales</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-[#160b3a]/50 border border-cyan-500/10 rounded-lg">
+                    <p className="text-xs text-orange-400 font-bold uppercase tracking-widest mb-1">Métal</p>
+                    <p className="text-2xl font-mono font-black text-slate-200 tabular-nums">{Math.floor(stats.total_metal).toLocaleString()}</p>
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="p-4 bg-[#160b3a]/50 border border-cyan-500/10 rounded-lg">
+                    <p className="text-xs text-cyan-400 font-bold uppercase tracking-widest mb-1">Cristal</p>
+                    <p className="text-2xl font-mono font-black text-slate-200 tabular-nums">{Math.floor(stats.total_crystal).toLocaleString()}</p>
+                  </div>
+                  <div className="p-4 bg-[#160b3a]/50 border border-cyan-500/10 rounded-lg">
+                    <p className="text-xs text-green-400 font-bold uppercase tracking-widest mb-1">Deutérium</p>
+                    <p className="text-2xl font-mono font-black text-slate-200 tabular-nums">{Math.floor(stats.total_deuterium).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Maintenance & Broadcast */}
+              <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Maintenance toggle */}
+                <div className="bg-[#0a0520] border border-yellow-500/20 rounded-lg p-5">
+                  <div className="flex items-center gap-2 border-b border-yellow-500/20 pb-2 mb-4">
+                    <AlertTriangle size={14} className="text-yellow-400" />
+                    <span className="text-xs font-bold uppercase tracking-widest text-yellow-400">Mode Maintenance</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-4">
+                    Activer la maintenance bloque l'accès à l'interface pour tous les joueurs non-admins.
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm font-bold ${maintenanceEnabled ? 'text-red-400' : 'text-green-400'}`}>
+                      {maintenanceEnabled ? 'MAINTENANCE ACTIVE' : 'Serveur opérationnel'}
+                    </span>
+                    <button
+                      onClick={() => toggleMaintenance(!maintenanceEnabled)}
+                      disabled={maintenanceLoading}
+                      className={`px-4 py-2 rounded text-xs font-bold uppercase tracking-wider transition-all ${
+                        maintenanceEnabled
+                          ? 'bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20'
+                          : 'bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20'
+                      } disabled:opacity-50`}
+                    >
+                      {maintenanceLoading ? '...' : maintenanceEnabled ? 'Désactiver' : 'Activer'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Broadcast panel */}
+                <div className="bg-[#0a0520] border border-cyan-500/12 rounded-lg p-5">
+                  <div className="flex items-center gap-2 border-b border-cyan-500/20 pb-2 mb-4">
+                    <Radio size={14} className="text-cyan-400 animate-pulse" />
+                    <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Broadcast Global</span>
+                  </div>
+                  <div className="space-y-2 mb-3">
+                    <input
+                      type="text"
+                      placeholder="Titre du message..."
+                      value={broadcastForm.title}
+                      onChange={e => setBroadcastForm(f => ({ ...f, title: e.target.value }))}
+                      className="w-full bg-[#160b3a]/60 border border-cyan-500/20 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50"
+                    />
+                    <textarea
+                      placeholder="Message à envoyer à tous les joueurs..."
+                      value={broadcastForm.message}
+                      onChange={e => setBroadcastForm(f => ({ ...f, message: e.target.value }))}
+                      rows={2}
+                      className="w-full bg-[#160b3a]/60 border border-cyan-500/20 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 resize-none"
+                    />
+                    <select
+                      value={broadcastForm.notif_type}
+                      onChange={e => setBroadcastForm(f => ({ ...f, notif_type: e.target.value }))}
+                      className="w-full bg-[#160b3a]/60 border border-cyan-500/20 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50"
+                    >
+                      <option value="system">Système</option>
+                      <option value="info">Info</option>
+                      <option value="warning">Avertissement</option>
+                      <option value="governance">Sénat</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={sendBroadcast}
+                    disabled={broadcastLoading}
+                    className="w-full px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 text-xs font-bold uppercase tracking-wider rounded transition-all disabled:opacity-50"
+                  >
+                    {broadcastLoading ? 'Envoi...' : 'Envoyer à tous les joueurs'}
+                  </button>
+                </div>
+              </div>
             </>
           ) : (
             <div className="col-span-full text-center py-12 text-slate-600">
@@ -1029,37 +1076,29 @@ export default function AdminPanel() {
           ) : (
             <>
               {/* Avertissement */}
-              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-400 flex items-start gap-3 card-depth">
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-400 flex items-start gap-3">
                 <AlertTriangle size={20} className="shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold mb-1">⚠️ Modifications en Temps Réel</p>
+                  <p className="font-bold mb-1 uppercase tracking-wide">Modifications en Temps Réel</p>
                   <p className="text-yellow-200/80">Les changements prennent effet immédiatement pour toutes les nouvelles opérations. Les opérations en cours conservent leur configuration initiale.</p>
                 </div>
               </div>
 
               {/* Categories */}
-              {CONFIG_CATEGORIES.map((category, idx) => {
+              {CONFIG_CATEGORIES.map((category) => {
                 const Icon = category.icon;
                 return (
-                  <Card
+                  <div
                     key={category.id}
-                    className={`bg-gradient-to-br from-${category.color}-950/30 to-${category.color}-900/10 border-${category.color}-500/30 card-depth animate-slide-up overflow-hidden relative`}
-                    style={{ animationDelay: `${idx * 100}ms` }}
+                    className="bg-[#0a0520] border border-cyan-500/12 rounded-lg overflow-hidden"
                   >
-                    {/* Decoration Icon */}
-                    <div className="absolute top-0 right-0 p-6 opacity-5">
-                      <Icon size={120} />
-                    </div>
-
-                    <CardHeader className="relative z-10">
-                      <CardTitle className={`flex items-center gap-3 text-${category.color}-400`}>
-                        <Icon size={20} />
-                        <span className="text-sm font-black uppercase tracking-wider">{category.title}</span>
-                        <span className="ml-auto text-xs text-slate-500 font-normal">{category.configs.length} paramètres</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="relative z-10">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="px-5 pt-5 pb-3">
+                      <div className="flex items-center gap-2 border-b border-cyan-500/20 pb-2 mb-4">
+                        <Icon size={14} className="text-cyan-400" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">{category.title}</span>
+                        <span className="ml-auto text-xs text-slate-500">{category.configs.length} paramètres</span>
+                      </div>
+                      <div className="space-y-0">
                         {category.configs.map((item) => {
                           const currentValue = config[item.key] || item.defaultValue;
                           const editedValue = editedConfig[item.key] ?? currentValue;
@@ -1068,41 +1107,35 @@ export default function AdminPanel() {
                           return (
                             <div
                               key={item.key}
-                              className={`bg-black/30 border rounded-lg p-4 transition-all duration-300 ${
-                                hasChanged
-                                  ? `border-${category.color}-500/50 shadow-lg shadow-${category.color}-500/20`
-                                  : 'border-white/10 hover:border-white/20'
-                              }`}
+                              className={`flex items-center justify-between py-2.5 border-b border-white/5 last:border-0 ${hasChanged ? 'bg-cyan-500/3' : ''}`}
                             >
-                              <label className={`text-xs font-bold mb-1 block ${
-                                hasChanged ? `text-${category.color}-300` : 'text-slate-400'
-                              }`}>
-                                {item.label}
-                              </label>
-                              <Input
+                              <div className="flex-1 pr-4">
+                                <p className={`text-sm ${hasChanged ? 'text-cyan-300' : 'text-slate-200'}`}>{item.label}</p>
+                                <p className="text-xs text-slate-500 mt-0.5">{item.description}</p>
+                                {hasChanged && (
+                                  <p className="text-[10px] text-cyan-400 mt-0.5 flex items-center gap-1">
+                                    <Edit size={9} />
+                                    {currentValue} → {editedValue}
+                                  </p>
+                                )}
+                              </div>
+                              <input
                                 type="number"
                                 step="0.1"
                                 value={editedValue}
                                 onChange={(e) => setEditedConfig({...editedConfig, [item.key]: e.target.value})}
-                                className={`bg-black/40 text-white font-mono text-lg transition-all ${
+                                className={`w-32 px-2 py-1 bg-[#160b3a] border rounded text-cyan-300 text-sm font-mono text-right focus:outline-none transition-colors ${
                                   hasChanged
-                                    ? `border-${category.color}-500/50`
-                                    : 'border-white/10'
+                                    ? 'border-cyan-500/60'
+                                    : 'border-cyan-500/20 focus:border-cyan-500/60'
                                 }`}
                               />
-                              <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">{item.description}</p>
-                              {hasChanged && (
-                                <div className={`mt-2 text-[10px] text-${category.color}-400 flex items-center gap-1`}>
-                                  <Edit size={10} />
-                                  <span>Modifié: {currentValue} → {editedValue}</span>
-                                </div>
-                              )}
                             </div>
                           );
                         })}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 );
               })}
 
@@ -1527,70 +1560,69 @@ export default function AdminPanel() {
 
               {/* Action Buttons */}
               <div className="flex gap-3 sticky bottom-4 z-10">
-                <Button
+                <button
                   onClick={updateConfig}
                   disabled={loadingConfig}
-                  className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold uppercase tracking-wider card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all hover:-translate-y-0.5 disabled:opacity-50"
                 >
-                  <Save size={16} className="mr-2" />
+                  <Save size={14} />
                   Enregistrer toutes les modifications
-                </Button>
-                <Button
-                  variant="outline"
+                </button>
+                <button
                   onClick={() => setEditedConfig(config)}
-                  className="border-white/10 bg-white/5 hover:bg-white/10 card-depth"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all"
                 >
-                  <X size={16} className="mr-2" />
+                  <X size={14} />
                   Annuler
-                </Button>
+                </button>
               </div>
             </>
           )}
         </div>
       )}
 
-      {/* TAB PLAYERS (unchanged) */}
+      {/* TAB PLAYERS */}
       {activeTab === 'players' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Liste des joueurs */}
-        <Card className="lg:col-span-1 bg-slate-950 border-white/10 card-depth">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-400">
-              <Users size={16} /> Joueurs ({players.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <div className="lg:col-span-1 bg-[#0a0520] border border-cyan-500/12 rounded-lg p-4">
+          <div className="flex items-center gap-2 border-b border-cyan-500/20 pb-2 mb-4">
+            <Users size={14} className="text-cyan-400" />
+            <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Joueurs ({players.length})</span>
+          </div>
+          <div className="space-y-3">
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <Input
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
                 placeholder="Rechercher..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-black/40 border-white/10 text-white"
+                className="w-full pl-9 pr-3 py-1.5 bg-[#160b3a] border border-cyan-500/20 rounded text-slate-200 text-sm placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/60 transition-colors"
               />
             </div>
 
-            <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
+            <div className="space-y-1 max-h-[600px] overflow-y-auto">
               {filteredPlayers.map(player => (
-                <div key={player.id} className="bg-slate-900/50 border border-white/5 rounded-lg overflow-hidden hover:-translate-y-1 transition-all duration-300">
+                <div key={player.id} className="bg-[#160b3a]/50 border border-cyan-500/10 rounded-lg overflow-hidden hover:border-cyan-500/25 transition-colors">
                   <div className="p-3 border-b border-white/5">
-                    <div className="font-bold text-white text-sm">{player.username}</div>
-                    <div className="text-xs text-slate-600 mt-1">{player.total_points.toLocaleString()} pts • {player.planets.length} planète(s)</div>
+                    <div className="font-bold text-slate-200 text-sm">{player.username}</div>
+                    <div className="text-xs text-slate-500 mt-0.5 font-mono">{player.total_points.toLocaleString()} pts • {player.planets.length} planète(s)</div>
                   </div>
                   <div className="divide-y divide-white/5">
                     {player.planets.length > 0 ? player.planets.map(planet => (
                       <button
                         key={planet.id}
                         onClick={() => handleSelectPlayer(player, planet.id)}
-                        className={`w-full text-left p-2 px-4 transition-all hover:bg-white/5 ${
+                        className={`w-full text-left p-2 px-4 transition-all hover:bg-cyan-500/5 ${
                           selectedPlayer?.id === player.id && planetData?.id === planet.id
-                            ? 'bg-indigo-600/20'
+                            ? 'bg-cyan-500/10'
                             : ''
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-xs text-white font-medium">{planet.name}</div>
+                            <div className="text-xs text-slate-200 font-medium">{planet.name}</div>
                             <div className="text-[10px] text-slate-500 font-mono">[{planet.galaxy}:{planet.system}:{planet.position}]</div>
                           </div>
                           <Edit size={12} className="text-slate-500" />
@@ -1603,31 +1635,31 @@ export default function AdminPanel() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Panneau d'édition */}
-        <Card className="lg:col-span-2 bg-slate-950 border-white/10 card-depth">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-400">
-                <Edit size={16} /> {selectedPlayer ? `Édition : ${selectedPlayer.username}` : 'Sélectionner un joueur'}
-              </CardTitle>
-              {selectedPlayer && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedPlayer(null);
-                    setPlanetData(null);
-                  }}
-                >
-                  <X size={16} />
-                </Button>
-              )}
+        <div className="lg:col-span-2 bg-[#0a0520] border border-cyan-500/12 rounded-lg p-5">
+          <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2 mb-4">
+            <div className="flex items-center gap-2">
+              <Edit size={14} className="text-cyan-400" />
+              <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">
+                {selectedPlayer ? `Édition : ${selectedPlayer.username}` : 'Sélectionner un joueur'}
+              </span>
             </div>
-          </CardHeader>
-          <CardContent>
+            {selectedPlayer && (
+              <button
+                onClick={() => {
+                  setSelectedPlayer(null);
+                  setPlanetData(null);
+                }}
+                className="p-1 text-slate-500 hover:text-slate-200 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <div>
             {loading ? (
               <div className="text-center py-12 text-slate-500">Chargement...</div>
             ) : !planetData ? (
@@ -1639,9 +1671,7 @@ export default function AdminPanel() {
               <div className="space-y-6">
                 {/* RESSOURCES */}
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-widest text-orange-400 mb-3 flex items-center gap-2">
-                    <Zap size={14} /> Ressources
-                  </h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-cyan-400 border-b border-cyan-500/20 pb-2 mb-3">Ressources</h3>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="text-xs text-slate-500 mb-1 block">Métal</label>
@@ -1679,7 +1709,7 @@ export default function AdminPanel() {
 
                 {/* MINES */}
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-3">Mines</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-cyan-400 border-b border-cyan-500/20 pb-2 mb-3">Mines</h3>
                   <div className="grid grid-cols-4 gap-3">
                     <div>
                       <label className="text-xs text-slate-500 mb-1 block">Mine Métal</label>
@@ -1726,7 +1756,7 @@ export default function AdminPanel() {
 
                 {/* INSTALLATIONS */}
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-widest text-purple-400 mb-3">Installations</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-cyan-400 border-b border-cyan-500/20 pb-2 mb-3">Installations</h3>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="text-xs text-slate-500 mb-1 block">Chantier</label>
@@ -1783,7 +1813,7 @@ export default function AdminPanel() {
 
                 {/* TECHNOLOGIES */}
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-widest text-green-400 mb-3">Technologies</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-cyan-400 border-b border-cyan-500/20 pb-2 mb-3">Technologies</h3>
                   <div className="grid grid-cols-3 gap-3">
                     {[
                       { key: 'energy_tech_level', label: 'Énergie' },
@@ -1814,7 +1844,7 @@ export default function AdminPanel() {
 
                 {/* FLOTTE */}
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-widest text-cyan-400 mb-3">Flotte</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-cyan-400 border-b border-cyan-500/20 pb-2 mb-3">Flotte</h3>
                   <div className="grid grid-cols-3 gap-3">
                     {[
                       { key: 'light_hunter_count', label: 'Chasseurs Légers' },
@@ -1846,7 +1876,7 @@ export default function AdminPanel() {
 
                 {/* DÉFENSES */}
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-widest text-red-400 mb-3">Défenses</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-cyan-400 border-b border-cyan-500/20 pb-2 mb-3">Défenses</h3>
                   <div className="grid grid-cols-4 gap-3">
                     {[
                       { key: 'rocket_launcher_count', label: 'Lance-Roquettes' },
@@ -1875,262 +1905,207 @@ export default function AdminPanel() {
                 </div>
 
                 {/* BOUTONS */}
-                <div className="flex gap-3 pt-4 border-t border-white/10">
-                  <Button
+                <div className="flex gap-3 pt-4 border-t border-white/5">
+                  <button
                     onClick={handleSaveChanges}
                     disabled={loading}
-                    className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold uppercase tracking-wider card-depth hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all disabled:opacity-50"
                   >
-                    <Save size={16} className="mr-2" />
+                    <Save size={13} />
                     Enregistrer les modifications
-                  </Button>
-                  <Button
-                    variant="outline"
+                  </button>
+                  <button
                     onClick={() => setEditedData(planetData)}
-                    className="border-white/10 bg-white/5 hover:bg-white/10 card-depth"
+                    className="px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all"
                   >
                     Annuler
-                  </Button>
+                  </button>
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
       )}
 
       {/* ONGLET GESTION UTILISATEURS (unchanged) */}
       {activeTab === 'users' && (
-        <Card className="bg-gradient-to-br from-slate-950 to-indigo-950/20 border-indigo-500/30 card-depth">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-3 text-indigo-300">
-              <Settings size={20} />
-              Gestion des Utilisateurs
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Liste des utilisateurs */}
-              <div className="space-y-3">
-                {players.map((player) => (
-                  <div
-                    key={player.id}
-                    className="bg-slate-900/40 border border-white/10 rounded-lg p-4 hover:bg-slate-900/60 transition-all duration-300 hover:-translate-y-1 card-depth"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-bold text-white">{player.username}</h3>
-                          <span className="px-2 py-0.5 bg-indigo-600/30 text-indigo-300 rounded text-xs font-mono border border-indigo-500/30">
-                            {player.id.substring(0, 8)}...
-                          </span>
-                        </div>
-                        <div className="text-sm text-slate-400 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-500">Email:</span>
-                            <span className="font-mono">{player.email}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-500">Planètes:</span>
-                            <span className="text-cyan-400">{player.planets.length}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
-                          onClick={async () => {
-                            const newPassword = prompt('Nouveau mot de passe (min. 6 caractères):');
-                            if (!newPassword || newPassword.length < 6) {
-                              toast.error('Mot de passe invalide (min. 6 caractères)');
-                              return;
-                            }
-
-                            try {
-                              const res = await fetch(apiUrl(`/admin/user/${player.id}/reset-password?user_id=${userId}`), {
-                                method: 'POST',
-                                headers: {
-                                  'Authorization': `Bearer ${token}`,
-                                  'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ new_password: newPassword })
-                              });
-
-                              if (res.ok) {
-                                toast.success('✅ Mot de passe réinitialisé');
-                              } else {
-                                const err = await res.json();
-                                toast.error(err.error || 'Erreur');
-                              }
-                            } catch (e) {
-                              toast.error('Erreur réseau');
-                            }
-                          }}
-                        >
-                          Réinitialiser MDP
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
-                          onClick={async () => {
-                            const newUsername = prompt('Nouveau nom d\'utilisateur:', player.username);
-                            if (!newUsername || newUsername.trim() === '') {
-                              toast.error('Nom d\'utilisateur invalide');
-                              return;
-                            }
-
-                            try {
-                              const res = await fetch(apiUrl(`/admin/user/${player.id}/username?user_id=${userId}`), {
-                                method: 'PATCH',
-                                headers: {
-                                  'Authorization': `Bearer ${token}`,
-                                  'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ username: newUsername })
-                              });
-
-                              if (res.ok) {
-                                toast.success('✅ Nom d\'utilisateur modifié');
-                                fetchPlayers();
-                              } else {
-                                const err = await res.json();
-                                toast.error(err.error || 'Erreur');
-                              }
-                            } catch (e) {
-                              toast.error('Erreur réseau');
-                            }
-                          }}
-                        >
-                          Modifier nom
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-green-500/30 text-green-400 hover:bg-green-500/10"
-                          onClick={async () => {
-                            const newEmail = prompt('Nouvel email:', player.email);
-                            if (!newEmail || !newEmail.includes('@')) {
-                              toast.error('Email invalide');
-                              return;
-                            }
-
-                            try {
-                              const res = await fetch(apiUrl(`/admin/user/${player.id}/email?user_id=${userId}`), {
-                                method: 'PATCH',
-                                headers: {
-                                  'Authorization': `Bearer ${token}`,
-                                  'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ email: newEmail })
-                              });
-
-                              if (res.ok) {
-                                toast.success('✅ Email modifié');
-                                fetchPlayers();
-                              } else {
-                                const err = await res.json();
-                                toast.error(err.error || 'Erreur');
-                              }
-                            } catch (e) {
-                              toast.error('Erreur réseau');
-                            }
-                          }}
-                        >
-                          Modifier email
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10"
-                          onClick={async () => {
-                            const current = player.syndicate_credits ?? 0;
-                            const newVal = prompt(`Crédits Syndicat pour ${player.username} (actuel: ${current}):`, String(current));
-                            if (newVal === null) return;
-                            const parsed = parseFloat(newVal);
-                            if (isNaN(parsed) || parsed < 0) {
-                              toast.error('Valeur invalide');
-                              return;
-                            }
-                            try {
-                              const res = await fetch(apiUrl(`/admin/user/${player.id}/syndicate-credits?user_id=${userId}`), {
-                                method: 'PATCH',
-                                headers: {
-                                  'Authorization': `Bearer ${token}`,
-                                  'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ syndicate_credits: parsed })
-                              });
-                              if (res.ok) {
-                                toast.success(`✅ SC mis à jour: ${parsed}`);
-                                fetchPlayers();
-                              } else {
-                                const err = await res.json();
-                                toast.error(err.error || 'Erreur');
-                              }
-                            } catch (e) {
-                              toast.error('Erreur réseau');
-                            }
-                          }}
-                        >
-                          SC: {player.syndicate_credits?.toFixed(0) ?? 0}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-                          onClick={() => {
-                            setConfirmState({
-                              open: true,
-                              title: 'Supprimer l\'utilisateur',
-                              message: `Voulez-vous vraiment supprimer l'utilisateur ${player.username} ? Cette action est IRRÉVERSIBLE et supprimera le compte, toutes ses planètes et toutes ses données.`,
-                              variant: 'danger',
-                              onConfirm: async () => {
-                                try {
-                                  const res = await fetch(apiUrl(`/admin/user/${player.id}?user_id=${userId}`), {
-                                    method: 'DELETE',
-                                    headers: { 'Authorization': `Bearer ${token}` }
-                                  });
-                                  if (res.ok) {
-                                    toast.success('Utilisateur supprimé');
-                                    fetchPlayers();
-                                  } else {
-                                    const err = await res.json();
-                                    toast.error(err.error || 'Erreur');
-                                  }
-                                } catch (e) {
-                                  toast.error('Erreur réseau');
-                                }
-                              },
-                            });
-                          }}
-                        >
-                          Supprimer
-                        </Button>
-                      </div>
+        <div className="bg-[#0a0520] border border-cyan-500/12 rounded-lg p-5">
+          <div className="flex items-center gap-2 border-b border-cyan-500/20 pb-2 mb-4">
+            <Settings size={14} className="text-cyan-400" />
+            <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Gestion des Utilisateurs</span>
+          </div>
+          <div className="space-y-2">
+            {/* Liste des utilisateurs */}
+            {players.map((player) => (
+              <div
+                key={player.id}
+                className="p-3 bg-[#160b3a]/50 border border-cyan-500/10 rounded-lg hover:border-cyan-500/25 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-slate-200 text-sm">{player.username}</span>
+                      <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded text-[9px] font-mono border border-cyan-500/20">
+                        {player.id.substring(0, 8)}...
+                      </span>
+                      {player.role === 'admin' && (
+                        <span className="px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 rounded text-[9px] font-bold border border-yellow-500/30 uppercase tracking-wide">
+                          ADMIN
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 flex items-center gap-3">
+                      <span className="font-mono">{player.email}</span>
+                      <span className="text-cyan-400">{player.planets.length} planète(s)</span>
                     </div>
                   </div>
-                ))}
+                  <div className="flex gap-1.5 flex-wrap justify-end">
+                    <button
+                      className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all"
+                      onClick={async () => {
+                        const newPassword = prompt('Nouveau mot de passe (min. 6 caractères):');
+                        if (!newPassword || newPassword.length < 6) { toast.error('Mot de passe invalide'); return; }
+                        try {
+                          const res = await fetch(apiUrl(`/admin/user/${player.id}/reset-password?user_id=${userId}`), {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ new_password: newPassword })
+                          });
+                          if (res.ok) toast.success('Mot de passe réinitialisé');
+                          else { const err = await res.json(); toast.error(err.error || 'Erreur'); }
+                        } catch { toast.error('Erreur réseau'); }
+                      }}
+                    >
+                      MDP
+                    </button>
+                    <button
+                      className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all"
+                      onClick={async () => {
+                        const newUsername = prompt('Nouveau nom d\'utilisateur:', player.username);
+                        if (!newUsername || newUsername.trim() === '') { toast.error('Nom invalide'); return; }
+                        try {
+                          const res = await fetch(apiUrl(`/admin/user/${player.id}/username?user_id=${userId}`), {
+                            method: 'PATCH',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: newUsername })
+                          });
+                          if (res.ok) { toast.success('Nom modifié'); fetchPlayers(); }
+                          else { const err = await res.json(); toast.error(err.error || 'Erreur'); }
+                        } catch { toast.error('Erreur réseau'); }
+                      }}
+                    >
+                      Nom
+                    </button>
+                    <button
+                      className="px-2.5 py-1 bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all"
+                      onClick={async () => {
+                        const newEmail = prompt('Nouvel email:', player.email);
+                        if (!newEmail || !newEmail.includes('@')) { toast.error('Email invalide'); return; }
+                        try {
+                          const res = await fetch(apiUrl(`/admin/user/${player.id}/email?user_id=${userId}`), {
+                            method: 'PATCH',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: newEmail })
+                          });
+                          if (res.ok) { toast.success('Email modifié'); fetchPlayers(); }
+                          else { const err = await res.json(); toast.error(err.error || 'Erreur'); }
+                        } catch { toast.error('Erreur réseau'); }
+                      }}
+                    >
+                      Email
+                    </button>
+                    <button
+                      className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all"
+                      onClick={async () => {
+                        const current = player.syndicate_credits ?? 0;
+                        const newVal = prompt(`SC pour ${player.username} (actuel: ${current}):`, String(current));
+                        if (newVal === null) return;
+                        const parsed = parseFloat(newVal);
+                        if (isNaN(parsed) || parsed < 0) { toast.error('Valeur invalide'); return; }
+                        try {
+                          const res = await fetch(apiUrl(`/admin/user/${player.id}/syndicate-credits?user_id=${userId}`), {
+                            method: 'PATCH',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ syndicate_credits: parsed })
+                          });
+                          if (res.ok) { toast.success(`SC: ${parsed}`); fetchPlayers(); }
+                          else { const err = await res.json(); toast.error(err.error || 'Erreur'); }
+                        } catch { toast.error('Erreur réseau'); }
+                      }}
+                    >
+                      SC: {player.syndicate_credits?.toFixed(0) ?? 0}
+                    </button>
+                    <button
+                      className={`px-2.5 py-1 text-xs font-bold uppercase tracking-wide rounded transition-all ${
+                        player.role === 'admin'
+                          ? 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20'
+                          : 'bg-slate-500/10 border border-slate-500/30 text-slate-400 hover:bg-slate-500/20'
+                      }`}
+                      onClick={() => {
+                        const newRole = player.role === 'admin' ? 'user' : 'admin';
+                        setConfirmState({
+                          open: true,
+                          title: newRole === 'admin' ? 'Promouvoir Admin' : 'Rétrograder en User',
+                          message: `Voulez-vous ${newRole === 'admin' ? 'promouvoir' : 'rétrograder'} ${player.username} en ${newRole} ?`,
+                          variant: newRole === 'admin' ? 'default' : 'danger',
+                          onConfirm: async () => {
+                            try {
+                              const res = await fetch(apiUrl(`/admin/user/${player.id}/role?user_id=${userId}`), {
+                                method: 'PATCH',
+                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ role: newRole }),
+                              });
+                              if (res.ok) { toast.success(`Rôle mis à jour: ${newRole}`); fetchPlayers(); }
+                              else { const err = await res.json(); toast.error(err.error || 'Erreur'); }
+                            } catch { toast.error('Erreur réseau'); }
+                          },
+                        });
+                      }}
+                    >
+                      {player.role === 'admin' ? 'Admin' : 'User'}
+                    </button>
+                    <button
+                      className="px-2.5 py-1 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all"
+                      onClick={() => {
+                        setConfirmState({
+                          open: true,
+                          title: 'Supprimer l\'utilisateur',
+                          message: `Voulez-vous vraiment supprimer l'utilisateur ${player.username} ? Cette action est IRRÉVERSIBLE.`,
+                          variant: 'danger',
+                          onConfirm: async () => {
+                            try {
+                              const res = await fetch(apiUrl(`/admin/user/${player.id}?user_id=${userId}`), {
+                                method: 'DELETE',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                              });
+                              if (res.ok) { toast.success('Utilisateur supprimé'); fetchPlayers(); }
+                              else { const err = await res.json(); toast.error(err.error || 'Erreur'); }
+                            } catch { toast.error('Erreur réseau'); }
+                          },
+                        });
+                      }}
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* TAB ANNOUNCEMENTS */}
       {activeTab === 'announcements' && (
         <div className="space-y-6">
           {/* Create New Announcement */}
-          <Card className="bg-gradient-to-br from-slate-950 to-emerald-950/20 border-emerald-500/30 card-depth">
-            <CardHeader>
-              <CardTitle className="text-emerald-400 flex items-center gap-2">
-                <Radio size={20} className="animate-pulse" />
-                Créer une Nouvelle Annonce
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="bg-[#0a0520] border border-cyan-500/12 rounded-lg p-5">
+            <div className="flex items-center gap-2 border-b border-cyan-500/20 pb-2 mb-4">
+              <Radio size={14} className="text-cyan-400 animate-pulse" />
+              <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Créer une Nouvelle Annonce</span>
+            </div>
+            <div className="space-y-4">
               <div>
                 <label className="text-xs text-slate-400 font-bold mb-2 block uppercase tracking-wider">
                   Titre
@@ -2180,40 +2155,32 @@ export default function AdminPanel() {
                   </label>
                 </div>
               </div>
-              <Button
+              <button
                 onClick={createAnnouncement}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 text-xs font-bold uppercase tracking-wide rounded transition-all"
               >
-                <Save size={16} className="mr-2" />
+                <Save size={13} />
                 Créer l'Annonce
-              </Button>
-            </CardContent>
-          </Card>
+              </button>
+            </div>
+          </div>
 
           {/* List of Announcements */}
-          <Card className="bg-slate-950 border-white/10 card-depth">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Radio size={20} />
-                Annonces Existantes ({announcements.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="bg-[#0a0520] border border-cyan-500/12 rounded-lg p-5">
+            <div className="flex items-center gap-2 border-b border-cyan-500/20 pb-2 mb-4">
+              <Radio size={14} className="text-cyan-400" />
+              <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Annonces Existantes ({announcements.length})</span>
+            </div>
+            <div className="space-y-3">
               {announcements.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
+                <div className="text-center py-8 text-slate-500 text-sm">
                   Aucune annonce pour le moment
                 </div>
               ) : (
                 announcements.map((announcement) => (
                   <div
                     key={announcement.id}
-                    className={`border-2 rounded-lg p-4 ${
-                      announcement.announcement_type === 'danger'
-                        ? 'border-red-500/30 bg-red-950/20'
-                        : announcement.announcement_type === 'warning'
-                        ? 'border-orange-500/30 bg-orange-950/20'
-                        : 'border-cyan-500/30 bg-cyan-950/20'
-                    }`}
+                    className="p-3 bg-[#160b3a]/50 border border-cyan-500/10 rounded-lg hover:border-cyan-500/25 transition-colors"
                   >
                     {editingAnnouncement?.id === announcement.id ? (
                       // Edit mode
@@ -2257,23 +2224,20 @@ export default function AdminPanel() {
                           </label>
                         </div>
                         <div className="flex gap-2">
-                          <Button
+                          <button
                             onClick={() => updateAnnouncement(announcement.id, editingAnnouncement)}
-                            className="flex-1 bg-emerald-600 hover:bg-emerald-500"
-                            size="sm"
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-400/60 transition-all"
                           >
-                            <Save size={14} className="mr-1" />
+                            <Save size={14} />
                             Sauvegarder
-                          </Button>
-                          <Button
+                          </button>
+                          <button
                             onClick={() => setEditingAnnouncement(null)}
-                            variant="outline"
-                            className="flex-1"
-                            size="sm"
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded border border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-300 transition-all"
                           >
-                            <X size={14} className="mr-1" />
+                            <X size={14} />
                             Annuler
-                          </Button>
+                          </button>
                         </div>
                       </div>
                     ) : (
@@ -2303,44 +2267,38 @@ export default function AdminPanel() {
                           </p>
                         </div>
                         <div className="flex gap-2">
-                          <Button
+                          <button
                             onClick={() => setEditingAnnouncement(announcement)}
-                            variant="outline"
-                            size="sm"
-                            className="border-cyan-500/30 hover:bg-cyan-500/10"
+                            className="p-1.5 rounded border border-cyan-500/30 bg-cyan-500/5 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-400/50 transition-all"
                           >
                             <Edit size={14} />
-                          </Button>
-                          <Button
+                          </button>
+                          <button
                             onClick={() =>
                               updateAnnouncement(announcement.id, { is_active: !announcement.is_active })
                             }
-                            variant="outline"
-                            size="sm"
-                            className={
+                            className={`p-1.5 rounded border transition-all ${
                               announcement.is_active
-                                ? 'border-orange-500/30 hover:bg-orange-500/10'
-                                : 'border-emerald-500/30 hover:bg-emerald-500/10'
-                            }
+                                ? 'border-orange-500/30 bg-orange-500/5 text-orange-400 hover:bg-orange-500/10 hover:border-orange-400/50'
+                                : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-400/50'
+                            }`}
                           >
                             {announcement.is_active ? <AlertTriangle size={14} /> : <Zap size={14} />}
-                          </Button>
-                          <Button
+                          </button>
+                          <button
                             onClick={() => deleteAnnouncement(announcement.id)}
-                            variant="outline"
-                            size="sm"
-                            className="border-red-500/30 hover:bg-red-500/10"
+                            className="p-1.5 rounded border border-red-500/30 bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:border-red-400/50 transition-all"
                           >
                             <X size={14} />
-                          </Button>
+                          </button>
                         </div>
                       </div>
                     )}
                   </div>
                 ))
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       )}
 

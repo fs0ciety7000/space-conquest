@@ -148,8 +148,13 @@ export default function Settings({
               <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
             </div>
             <div className="pb-2 text-center md:text-left space-y-2">
-              <h2 className="text-3xl font-black text-slate-200 uppercase tracking-tighter flex items-center gap-3 justify-center md:justify-start">
+              <h2 className="text-3xl font-black text-slate-200 uppercase tracking-tighter flex items-center gap-3 justify-center md:justify-start flex-wrap">
                 {username} <Shield size={20} className="text-cyan-400" />
+                {localStorage.getItem('userRole') === 'admin' && (
+                  <span className="px-2 py-0.5 text-xs font-bold rounded border border-yellow-400/50 text-yellow-400 bg-yellow-400/10 uppercase tracking-wider">
+                    Admin
+                  </span>
+                )}
               </h2>
               <p className="text-slate-400 font-mono text-xs flex items-center gap-2 justify-center md:justify-start">
                 <Fingerprint size={12} /> ID-CORE: {userId.substring(0, 8)}...

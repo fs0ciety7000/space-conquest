@@ -8,7 +8,7 @@ import { SpaceBackground, SpaceLoader } from "@/components/ui/space-background";
 import { toast } from "sonner";
 
 interface LoginProps {
-  onLogin: (token: string, planetId: string, userId: string, username: string, email: string) => void;
+  onLogin: (token: string, planetId: string, userId: string, username: string, email: string, role?: string) => void;
 }
 
 interface LoginResponse {
@@ -17,6 +17,7 @@ interface LoginResponse {
   user_id: string;
   username: string;
   email:  string;
+  role?: string;
 }
 
 interface RegisterResponse {
@@ -143,7 +144,7 @@ export default function Login({ onLogin }: LoginProps) {
           throw new Error('Réponse de connexion invalide');
         }
         toast.success(`Bienvenue, Commandant ${loginData.username} !`);
-        onLogin(loginData.token, loginData.planet_id, loginData.user_id, loginData.username, loginData.email);
+        onLogin(loginData.token, loginData.planet_id, loginData.user_id, loginData.username, loginData.email, loginData.role);
       }
     } catch (err: any) {
       const msg = err.name === 'AbortError'

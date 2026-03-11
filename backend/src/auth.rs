@@ -358,7 +358,8 @@ let (system, position) = {
             "user_id": user_id,
             "username": payload.username,
             "planet_id": planet_id,
-            "email": payload.email
+            "email": payload.email,
+            "role": "user"
         }))
     )
 }
@@ -535,9 +536,10 @@ pub async fn login_handler(
         Json(json!({
             "token": token,
             "planet_id": planet_id,
-            "user_id": user.id, 
+            "user_id": user.id,
             "username": user.username,
-            "email": user.email
+            "email": user.email,
+            "role": user.role
         }))
     )
 }

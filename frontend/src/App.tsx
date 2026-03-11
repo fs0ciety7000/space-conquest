@@ -84,15 +84,17 @@ export default function App() {
   const [planetId, setPlanetId] = useState<string | null>(localStorage.getItem('planet_id'));
   const [userId, setUserId] = useState<string | null>(localStorage.getItem('user_id'));
   const [username, setUsername] = useState<string | null>(localStorage.getItem('username'));
+  const [userRole, setUserRole] = useState<string>(localStorage.getItem('userRole') || 'user');
 
   return (
     <PlanetProvider initialPlanetId={planetId} token={token}>
       <WebSocketProvider token={token}>
-         <AppContent 
+         <AppContent
            token={token} setToken={setToken}
            planetId={planetId} setPlanetId={setPlanetId}
            userId={userId} setUserId={setUserId}
            username={username} setUsername={setUsername}
+           userRole={userRole} setUserRole={setUserRole}
          />
       </WebSocketProvider>
     </PlanetProvider>
@@ -103,12 +105,14 @@ function AppContent({
   token, setToken,
   planetId, setPlanetId,
   userId, setUserId,
-  username, setUsername
+  username, setUsername,
+  userRole, setUserRole
 }: {
   token: string | null; setToken: (t: string | null) => void;
   planetId: string | null; setPlanetId: (p: string | null) => void;
   userId: string | null; setUserId: (u: string | null) => void;
   username: string | null; setUsername: (u: string | null) => void;
+  userRole: string; setUserRole: (r: string) => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [speedFactor, setSpeedFactor] = useState<number>(1);
@@ -227,10 +231,12 @@ function AppContent({
     localStorage.removeItem('planet_id');
     localStorage.removeItem('user_id');
     localStorage.removeItem('username');
+    localStorage.removeItem('userRole');
     setToken(null);
     setPlanetId(null);
     setUserId(null);
     setUsername(null);
+    setUserRole('user');
     setPlanet(null);
   };
 
@@ -580,6 +586,10 @@ function AppContent({
         if (res.ok) {
           const data = await res.json();
           setSyndicateCredits(data.syndicate_credits ?? 0);
+          if (data.role && data.role !== userRole) {
+            setUserRole(data.role);
+            localStorage.setItem('userRole', data.role);
+          }
         }
       } catch { /* ignore */ }
     };
@@ -627,16 +637,18 @@ function AppContent({
   }
 
   if (!token || !planetId || !userId) {
-    return <Login onLogin={(t, p, u, user) => {
+    return <Login onLogin={(t, p, u, user, _email, role) => {
         localStorage.setItem('token', t);
         localStorage.setItem('planet_id', p);
         localStorage.setItem('user_id', u);
         localStorage.setItem('username', user);
+        const resolvedRole = role || 'user';
+        localStorage.setItem('userRole', resolvedRole);
         setToken(t);
         setPlanetId(p);
         setUserId(u);
         setUsername(user);
-        console.log('👤 Utilisateur connecté:', user); // DEBUG
+        setUserRole(resolvedRole);
     }} />;
   }
 
@@ -648,7 +660,7 @@ function AppContent({
   );
 
   // Vérifier si l'utilisateur est admin
-  const isAdmin = username === 'phantomhex';
+  const isAdmin = userRole === 'admin';
 
   const MENU_ITEMS: MenuItem[] = [
     { id: 'overview', label: 'Vue Générale', icon: LayoutDashboard, category: 'COMMANDEMENT' },

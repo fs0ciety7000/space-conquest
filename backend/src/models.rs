@@ -75,6 +75,7 @@ pub struct UserResponse {
     pub username: String,
     pub email: String,
     pub syndicate_credits: f64,
+    pub role: String,
 }
 
 #[derive(Deserialize)]

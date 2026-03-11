@@ -13,6 +13,7 @@ use uuid::Uuid;
 use chrono::Utc;
 use bcrypt;
 
+use crate::websocket::WsEvent;
 use crate::entities::{
     prelude::{Planet, User, ServerConfig, Announcement, BuildingType, PlanetBuilding, ShipType, PlanetShip, DefenseType, PlanetDefense, Technology, PlanetTechnology},
     planet,
@@ -44,6 +45,7 @@ struct PlayerListItem {
     id: Uuid,
     username: String,
     email: String,
+    role: String,
     planets: Vec<PlanetInfo>,
     total_points: i32,
     syndicate_credits: f64,
@@ -160,6 +162,7 @@ pub async fn get_all_players_handler(
             syndicate_credits: user.syndicate_credits,
             username: user.username,
             email: user.email,
+            role: user.role,
             planets: planet_infos,
             total_points: 0,
         });
@@ -1148,4 +1151,47 @@ pub async fn delete_announcement_handler(
                 .into_response()
         }
     }
+}
+
+// POST /admin/broadcast - Global broadcast to all connected players
+#[derive(Debug, Deserialize)]
+pub struct BroadcastRequest {
+    pub title: String,
+    pub message: String,
+    pub notif_type: Option<String>,
+}
+
+pub async fn admin_broadcast_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(body): Json<BroadcastRequest>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    if check_admin(user_id_str, &state).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
+            .into_response();
+    }
+
+    let notif_type = body.notif_type.as_deref().unwrap_or("system").to_string();
+
+    if let Some(ws) = &state.ws {
+        // WebSocket broadcast global (joueurs connectés)
+        ws.broadcast_global(WsEvent::Notification {
+            notif_type: notif_type.clone(),
+            title: body.title.clone(),
+            message: body.message.clone(),
+        }).await;
+
+        // Notification persistante pour tous les joueurs
+        if let Ok(all_users) = User::find().all(&state.db).await {
+            for u in all_users {
+                ws.push_notification(u.id, &notif_type, &body.title, &body.message, None).await;
+            }
+        }
+    }
+
+    Json(json!({
+        "success": true,
+        "message": "Broadcast envoyé à tous les joueurs"
+    })).into_response()
 }

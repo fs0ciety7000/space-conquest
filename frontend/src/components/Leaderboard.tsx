@@ -32,6 +32,7 @@ interface RankItem {
     galaxy: number | null;
     avatar_url?: string | null;
     is_online?: boolean;
+    role?: string;
 }
 
 interface LeaderboardProps {
@@ -306,6 +307,9 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                                     </button>
                                                     {player.is_me && (
                                                         <span className="text-[9px] bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/30 font-bold tracking-wider w-fit">VOUS</span>
+                                                    )}
+                                                    {(player.role === 'admin' || (player.is_me && localStorage.getItem('userRole') === 'admin')) && (
+                                                        <span className="text-[9px] px-2 py-0.5 font-bold uppercase tracking-wider rounded border border-yellow-400/50 text-yellow-400 bg-yellow-400/10 w-fit">Admin</span>
                                                     )}
                                                 </div>
                                                 <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wide">
