@@ -1,5 +1,18 @@
 # Changelog - Space Conquest
 
+## [11.3.0] - 2026-03-12 - Puissance Militaire Réelle
+
+### ⚔️ Puissance Offensive & Défensive — Refonte complète
+- **Calcul backend** : `offensive_power` et `defensive_power` calculés côté serveur avec les vraies stats de la base de données (plus de valeurs hardcodées côté frontend)
+- **Toutes les unités incluses** — avant : seulement 2 vaisseaux + 2 défenses ; maintenant :
+  - Vaisseaux : chasseur léger, chasseur lourd, croiseur, cuirassé, bombardier, destructeur, **Étoile de la Mort**, transporteur, recycleur, vaisseau de colonisation
+  - Défenses : lance-roquettes, laser léger, laser lourd, canon Gauss, canon ionique, tourelle plasma, petit bouclier, grand bouclier
+- **Tech bonus corrigé** : le calcul utilisait `laser_tech` au lieu de `weapons_tech` comme multiplicateur d'attaque principal
+- **Score militaire** (classement) : les vaisseaux sont maintenant inclus à ×0.5 (les défenses restent à ×1.0 — plus permanentes)
+- **Rapports d'espionnage** : score de menace corrigé — les unités civiles et toutes les défenses avaient des stats fausses (1/1/10 au lieu des vraies valeurs)
+
+---
+
 ## [11.2.0] - 2026-03-12 - Tech Tree Refonte Visuelle
 
 ### 🌳 Arbre Technologique — Refonte complète
