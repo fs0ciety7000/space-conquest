@@ -53,9 +53,9 @@ interface TechInfo {
   }>;
 }
 
-// Node dimensions used by dagre for layout computation
+// Node dimensions — must match the fixed card dimensions below (w-[240px] h-[320px])
 const NODE_WIDTH = 240;
-const NODE_HEIGHT = 300;
+const NODE_HEIGHT = 320;
 
 // --------------------------------------------------------------------------
 // Dagre layout helper
@@ -68,7 +68,7 @@ const getLayoutedElements = (
 ): { nodes: Node[]; edges: Edge[] } => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 80 });
+  dagreGraph.setGraph({ rankdir: 'TB', nodesep: 50, ranksep: 80 });
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
@@ -198,7 +198,7 @@ const TechNode = ({ data }: { data: any }) => {
       />
       <motion.div variants={nodeVariants} initial="hidden" animate="show">
         <Card className={`
-          relative overflow-hidden w-[220px] min-h-[240px] transition-all duration-300
+          relative overflow-hidden w-[240px] h-[320px] transition-all duration-300
           bg-[rgba(16,8,46,0.95)] backdrop-blur-[20px]
           border ${nodeStateClass}
           ${!isLocked && !isResearching ? 'hover:-translate-y-1 hover:shadow-2xl cursor-pointer hover:scale-105' : ''}
@@ -211,7 +211,7 @@ const TechNode = ({ data }: { data: any }) => {
             <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
           </div>
 
-          <CardContent className="p-3 relative z-10">
+          <CardContent className="p-3 relative z-10 h-full overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
             {/* Header */}
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -553,8 +553,6 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
             width:  16,
             height: 16,
           },
-          // Ensure edges render above node backgrounds
-          zIndex: 10,
         });
       });
     });
