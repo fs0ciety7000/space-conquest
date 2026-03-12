@@ -90,6 +90,7 @@ export default function ListingCard({ listing, onBuy, canBuy }: ListingCardProps
                 max={listing.quantity}
                 value={quantity}
                 onChange={(e) => setQuantity(Math.min(listing.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
+                onFocus={(e) => e.target.select()}
                 className="bg-[rgba(10,5,32,0.6)] border-cyan-500/10 text-slate-200 font-mono hover:border-cyan-500/20 transition-colors"
               />
 

@@ -367,6 +367,7 @@ export default function ServerEventModal({ event, userId, planetId, onClose }: S
                 placeholder="Points (défaut: 100)"
                 value={contribution}
                 onChange={e => setContribution(e.target.value)}
+                onFocus={(e) => e.target.select()}
                 className="bg-slate-800/50 border-slate-600 text-white text-sm h-9"
               />
               <Button

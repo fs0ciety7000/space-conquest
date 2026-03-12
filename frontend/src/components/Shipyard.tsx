@@ -395,6 +395,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
                       placeholder="0"
                       className="w-20 bg-black/50 border border-cyan-500/10 rounded-lg text-center text-slate-200 text-sm font-bold focus:outline-none focus:border-cyan-500/30 transition-colors"
                       onChange={(e) => setQty({...qty, [ship.ship_key]: parseInt(e.target.value)})}
+                      onFocus={(e) => e.target.select()}
                       disabled={locked || isFull}
                     />
                     <Button

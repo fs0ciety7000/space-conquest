@@ -595,13 +595,13 @@ async fn calculate_current_resources(
         }
     }
 
-    // Calculer le ratio énergétique
+    // Calculer le ratio énergétique (solar + fusion)
     let energy_produced = game_logic::calculate_energy_production_with_slots(
         planet_data.building_level("solar_plant"),
         planet_data.tech_level("energy_tech"),
         &slot_1, &slot_2, &slot_3, &slot_4,
         config,
-    );
+    ) + game_logic::calculate_fusion_energy(planet_data.building_level("fusion_plant"), config);
 
     let energy_consumed = game_logic::calculate_energy_consumption(
         planet_data.building_level("metal_mine"),

@@ -288,7 +288,9 @@ async fn start_item_immediately(
             let facility_key = if category == "resources" { "shipyard" } else { "shipyard" };
             let facility_level = tech_tree::get_planet_building_level(db, planet_id, facility_key)
                 .await.unwrap_or(0);
-            let build_time = crate::game_logic::get_build_time(new_level, facility_level, crate::game_logic::building_category_factor(item_key), config);
+            let nanite_level = tech_tree::get_planet_building_level(db, planet_id, "nanite_factory")
+                .await.unwrap_or(0);
+            let build_time = crate::game_logic::get_build_time_with_nanite(new_level, facility_level, nanite_level, crate::game_logic::building_category_factor(item_key), config);
             let end_time = now + Duration::seconds(build_time);
 
             let item = construction_queue::ActiveModel {

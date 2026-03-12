@@ -121,6 +121,7 @@ function OrbitalTargetModal({ item, onClose, onLaunch, launching }: OrbitalTarge
                     max={max}
                     value={value}
                     onChange={(e) => onChange(Math.max(min, Math.min(max, parseInt(e.target.value) || min)))}
+                    onFocus={(e) => e.target.select()}
                     className="bg-black/40 border-slate-700/50 text-white font-mono text-center"
                   />
                 </div>

@@ -236,17 +236,17 @@ export default function BountyBoard({ userId, planetId, planet }: BountyBoardPro
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Métal</div>
-                  <Input type="number" min="0" value={metal} onChange={e => setMetal(e.target.value)} placeholder="0" className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200" />
+                  <Input type="number" min="0" value={metal} onChange={e => setMetal(e.target.value)} onFocus={(e) => e.target.select()} placeholder="0" className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200" />
                   <div className="text-[10px] text-slate-600 mt-0.5">Dispo : {planet.metal_amount.toLocaleString()}</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Cristal</div>
-                  <Input type="number" min="0" value={crystal} onChange={e => setCrystal(e.target.value)} placeholder="0" className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200" />
+                  <Input type="number" min="0" value={crystal} onChange={e => setCrystal(e.target.value)} onFocus={(e) => e.target.select()} placeholder="0" className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200" />
                   <div className="text-[10px] text-slate-600 mt-0.5">Dispo : {planet.crystal_amount.toLocaleString()}</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Deutérium</div>
-                  <Input type="number" min="0" value={deuterium} onChange={e => setDeuterium(e.target.value)} placeholder="0" className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200" />
+                  <Input type="number" min="0" value={deuterium} onChange={e => setDeuterium(e.target.value)} onFocus={(e) => e.target.select()} placeholder="0" className="bg-[rgba(10,5,32,0.85)] border-cyan-500/10 text-slate-200" />
                   <div className="text-[10px] text-slate-600 mt-0.5">Dispo : {planet.deuterium_amount.toLocaleString()}</div>
                 </div>
               </div>

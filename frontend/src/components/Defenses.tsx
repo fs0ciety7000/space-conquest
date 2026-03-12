@@ -309,6 +309,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
                         min="1"
                         value={qty}
                         onChange={e => setQty(Math.max(1, Number(e.target.value)))}
+                        onFocus={(e) => e.target.select()}
                         className="bg-transparent border-b-2 border-cyan-500/10 text-3xl font-mono font-black text-slate-200 w-24 focus:outline-none focus:border-cyan-500/30 pb-1"
                       />
                   </div>

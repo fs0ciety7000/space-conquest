@@ -43,11 +43,12 @@ async fn apply_lazy_eval(
     let crystal_level = tech_tree::get_planet_building_level(db, planet.id, "crystal_mine").await.unwrap_or(0);
     let deuterium_level = tech_tree::get_planet_building_level(db, planet.id, "deuterium_mine").await.unwrap_or(0);
     let solar_level = tech_tree::get_planet_building_level(db, planet.id, "solar_plant").await.unwrap_or(0);
+    let fusion_level = tech_tree::get_planet_building_level(db, planet.id, "fusion_plant").await.unwrap_or(0);
     let energy_tech = tech_tree::get_planet_tech_level(db, planet.id, "energy_tech").await.unwrap_or(0);
     let plasma_tech = tech_tree::get_planet_tech_level(db, planet.id, "plasma_tech").await.unwrap_or(0);
 
-    let energy_ratio = game_logic::calculate_energy_ratio(
-        solar_level, energy_tech, metal_level, crystal_level, deuterium_level, config,
+    let energy_ratio = game_logic::calculate_energy_ratio_with_fusion(
+        solar_level, energy_tech, fusion_level, metal_level, crystal_level, deuterium_level, config,
     );
 
     planet.metal_amount = game_logic::calculate_resources_with_energy(

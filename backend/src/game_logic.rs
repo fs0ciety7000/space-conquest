@@ -199,7 +199,7 @@ pub fn calculate_resources(
 
 // --- CALCULS ÉNERGIE ---
 
-/// Calcule la production d'énergie totale du solar plant
+/// Calcule la production d'énergie du solar plant uniquement (sans fusion_plant)
 pub fn calculate_energy_production(solar_plant_level: i32, energy_tech_level: i32, config: &ServerConfigCache) -> f64 {
     if solar_plant_level == 0 {
         return 0.0;
@@ -214,6 +214,16 @@ pub fn calculate_energy_production(solar_plant_level: i32, energy_tech_level: i3
     base_production * tech_bonus
 }
 
+/// Calcule la production d'énergie de la fusion_plant
+/// Formule : level * 50 unités par niveau (configurable via energy_fusion_per_level)
+pub fn calculate_fusion_energy(fusion_plant_level: i32, config: &ServerConfigCache) -> f64 {
+    if fusion_plant_level == 0 {
+        return 0.0;
+    }
+    let per_level = config.get_config("energy_fusion_per_level", 50.0);
+    fusion_plant_level as f64 * per_level
+}
+
 /// Calcule la consommation d'énergie totale des mines
 pub fn calculate_energy_consumption(metal_mine_level: i32, crystal_mine_level: i32, deuterium_mine_level: i32, config: &ServerConfigCache) -> f64 {
     let base_cons = config.get_config("energy_mine_consumption_base", 10.0);
@@ -226,19 +236,30 @@ pub fn calculate_energy_consumption(metal_mine_level: i32, crystal_mine_level: i
     metal_cons + crystal_cons + deut_cons
 }
 
-/// Calcule le ratio énergétique (production / consommation)
+/// Calcule le ratio énergétique (production / consommation), fusion_plant incluse
 /// Retourne un ratio entre 0.0 et 1.0 (ou plus si surplus)
 pub fn calculate_energy_ratio(solar_plant_level: i32, energy_tech_level: i32,
                                 metal_mine_level: i32, crystal_mine_level: i32,
                                 deuterium_mine_level: i32, config: &ServerConfigCache) -> f64 {
-    let production = calculate_energy_production(solar_plant_level, energy_tech_level, config);
+    calculate_energy_ratio_with_fusion(solar_plant_level, energy_tech_level, 0,
+        metal_mine_level, crystal_mine_level, deuterium_mine_level, config)
+}
+
+/// Calcule le ratio énergétique avec la contribution de la fusion_plant
+pub fn calculate_energy_ratio_with_fusion(solar_plant_level: i32, energy_tech_level: i32,
+                                           fusion_plant_level: i32,
+                                           metal_mine_level: i32, crystal_mine_level: i32,
+                                           deuterium_mine_level: i32, config: &ServerConfigCache) -> f64 {
+    let solar_production = calculate_energy_production(solar_plant_level, energy_tech_level, config);
+    let fusion_production = calculate_fusion_energy(fusion_plant_level, config);
+    let total_production = solar_production + fusion_production;
     let consumption = calculate_energy_consumption(metal_mine_level, crystal_mine_level, deuterium_mine_level, config);
 
     if consumption == 0.0 {
         return 1.0; // Pas de consommation = 100%
     }
 
-    (production / consumption).min(1.0) // Max 100%
+    (total_production / consumption).min(1.0) // Max 100%
 }
 
 /// Calcule la production horaire d'une ressource (en unités/heure)
@@ -500,8 +521,15 @@ pub fn building_category_factor(building_key: &str) -> f64 {
 
 // TEMPS DE CONSTRUCTION PROGRESSIF
 /// Formule : BASE_TIME * level^EXPONENT * category_factor
-/// Réduction : -8% par niveau de chantier, max -60%.
+/// Réduction chantier : -8% par niveau, max -60%.
+/// Délègue à get_build_time_with_nanite avec nanite_level=0.
 pub fn get_build_time(level: i32, facility_level: i32, category_factor: f64, config: &ServerConfigCache) -> i64 {
+    get_build_time_with_nanite(level, facility_level, 0, category_factor, config)
+}
+
+/// Variante de get_build_time incluant la réduction de la nanite_factory.
+/// nanite_level : chaque niveau divise le temps final par 2 (formule : time / 2^nanite_level).
+pub fn get_build_time_with_nanite(level: i32, facility_level: i32, nanite_level: i32, category_factor: f64, config: &ServerConfigCache) -> i64 {
     const BASE_TIME: f64 = 1800.0;   // 30 min à L1
     const EXPONENT: f64 = 1.40;
     const REDUCTION_PER_LEVEL: f64 = 0.08;
@@ -509,8 +537,10 @@ pub fn get_build_time(level: i32, facility_level: i32, category_factor: f64, con
 
     let base = BASE_TIME * (level as f64).powf(EXPONENT) * category_factor;
     let reduction_factor = 1.0 - (facility_level as f64 * REDUCTION_PER_LEVEL).min(MAX_REDUCTION);
-    let final_time = base * reduction_factor / config.building_speed;
-    std::cmp::max(10, final_time as i64)
+    let raw_time = base * reduction_factor / config.building_speed;
+    // nanite_factory : chaque niveau divise le temps par 2
+    let nanite_divisor = (2_f64).powi(nanite_level);
+    std::cmp::max(10, (raw_time / nanite_divisor) as i64)
 }
 
 /// Temps de production d'un vaisseau/défense, basé sur son coût réel.
@@ -1013,10 +1043,12 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
     let crystal_level = get_bl("crystal_mine");
     let deuterium_level = get_bl("deuterium_mine");
     let solar_level = get_bl("solar_plant");
+    let fusion_level = get_bl("fusion_plant");
 
-    let energy_ratio = calculate_energy_ratio(
+    let energy_ratio = calculate_energy_ratio_with_fusion(
         solar_level,
         energy_tech_level,
+        fusion_level,
         metal_level,
         crystal_level,
         deuterium_level,

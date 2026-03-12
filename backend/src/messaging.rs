@@ -18,6 +18,7 @@ use crate::entities::{
     user, message, conversation, global_chat_message
 };
 use crate::websocket::WsEvent;
+use crate::missions::update_achievement_progress;
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -271,6 +272,9 @@ pub async fn send_message_v2_handler(
     };
 
     new_message.insert(&state.db).await.unwrap();
+
+    // Déclencher l'achievement "messages"
+    update_achievement_progress(&state, sender_id, "messages", 1).await;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // NOTIFICATION WEBSOCKET - Notifier le destinataire du nouveau message

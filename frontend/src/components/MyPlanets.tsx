@@ -893,6 +893,7 @@ function ShipProductionModal({ planet, onClose, onBuild }: { planet: Planet; onC
                   max="10000"
                   value={quantity}
                   onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  onFocus={(e) => e.target.select()}
                   className="w-24 bg-black border-blue-900/50 text-white text-right font-mono"
                 />
               </div>
@@ -1012,6 +1013,7 @@ function DefenseProductionModal({ planet, onClose, onBuild }: { planet: Planet; 
                   max="10000"
                   value={quantity}
                   onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  onFocus={(e) => e.target.select()}
                   className="w-24 bg-black border-red-900/50 text-white text-right font-mono"
                 />
               </div>

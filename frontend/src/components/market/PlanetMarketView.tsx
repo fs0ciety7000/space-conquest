@@ -254,10 +254,13 @@ function ListingCard({
               <div className="space-y-1">
                 <div className="flex gap-2 items-center">
                   <Input type="number" value={priceMetal} onChange={e => setPriceMetal(Number(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="h-7 w-28 text-xs bg-slate-900 border-yellow-500/30 text-yellow-300" placeholder="Métal" />
                   <Input type="number" value={priceCrystal} onChange={e => setPriceCrystal(Number(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="h-7 w-28 text-xs bg-slate-900 border-cyan-500/30 text-cyan-300" placeholder="Cristal" />
                   <Input type="number" value={priceDeuterium} onChange={e => setPriceDeuterium(Number(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="h-7 w-28 text-xs bg-slate-900 border-blue-500/30 text-blue-300" placeholder="Deutérium" />
                   <Button size="sm" onClick={handleSavePrice} disabled={savingPrice} className="bg-emerald-700 hover:bg-emerald-600 h-7 text-xs px-2">
                     <Check size={12} />
@@ -607,16 +610,19 @@ function SellPanel({
               <div>
                 <label className="text-[10px] text-yellow-400 mb-1 block">Métal</label>
                 <Input type="number" value={metal} onChange={e => setMetal(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   className="h-8 text-xs bg-slate-900 border-yellow-500/30 text-yellow-300" />
               </div>
               <div>
                 <label className="text-[10px] text-cyan-400 mb-1 block">Cristal</label>
                 <Input type="number" value={crystal} onChange={e => setCrystal(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   className="h-8 text-xs bg-slate-900 border-cyan-500/30 text-cyan-300" />
               </div>
               <div>
                 <label className="text-[10px] text-blue-400 mb-1 block">Deutérium</label>
                 <Input type="number" value={deuterium} onChange={e => setDeuterium(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   className="h-8 text-xs bg-slate-900 border-blue-500/30 text-blue-300" />
               </div>
             </div>

@@ -449,7 +449,7 @@ export default function FleetDispatcher({
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <button onClick={() => handleShipCountChange(ship.ship_key, selected - 1)} className="p-1.5 bg-[rgba(5,0,15,0.8)] hover:bg-cyan-500/10 border border-cyan-500/15 text-slate-400 rounded transition-colors"><Minus size={12} /></button>
-                                                <Input type="number" min="0" max={ship.current_count} value={selected} onChange={(e) => handleShipCountChange(ship.ship_key, parseInt(e.target.value) || 0)} className="w-16 h-8 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-center font-mono text-sm focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]" />
+                                                <Input type="number" min="0" max={ship.current_count} value={selected} onChange={(e) => handleShipCountChange(ship.ship_key, parseInt(e.target.value) || 0)} onFocus={(e) => e.target.select()} className="w-16 h-8 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-center font-mono text-sm focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]" />
                                                 <button onClick={() => handleShipCountChange(ship.ship_key, selected + 1)} className="p-1.5 bg-[rgba(5,0,15,0.8)] hover:bg-cyan-500/10 border border-cyan-500/15 text-slate-400 rounded transition-colors"><Plus size={12} /></button>
                                                 <button onClick={() => handleShipCountChange(ship.ship_key, ship.current_count)} className="px-2 py-1.5 bg-cyan-900/20 hover:bg-cyan-900/40 border border-cyan-500/20 text-cyan-400 font-bold text-[10px] rounded transition-colors">MAX</button>
                                             </div>
@@ -481,6 +481,7 @@ export default function FleetDispatcher({
                                             min="0"
                                             value={res.value}
                                             onChange={(e) => res.setter(Math.max(0, parseInt(e.target.value) || 0))}
+                                            onFocus={(e) => e.target.select()}
                                             className={`flex-1 h-8 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-right font-mono text-sm text-slate-200 focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)] ${targetLoad > totalCargo ? 'border-red-500/50 text-red-300' : ''}`}
                                         />
                                         <button onClick={() => setMaxResource(res.key as any)} className="px-3 py-1.5 bg-emerald-900/20 hover:bg-emerald-900/40 border border-emerald-500/20 text-emerald-400 font-bold text-[10px] rounded transition-colors">MAX</button>

@@ -193,6 +193,7 @@ export default function ZACManager({ planetId }: ZACManagerProps) {
                         max={available}
                         value={assigned}
                         onChange={e => handleChange(key, parseInt(e.target.value) || 0)}
+                        onFocus={(e) => e.target.select()}
                         className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-xs text-white text-right font-mono focus:outline-none focus:border-cyan-500/50"
                       />
                     </div>

@@ -269,9 +269,10 @@ fn calculate_bonus(template: &crate::entities::officer_template::Model, level: i
 }
 
 /// Calcule le coût pour level up un officier
-/// Formule: coût_recrutement × niveau × 0.3
+/// Formule exponentielle: coût_recrutement × 1.5^niveau_actuel
+/// Exemples: L1→L2 = 1.5× la base, L10→L11 = 1.5^10 ≈ 57× la base
 fn calculate_levelup_cost(template: &crate::entities::officer_template::Model, current_level: i32) -> (f64, f64, f64) {
-    let multiplier = current_level as f64 * 0.3;
+    let multiplier = (1.5_f64).powi(current_level as i32);
     (
         template.recruitment_cost_metal * multiplier,
         template.recruitment_cost_crystal * multiplier,

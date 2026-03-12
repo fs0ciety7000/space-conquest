@@ -484,11 +484,12 @@ function ShipCompositionEditor({
                              />
                          </div>
                          <div className="shrink-0 w-24">
-                              <Input 
-                                type="number" 
+                              <Input
+                                type="number"
                                 min="0"
                                 value={count}
                                 onChange={(e) => set(ship.ship_key, parseInt(e.target.value) || 0)}
+                                onFocus={(e) => e.target.select()}
                                 className="h-8 text-right bg-slate-950 border-slate-700 font-mono text-indigo-300 font-bold focus-visible:ring-indigo-500"
                               />
                          </div>

@@ -160,6 +160,7 @@ export default function ColonizeModal({
                 max={Math.floor(availableResources.metal)}
                 value={metal}
                 onChange={(e) => setMetal(Math.min(Math.floor(availableResources.metal), parseInt(e.target.value) || 0))}
+                onFocus={(e) => e.target.select()}
                 className="w-28 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-right font-mono focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]"
               />
             </div>
@@ -189,6 +190,7 @@ export default function ColonizeModal({
                 max={Math.floor(availableResources.crystal)}
                 value={crystal}
                 onChange={(e) => setCrystal(Math.min(Math.floor(availableResources.crystal), parseInt(e.target.value) || 0))}
+                onFocus={(e) => e.target.select()}
                 className="w-28 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-right font-mono focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]"
               />
             </div>
@@ -218,6 +220,7 @@ export default function ColonizeModal({
                 max={Math.floor(availableResources.deuterium)}
                 value={deuterium}
                 onChange={(e) => setDeuterium(Math.min(Math.floor(availableResources.deuterium), parseInt(e.target.value) || 0))}
+                onFocus={(e) => e.target.select()}
                 className="w-28 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-right font-mono focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]"
               />
             </div>

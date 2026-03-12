@@ -207,6 +207,7 @@ async fn get_planet_handler(
     let crystal_mine_level = get_building_level(&state.db, id, "crystal_mine").await;
     let deuterium_mine_level = get_building_level(&state.db, id, "deuterium_mine").await;
     let solar_plant_level = get_building_level(&state.db, id, "solar_plant").await;
+    let fusion_plant_level = get_building_level(&state.db, id, "fusion_plant").await;
     let resource_storage_level = get_building_level(&state.db, id, "resource_storage").await;
 
     // Get tech levels from planet_technologies
@@ -214,10 +215,11 @@ async fn get_planet_handler(
         .await
         .unwrap_or(0);
 
-    // Calculate energy ratio
-    let energy_ratio = game_logic::calculate_energy_ratio(
+    // Calculate energy ratio (solar + fusion)
+    let energy_ratio = game_logic::calculate_energy_ratio_with_fusion(
         solar_plant_level,
         energy_tech_level,
+        fusion_plant_level,
         metal_mine_level,
         crystal_mine_level,
         deuterium_mine_level,
@@ -826,7 +828,7 @@ async fn get_planet_handler(
         &slot_3,
         &slot_4,
         &config,
-    );
+    ) + game_logic::calculate_fusion_energy(fusion_plant_level, &config);
     let energy_cons = game_logic::calculate_energy_consumption(
         metal_mine_level,
         crystal_mine_level,
@@ -1180,8 +1182,9 @@ async fn upgrade_mine_handler(
             let crystal_lv  = get_building_level(&state.db, p.id, "crystal_mine").await;
             let deut_lv     = get_building_level(&state.db, p.id, "deuterium_mine").await;
             let solar_lv    = get_building_level(&state.db, p.id, "solar_plant").await;
+            let fusion_lv   = get_building_level(&state.db, p.id, "fusion_plant").await;
             let energy_tech = tech_tree::get_planet_tech_level(&state.db, p.id, "energy_tech").await.unwrap_or(0);
-            let energy_ratio = game_logic::calculate_energy_ratio(solar_lv, energy_tech, metal_lv, crystal_lv, deut_lv, &config);
+            let energy_ratio = game_logic::calculate_energy_ratio_with_fusion(solar_lv, energy_tech, fusion_lv, metal_lv, crystal_lv, deut_lv, &config);
 
             let m = game_logic::calculate_resources_with_slots(
                 game_logic::ResourceType::Metal, metal_lv, p.metal_amount,
@@ -1206,11 +1209,18 @@ async fn upgrade_mine_handler(
     }
 
     // Recherches : utiliser get_research_time (basé sur niveau, réduit par labo)
-    // Bâtiments : utiliser get_build_time (basé sur niveau, réduit par chantier)
+    // Bâtiments : utiliser get_build_time_with_nanite (basé sur niveau, réduit par chantier + nanite)
+    let nanite_level = if !is_research {
+        tech_tree::get_planet_building_level(&state.db, p.id, "nanite_factory")
+            .await
+            .unwrap_or(0)
+    } else {
+        0
+    };
     let mut build_time = if is_research {
         game_logic::get_research_time(&type_mine, target_level, facility_level, &config)
     } else {
-        game_logic::get_build_time(target_level, facility_level, game_logic::building_category_factor(&type_mine), &config)
+        game_logic::get_build_time_with_nanite(target_level, facility_level, nanite_level, game_logic::building_category_factor(&type_mine), &config)
     };
 
     if is_research {
@@ -1339,10 +1349,17 @@ async fn cancel_construction_handler(
                 .await
                 .unwrap_or(0)
         };
+        let nanite_lvl = if !is_tech {
+            tech_tree::get_planet_building_level(&state.db, p.id, "nanite_factory")
+                .await
+                .unwrap_or(0)
+        } else {
+            0
+        };
         if is_tech {
             game_logic::get_research_time(&item.building_type, item.level, facility_level, &config) as f64
         } else {
-            game_logic::get_build_time(item.level, facility_level, game_logic::building_category_factor(&item.building_type), &config) as f64
+            game_logic::get_build_time_with_nanite(item.level, facility_level, nanite_lvl, game_logic::building_category_factor(&item.building_type), &config) as f64
         }
     };
 
@@ -1438,6 +1455,7 @@ async fn get_my_planets_handler(
             let crystal_mine_level = get_building_level(&state.db, mp.id, "crystal_mine").await;
             let deuterium_mine_level = get_building_level(&state.db, mp.id, "deuterium_mine").await;
             let solar_plant_level = get_building_level(&state.db, mp.id, "solar_plant").await;
+            let fusion_plant_level = get_building_level(&state.db, mp.id, "fusion_plant").await;
             let shipyard_level = get_building_level(&state.db, mp.id, "shipyard").await;
             let research_lab_level = get_building_level(&state.db, mp.id, "research").await;
             let hangar_level = get_building_level(&state.db, mp.id, "hangar").await;
@@ -1447,9 +1465,10 @@ async fn get_my_planets_handler(
                     .await
                     .unwrap_or(0);
 
-            let energy_ratio = game_logic::calculate_energy_ratio(
+            let energy_ratio = game_logic::calculate_energy_ratio_with_fusion(
                 solar_plant_level,
                 energy_tech_level,
+                fusion_plant_level,
                 metal_mine_level,
                 crystal_mine_level,
                 deuterium_mine_level,
@@ -1460,7 +1479,7 @@ async fn get_my_planets_handler(
                 solar_plant_level,
                 energy_tech_level,
                 &config,
-            );
+            ) + game_logic::calculate_fusion_energy(fusion_plant_level, &config);
             let energy_cons = game_logic::calculate_energy_consumption(
                 metal_mine_level,
                 crystal_mine_level,
@@ -1645,6 +1664,7 @@ pub async fn get_production_details_handler(
     let crystal_mine_level = building_levels.get("crystal_mine").copied().unwrap_or(0);
     let deuterium_mine_level = building_levels.get("deuterium_mine").copied().unwrap_or(0);
     let solar_plant_level = building_levels.get("solar_plant").copied().unwrap_or(0);
+    let fusion_plant_level = building_levels.get("fusion_plant").copied().unwrap_or(0);
 
     // Load tech levels from relational table
     let tech_levels = match tech_tree::get_all_planet_tech_levels(db, planet_uuid).await {
@@ -1657,8 +1677,9 @@ pub async fn get_production_details_handler(
     let energy_tech_level = tech_levels.get("energy_tech").copied().unwrap_or(0);
     let plasma_tech_level = tech_levels.get("plasma_tech").copied().unwrap_or(0);
 
-    // Energy balance
-    let energy_produced = game_logic::calculate_energy_production(solar_plant_level, energy_tech_level, &config);
+    // Energy balance (solar + fusion)
+    let energy_produced = game_logic::calculate_energy_production(solar_plant_level, energy_tech_level, &config)
+        + game_logic::calculate_fusion_energy(fusion_plant_level, &config);
     let energy_consumed = game_logic::calculate_energy_consumption(
         metal_mine_level, crystal_mine_level, deuterium_mine_level, &config,
     );

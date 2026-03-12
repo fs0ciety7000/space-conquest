@@ -80,6 +80,7 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
                         max={myFleet.hunters}
                         value={hunters}
                         onChange={(e) => setHunters(Math.min(myFleet.hunters, parseInt(e.target.value) || 0))}
+                        onFocus={(e) => e.target.select()}
                         className="w-20 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-right font-mono focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]"
                     />
                 </div>
@@ -107,6 +108,7 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
                         max={myFleet.cruisers}
                         value={cruisers}
                         onChange={(e) => setCruisers(Math.min(myFleet.cruisers, parseInt(e.target.value) || 0))}
+                        onFocus={(e) => e.target.select()}
                         className="w-20 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-right font-mono focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]"
                     />
                 </div>
@@ -134,6 +136,7 @@ export default function AttackModal({ targetName, myFleet, onConfirm, onCancel }
                         max={myFleet.transporters}
                         value={transporters}
                         onChange={(e) => setTransporters(Math.min(myFleet.transporters, parseInt(e.target.value) || 0))}
+                        onFocus={(e) => e.target.select()}
                         className="w-20 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-right font-mono focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]"
                     />
                 </div>

@@ -719,6 +719,7 @@ pub async fn get_building_types_for_planet(
 
     // Get shipyard level from relational table
     let shipyard_level = *planet_building_levels.get("shipyard").unwrap_or(&0);
+    let nanite_level = *planet_building_levels.get("nanite_factory").unwrap_or(&0);
 
     let mut result = Vec::new();
 
@@ -726,11 +727,11 @@ pub async fn get_building_types_for_planet(
         let current_level = *planet_building_levels.get(&building.building_key).unwrap_or(&0);
         let requirements = get_building_requirements(db, building.id, planet_id).await?;
 
-        // Calculate next level build time
+        // Calculate next level build time (with nanite_factory reduction)
         let next_level_time = if current_level >= 0 {
             let next_cost_metal = calculate_building_cost(building.base_cost_metal, building.cost_multiplier, current_level);
             let next_cost_crystal = calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, current_level);
-            Some(game_logic::get_build_time(current_level + 1, shipyard_level, game_logic::building_category_factor(&building.building_key), config))
+            Some(game_logic::get_build_time_with_nanite(current_level + 1, shipyard_level, nanite_level, game_logic::building_category_factor(&building.building_key), config))
         } else {
             None
         };

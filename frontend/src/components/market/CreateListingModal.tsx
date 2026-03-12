@@ -169,6 +169,7 @@ export default function CreateListingModal({ planet, userId, onClose, onSuccess 
                 max={availableAmount}
                 value={quantity}
                 onChange={(e) => setQuantity(Math.max(1, Math.min(availableAmount, parseInt(e.target.value) || 1)))}
+                onFocus={(e) => e.target.select()}
                 className="bg-[rgba(10,5,32,0.6)] border-cyan-500/10 text-slate-200 font-mono hover:border-cyan-500/20 transition-colors"
               />
             </div>
@@ -203,6 +204,7 @@ export default function CreateListingModal({ planet, userId, onClose, onSuccess 
                 min={0.01}
                 value={pricePerUnit}
                 onChange={(e) => setPricePerUnit(Math.max(0.01, parseFloat(e.target.value) || 0.01))}
+                onFocus={(e) => e.target.select()}
                 className="bg-[rgba(10,5,32,0.6)] border-cyan-500/10 text-slate-200 font-mono hover:border-cyan-500/20 transition-colors"
               />
             </div>

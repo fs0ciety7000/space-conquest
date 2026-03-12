@@ -696,12 +696,14 @@ async fn resolve_attack_mission(
     let def_crystal_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "crystal").await.unwrap_or(0);
     let def_deuterium_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "deuterium").await.unwrap_or(0);
     let def_solar_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "solar_plant").await.unwrap_or(0);
+    let def_fusion_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "fusion_plant").await.unwrap_or(0);
     let def_energy_tech = tech_tree::get_planet_tech_level(db, def_planet_raw.id, "energy_tech").await.unwrap_or(0);
     let plasma_tech_level = tech_tree::get_planet_tech_level(db, def_planet_raw.id, "plasma_tech").await.unwrap_or(0);
 
-    let def_energy_ratio = game_logic::calculate_energy_ratio(
+    let def_energy_ratio = game_logic::calculate_energy_ratio_with_fusion(
         def_solar_level,
         def_energy_tech,
+        def_fusion_level,
         def_metal_level,
         def_crystal_level,
         def_deuterium_level,

@@ -21,6 +21,7 @@ use crate::tech_tree;
 use sea_orm::DatabaseConnection;
 // WebSocket notifications peuvent être ajoutées ici plus tard
 // use crate::websocket::{WsEvent, WsState};
+use crate::missions::update_achievement_progress;
 use crate::AppState;
 
 // ============================================================================
@@ -300,6 +301,9 @@ pub async fn create_alliance_handler(
         let _ = Alliance::delete_by_id(alliance_id).exec(&state.db).await;
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Erreur création membre: {}", e)}))).into_response();
     }
+
+    // Déclencher l'achievement "alliance_create"
+    update_achievement_progress(&state, user_id, "alliance_create", 1).await;
 
     (StatusCode::CREATED, Json(json!({
         "id": alliance_id,
@@ -1257,6 +1261,9 @@ async fn join_alliance_directly(
     alliance_active.total_score = Set(alliance.total_score + user_score);
     alliance_active.updated_at = Set(now);
     let _ = alliance_active.update(&state.db).await;
+
+    // Déclencher l'achievement "alliance_join"
+    update_achievement_progress(state, user_id, "alliance_join", 1).await;
 
     (StatusCode::OK, Json(json!({
         "message": format!("Bienvenue dans [{}] {} !", alliance.tag, alliance.name),

@@ -238,6 +238,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
                   max={availableAmount}
                   value={sellQuantity}
                   onChange={(e) => handleSellQuantityChange(parseInt(e.target.value) || 0)}
+                  onFocus={(e) => e.target.select()}
                   className={`bg-[rgba(10,5,32,0.6)] border-cyan-500/10 text-slate-200 font-mono hover:border-cyan-500/20 transition-colors pr-12 ${lastEdited === 'sell' ? 'border-cyan-500/30' : ''}`}
                 />
                 <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${color}`}>
@@ -261,6 +262,7 @@ export default function NpcTradeCard({ resource, npcPrices, planet, userId, onUp
                     min={0}
                     value={buyQuantity}
                     onChange={(e) => handleBuyQuantityChange(parseInt(e.target.value) || 0)}
+                    onFocus={(e) => e.target.select()}
                     className={`bg-[rgba(10,5,32,0.6)] border-cyan-500/10 text-slate-200 font-mono hover:border-cyan-500/20 transition-colors pr-12 ${lastEdited === 'buy' ? 'border-cyan-500/30' : ''}`}
                   />
                   <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${resourceColors[buyResource]}`}>
