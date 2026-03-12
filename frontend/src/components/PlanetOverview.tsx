@@ -8,11 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { DataCard } from "@/components/ui/data-card";
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
-import { getTechLevel, getBuildingLevel, getShipCount, getDefenseCount, getShipStats, getDefenseStats, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
+import { getTechLevel, getBuildingLevel, getShipCount, getDefenseCount, getShipStats, getDefenseStats, calculateFleetAttack, calculateFleetHull, getTotalFleetCount, computeMilitaryScore, computeCTR } from '@/utils/techTreeCompat';
 import { formatDuration } from '@/lib/utils';
 import { usePlanet } from '@/contexts/PlanetContext';
 import ZACManager from '@/components/ZACManager';
@@ -391,34 +391,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     'ion_cannon', 'plasma_turret', 'small_shield', 'large_shield',
   ] as const;
 
-  // If the backend already computed these values, use them directly (real-time accurate).
-  // Otherwise fall back to the local calculation using complete ship/defense rosters.
-  const totalAtk: number = planet.offensive_power ?? (() => {
-    const shipAtk = ALL_SHIPS.reduce((sum, key) => {
-      return sum + getShipCount(planet, key) * getShipStats(planet, key).attack;
-    }, 0);
-    const defAtk = ALL_DEFENSES.reduce((sum, key) => {
-      return sum + getDefenseCount(planet, key) * getDefenseStats(planet, key).attack;
-    }, 0);
-    return (shipAtk + defAtk) * weaponsMult;
-  })();
-
-  const totalHull: number = planet.defensive_power ?? (() => {
-    const shipRes = ALL_SHIPS.reduce((sum, key) => {
-      const stats = getShipStats(planet, key);
-      const count = getShipCount(planet, key);
-      return sum + count * (stats.shield * shieldMult + stats.hull * armourMult);
-    }, 0);
-    const defRes = ALL_DEFENSES.reduce((sum, key) => {
-      const stats = getDefenseStats(planet, key);
-      const count = getDefenseCount(planet, key);
-      return sum + count * (stats.shield * shieldMult + stats.hull * armourMult);
-    }, 0);
-    return shipRes + defRes;
-  })();
-
-  // Whether the values came from the backend (more accurate) or were computed locally
-  const militaryFromBackend = planet.offensive_power !== undefined && planet.defensive_power !== undefined;
+  // Normalized Military Score + CTR
+  const militaryScore = useMemo(() => computeMilitaryScore(planet), [planet.ships, planet.defenses]);
+  const ctrResult = useMemo(() => computeCTR(militaryScore.totalScore), [militaryScore.totalScore]);
 
   const totalFleet = getTotalFleetCount(planet);
   const hangarCap = planet.fleet_capacity ?? (500 + (getBuildingLevel(planet, 'hangar') * 500));
@@ -1188,12 +1163,14 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
               </CardHeader>
 
               <CardContent className="relative z-10 pt-4">
-                  {/* Indicateur principal */}
+                  {/* Indicateur principal — Score Flotte normalisé */}
                   <div className="flex items-end gap-3 mb-6">
-                      <span className="text-5xl font-black font-mono tabular-nums text-transparent bg-clip-text bg-gradient-to-br from-red-400 via-red-300 to-orange-400 tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,0.5)] animate-pulse">{fmt(totalAtk)}</span>
+                      <span className="text-5xl font-black font-mono tabular-nums text-transparent bg-clip-text bg-gradient-to-br from-red-400 via-red-300 to-orange-400 tracking-tighter drop-shadow-[0_0_20px_rgba(239,68,68,0.5)]">
+                          {militaryScore.fleetScore.toLocaleString()}
+                      </span>
                       <div className="mb-2">
-                          <span className="text-xs font-black text-red-500 uppercase tracking-wider block drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]">Dégâts</span>
-                          <span className="text-[9px] font-bold text-slate-500 uppercase">/ Round</span>
+                          <span className="text-xs font-black text-red-500 uppercase tracking-wider block drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]">Score</span>
+                          <span className="text-[9px] font-bold text-slate-500 uppercase">Flotte</span>
                       </div>
                   </div>
 
@@ -1203,45 +1180,33 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                           <span className="flex items-center gap-1.5">
                               <Target size={12} className="text-red-400" />
                               Armement Niv.{getTechLevel(planet, 'weapons_tech')}
-                              {militaryFromBackend && <span className="text-[8px] text-cyan-500 normal-case font-bold ml-1">(live)</span>}
                           </span>
-                          <span className="text-red-400 font-mono font-black px-2 py-1 bg-red-500/20 rounded-lg border border-red-500/40 shadow-[0_0_8px_rgba(239,68,68,0.3)] animate-pulse">+{Math.round((weaponsMult-1)*100)}% DMG</span>
+                          <span className="text-red-400 font-mono font-black px-2 py-1 bg-red-500/20 rounded-lg border border-red-500/40 shadow-[0_0_8px_rgba(239,68,68,0.3)]">+{Math.round((weaponsMult-1)*100)}% DMG</span>
                       </div>
 
                       {/* Barre de progression style voltmètre */}
                       <div className="relative h-3 w-full bg-[rgba(10,5,32,0.85)] rounded-full overflow-hidden border-2 border-red-500/20 shadow-inner">
-                          {/* Graduations */}
                           <div className="absolute inset-0 flex justify-between px-1 items-center z-10">
                               {[...Array(10)].map((_, i) => (
                                   <div key={i} className="w-px h-2 bg-cyan-500/20"></div>
                               ))}
                           </div>
-                          {/* Barre de remplissage */}
                           <div
                               className="absolute inset-0 bg-gradient-to-r from-red-700 via-red-500 to-orange-400 transition-all duration-700"
                               style={{ width: `${Math.min(100, getTechLevel(planet, 'weapons_tech') * 8)}%` }}
                           >
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
-                              {/* Point lumineux au bout */}
                               <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.8)] animate-pulse"></div>
                           </div>
                       </div>
                   </div>
 
-                  {/* Stats secondaires */}
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div className="bg-black/30 rounded-lg p-2.5 border border-red-500/20">
-                          <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Vaisseaux</span>
-                          <span className="text-red-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]">
-                              {fmt(ALL_SHIPS.reduce((s, k) => s + getShipCount(planet, k) * getShipStats(planet, k).attack, 0) * weaponsMult)}
-                          </span>
-                      </div>
-                      <div className="bg-black/30 rounded-lg p-2.5 border border-red-500/20">
-                          <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
-                          <span className="text-red-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]">
-                              {fmt(ALL_DEFENSES.reduce((s, k) => s + getDefenseCount(planet, k) * getDefenseStats(planet, k).attack, 0) * weaponsMult)}
-                          </span>
-                      </div>
+                  {/* Score total */}
+                  <div className="mt-4 bg-black/30 rounded-lg p-2.5 border border-red-500/20 flex justify-between items-center">
+                      <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Score Total (flotte + défenses)</span>
+                      <span className="text-red-300 font-mono text-sm font-black">
+                          {militaryScore.totalScore.toLocaleString()}
+                      </span>
                   </div>
               </CardContent>
           </Card>
@@ -1275,12 +1240,27 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
               </CardHeader>
 
               <CardContent className="relative z-10 pt-4">
-                  {/* Indicateur principal */}
-                  <div className="flex items-end gap-3 mb-6">
-                      <span className="text-5xl font-black font-mono tabular-nums text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 via-emerald-300 to-cyan-400 tracking-tighter drop-shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse">{fmt(totalHull)}</span>
-                      <div className="mb-2">
-                          <span className="text-xs font-black text-emerald-500 uppercase tracking-wider block drop-shadow-[0_0_6px_rgba(16,185,129,0.6)]">Points</span>
-                          <span className="text-[9px] font-bold text-slate-500 uppercase">Coque</span>
+                  {/* CTR principal */}
+                  <div className="flex items-end gap-3 mb-4">
+                      <span className={`text-5xl font-black font-mono tabular-nums tracking-tighter drop-shadow-[0_0_20px_rgba(16,185,129,0.5)] ${ctrResult.ctr === 0 ? 'text-slate-500' : 'text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 via-emerald-300 to-cyan-400'}`}>
+                          {ctrResult.ctr === 0 ? '—' : ctrResult.ctr}
+                      </span>
+                      <div className="mb-2 flex flex-col gap-1">
+                          <span className={`text-xl font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                            ctrResult.grade === 'S∞' ? 'text-white border-white/30 bg-white/10' :
+                            ctrResult.grade === 'S++' ? 'text-yellow-300 border-yellow-400/40 bg-yellow-500/10' :
+                            ctrResult.grade === 'S+' ? 'text-amber-400 border-amber-500/40 bg-amber-500/10' :
+                            ctrResult.grade === 'S' ? 'text-violet-400 border-violet-500/40 bg-violet-500/10' :
+                            ctrResult.grade === 'A' ? 'text-blue-400 border-blue-500/40 bg-blue-500/10' :
+                            ctrResult.grade === 'B' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' :
+                            ctrResult.grade === 'C' ? 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10' :
+                            ctrResult.grade === 'D' ? 'text-orange-400 border-orange-500/40 bg-orange-500/10' :
+                            ctrResult.grade === 'E' ? 'text-red-400 border-red-500/40 bg-red-500/10' :
+                            'text-slate-500 border-slate-600/40 bg-slate-500/10'
+                          }`}>
+                              {ctrResult.grade}
+                          </span>
+                          <span className="text-[9px] font-bold text-slate-500 uppercase text-center">CTR</span>
                       </div>
                   </div>
 
@@ -1290,49 +1270,39 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                           <span className="flex items-center gap-1.5">
                               <Shield size={12} className="text-emerald-400" />
                               Protection Niv.{getTechLevel(planet, 'armour_tech')}
-                              {militaryFromBackend && <span className="text-[8px] text-cyan-500 normal-case font-bold ml-1">(live)</span>}
                           </span>
-                          <span className="text-emerald-400 font-mono font-black px-2 py-1 bg-emerald-500/20 rounded-lg border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.3)] animate-pulse">+{Math.round((armourMult-1)*100)}% HULL</span>
+                          <span className="text-emerald-400 font-mono font-black px-2 py-1 bg-emerald-500/20 rounded-lg border border-emerald-500/40">+{Math.round((armourMult-1)*100)}% HULL</span>
                       </div>
 
-                      {/* Barre de progression style voltmètre */}
+                      {/* Barre CTR */}
                       <div className="relative h-3 w-full bg-[rgba(10,5,32,0.85)] rounded-full overflow-hidden border-2 border-emerald-500/20 shadow-inner">
-                          {/* Graduations */}
                           <div className="absolute inset-0 flex justify-between px-1 items-center z-10">
                               {[...Array(10)].map((_, i) => (
                                   <div key={i} className="w-px h-2 bg-cyan-500/20"></div>
                               ))}
                           </div>
-                          {/* Barre de remplissage */}
                           <div
                               className="absolute inset-0 bg-gradient-to-r from-emerald-700 via-emerald-500 to-cyan-400 transition-all duration-700"
-                              style={{ width: `${Math.min(100, getTechLevel(planet, 'armour_tech') * 8)}%` }}
+                              style={{ width: `${(ctrResult.ctr / 999) * 100}%` }}
                           >
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
-                              {/* Point lumineux au bout */}
                               <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] animate-pulse"></div>
                           </div>
                       </div>
                   </div>
 
-                  {/* Stats secondaires */}
+                  {/* Score Flotte / Défenses */}
                   <div className="mt-4 grid grid-cols-2 gap-3">
                       <div className="bg-black/30 rounded-lg p-2.5 border border-emerald-500/20">
-                          <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Vaisseaux</span>
+                          <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Flotte</span>
                           <span className="text-emerald-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]">
-                              {fmt(ALL_SHIPS.reduce((s, k) => {
-                                  const st = getShipStats(planet, k);
-                                  return s + getShipCount(planet, k) * (st.shield * shieldMult + st.hull * armourMult);
-                              }, 0))}
+                              {militaryScore.fleetScore.toLocaleString()}
                           </span>
                       </div>
                       <div className="bg-black/30 rounded-lg p-2.5 border border-emerald-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
                           <span className="text-emerald-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]">
-                              {fmt(ALL_DEFENSES.reduce((s, k) => {
-                                  const st = getDefenseStats(planet, k);
-                                  return s + getDefenseCount(planet, k) * (st.shield * shieldMult + st.hull * armourMult);
-                              }, 0))}
+                              {militaryScore.defenseScore.toLocaleString()}
                           </span>
                       </div>
                   </div>

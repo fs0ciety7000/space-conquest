@@ -307,6 +307,86 @@ export function calculateFleetHull(planet: Planet | null | undefined): number {
   return totalHull * (1 + armourBonus);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Military Score & CTR (Combat Tier Rating)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MilitaryScoreResult {
+  fleetScore: number;
+  defenseScore: number;
+  totalScore: number;
+}
+
+export interface CTRResult {
+  ctr: number;
+  grade: string;
+  /** Tailwind color classes for the grade badge */
+  color: string;
+}
+
+const ALL_SHIP_KEYS = [
+  'light_hunter', 'heavy_hunter', 'cruiser', 'battleship', 'bomber',
+  'destroyer', 'recycler', 'transporter', 'colony_ship', 'spy_probe', 'deathstar',
+];
+const ALL_DEFENSE_KEYS = [
+  'rocket_launcher', 'light_laser', 'heavy_laser', 'gauss_cannon',
+  'ion_cannon', 'plasma_turret', 'small_shield', 'large_shield',
+];
+
+/**
+ * Normalized Military Score.
+ * Unit score = attack/50 + shield/10 + hull/400 — Light Hunter baseline = 3 pts.
+ * Comparable between players, infinite scale, no tech multipliers (raw unit quality).
+ */
+export function computeMilitaryScore(planet: Planet | null | undefined): MilitaryScoreResult {
+  if (!planet) return { fleetScore: 0, defenseScore: 0, totalScore: 0 };
+
+  const unitScore = (atk: number, shd: number, hul: number) =>
+    atk / 50 + shd / 10 + hul / 400;
+
+  const fleetScore = ALL_SHIP_KEYS.reduce((sum, key) => {
+    const stats = getShipStats(planet, key);
+    return sum + getShipCount(planet, key) * unitScore(stats.attack, stats.shield, stats.hull);
+  }, 0);
+
+  const defenseScore = ALL_DEFENSE_KEYS.reduce((sum, key) => {
+    const stats = getDefenseStats(planet, key);
+    return sum + getDefenseCount(planet, key) * unitScore(stats.attack, stats.shield, stats.hull);
+  }, 0);
+
+  return {
+    fleetScore:   Math.round(fleetScore),
+    defenseScore: Math.round(defenseScore),
+    totalScore:   Math.round(fleetScore + defenseScore),
+  };
+}
+
+/**
+ * Combat Tier Rating — logarithmic 0-999 + letter grade.
+ * Scale: 100 × log10(score+1)
+ *   score=0 → CTR 0 / "-"
+ *   score=150 (50 LH) → CTR ~221 / "D"
+ *   score=3000 (1 000 LH) → CTR ~347 / "C"
+ *   score=100 000 → CTR ~500 / "A"
+ *   score=3 000 000 → CTR ~647 / "S"
+ *   score=10 000 000 → CTR ~700 / "S+"
+ */
+export function computeCTR(totalScore: number): CTRResult {
+  if (totalScore <= 0) return { ctr: 0, grade: '-', color: 'text-slate-500' };
+  const ctr = Math.min(999, Math.max(1, Math.floor(Math.log10(totalScore + 1) * 100)));
+
+  if (ctr >= 900) return { ctr, grade: 'S∞', color: 'text-white' };
+  if (ctr >= 800) return { ctr, grade: 'S++', color: 'text-yellow-300' };
+  if (ctr >= 700) return { ctr, grade: 'S+',  color: 'text-amber-400' };
+  if (ctr >= 600) return { ctr, grade: 'S',   color: 'text-violet-400' };
+  if (ctr >= 500) return { ctr, grade: 'A',   color: 'text-blue-400' };
+  if (ctr >= 400) return { ctr, grade: 'B',   color: 'text-emerald-400' };
+  if (ctr >= 300) return { ctr, grade: 'C',   color: 'text-yellow-400' };
+  if (ctr >= 200) return { ctr, grade: 'D',   color: 'text-orange-400' };
+  if (ctr >= 100) return { ctr, grade: 'E',   color: 'text-red-400' };
+  return              { ctr, grade: 'F',   color: 'text-slate-400' };
+}
+
 /**
  * Get total fleet count
  */

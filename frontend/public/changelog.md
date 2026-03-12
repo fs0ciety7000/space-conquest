@@ -1,5 +1,28 @@
 # Changelog - Space Conquest
 
+## [11.5.0] - 2026-03-13 - CTR & Military Score
+
+### 🏅 Combat Tier Rating (CTR) — Nouvelle métrique militaire
+- **Résistance Totale supprimée** : l'affichage en milliards de points de coque n'avait aucune lisibilité pour le joueur
+- **Military Score normalisé** : nouvelle formule `attack/50 + shield/10 + hull/400` par unité — le Chasseur Léger vaut 3 pts, le Cuirassé 55 pts, la Tourelle Plasma 115 pts
+- **CTR (Combat Tier Rating)** : index logarithmique 0–999 affiché sur la carte défense
+  - Grades : F → E → D → C → B → A → S → S+ → S++ → S∞
+  - La barre de progression reflète le CTR réel (0–999) au lieu du niveau de tech blindage
+- **Score Flotte** (carte Offensive) : affiche le score normalisé de la flotte au lieu des dégâts bruts/round
+- **Split Flotte / Défenses** visible sur les deux cartes pour identifier les profils "raider" vs "tortue"
+- Animations `animate-pulse` retirées des badges de tech (réduction du bruit visuel)
+
+---
+
+## [11.4.0] - 2026-03-13 - Tech Tree Cards
+
+### 🌳 Arbre Technologique — Cartes auto-dimensionnées
+- **Cards non tronquées** : hauteur fixe `h-[320px]` supprimée — les cartes s'adaptent maintenant à leur contenu
+- **Bouton "Rechercher" toujours visible** : plus aucune troncature du texte ni du bouton d'action sur les cartes chargées
+- **NODE_HEIGHT dagre augmenté** à 440px pour garantir l'absence de chevauchement même sur les cartes les plus denses (plusieurs prérequis + 3 coûts + durée + gain + bouton)
+
+---
+
 ## [11.3.0] - 2026-03-12 - Puissance Militaire Réelle
 
 ### ⚔️ Puissance Offensive & Défensive — Refonte complète
