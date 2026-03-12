@@ -304,11 +304,12 @@ async fn attack_v2_handler(
         let _ = att_active.update(&state.db).await;
     }
 
-    let travel_time = {
+    let attack_base_speed = {
         let config = state.config.read().unwrap_or_else(|e| e.into_inner());
-        let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
-        game_logic::calculate_flight_time(dist, flight_speed)
+        config.get_config("flight_speed_multiplier", 5.0)
     };
+    let attack_hyperspace_level = tech_tree::get_planet_tech_level(&state.db, attacker_id, "hyperspace_tech").await.unwrap_or(0);
+    let travel_time = game_logic::calculate_flight_time(dist, attack_base_speed * (1.0 + attack_hyperspace_level as f64 * 0.15));
     let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time);
 
     let fleet_json = match serde_json::to_string(&payload.fleet) {
@@ -506,6 +507,22 @@ async fn spy_v2_handler(
         }))).into_response();
     }
 
+    // Perturbation graviton : le défenseur brouille ses ressources réelles
+    let def_graviton = tech_tree::get_planet_tech_level(&state.db, def_planet.id, "graviton_tech").await.unwrap_or(0);
+    let (report_metal, report_crystal, report_deut) = if def_graviton > 0 {
+        let noise_factor = def_graviton as f64 * 0.05; // ±5% par niveau
+        let m_noise = 1.0 + (rand::random::<f64>() - 0.5) * 2.0 * noise_factor;
+        let c_noise = 1.0 + (rand::random::<f64>() - 0.5) * 2.0 * noise_factor;
+        let d_noise = 1.0 + (rand::random::<f64>() - 0.5) * 2.0 * noise_factor;
+        (
+            (def_planet.metal_amount * m_noise).round(),
+            (def_planet.crystal_amount * c_noise).round(),
+            (def_planet.deuterium_amount * d_noise).round(),
+        )
+    } else {
+        (def_planet.metal_amount, def_planet.crystal_amount, def_planet.deuterium_amount)
+    };
+
     let mut detection = "none";
     let mut resources = None;
     let mut fleet_report = None;
@@ -515,9 +532,9 @@ async fn spy_v2_handler(
     if tech_diff_eff >= -1 {
         detection = "resources";
         resources = Some(game_logic::Cost {
-            metal: def_planet.metal_amount,
-            crystal: def_planet.crystal_amount,
-            deuterium: def_planet.deuterium_amount,
+            metal: report_metal,
+            crystal: report_crystal,
+            deuterium: report_deut,
         });
     }
 
@@ -762,11 +779,12 @@ async fn recycle_handler(
     }
 
     // Temps de trajet aller-retour
-    let travel_time = {
+    let recycle_base_speed = {
         let config = state.config.read().unwrap_or_else(|e| e.into_inner());
-        let flight_speed = config.get_config("flight_speed_multiplier", 5.0);
-        game_logic::calculate_flight_time(dist, flight_speed)
+        config.get_config("flight_speed_multiplier", 5.0)
     };
+    let recycle_hyperspace_level = tech_tree::get_planet_tech_level(&state.db, current_id, "hyperspace_tech").await.unwrap_or(0);
+    let travel_time = game_logic::calculate_flight_time(dist, recycle_base_speed * (1.0 + recycle_hyperspace_level as f64 * 0.15));
     let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time * 2);
 
     let fleet_data = json!({
@@ -913,7 +931,8 @@ async fn transport_handler(
         (source_model.galaxy, source_model.system, source_model.position),
         (target_model.galaxy, target_model.system, target_model.position),
     );
-    let flight_speed = config_clone.get_config("flight_speed_multiplier", 5.0);
+    let hyperspace_level_transport = tech_tree::get_planet_tech_level(&state.db, source_id, "hyperspace_tech").await.unwrap_or(0);
+    let flight_speed = config_clone.get_config("flight_speed_multiplier", 5.0) * (1.0 + hyperspace_level_transport as f64 * 0.15);
     let flight_duration = game_logic::calculate_flight_time(dist, flight_speed);
     let arrival = Utc::now().naive_utc() + Duration::seconds(flight_duration);
 
@@ -1174,20 +1193,24 @@ pub(crate) async fn load_planet_tech_bonuses(
     let mut weapons_level = 0i32;
     let mut shield_level = 0i32;
     let mut armour_level = 0i32;
+    let mut laser_level = 0i32;
+    let mut ion_level = 0i32;
 
     for pt in &planet_techs {
         match tech_key_map.get(&pt.tech_id).map(|s| s.as_str()) {
             Some("weapons_tech") => weapons_level = pt.current_level,
-            Some("shield_tech") => shield_level = pt.current_level,
-            Some("armour_tech") => armour_level = pt.current_level,
+            Some("shield_tech")  => shield_level  = pt.current_level,
+            Some("armour_tech")  => armour_level  = pt.current_level,
+            Some("laser_tech")   => laser_level   = pt.current_level,
+            Some("ion_tech")     => ion_level      = pt.current_level,
             _ => {}
         }
     }
 
     combat::CombatBonuses {
-        weapons_mult: 1.0 + weapons_level as f64 * 0.1,
-        shield_mult: 1.0 + shield_level as f64 * 0.1,
-        armour_mult: 1.0 + armour_level as f64 * 0.1,
+        weapons_mult: 1.0 + weapons_level as f64 * 0.1 + laser_level as f64 * 0.05 + ion_level as f64 * 0.03,
+        shield_mult:  1.0 + shield_level as f64 * 0.1,
+        armour_mult:  1.0 + armour_level as f64 * 0.1,
     }
 }
 

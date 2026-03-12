@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -6,12 +6,9 @@ import ReactFlow, {
   Node,
   Edge,
   Controls,
-  Background,
-  BackgroundVariant,
   useNodesState,
   useEdgesState,
   MarkerType,
-  ConnectionLineType,
   MiniMap,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -82,18 +79,19 @@ const getTechConfig = (tech_key: string) => {
 const getTechGainPerLevel = (tech_key: string): string => {
   const gains: Record<string, string> = {
     energy_tech:       '+10% production des mines',
-    laser_tech:        '+10% attaque des vaisseaux',
+    laser_tech:        '+5% attaque / prérequis armes avancées',
     armour_tech:       '+10% points de coque',
     espionage_tech:    '+1 couche de données espionnage',
-    ion_tech:          '+20% dégâts ioniques',
-    plasma_tech:       '+5% ATK/SHD/HULL',
+    ion_tech:          '+3% attaque / prérequis moteurs avancés',
+    plasma_tech:       '+1% production ressources/niveau',
     shield_tech:       '+10% bouclier des vaisseaux',
     weapons_tech:      '+10% attaque globale',
-    computer_tech:     '+1 slot de flotte',
+    computer_tech:     '+10% cargo transporteurs/niveau',
     combustion_drive:  '+10% vitesse (chasseurs légers)',
     impulse_drive:     '+20% vitesse (croiseurs)',
     hyperspace_drive:  '+30% vitesse (battleships)',
     astrophysics:      '+1 slot de colonie',
+    graviton_tech:     'Perturbe les rapports espions adverses',
   };
   return gains[tech_key] || '+1 niveau';
 };
@@ -150,7 +148,7 @@ const TechNode = ({ data }: { data: any }) => {
   return (
     <motion.div variants={nodeVariants} initial="hidden" animate="show">
       <Card className={`
-        relative overflow-hidden w-[280px] min-h-[320px] transition-all duration-300
+        relative overflow-hidden w-[220px] min-h-[240px] transition-all duration-300
         bg-[rgba(16,8,46,0.95)] backdrop-blur-[20px]
         border ${nodeStateClass}
         ${!isLocked && !isResearching ? 'hover:-translate-y-1 hover:shadow-2xl cursor-pointer hover:scale-105' : ''}
@@ -163,7 +161,7 @@ const TechNode = ({ data }: { data: any }) => {
           <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
         </div>
 
-        <CardContent className="p-4 relative z-10">
+        <CardContent className="p-3 relative z-10">
           {/* Header */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-3">
@@ -175,7 +173,7 @@ const TechNode = ({ data }: { data: any }) => {
                 )}
               </div>
               <div>
-                <div className={`text-xs font-black uppercase tracking-wider ${config.color}`}>
+                <div className={`text-sm font-semibold uppercase tracking-wider ${config.color}`}>
                   {data.display_name}
                 </div>
                 <div className="text-[10px] text-slate-500">{config.category}</div>
@@ -292,7 +290,7 @@ const TechNode = ({ data }: { data: any }) => {
                 <span className="text-emerald-400 flex items-center gap-1">
                   <CheckCircle2 size={10} /> Gain Niv. {data.current_level + 1}
                 </span>
-                <span className="font-mono font-bold text-emerald-300">
+                <span className="font-mono font-bold text-xs text-emerald-300">
                   {getTechGainPerLevel(data.tech_key)}
                 </span>
               </div>
@@ -339,6 +337,15 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   const [techTree, setTechTree] = useState<TechInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   const researchQueue = planet.research_queue || [];
 
@@ -408,10 +415,9 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     const depths = new Map<string, number>();
     const visited = new Set<string>();
 
-    // Fonction récursive pour calculer la profondeur
     const getDepth = (tech_key: string): number => {
       if (depths.has(tech_key)) return depths.get(tech_key)!;
-      if (visited.has(tech_key)) return 0; // Éviter les cycles
+      if (visited.has(tech_key)) return 0;
 
       visited.add(tech_key);
 
@@ -421,7 +427,6 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
         return 0;
       }
 
-      // La profondeur = 1 + max des profondeurs des dépendances
       const maxDepth = Math.max(
         ...tech.requirements.map(req => getDepth(req.required_tech_key))
       );
@@ -430,27 +435,28 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
       return depth;
     };
 
-    // Calculer pour toutes les techs
     techTree.forEach(tech => getDepth(tech.tech_key));
     return depths;
   };
 
   // Positionner les nodes en arbre vertical hiérarchique
-  const getNodePosition = (tech_key: string, techTree: TechInfo[], depths: Map<string, number>) => {
+  const getNodePosition = (
+    tech_key: string,
+    techTree: TechInfo[],
+    depths: Map<string, number>,
+    containerWidth: number
+  ) => {
     const depth = depths.get(tech_key) || 0;
 
-    // Grouper les techs par profondeur
     const techsAtDepth = techTree.filter(t => depths.get(t.tech_key) === depth);
     const indexAtDepth = techsAtDepth.findIndex(t => t.tech_key === tech_key);
 
-    // Layout vertical : profondeur = Y, index à cette profondeur = X
-    const spacingY = 450; // Espacement vertical entre niveaux (augmenté pour éviter les chevauchements)
-    const spacingX = 350; // Espacement horizontal entre techs du même niveau
+    const spacingY = 320;
+    const spacingX = 270;
     const startY = 100;
 
-    // Centrer horizontalement les techs du même niveau
     const totalWidth = techsAtDepth.length * spacingX;
-    const startX = (window.innerWidth / 2) - (totalWidth / 2) + (indexAtDepth * spacingX);
+    const startX = (containerWidth / 2) - (totalWidth / 2) + (indexAtDepth * spacingX);
 
     return {
       x: Math.max(50, startX),
@@ -462,13 +468,12 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   const initialNodes: Node[] = useMemo(() => {
     if (!techTree.length) return [];
 
-    // Calculer les profondeurs pour organiser hiérarchiquement
+    const containerWidth = containerRef.current?.getBoundingClientRect().width ?? window.innerWidth;
     const depths = calculateTechDepth(techTree);
 
     const nodes: Node[] = [];
 
     techTree.forEach((tech) => {
-      // Check research_queue for ongoing research (has tech_key and end_time)
       const researchingItem = researchQueue.find((r: any) => r.tech_key === tech.tech_key);
       const isResearching = !!researchingItem;
       const researchEndTime = researchingItem?.end_time || null;
@@ -476,15 +481,15 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
       const canAfford = metal >= cost.metal && crystal >= cost.crystal && deuterium >= cost.deuterium;
       const allRequirementsMet = tech.requirements.every(r => r.met);
 
-      // Determine if this node is a missing requirement for the selected node
       const selectedTech = selectedNodeId ? techTree.find(t => t.tech_key === selectedNodeId) : null;
       const isMissingReqForSelected = selectedTech && !selectedTech.requirements.every(r => r.met) && selectedTech.requirements.some(r => r.required_tech_key === tech.tech_key && !r.met);
 
       nodes.push({
         id: tech.tech_key,
         type: 'techNode',
-        position: getNodePosition(tech.tech_key, techTree, depths),
+        position: getNodePosition(tech.tech_key, techTree, depths, containerWidth),
         className: isMissingReqForSelected ? 'animate-pulse ring-4 ring-red-500 rounded-2xl shadow-[0_0_20px_rgba(239,68,68,0.6)]' : '',
+        style: { width: 220 },
         data: {
           ...tech,
           isResearching,
@@ -511,50 +516,31 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
 
     techTree.forEach(tech => {
       tech.requirements.forEach(req => {
-        const config = getTechConfig(req.required_tech_key);
+        const sourceLevel = techTree.find(t => t.tech_key === req.required_tech_key)?.current_level ?? 0;
+        const isSourceUnlocked = sourceLevel > 0;
 
-        // Color coding: satisfied = tech color, unsatisfied = bright RED
-        const edgeColor = req.met ? config.hexColor : '#dc2626'; // bright red for unmet
-        const edgeOpacity = req.met ? 1.0 : 0.8;
+        const edgeColor = isSourceUnlocked ? '#22c55e' : (req.met ? '#4B5563' : '#dc2626');
+        const markerColor = isSourceUnlocked ? '#22c55e' : (req.met ? '#4B5563' : '#dc2626');
 
-        // Highlight logic
         const isHighlighted = selectedNodeId === tech.tech_key && !req.met;
 
         edges.push({
-          id: `${req.required_tech_key}-${tech.tech_key}`,
+          id: `edge-${req.required_tech_key}-${tech.tech_key}`,
           source: req.required_tech_key,
           target: tech.tech_key,
-          type: ConnectionLineType.SmoothStep,
-          animated: req.met || isHighlighted,
-          className: req.met ? 'animate-flow-glow' : (isHighlighted ? 'animate-pulse' : ''),
+          type: 'smoothstep',
+          animated: false,
           style: {
-            stroke: edgeColor,
-            strokeWidth: isHighlighted ? 6 : 4,
-            opacity: isHighlighted ? 1.0 : edgeOpacity,
-            filter: req.met ? `drop-shadow(0 0 5px ${edgeColor})` : (isHighlighted ? `drop-shadow(0 0 12px #ef4444)` : 'none'),
+            stroke: isHighlighted ? '#ef4444' : edgeColor,
+            strokeWidth: isHighlighted ? 6 : 2,
+            opacity: isHighlighted ? 1.0 : 0.9,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: edgeColor,
-            width: 24,
-            height: 24,
+            color: isHighlighted ? '#ef4444' : markerColor,
+            width: 15,
+            height: 15,
           },
-          label: req.met ? '✓ Débloqué' : `⚠️ Requis Niv. ${req.required_level}`,
-          labelStyle: {
-            fill: req.met ? '#10b981' : '#dc2626',
-            fontSize: 11,
-            fontWeight: 800,
-            textTransform: 'uppercase',
-          },
-          labelBgStyle: {
-            fill: '#0f172a',
-            fillOpacity: 0.95,
-            stroke: edgeColor,
-            strokeWidth: 2,
-            rx: 4,
-            ry: 4,
-          },
-          labelBgPadding: [8, 12],
         });
       });
     });
@@ -566,10 +552,10 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   // Mettre à jour les noeuds quand les données changent
-  useMemo(() => {
+  useEffect(() => {
     setNodes(initialNodes);
     setEdges(initialEdges);
-  }, [initialNodes, initialEdges, setNodes, setEdges]);
+  }, [initialNodes, initialEdges]);
 
   if (loading) {
     return (
@@ -579,12 +565,51 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     );
   }
 
-  // TODO CLAUDE: Sur mobile, le TechTree en ReactFlow est difficilement utilisable (nodes trop grands pour l'écran).
-  // Une amélioration future serait de détecter window.innerWidth < 768 et afficher une vue liste/grille des techs
-  // au lieu du graphe ReactFlow interactif lorsque l'écran est trop petit.
-  // Voir: https://reactflow.dev/docs/api/react-flow-props/#fitview
+  // Vue liste sur mobile
+  if (isMobile) {
+    return (
+      <div className="p-4 space-y-3 overflow-y-auto h-full">
+        <h2 className="text-lg font-bold text-slate-200 mb-4">Arbre Technologique</h2>
+        <div className="grid grid-cols-1 gap-3">
+          {techTree.map(tech => {
+            const meta = getTechConfig(tech.tech_key);
+            const Icon = meta.icon;
+            const researchingItem = researchQueue.find((r: any) => r.tech_key === tech.tech_key);
+            const isResearching = !!researchingItem;
+            const canResearch = tech.requirements.every(r => r.met) && !isResearching;
+            return (
+              <button
+                key={tech.tech_key}
+                onClick={() => handleResearch(tech.tech_key)}
+                disabled={!canResearch && !isResearching}
+                className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all min-h-[64px]
+                  ${isResearching ? 'border-yellow-500/50 bg-yellow-500/10' : ''}
+                  ${canResearch && !isResearching ? 'border-slate-600/50 bg-slate-800/50 hover:border-slate-500' : ''}
+                  ${!canResearch && !isResearching ? 'border-slate-700/30 bg-slate-900/30 opacity-60' : ''}
+                `}
+              >
+                <div className={`w-10 h-10 flex items-center justify-center rounded-lg flex-shrink-0 ${meta.bg} border ${meta.border}`}>
+                  <Icon size={18} className={meta.color} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-200 truncate">{tech.display_name}</span>
+                    <span className="text-xs text-slate-500 flex-shrink-0">Nv.{tech.current_level}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">{getTechGainPerLevel(tech.tech_key)}</p>
+                </div>
+                {isResearching && <span className="text-xs text-yellow-400 flex-shrink-0">En cours</span>}
+                {canResearch && !isResearching && <span className="text-xs text-slate-400 flex-shrink-0">Rechercher</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-screen bg-[rgba(10,5,32,0.85)] overflow-hidden relative">
+    <div ref={containerRef} className="h-screen bg-[rgba(10,5,32,0.85)] overflow-hidden relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -603,7 +628,6 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
         className="bg-transparent"
         proOptions={{ hideAttribution: true }}
       >
-        {/* Removed Background grid for cleaner skill tree look */}
         <Controls
           className="bg-[rgba(16,8,46,0.95)] border-purple-500/30 backdrop-blur-[20px] rounded-lg"
           showInteractive={false}
@@ -615,8 +639,7 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
           </div>
         </div>
 
-        {/* MiniMap — hidden on mobile (too small to be useful) */}
-        {/* TODO CLAUDE: Sur très petits écrans, envisager de remplacer le MiniMap par un bouton "Centrer" */}
+        {/* MiniMap — hidden on mobile */}
         <div className="hidden sm:block">
           <MiniMap
             className="bg-[rgba(16,8,46,0.95)] border border-purple-500/30 rounded-lg backdrop-blur-[20px]"
@@ -660,6 +683,16 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
             <span className="text-slate-200">Dépendance disponible</span>
           </div>
         </div>
+      </div>
+
+      {/* Bouton retour mobile */}
+      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <button
+          onClick={() => window.history.back()}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-600 rounded-full text-sm text-slate-300 shadow-lg"
+        >
+          ← Retour
+        </button>
       </div>
     </div>
   );

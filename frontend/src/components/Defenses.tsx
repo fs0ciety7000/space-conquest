@@ -245,9 +245,9 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
         </motion.div>
 
         {/* PANNEAU CENTRAL */}
-        <div className={`relative overflow-hidden rounded-3xl border ${selectedTheme.border} bg-[rgba(16,8,46,0.95)] backdrop-blur-[12px] p-8 shadow-2xl card-depth hover:shadow-3xl transition-all duration-500 animate-slide-up`}>
+        <div className={`relative overflow-hidden rounded-3xl border ${selectedTheme.border} bg-[rgba(16,8,46,0.95)] backdrop-blur-[12px] p-4 md:p-8 shadow-2xl card-depth hover:shadow-3xl transition-all duration-500 animate-slide-up`}>
            <div className={`absolute -right-10 -bottom-10 opacity-10 ${isBusy ? 'animate-pulse' : 'group-hover:animate-float'}`}>
-             <Shield size={250} className={selectedTheme.color} />
+             <Shield size={150} className={selectedTheme.color} />
            </div>
 
            <div className="relative z-10 space-y-6">
@@ -261,7 +261,7 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
               />
 
               <div>
-                  <h2 className="text-3xl font-black uppercase text-slate-200 italic">{selectedDefense.name}</h2>
+                  <h2 className="text-xl md:text-3xl font-black uppercase text-slate-200 italic">{selectedDefense.name}</h2>
                   <p className="text-xs text-slate-400">{selectedDefense.description || "Système défensif planétaire"}</p>
               </div>
 

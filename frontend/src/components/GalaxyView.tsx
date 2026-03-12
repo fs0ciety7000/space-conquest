@@ -398,7 +398,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
 
                                                 <button
                                                     onClick={(e) => handleSlotClick(e, slot)}
-                                                    className={`relative w-8 h-8 md:w-12 md:h-12 -translate-x-1/2 -translate-y-1/2 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-150 focus:outline-none card-depth hover:shadow-2xl z-10 ${slot.planet_id ? `shadow-lg bg-gradient-to-br ${planetStyle} border border-cyan-500/20` : 'hover:border-cyan-500/30 bg-[rgba(10,5,32,0.85)] border border-dashed border-cyan-500/10 opacity-40 hover:opacity-100'}`}
+                                                    className={`relative w-11 h-11 md:w-12 md:h-12 -translate-x-1/2 -translate-y-1/2 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-150 focus:outline-none card-depth hover:shadow-2xl z-10 ${slot.planet_id ? `shadow-lg bg-gradient-to-br ${planetStyle} border border-cyan-500/20` : 'hover:border-cyan-500/30 bg-[rgba(10,5,32,0.85)] border border-dashed border-cyan-500/10 opacity-40 hover:opacity-100'}`}
                                                 >
                                                     <span className="absolute -bottom-5 text-[9px] font-mono text-cyan-400/60 font-bold tabular-nums">{slot.position}</span>
                                                     {slot.is_me && <Crown size={14} className="text-slate-200 absolute -top-2" />}
@@ -457,7 +457,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
 
             {/* Sidebar: Mes Planètes */}
             {showPlayerPlanets && playerPlanets.length > 0 && (
-                <div className="fixed top-20 right-4 z-40 w-64 max-h-[calc(100vh-120px)] overflow-y-auto bg-[rgba(16,8,46,0.95)] backdrop-blur-[12px] border border-cyan-500/10 rounded-2xl shadow-2xl card-depth">
+                <div className="fixed top-20 right-4 z-40 w-[calc(100vw-2rem)] sm:w-64 max-h-[70vh] overflow-y-auto bg-[rgba(16,8,46,0.95)] backdrop-blur-[12px] border border-cyan-500/10 rounded-2xl shadow-2xl card-depth">
                     <div className="sticky top-0 bg-[rgba(10,5,32,0.85)] p-4 border-b border-cyan-500/10 flex items-center justify-between">
                         <h3 className="font-bold text-cyan-400 text-sm uppercase tracking-wider flex items-center gap-2">
                             <MapPin size={16} /> Mes Planètes
@@ -509,6 +509,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                             </button>
                         </div>
                         <div className="overflow-y-auto max-h-[calc(80vh-100px)]">
+                            <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead className="bg-[rgba(10,5,32,0.85)] sticky top-0 z-10">
                                     <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-cyan-500/10">
@@ -577,6 +578,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                     })}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -599,6 +601,7 @@ interface ListViewProps {
 
 function ListView({ slots, onNavigateAttack, onNavigateSpy, onNavigateTransport, handleColonize, handleRecycle, getPlanetStyle }: ListViewProps) {
     return (
+        <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
             <thead>
                 <tr className="bg-[rgba(10,5,32,0.85)] text-slate-400 text-[10px] uppercase tracking-wider font-bold border-b border-cyan-500/10">
@@ -664,5 +667,6 @@ function ListView({ slots, onNavigateAttack, onNavigateSpy, onNavigateTransport,
                 ))}
             </tbody>
         </table>
+        </div>
     );
 }

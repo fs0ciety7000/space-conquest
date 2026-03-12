@@ -329,7 +329,7 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
               </div>
 
               {/* STATS DE COMBAT RÉELLES */}
-              <div className="grid grid-cols-4 gap-1.5 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-4">
                  <StatBox icon={Sword}       label="ATK"  value={Math.floor(ship.attack  * bonusAtk)}  color="text-red-400"     />
                  <StatBox icon={Shield}      label="SHD"  value={Math.floor(ship.shield  * bonusShd)}  color="text-cyan-400"    />
                  <StatBox icon={ShieldCheck} label="HULL" value={Math.floor(ship.hull    * bonusHull)} color="text-emerald-400" />

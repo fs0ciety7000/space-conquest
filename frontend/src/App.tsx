@@ -890,7 +890,7 @@ function AppContent({
                   planetId={planetId ?? undefined}
                 />
 
-                <div className="p-3 md:p-4 lg:p-8">
+                <div className="p-3 md:p-4 lg:p-8 overflow-x-hidden">
                   {/* BuildQueue en haut si actif */}
                   {buildQueueItems.length > 0 && (
                     <div className="max-w-7xl mx-auto mb-6">
