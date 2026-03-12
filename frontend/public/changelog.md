@@ -1,5 +1,31 @@
 # Changelog - Space Conquest
 
+## [11.0.0] - 2026-03-12 - Officiers, Bâtiments & Succès
+
+### ⚔️ Officiers — Rebalance complet
+- **Coûts de recrutement** multipliés ×100 à ×5000 selon la rareté (common 500k métal, legendary 100M métal)
+- **Formule de levelup** passée en exponentielle : chaque niveau coûte 1.5× de plus que le précédent
+  - Level 1→2 : 1.5× la base ; level 10→11 : ~57× la base — progression qui récompense vraiment la patience
+- Les officiers restent achetables early game, mais atteindre level 50 est un vrai objectif de fin de partie
+
+### 🏭 Bâtiments — Plus aucun fantôme
+- **Usine de fusion** : produit désormais +50 unités d'énergie par niveau (configurable par l'admin)
+- **Usine de nanites** : réduit les temps de construction de `÷ 2^niveau` sur tous les chemins (queue, affichage, mines)
+
+### 🏆 Succès & Missions
+- **Succès corrigés** : `alliance_create`, `alliance_join` et `messages` désormais trackés en temps réel
+- **33 nouvelles missions** réparties sur 4 tiers de difficulté
+  - Tier 1 (débutant) : premières attaques, premières espionnages, construction de base
+  - Tier 2 (intermédiaire) : flottes avancées, routes commerciales, conquêtes
+  - Tier 3 (expert) : objectifs de masse, production intensive
+  - Tier 4 (légendaire) : flotte de 1000+ vaisseaux, top 10 classement, 5 planètes colonisées
+
+### 🖱️ UX — Inputs numériques
+- Cliquer sur n'importe quel champ de quantité (vaisseaux, ressources, prix) sélectionne tout le contenu automatiquement
+- Applicable dans 15 composants : Chantier, Défenses, AttackModal, FleetDispatcher, Marché et plus
+
+---
+
 ## [10.9.0] - 2026-03-12 - Responsive Mobile & Tech Tree
 
 ### 📱 Interface Mobile
