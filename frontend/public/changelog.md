@@ -1,12 +1,25 @@
 # Changelog - Space Conquest
 
+## [11.1.0] - 2026-03-12 - Corrections & Précision
+
+### 🔧 Cohérence backend/frontend
+- **Deutérium** : base de production corrigée de 10 → 15 dans 6 composants (ROI affiché était ~33% trop bas)
+- **`energy_tech`** : clé de config scindée en deux — `energy_tech_solar_bonus` (0.10, solaire) et `energy_tech_bonus` (0.01, mines) — fin de l'ambiguïté
+
+### 📋 Descriptions de bâtiments corrigées
+- **Chantier Spatial** : mentionne désormais la réduction des temps de construction (-8%/niveau, max -60%)
+- **Hangar** : mentionne la capacité de flotte (500+500/niveau) ET le bonus cargo transporteurs (+5%/niveau)
+- **Dépôt d'Alliance** : décrit le fonctionnement réel (niveau max parmi les membres), retourné dans l'API alliance
+
+---
+
 ## [11.0.0] - 2026-03-12 - Officiers, Bâtiments & Succès
 
 ### ⚔️ Officiers — Rebalance complet
 - **Coûts de recrutement** multipliés ×100 à ×5000 selon la rareté (common 500k métal, legendary 100M métal)
-- **Formule de levelup** passée en exponentielle : chaque niveau coûte 1.5× de plus que le précédent
-  - Level 1→2 : 1.5× la base ; level 10→11 : ~57× la base — progression qui récompense vraiment la patience
-- Les officiers restent achetables early game, mais atteindre level 50 est un vrai objectif de fin de partie
+- **Formule de levelup** quadratique ancrée `((niveau+9)/59)² × 1000` — progression douce early, prestige réel late game
+  - Level 1→2 : ~29× la base ; level 25→26 : ~332× ; level 49→50 : ~966×
+  - Legendary level 50 cumulé ≈ 5.9 milliards de métal (des mois de jeu, pas des années infinies)
 
 ### 🏭 Bâtiments — Plus aucun fantôme
 - **Usine de fusion** : produit désormais +50 unités d'énergie par niveau (configurable par l'admin)
