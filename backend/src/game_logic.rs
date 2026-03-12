@@ -1097,25 +1097,8 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
         defense_points += (*count as i64) * unit_value / 1000;
     }
 
-    // Vaisseaux : poids réduit à 0.5 car leur présence sur la planète est volatile
-    let ship_counts = tech_tree::get_all_planet_ship_counts(db, p.id)
-        .await
-        .unwrap_or_default();
-    let all_ship_types = ShipType::find().all(db).await.unwrap_or_default();
-    let ship_stats: std::collections::HashMap<String, (i32, i32, i32)> = all_ship_types
-        .iter()
-        .map(|s| (s.ship_key.clone(), (s.attack, s.shield, s.hull)))
-        .collect();
-
-    let mut ship_points: i64 = 0;
-    for (ship_key, count) in &ship_counts {
-        let (atk, shd, hul) = ship_stats.get(ship_key.as_str()).copied().unwrap_or((1, 1, 10));
-        let unit_value = (atk as i64) + (shd as i64 / 2) + (hul as i64 / 10);
-        // Coefficient 0.5 appliqué en divisant par 2 après la division par 1000
-        ship_points += (*count as i64) * unit_value / 2000;
-    }
-
-    let military = (defense_points + ship_points) as i32;
+    // Vaisseaux exclus du score militaire (classement) — trop volatils (missions, combats)
+    let military = defense_points as i32;
 
     // Points production (basé sur la production horaire)
     let energy_tech_level = *tech_levels.get("energy_tech").unwrap_or(&0);

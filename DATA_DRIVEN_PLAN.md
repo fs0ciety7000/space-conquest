@@ -724,10 +724,20 @@ L = level, E = energy_tech_level, P = plasma_tech_level, S = shipyard_level
 
 1. **Fusion Plant consommation deutérium** : La consommation de deutérium de la fusion doit-elle s'appliquer au TICK de production (donc soustraite du stock) ou comme une réduction de la production nette de deutérium ? La première option est plus fidèle à OGame, la seconde est plus simple à implémenter sans changer le schema.
 
+=> Première option
+
 2. **Slot planétaire max_building_slots** : La valeur de 16 slots par défaut est-elle validée ? Si des joueurs ont déjà construit plus de 16 bâtiments (improbable dans l'état actuel), la migration de backfill doit calculer le nombre réel de bâtiments par planète.
+
+=> 16 slots par défaut
 
 3. **Synergies : additif ou multiplicatif ?** Pour éviter l'hyperinflation, les synergies doivent-elles être additives (tous les bonus s'additionnent puis on multiplie une fois) ou multiplicatives (chaque bonus se multiplie) ? Recommandation : additif avec cap configurable.
 
+=> Additif avec cap configurable
+
 4. **Gravitational Shield et flottes alliées** : Le ralentissement s'applique-t-il à tous les vaisseaux entrant en orbite, ou uniquement aux missions hostiles ? Recommandation : uniquement `mission_type = "attack"`, pas `transport`, `spy`, ni `friendly_fleet`.
 
+=> Uniquement `mission_type = "attack"`
+
 5. **Nanite Factory multiplicateur 2.0** : Le coût actuel de 1,000,000 M en DB semble délibéré (bâtiment endgame extrême) mais le mult 2.0 rend le niveau 2 inaccessible pour tout joueur normal. Recommandation : mult → 1.5 et coût base → 500,000 M / 250,000 C / 50,000 D.
+
+=> Pourquoi inaccessible ?
