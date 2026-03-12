@@ -1,5 +1,61 @@
 # Changelog - Space Conquest
 
+## [10.9.0] - 2026-03-12 - Responsive Mobile & Tech Tree
+
+### 📱 Interface Mobile
+- Tous les composants principaux passent en responsive mobile (375px → 1440px)
+- Boutons orbitaux (vue Galaxie) agrandis à 44px — seuil WCAG touch target
+- Panneau "Mes Planètes" adaptatif : pleine largeur sur mobile, 256px sur écrans larges
+- Tables (Planètes Proches, ListView galaxie) avec défilement horizontal sur mobile
+- Grille de stats vaisseaux (Chantier) : 2 colonnes sur mobile → 4 sur tablette+
+- Panneau Défenses : padding et titres adaptatifs, icône décor réduite
+- `overflow-x-hidden` global sur le layout principal — fin du scroll horizontal parasite
+
+### 🔬 Tech Tree — Corrections backend
+- **`laser_tech`** : désormais effectif dans le moteur de combat v5.0 (+5% attaque/niveau, était ignoré)
+- **`ion_tech`** : bonus +3% attaque/niveau implémenté (était un fantôme sans effet)
+- **`hyperspace_tech`** : multiplie la vitesse de vol de toutes les missions (attaque, recyclage, transport) par `1 + niveau × 15%`
+- **`graviton_tech`** : perturbe les ressources affichées dans les rapports espions adverses (±5%/niveau de bruit aléatoire)
+- **`plasma_tech`** : description corrigée (affichait "+5% ATK/SHD/HULL" — bonus inexistant)
+- **`computer_tech`** : description corrigée (affichait "+1 slot de flotte" — système inexistant)
+
+### 🌳 Tech Tree — Refactoring visuel
+- **Arêtes corrigées** : fix race condition `useMemo→useEffect` qui empêchait l'affichage des connexions
+- **Positions corrigées** : calcul via `containerRef` au lieu de `window.innerWidth` (sidebar exclue)
+- Noeuds compactés : 280px → 220px, hauteur min 320px → 240px
+- Espacement réduit : spacingX 350→270, spacingY 450→320 — canvas moins imposant
+- Arêtes colorées : vert si tech source débloquée, gris sinon, avec flèche directionnelle
+- **Vue liste mobile** : ReactFlow remplacé par une grille scrollable sur écrans < 768px
+- Bouton retour fixe visible uniquement sur mobile
+
+### 🔧 Corrections diverses
+- Recyclage depuis une autre planète : fix "Erreur réseau" (mauvaise lecture de `planet.ships.recycler`)
+- Création de champ de débris : notification immédiate à l'attaquant (toast + cloche) avec coordonnées et quantités
+
+---
+
+## [10.8.0] - 2026-03-12 - Panel Admin & Gouvernance
+
+### 🛡️ Panel Admin — Fonctionnalités réelles
+- **Gestion des rôles** : bouton par joueur pour promouvoir/rétrograder admin avec confirmation
+- **Broadcast global** : formulaire titre/message/type envoyé à tous les joueurs (WS + notification cloche persistante)
+- **Mode maintenance** : toggle activé/désactivé via `PATCH /admin/config`
+- **Badge ADMIN** visible sur les profils (DB-driven, remplace l'ancienne détection par username)
+
+### 🏛️ Sénat Galactique — Corrections
+- Chargement des lois et sondages corrigé (mauvais endpoint + mauvais unwrap JSON)
+- Dates dans les annonces en format lisible (ex: "17 mars 2026 à 23h00")
+- Sondages Oui/Non : valeurs `"yes"/"non"` correctement transmises au backend
+- Résultats de sondage : fix crash React (mauvaise shape de données)
+- Doublon de réponse (409) : message clair "Vous avez déjà répondu" au lieu d'une erreur générique
+- `user_answered` retourné par le backend : le formulaire reste masqué après rechargement de page
+
+### 🗑️ Champs de débris — Alertes
+- Après chaque combat générant des débris, l'attaquant reçoit une notification WS immédiate
+- Toast `♻️ Champ de débris créé` avec coordonnées et quantités métal/cristal
+
+---
+
 ## [10.7.0] - 2026-03-11 - Sénat Galactique : Lois, Sondages & Annonces
 
 ### 🏛️ Sénat Galactique (nouveau)
