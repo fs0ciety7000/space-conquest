@@ -8,7 +8,7 @@
   - Vaisseaux : chasseur léger, chasseur lourd, croiseur, cuirassé, bombardier, destructeur, **Étoile de la Mort**, transporteur, recycleur, vaisseau de colonisation
   - Défenses : lance-roquettes, laser léger, laser lourd, canon Gauss, canon ionique, tourelle plasma, petit bouclier, grand bouclier
 - **Tech bonus corrigé** : le calcul utilisait `laser_tech` au lieu de `weapons_tech` comme multiplicateur d'attaque principal
-- **Score militaire** (classement) : les vaisseaux sont maintenant inclus à ×0.5 (les défenses restent à ×1.0 — plus permanentes)
+- **Score militaire** (classement) : seules les défenses permanentes sont comptabilisées — les vaisseaux sont exclus car trop volatils (missions, pertes au combat)
 - **Rapports d'espionnage** : score de menace corrigé — les unités civiles et toutes les défenses avaient des stats fausses (1/1/10 au lieu des vraies valeurs)
 
 ---
