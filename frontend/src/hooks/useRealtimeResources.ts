@@ -59,7 +59,7 @@ export function useRealtimeResources(
   const safeConfig = config || {
     production_metal_base: 30,
     production_crystal_base: 20,
-    production_deuterium_base: 10,
+    production_deuterium_base: 15,
     production_metal_growth: 1.1,
     production_crystal_growth: 1.1,
     production_deuterium_growth: 1.05,

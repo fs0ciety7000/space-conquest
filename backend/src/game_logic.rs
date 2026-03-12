@@ -207,7 +207,7 @@ pub fn calculate_energy_production(solar_plant_level: i32, energy_tech_level: i3
 
     let base = config.get_config("energy_solar_base", 60.0);
     let growth = config.get_config("energy_solar_growth", 1.1);
-    let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.10);
+    let tech_bonus_factor = config.get_config("energy_tech_solar_bonus", 0.10);
 
     let base_production = base * (solar_plant_level as f64) * growth.powi(solar_plant_level);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);
@@ -1260,7 +1260,7 @@ pub fn calculate_energy_production_with_slots(
 
     let base = config.get_config("energy_solar_base", 60.0);
     let growth = config.get_config("energy_solar_growth", 1.1);
-    let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.10);
+    let tech_bonus_factor = config.get_config("energy_tech_solar_bonus", 0.10);
 
     let base_production = base * (solar_plant_level as f64) * growth.powi(solar_plant_level);
     let tech_bonus = 1.0 + (energy_tech_level as f64 * tech_bonus_factor);

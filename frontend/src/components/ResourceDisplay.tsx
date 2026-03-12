@@ -80,7 +80,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   const [config, setConfig] = useState<any>({
     production_metal_base: 30,
     production_crystal_base: 20,
-    production_deuterium_base: 10,
+    production_deuterium_base: 15,
     production_metal_growth: 1.1,
     production_crystal_growth: 1.1,
     production_deuterium_growth: 1.05,
@@ -346,7 +346,7 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   const buildings = [
     { id: 'metal_mine', name: 'Mine de Métal', lv: getBuildingLevel(planet, 'metal_mine'), base: config.production_metal_base || 30, growth: config.production_metal_growth || 1.1 },
     { id: 'crystal_mine', name: 'Mine de Cristal', lv: getBuildingLevel(planet, 'crystal_mine'), base: config.production_crystal_base || 20, growth: config.production_crystal_growth || 1.1 },
-    { id: 'deuterium_mine', name: 'Synthé de Deutérium', lv: getBuildingLevel(planet, 'deuterium_mine'), base: config.production_deuterium_base || 10, growth: config.production_deuterium_growth || 1.05 },
+    { id: 'deuterium_mine', name: 'Synthé de Deutérium', lv: getBuildingLevel(planet, 'deuterium_mine'), base: config.production_deuterium_base || 15, growth: config.production_deuterium_growth || 1.05 },
     { id: 'solar_plant', name: 'Centrale Solaire', lv: getBuildingLevel(planet, 'solar_plant'), base: 0, growth: 1.1 },
   ];
 

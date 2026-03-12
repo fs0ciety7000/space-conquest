@@ -79,7 +79,7 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
   const [config, setConfig] = useState<any>({
     production_metal_base: 30,
     production_crystal_base: 20,
-    production_deuterium_base: 10,
+    production_deuterium_base: 15,
     production_metal_growth: 1.1,
     production_crystal_growth: 1.1,
     production_deuterium_growth: 1.05,
@@ -184,7 +184,7 @@ export default function ProductionStats({ planet, speedFactor = 10 }: { planet: 
 
   const prodMetal   = { ...calculateProduction('metal',     getBuildingLevel(planet, 'metal_mine'),     config.production_metal_base || 30,     config.production_metal_growth || 1.1),    total: backendMetal   };
   const prodCrystal = { ...calculateProduction('crystal',   getBuildingLevel(planet, 'crystal_mine'),   config.production_crystal_base || 20,   config.production_crystal_growth || 1.1),  total: backendCrystal };
-  const prodDeut    = { ...calculateProduction('deuterium', getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base || 10, config.production_deuterium_growth || 1.05), total: backendDeut    };
+  const prodDeut    = { ...calculateProduction('deuterium', getBuildingLevel(planet, 'deuterium_mine'), config.production_deuterium_base || 15, config.production_deuterium_growth || 1.05), total: backendDeut    };
 
   const totalCombats = combatLogs.length;
   const victories = combatLogs.filter(log => log.result === 'victory' || log.result === 'player').length;
