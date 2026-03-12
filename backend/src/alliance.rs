@@ -100,6 +100,7 @@ pub struct AllianceDetailDisplay {
     pub created_at: chrono::NaiveDateTime,
     pub is_member: bool,
     pub user_role: Option<String>,
+    pub alliance_depot_level: i32,
 }
 
 #[derive(Serialize)]
@@ -344,6 +345,7 @@ pub async fn get_alliance_handler(
     let mut members = Vec::new();
     let mut is_member = false;
     let mut user_role = None;
+    let mut member_user_ids: Vec<Uuid> = Vec::new();
 
     for m in members_raw {
         let member_user = User::find_by_id(m.user_id)
@@ -359,6 +361,8 @@ pub async fn get_alliance_handler(
             }
         }
 
+        member_user_ids.push(m.user_id);
+
         members.push(MemberDisplay {
             user_id: m.user_id,
             username: member_user.map(|u| u.username).unwrap_or_else(|| "Inconnu".into()),
@@ -367,6 +371,25 @@ pub async fn get_alliance_handler(
             joined_at: m.joined_at,
             last_active: m.last_active,
         });
+    }
+
+    // Calculer le niveau max du dépôt d'alliance parmi toutes les planètes des membres
+    let mut alliance_depot_level: i32 = 0;
+    for member_uid in &member_user_ids {
+        let member_planets = Planet::find()
+            .filter(planet::Column::OwnerId.eq(*member_uid))
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+
+        for p in member_planets {
+            if let Ok(planet_data) = tech_tree::PlanetData::load(&state.db, p.id).await {
+                let lvl = planet_data.building_level("alliance_depot");
+                if lvl > alliance_depot_level {
+                    alliance_depot_level = lvl;
+                }
+            }
+        }
     }
 
     // Ne pas montrer le message interne aux non-membres
@@ -392,6 +415,7 @@ pub async fn get_alliance_handler(
         created_at: alliance.created_at,
         is_member,
         user_role,
+        alliance_depot_level,
     }).into_response()
 }
 

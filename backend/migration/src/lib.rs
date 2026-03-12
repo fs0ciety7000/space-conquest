@@ -94,6 +94,7 @@ mod m20260314_000001_governance_laws_surveys;
 mod m20260314_000002_set_phantomhex_admin;
 mod m20261001_000001_rebalance_officer_costs;
 mod m20261001_000002_expand_missions;
+mod m20261002_000001_fix_building_descriptions;
 
 pub struct Migrator;
 
@@ -195,6 +196,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260314_000002_set_phantomhex_admin::Migration),
             Box::new(m20261001_000001_rebalance_officer_costs::Migration),
             Box::new(m20261001_000002_expand_missions::Migration),
+            Box::new(m20261002_000001_fix_building_descriptions::Migration),
         ]
     }
 }
