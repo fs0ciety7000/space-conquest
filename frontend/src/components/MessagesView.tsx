@@ -365,7 +365,7 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                             }`}
                         >
                             <Bell size={12} className="lg:w-3.5 lg:h-3.5" />
-                            <span className="hidden lg:inline">Alertes</span>
+                            <span className="hidden sm:inline">Alertes</span>
                         </button>
                     </div>
                 </div>
@@ -542,7 +542,7 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
             </div>
 
             {/* ZONE PRINCIPALE */}
-            <div className={`${!selectedConv && !isComposing ? 'hidden lg:flex' : 'flex'} flex-1 flex-col bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-xl overflow-hidden backdrop-blur-[12px] card-depth`}>
+            <div className={`${selectedConv || isComposing || selectedNotif || viewMode === 'galactic' || viewMode === 'notifications' ? 'flex' : 'hidden lg:flex'} flex-1 flex-col bg-[rgba(10,5,32,0.85)] border border-cyan-500/10 rounded-xl overflow-hidden backdrop-blur-[12px] card-depth`}>
 
                 {isComposing ? (
                     <div className="flex-1 flex flex-col">
@@ -785,6 +785,12 @@ export default function MessagesView({ token, userId, initialRecipient, initialT
                             </div>
                         </div>
                     </motion.div>
+                ) : viewMode === 'notifications' ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
+                        <Bell size={48} className="mb-4 opacity-20" />
+                        <h3 className="text-lg font-bold text-slate-400 mb-2">Centre d'Alertes</h3>
+                        <p className="text-sm max-w-sm">Sélectionnez une alerte pour consulter les détails.</p>
+                    </div>
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
                         <MessageCircle size={48} className="mb-4 opacity-20" />
