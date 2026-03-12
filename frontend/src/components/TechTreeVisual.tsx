@@ -11,6 +11,8 @@ import ReactFlow, {
   MarkerType,
   MiniMap,
   ReactFlowInstance,
+  Handle,
+  Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Card, CardContent } from "@/components/ui/card";
@@ -187,9 +189,13 @@ const TechNode = ({ data }: { data: any }) => {
         : `${config.border} bg-cyan-500/5 hover:border-cyan-500/50`;
 
   return (
-    // zIndex: 0 keeps this node's stacking context below the React Flow SVG
-    // edge layer, preventing the opaque card from masking edge lines.
-    <div style={{ zIndex: 0, position: 'relative' }}>
+    <div style={{ position: 'relative' }}>
+      {/* Invisible handles — required for React Flow to draw edges at card boundaries */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        style={{ opacity: 0, width: 10, height: 10, border: 'none', background: 'transparent' }}
+      />
       <motion.div variants={nodeVariants} initial="hidden" animate="show">
         <Card className={`
           relative overflow-hidden w-[220px] min-h-[240px] transition-all duration-300
@@ -370,6 +376,12 @@ const TechNode = ({ data }: { data: any }) => {
           </CardContent>
         </Card>
       </motion.div>
+      {/* Source handle at bottom — edges leave from here toward child nodes */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        style={{ opacity: 0, width: 10, height: 10, border: 'none', background: 'transparent' }}
+      />
     </div>
   );
 };
