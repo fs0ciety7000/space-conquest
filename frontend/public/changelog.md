@@ -1,5 +1,19 @@
 # Changelog - Space Conquest
 
+## [11.2.0] - 2026-03-12 - Tech Tree Refonte Visuelle
+
+### 🌳 Arbre Technologique — Refonte complète
+- **Layout dagre** : algorithme de graphe hiérarchique automatique — plus aucun chevauchement de cartes
+- **Connexions visibles** : les lignes entre technologies sont maintenant clairement affichées
+  - Vert animé si la technologie source est déjà recherchée
+  - Bleu si le prérequis est satisfait mais pas encore recherché
+  - Rouge si le prérequis n'est pas atteint
+- **Lignes plus épaisses** (strokeWidth 3) et couleurs vives pour une lisibilité maximale
+- **FitView animé** : la vue s'ajuste automatiquement au chargement (400ms)
+- Fix race condition `useMemo` → `useEffect` unique pour build + layout + rendu
+
+---
+
 ## [11.1.0] - 2026-03-12 - Corrections & Précision
 
 ### 🔧 Cohérence backend/frontend
