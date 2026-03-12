@@ -182,28 +182,91 @@ export function getShipStats(
     };
   }
 
-  // OLD SYSTEM: Hardcoded fallback values
+  // OLD SYSTEM: Hardcoded fallback values (complete ship roster)
   const shipStats: {
     [key: string]: { attack: number; shield: number; hull: number };
   } = {
-    light_hunter: { attack: 50, shield: 10, hull: 400 },
-    cruiser: { attack: 400, shield: 50, hull: 2700 },
-    spy_probe: { attack: 0, shield: 0, hull: 100 },
-    transporter: { attack: 5, shield: 10, hull: 400 },
-    colony_ship: { attack: 50, shield: 100, hull: 3000 },
-    recycler: { attack: 10, shield: 10, hull: 1600 },
+    light_hunter:    { attack: 50,   shield: 10,  hull: 400 },
+    heavy_hunter:    { attack: 150,  shield: 25,  hull: 1000 },
+    cruiser:         { attack: 400,  shield: 50,  hull: 2700 },
+    battleship:      { attack: 1000, shield: 200, hull: 6000 },
+    bomber:          { attack: 1000, shield: 500, hull: 7500 },
+    destroyer:       { attack: 2000, shield: 500, hull: 11000 },
+    recycler:        { attack: 1,    shield: 10,  hull: 160 },
+    transporter:     { attack: 5,    shield: 25,  hull: 500 },
+    colony_ship:     { attack: 50,   shield: 100, hull: 3000 },
+    espionage_probe: { attack: 0,    shield: 0,   hull: 1 },
+    spy_probe:       { attack: 0,    shield: 0,   hull: 1 },
   };
 
   return shipStats[shipKey] || { attack: 0, shield: 0, hull: 0 };
 }
 
 /**
- * Calculate total fleet attack power
+ * Get defense count (dedicated wrapper, mirrors getShipCount for defense slots)
+ */
+export function getDefenseCount(planet: Planet | null | undefined, defenseKey: string): number {
+  if (!planet) return 0;
+
+  // NEW SYSTEM: Check defenses object first (priority)
+  if (planet.defenses && planet.defenses[defenseKey] !== undefined) {
+    const v = planet.defenses[defenseKey];
+    return typeof v === 'object' ? (v.count ?? 0) : (v as unknown as number);
+  }
+
+  // Delegate to getShipCount which also handles the defenses object and legacy columns
+  return getShipCount(planet, defenseKey);
+}
+
+/**
+ * Get defense stats with fallback to hardcoded values
+ */
+export function getDefenseStats(
+  planet: Planet | null | undefined,
+  defenseKey: string
+): { attack: number; shield: number; hull: number } {
+  if (!planet) return { attack: 0, shield: 0, hull: 0 };
+
+  // NEW SYSTEM: Get from defenses object if stats are embedded
+  if (planet.defenses && planet.defenses[defenseKey]) {
+    const def = planet.defenses[defenseKey];
+    if (def.attack !== undefined) {
+      return {
+        attack: def.attack || 0,
+        shield: def.shield || 0,
+        hull: 0, // defenses rarely embed hull in the response
+      };
+    }
+  }
+
+  // Hardcoded fallback values (complete defense roster)
+  const defenseStats: {
+    [key: string]: { attack: number; shield: number; hull: number };
+  } = {
+    rocket_launcher: { attack: 80,   shield: 20,    hull: 200 },
+    light_laser:     { attack: 100,  shield: 25,    hull: 100 },
+    heavy_laser:     { attack: 250,  shield: 100,   hull: 800 },
+    gauss_cannon:    { attack: 1100, shield: 200,   hull: 3500 },
+    ion_cannon:      { attack: 150,  shield: 500,   hull: 800 },
+    plasma_turret:   { attack: 3000, shield: 300,   hull: 10000 },
+    small_shield:    { attack: 1,    shield: 2000,  hull: 20000 },
+    large_shield:    { attack: 1,    shield: 10000, hull: 100000 },
+  };
+
+  return defenseStats[defenseKey] || { attack: 0, shield: 0, hull: 0 };
+}
+
+/**
+ * Calculate total fleet attack power (ships only, no defenses)
+ * Used by external components that want ship-only attack figures.
  */
 export function calculateFleetAttack(planet: Planet | null | undefined): number {
   if (!planet) return 0;
 
-  const ships = ['light_hunter', 'cruiser', 'spy_probe', 'transporter', 'colony_ship', 'recycler'];
+  const ships = [
+    'light_hunter', 'heavy_hunter', 'cruiser', 'battleship', 'bomber', 'destroyer',
+    'recycler', 'transporter', 'colony_ship', 'espionage_probe', 'spy_probe',
+  ];
   let totalAttack = 0;
 
   for (const shipKey of ships) {
@@ -212,18 +275,25 @@ export function calculateFleetAttack(planet: Planet | null | undefined): number 
     totalAttack += count * stats.attack;
   }
 
-  // Apply weapon tech bonus
-  const weaponBonus = getTechLevel(planet, 'laser_tech') * 0.1;
-  return totalAttack * (1 + weaponBonus);
+  // weapons_tech is the primary attack bonus (+10% / level)
+  // laser_tech provides a secondary bonus (+5% / level)
+  const weaponsMult = 1
+    + getTechLevel(planet, 'weapons_tech') * 0.1
+    + getTechLevel(planet, 'laser_tech') * 0.05;
+  return totalAttack * weaponsMult;
 }
 
 /**
- * Calculate total fleet hull points
+ * Calculate total fleet hull points (ships only, no defenses)
+ * Used by external components that want ship-only hull figures.
  */
 export function calculateFleetHull(planet: Planet | null | undefined): number {
   if (!planet) return 0;
 
-  const ships = ['light_hunter', 'cruiser', 'spy_probe', 'transporter', 'colony_ship', 'recycler'];
+  const ships = [
+    'light_hunter', 'heavy_hunter', 'cruiser', 'battleship', 'bomber', 'destroyer',
+    'recycler', 'transporter', 'colony_ship', 'espionage_probe', 'spy_probe',
+  ];
   let totalHull = 0;
 
   for (const shipKey of ships) {

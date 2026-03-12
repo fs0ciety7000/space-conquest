@@ -12,7 +12,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
-import { getTechLevel, getBuildingLevel, getShipCount, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
+import { getTechLevel, getBuildingLevel, getShipCount, getDefenseCount, getShipStats, getDefenseStats, calculateFleetAttack, calculateFleetHull, getTotalFleetCount } from '@/utils/techTreeCompat';
 import { formatDuration } from '@/lib/utils';
 import { usePlanet } from '@/contexts/PlanetContext';
 import ZACManager from '@/components/ZACManager';
@@ -374,22 +374,51 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   const energyPercent = energyCons > 0 ? Math.min(100, (energyCons / energyProd) * 100) : 0;
 
   // --- CALCULS MILITAIRES AVANCÉS ---
-  const atkBonus = 1 + (getTechLevel(planet, 'laser_tech') * 0.1);
-  const hullBonus = 1 + (getTechLevel(planet, 'armour_tech') * 0.1);
+  // Tech multipliers (mirrors backend combat.rs formulas)
+  const weaponsMult = 1
+    + getTechLevel(planet, 'weapons_tech') * 0.1  // primary attack bonus
+    + getTechLevel(planet, 'laser_tech') * 0.05;  // secondary laser bonus
+  const shieldMult  = 1 + getTechLevel(planet, 'shield_tech') * 0.1;
+  const armourMult  = 1 + getTechLevel(planet, 'armour_tech') * 0.1;
 
-  const totalAtk = (
-    (getShipCount(planet, 'light_hunter') * 50) +
-    (getShipCount(planet, 'cruiser') * 400) +
-    (getShipCount(planet, 'rocket_launcher') * 80) +
-    (getShipCount(planet, 'plasma_turret') * 3000)
-  ) * atkBonus;
+  const ALL_SHIPS = [
+    'light_hunter', 'heavy_hunter', 'cruiser', 'battleship', 'bomber', 'destroyer',
+    'recycler', 'transporter', 'colony_ship', 'espionage_probe', 'spy_probe',
+  ] as const;
 
-  const totalHull = (
-    (getShipCount(planet, 'light_hunter') * 400) +
-    (getShipCount(planet, 'cruiser') * 2700) +
-    (getShipCount(planet, 'rocket_launcher') * 200) +
-    (getShipCount(planet, 'plasma_turret') * 10000)
-  ) * hullBonus;
+  const ALL_DEFENSES = [
+    'rocket_launcher', 'light_laser', 'heavy_laser', 'gauss_cannon',
+    'ion_cannon', 'plasma_turret', 'small_shield', 'large_shield',
+  ] as const;
+
+  // If the backend already computed these values, use them directly (real-time accurate).
+  // Otherwise fall back to the local calculation using complete ship/defense rosters.
+  const totalAtk: number = planet.offensive_power ?? (() => {
+    const shipAtk = ALL_SHIPS.reduce((sum, key) => {
+      return sum + getShipCount(planet, key) * getShipStats(planet, key).attack;
+    }, 0);
+    const defAtk = ALL_DEFENSES.reduce((sum, key) => {
+      return sum + getDefenseCount(planet, key) * getDefenseStats(planet, key).attack;
+    }, 0);
+    return (shipAtk + defAtk) * weaponsMult;
+  })();
+
+  const totalHull: number = planet.defensive_power ?? (() => {
+    const shipRes = ALL_SHIPS.reduce((sum, key) => {
+      const stats = getShipStats(planet, key);
+      const count = getShipCount(planet, key);
+      return sum + count * (stats.shield * shieldMult + stats.hull * armourMult);
+    }, 0);
+    const defRes = ALL_DEFENSES.reduce((sum, key) => {
+      const stats = getDefenseStats(planet, key);
+      const count = getDefenseCount(planet, key);
+      return sum + count * (stats.shield * shieldMult + stats.hull * armourMult);
+    }, 0);
+    return shipRes + defRes;
+  })();
+
+  // Whether the values came from the backend (more accurate) or were computed locally
+  const militaryFromBackend = planet.offensive_power !== undefined && planet.defensive_power !== undefined;
 
   const totalFleet = getTotalFleetCount(planet);
   const hangarCap = planet.fleet_capacity ?? (500 + (getBuildingLevel(planet, 'hangar') * 500));
@@ -1173,9 +1202,10 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       <div className="text-[10px] text-slate-400 font-bold uppercase flex justify-between items-center mb-3">
                           <span className="flex items-center gap-1.5">
                               <Target size={12} className="text-red-400" />
-                              Armement Niv.{getTechLevel(planet, 'laser_tech')}
+                              Armement Niv.{getTechLevel(planet, 'weapons_tech')}
+                              {militaryFromBackend && <span className="text-[8px] text-cyan-500 normal-case font-bold ml-1">(live)</span>}
                           </span>
-                          <span className="text-red-400 font-mono font-black px-2 py-1 bg-red-500/20 rounded-lg border border-red-500/40 shadow-[0_0_8px_rgba(239,68,68,0.3)] animate-pulse">+{Math.round((atkBonus-1)*100)}% DMG</span>
+                          <span className="text-red-400 font-mono font-black px-2 py-1 bg-red-500/20 rounded-lg border border-red-500/40 shadow-[0_0_8px_rgba(239,68,68,0.3)] animate-pulse">+{Math.round((weaponsMult-1)*100)}% DMG</span>
                       </div>
 
                       {/* Barre de progression style voltmètre */}
@@ -1189,7 +1219,7 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                           {/* Barre de remplissage */}
                           <div
                               className="absolute inset-0 bg-gradient-to-r from-red-700 via-red-500 to-orange-400 transition-all duration-700"
-                              style={{ width: `${Math.min(100, getTechLevel(planet, 'laser_tech') * 8)}%` }}
+                              style={{ width: `${Math.min(100, getTechLevel(planet, 'weapons_tech') * 8)}%` }}
                           >
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
                               {/* Point lumineux au bout */}
@@ -1203,13 +1233,13 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       <div className="bg-black/30 rounded-lg p-2.5 border border-red-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Vaisseaux</span>
                           <span className="text-red-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]">
-                              {fmt(getShipCount(planet, 'light_hunter') * 50 + getShipCount(planet, 'cruiser') * 400)}
+                              {fmt(ALL_SHIPS.reduce((s, k) => s + getShipCount(planet, k) * getShipStats(planet, k).attack, 0) * weaponsMult)}
                           </span>
                       </div>
                       <div className="bg-black/30 rounded-lg p-2.5 border border-red-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
                           <span className="text-red-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]">
-                              {fmt(getShipCount(planet, 'rocket_launcher') * 80 + getShipCount(planet, 'plasma_turret') * 3000)}
+                              {fmt(ALL_DEFENSES.reduce((s, k) => s + getDefenseCount(planet, k) * getDefenseStats(planet, k).attack, 0) * weaponsMult)}
                           </span>
                       </div>
                   </div>
@@ -1260,8 +1290,9 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                           <span className="flex items-center gap-1.5">
                               <Shield size={12} className="text-emerald-400" />
                               Protection Niv.{getTechLevel(planet, 'armour_tech')}
+                              {militaryFromBackend && <span className="text-[8px] text-cyan-500 normal-case font-bold ml-1">(live)</span>}
                           </span>
-                          <span className="text-emerald-400 font-mono font-black px-2 py-1 bg-emerald-500/20 rounded-lg border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.3)] animate-pulse">+{Math.round((hullBonus-1)*100)}% HULL</span>
+                          <span className="text-emerald-400 font-mono font-black px-2 py-1 bg-emerald-500/20 rounded-lg border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.3)] animate-pulse">+{Math.round((armourMult-1)*100)}% HULL</span>
                       </div>
 
                       {/* Barre de progression style voltmètre */}
@@ -1289,13 +1320,19 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
                       <div className="bg-black/30 rounded-lg p-2.5 border border-emerald-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Vaisseaux</span>
                           <span className="text-emerald-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]">
-                              {fmt(getShipCount(planet, 'light_hunter') * 400 + getShipCount(planet, 'cruiser') * 2700)}
+                              {fmt(ALL_SHIPS.reduce((s, k) => {
+                                  const st = getShipStats(planet, k);
+                                  return s + getShipCount(planet, k) * (st.shield * shieldMult + st.hull * armourMult);
+                              }, 0))}
                           </span>
                       </div>
                       <div className="bg-black/30 rounded-lg p-2.5 border border-emerald-500/20">
                           <span className="text-[8px] text-slate-600 uppercase block font-bold tracking-wider mb-0.5">Défenses</span>
                           <span className="text-emerald-400 font-mono text-sm font-black drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]">
-                              {fmt(getShipCount(planet, 'rocket_launcher') * 200 + getShipCount(planet, 'plasma_turret') * 10000)}
+                              {fmt(ALL_DEFENSES.reduce((s, k) => {
+                                  const st = getDefenseStats(planet, k);
+                                  return s + getDefenseCount(planet, k) * (st.shield * shieldMult + st.hull * armourMult);
+                              }, 0))}
                           </span>
                       </div>
                   </div>

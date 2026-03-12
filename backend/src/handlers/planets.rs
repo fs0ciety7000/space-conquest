@@ -1025,6 +1025,81 @@ async fn get_planet_handler(
             .unwrap_or(0);
         let fleet_cap = game_logic::get_fleet_capacity(hangar_lvl, &config);
         obj.insert("fleet_capacity".into(), json!(fleet_cap));
+
+        // ── Puissance offensive / défensive ──────────────────────────────────
+        // Calcul cohérent avec le moteur de combat v5.0.
+        // On relit les techs, vaisseaux et défenses depuis la DB (données déjà
+        // chargées ci-dessus mais dans des scopes séparés ; le coût est négligeable
+        // car ces requêtes sont légères et indexées).
+        let pw_tech_levels = tech_tree::get_all_planet_tech_levels(&state.db, updated_model.id)
+            .await
+            .unwrap_or_default();
+        let pw_ship_counts = tech_tree::get_all_planet_ship_counts(&state.db, updated_model.id)
+            .await
+            .unwrap_or_default();
+        let pw_defense_counts = tech_tree::get_all_planet_defense_counts(&state.db, updated_model.id)
+            .await
+            .unwrap_or_default();
+
+        // Multiplicateurs technologiques (identiques au moteur de combat)
+        let weapons_tech = *pw_tech_levels.get("weapons_tech").unwrap_or(&0) as f64;
+        let shield_tech  = *pw_tech_levels.get("shield_tech").unwrap_or(&0) as f64;
+        let armour_tech  = *pw_tech_levels.get("armour_tech").unwrap_or(&0) as f64;
+        let laser_tech   = *pw_tech_levels.get("laser_tech").unwrap_or(&0) as f64;
+        let ion_tech     = *pw_tech_levels.get("ion_tech").unwrap_or(&0) as f64;
+
+        let weapons_mult = 1.0 + weapons_tech * 0.1 + laser_tech * 0.05 + ion_tech * 0.03;
+        let shield_mult  = 1.0 + shield_tech  * 0.1;
+        let armour_mult  = 1.0 + armour_tech  * 0.1;
+
+        // Charger les stats réelles depuis la DB
+        let all_ship_types = ShipType::find()
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+        let ship_stat_map: std::collections::HashMap<String, (i32, i32, i32)> = all_ship_types
+            .iter()
+            .map(|s| (s.ship_key.clone(), (s.attack, s.shield, s.hull)))
+            .collect();
+
+        let all_defense_types = DefenseType::find()
+            .all(&state.db)
+            .await
+            .unwrap_or_default();
+        let defense_stat_map: std::collections::HashMap<String, (i32, i32, i32)> = all_defense_types
+            .iter()
+            .map(|d| (d.defense_key.clone(), (d.attack, d.shield, d.hull)))
+            .collect();
+
+        // Puissance offensive : somme attack × weapons_mult pour tous les vaisseaux
+        let offensive_power: i64 = pw_ship_counts
+            .iter()
+            .map(|(key, &count)| {
+                let (atk, _, _) = ship_stat_map.get(key.as_str()).copied().unwrap_or((0, 0, 0));
+                (atk as f64 * weapons_mult * count as f64) as i64
+            })
+            .sum();
+
+        // Puissance défensive : (shield × shield_mult + hull × armour_mult)
+        // pour les défenses et les vaisseaux stationnés
+        let defensive_power_defenses: i64 = pw_defense_counts
+            .iter()
+            .map(|(key, &count)| {
+                let (_, shd, hul) = defense_stat_map.get(key.as_str()).copied().unwrap_or((0, 0, 0));
+                ((shd as f64 * shield_mult + hul as f64 * armour_mult) * count as f64) as i64
+            })
+            .sum();
+        let defensive_power_ships: i64 = pw_ship_counts
+            .iter()
+            .map(|(key, &count)| {
+                let (_, shd, hul) = ship_stat_map.get(key.as_str()).copied().unwrap_or((0, 0, 0));
+                ((shd as f64 * shield_mult + hul as f64 * armour_mult) * count as f64) as i64
+            })
+            .sum();
+        let defensive_power: i64 = defensive_power_defenses + defensive_power_ships;
+
+        obj.insert("offensive_power".into(), json!(offensive_power));
+        obj.insert("defensive_power".into(), json!(defensive_power));
     }
 
     Ok(Json(json_response))

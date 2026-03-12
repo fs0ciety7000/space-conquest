@@ -673,17 +673,79 @@ pub fn get_unit_base_stats(unit_type: &str, config: &ServerConfigCache) -> UnitS
             cargo_capacity: config.get_config("cargo_destroyer", 2000.0),
         },
 
+        // Vaisseaux civils / utilitaires
+        "transporter" => UnitStats {
+            attack: config.get_config("combat_transporter_attack", 5.0),
+            shield: config.get_config("combat_transporter_shield", 25.0),
+            hull: config.get_config("combat_transporter_hull", 500.0),
+            cargo_capacity: config.get_config("cargo_transporter", 25000.0),
+        },
+        "recycler" => UnitStats {
+            attack: config.get_config("combat_recycler_attack", 1.0),
+            shield: config.get_config("combat_recycler_shield", 10.0),
+            hull: config.get_config("combat_recycler_hull", 160.0),
+            cargo_capacity: config.get_config("cargo_recycler", 20000.0),
+        },
+        "colony_ship" => UnitStats {
+            attack: config.get_config("combat_colony_ship_attack", 50.0),
+            shield: config.get_config("combat_colony_ship_shield", 100.0),
+            hull: config.get_config("combat_colony_ship_hull", 3000.0),
+            cargo_capacity: config.get_config("cargo_colony_ship", 7500.0),
+        },
+        "espionage_probe" | "spy_probe" => UnitStats {
+            attack: config.get_config("combat_espionage_probe_attack", 0.0),
+            shield: config.get_config("combat_espionage_probe_shield", 0.0),
+            hull: config.get_config("combat_espionage_probe_hull", 1.0),
+            cargo_capacity: 0.0,
+        },
+
         // Défenses
-        "missile_launcher" => UnitStats {
+        "missile_launcher" | "rocket_launcher" => UnitStats {
             attack: config.get_config("combat_missile_launcher_attack", 80.0),
             shield: config.get_config("combat_missile_launcher_shield", 20.0),
             hull: config.get_config("combat_missile_launcher_hull", 200.0),
+            cargo_capacity: 0.0,
+        },
+        "light_laser" => UnitStats {
+            attack: config.get_config("combat_light_laser_attack", 100.0),
+            shield: config.get_config("combat_light_laser_shield", 25.0),
+            hull: config.get_config("combat_light_laser_hull", 100.0),
+            cargo_capacity: 0.0,
+        },
+        "heavy_laser" => UnitStats {
+            attack: config.get_config("combat_heavy_laser_attack", 250.0),
+            shield: config.get_config("combat_heavy_laser_shield", 100.0),
+            hull: config.get_config("combat_heavy_laser_hull", 800.0),
+            cargo_capacity: 0.0,
+        },
+        "gauss_cannon" => UnitStats {
+            attack: config.get_config("combat_gauss_cannon_attack", 1100.0),
+            shield: config.get_config("combat_gauss_cannon_shield", 200.0),
+            hull: config.get_config("combat_gauss_cannon_hull", 3500.0),
+            cargo_capacity: 0.0,
+        },
+        "ion_cannon" => UnitStats {
+            attack: config.get_config("combat_ion_cannon_attack", 150.0),
+            shield: config.get_config("combat_ion_cannon_shield", 500.0),
+            hull: config.get_config("combat_ion_cannon_hull", 800.0),
             cargo_capacity: 0.0,
         },
         "plasma_turret" => UnitStats {
             attack: config.get_config("combat_plasma_turret_attack", 3000.0),
             shield: config.get_config("combat_plasma_turret_shield", 300.0),
             hull: config.get_config("combat_plasma_turret_hull", 10000.0),
+            cargo_capacity: 0.0,
+        },
+        "small_shield" => UnitStats {
+            attack: config.get_config("combat_small_shield_attack", 1.0),
+            shield: config.get_config("combat_small_shield_shield", 2000.0),
+            hull: config.get_config("combat_small_shield_hull", 20000.0),
+            cargo_capacity: 0.0,
+        },
+        "large_shield" => UnitStats {
+            attack: config.get_config("combat_large_shield_attack", 1.0),
+            shield: config.get_config("combat_large_shield_shield", 10000.0),
+            hull: config.get_config("combat_large_shield_hull", 100000.0),
             cargo_capacity: 0.0,
         },
 
@@ -1017,9 +1079,9 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
         research += level * level * base;
     }
 
-    // Points militaire — défenses uniquement (vaisseaux exclus : trop volatils)
+    // Points militaire — défenses (×1.0) + vaisseaux (×0.5, nature volatile)
     // Formule: (attack + shield/2 + hull/10) / 1000 par unité
-    use crate::entities::prelude::DefenseType;
+    use crate::entities::prelude::{DefenseType, ShipType};
     use sea_orm::EntityTrait;
 
     let all_defense_types = DefenseType::find().all(db).await.unwrap_or_default();
@@ -1034,7 +1096,26 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
         let unit_value = (atk as i64) + (shd as i64 / 2) + (hul as i64 / 10);
         defense_points += (*count as i64) * unit_value / 1000;
     }
-    let military = defense_points as i32;
+
+    // Vaisseaux : poids réduit à 0.5 car leur présence sur la planète est volatile
+    let ship_counts = tech_tree::get_all_planet_ship_counts(db, p.id)
+        .await
+        .unwrap_or_default();
+    let all_ship_types = ShipType::find().all(db).await.unwrap_or_default();
+    let ship_stats: std::collections::HashMap<String, (i32, i32, i32)> = all_ship_types
+        .iter()
+        .map(|s| (s.ship_key.clone(), (s.attack, s.shield, s.hull)))
+        .collect();
+
+    let mut ship_points: i64 = 0;
+    for (ship_key, count) in &ship_counts {
+        let (atk, shd, hul) = ship_stats.get(ship_key.as_str()).copied().unwrap_or((1, 1, 10));
+        let unit_value = (atk as i64) + (shd as i64 / 2) + (hul as i64 / 10);
+        // Coefficient 0.5 appliqué en divisant par 2 après la division par 1000
+        ship_points += (*count as i64) * unit_value / 2000;
+    }
+
+    let military = (defense_points + ship_points) as i32;
 
     // Points production (basé sur la production horaire)
     let energy_tech_level = *tech_levels.get("energy_tech").unwrap_or(&0);
