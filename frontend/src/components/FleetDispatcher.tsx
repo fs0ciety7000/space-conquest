@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Crosshair, Rocket, AlertTriangle, X, Minus, Plus, BookmarkPlus, Trash2, Zap, ChevronDown, ChevronUp, Check, Truck, Eye, ArrowRight, ShieldAlert, Navigation, Shield, RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Crosshair, Rocket, AlertTriangle, X, Minus, Plus, BookmarkPlus, Trash2, Zap, ChevronDown, ChevronUp, Check, Truck, Eye, ArrowRight, ShieldAlert, Navigation, Shield, RefreshCw, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,36 +37,8 @@ interface FleetDispatcherProps {
   onActionSuccess: () => void;
 }
 
-// Mirrors the backend flight time formula (backend/src/handlers/fleet.rs)
-function calculateFlightTime(
-  from: { galaxy: number; system: number; position: number },
-  to: { galaxy: number; system: number; position: number },
-  flightSpeedMultiplier: number,
-  hyperspaceLevel: number = 0
-): number {
-  let dist: number;
-  if (from.galaxy !== to.galaxy) {
-    dist = Math.abs(from.galaxy - to.galaxy) * 20000;
-  } else if (from.system !== to.system) {
-    dist = Math.abs(from.system - to.system) * 2000 + 2700;
-  } else if (from.position !== to.position) {
-    dist = Math.abs(from.position - to.position) * 5 + 1000;
-  } else {
-    dist = 5;
-  }
-
-  let baseTime: number;
-  if (dist < 1000) {
-    baseTime = dist / 10.0 + 30.0;
-  } else if (dist < 10000) {
-    baseTime = dist / 5.0 + 200.0;
-  } else {
-    baseTime = dist / 2.0 + 500.0;
-  }
-
-  const effectiveSpeed = flightSpeedMultiplier * (1.0 + hyperspaceLevel * 0.15);
-  return Math.max(5, Math.floor(baseTime / effectiveSpeed));
-}
+// FE-01: calculateFlightTime() local supprimé — remplacé par l'endpoint /fleet/estimate
+// qui inclut le niveau d'hyperespace réel et tous les paramètres serveur.
 
 export default function FleetDispatcher({
   planetId,
@@ -80,6 +52,9 @@ export default function FleetDispatcher({
   const [mission, setMission] = useState<MissionType>(initialMission);
   const [isLaunching, setIsLaunching] = useState(false);
   const [flightTime, setFlightTime] = useState(0);
+  // FE-01: spinner pendant le fetch de l'estimation de vol
+  const [isEstimating, setIsEstimating] = useState(false);
+  const estimateAbortRef = useRef<AbortController | null>(null);
 
   // === FLOTTE (Attaque & Transport) ===
   const [shipSelection, setShipSelection] = useState<{ [key: string]: number }>({});
@@ -108,8 +83,7 @@ export default function FleetDispatcher({
   const [activeMissions, setActiveMissions] = useState<Array<{ id: string; destination_name: string; ships_count: number; arrival_time: string }>>([]);
   const [recalling, setRecalling] = useState<string | null>(null);
 
-  // === CONFIG SERVEUR (flight_speed_multiplier) ===
-  const [flightSpeedMultiplier, setFlightSpeedMultiplier] = useState(5.0);
+  // FE-01: flightSpeedMultiplier supprimé — le calcul est délégué à /fleet/estimate
 
   const userId = localStorage.getItem('user_id');
 
@@ -142,18 +116,6 @@ export default function FleetDispatcher({
       .catch(() => {});
   }, [userId]);
 
-  // Fetch server config for dynamic flight_speed_multiplier
-  useEffect(() => {
-    fetch(apiUrl('/config'))
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data && data.flight_speed_multiplier) {
-          setFlightSpeedMultiplier(parseFloat(data.flight_speed_multiplier) || 5.0);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   // Load player's own planets for deploy destination picker
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -183,32 +145,66 @@ export default function FleetDispatcher({
       .catch(() => {});
   }, [mission]);
 
-  // Flight time calculation — mirrors the backend formula exactly
+  // FE-01: fetch de l'estimation de vol depuis le serveur avec debounce 500ms.
+  // Le serveur connaît le niveau d'hyperespace réel et tous les modificateurs de vitesse.
   useEffect(() => {
-      const from = {
-        galaxy: currentPlanet.galaxy || 1,
-        system: currentPlanet.system || 1,
-        position: currentPlanet.position || 1,
-      };
+    // Résoudre la cible effective (deploy = planète choisie par le joueur)
+    let effectiveTarget = targetPlanet;
+    if (mission === 'deploy' && deployDestinationId) {
+      const found = myPlanets.find(p => p.id === deployDestinationId);
+      if (found) effectiveTarget = found;
+    }
 
-      // For deploy mission, resolve destination from myPlanets selection
-      let effectiveTarget = targetPlanet;
-      if (mission === 'deploy' && deployDestinationId) {
-        const found = myPlanets.find(p => p.id === deployDestinationId);
-        if (found) effectiveTarget = found;
+    const targetGalaxy  = effectiveTarget.galaxy  ?? currentPlanet.galaxy  ?? 1;
+    const targetSystem  = effectiveTarget.system  ?? currentPlanet.system  ?? 1;
+    const targetPosition = effectiveTarget.position ?? currentPlanet.position ?? 1;
+
+    // Annuler le fetch précédent si les dépendances changent avant la fin du debounce
+    const timer = setTimeout(async () => {
+      // Annuler tout fetch précédent encore en cours
+      if (estimateAbortRef.current) {
+        estimateAbortRef.current.abort();
       }
+      const controller = new AbortController();
+      estimateAbortRef.current = controller;
 
-      const to = {
-        galaxy: effectiveTarget.galaxy || from.galaxy,
-        system: effectiveTarget.system || from.system,
-        position: effectiveTarget.position || from.position,
-      };
+      setIsEstimating(true);
+      try {
+        const url = apiUrl(
+          `/fleet/estimate?planet_id=${planetId}` +
+          `&target_galaxy=${targetGalaxy}` +
+          `&target_system=${targetSystem}` +
+          `&target_position=${targetPosition}` +
+          `&speed_percent=100`
+        );
+        const token = localStorage.getItem('token');
+        const res = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setFlightTime(data.flight_time_seconds ?? 0);
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          // Fallback silencieux: garder la valeur précédente
+          console.warn('fleet/estimate failed, keeping previous value', err);
+        }
+      } finally {
+        setIsEstimating(false);
+      }
+    }, 500);
 
-      // TODO: pass hyperspace_tech_level from planet data
-      const hyperspaceLevel = 0;
-
-      setFlightTime(calculateFlightTime(from, to, flightSpeedMultiplier, hyperspaceLevel));
-  }, [currentPlanet, targetPlanet, flightSpeedMultiplier, mission, deployDestinationId, myPlanets]);
+    return () => clearTimeout(timer);
+  }, [
+    planetId,
+    currentPlanet,
+    targetPlanet,
+    mission,
+    deployDestinationId,
+    myPlanets,
+  ]);
 
   // Calculations
   const totalPower = availableShips.reduce((sum, ship) => sum + (ship.attack * (shipSelection[ship.ship_key] || 0)), 0);
@@ -491,7 +487,12 @@ export default function FleetDispatcher({
                         {targetPlanet.galaxy && (
                             <span className="text-[10px] text-slate-500 ml-1 font-mono text-cyan-400">[{targetPlanet.galaxy}:{targetPlanet.system}:{targetPlanet.position}]</span>
                         )}
-                        <span className="ml-2 px-1.5 py-0.5 rounded bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-[10px] text-cyan-400 font-mono tabular-nums">ETA: {flightTime}s</span>
+                        <span className="ml-2 px-1.5 py-0.5 rounded bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-[10px] text-cyan-400 font-mono tabular-nums flex items-center gap-1">
+                          {isEstimating
+                            ? <Loader2 size={10} className="animate-spin" />
+                            : <>ETA: {flightTime}s</>
+                          }
+                        </span>
                     </div>
                 </div>
             </div>
@@ -831,7 +832,10 @@ export default function FleetDispatcher({
                         </div>
                         <div className="flex justify-between items-center p-2 bg-black/40 rounded border border-cyan-500/10">
                             <span className="text-slate-500 uppercase font-bold">ETA aller</span>
-                            <span className="font-mono text-slate-200">{flightTime}s</span>
+                            {isEstimating
+                              ? <Loader2 size={14} className="animate-spin text-cyan-400" />
+                              : <span className="font-mono text-slate-200">{flightTime}s</span>
+                            }
                         </div>
                         <div className="p-2 bg-red-950/20 rounded border border-red-900/40 text-red-300 text-[10px] text-center font-bold uppercase tracking-wider">
                             Cette action est irréversible

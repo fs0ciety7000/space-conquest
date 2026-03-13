@@ -908,6 +908,24 @@ async fn get_planet_handler(
         obj.insert("metal_production".into(), json!(metal_production as i32));
         obj.insert("crystal_production".into(), json!(crystal_production as i32));
         obj.insert("deuterium_production".into(), json!(deuterium_production as i32));
+
+        // P2-1.1: expose per-second production rates so the frontend can tick
+        // resources locally without duplicating the hourly formula.
+        // Values are in units/second (hourly / 3600), rounded to 6 decimal places.
+        let metal_per_sec = (metal_production / 3600.0 * 1_000_000.0).round() / 1_000_000.0;
+        let crystal_per_sec = (crystal_production / 3600.0 * 1_000_000.0).round() / 1_000_000.0;
+        let deuterium_per_sec = (deuterium_production / 3600.0 * 1_000_000.0).round() / 1_000_000.0;
+        obj.insert("metal_per_second".into(), json!(metal_per_sec));
+        obj.insert("crystal_per_second".into(), json!(crystal_per_sec));
+        obj.insert("deuterium_per_second".into(), json!(deuterium_per_sec));
+
+        // P2-1.1: expose storage caps so the frontend can render the fill bar
+        // without recomputing the exponential formula.
+        let storage_cap = game_logic::get_storage_capacity(resource_storage_level, &config);
+        obj.insert("storage_capacity_metal".into(), json!(storage_cap as i64));
+        obj.insert("storage_capacity_crystal".into(), json!(storage_cap as i64));
+        obj.insert("storage_capacity_deuterium".into(), json!(storage_cap as i64));
+
         obj.insert("unread_messages".into(), json!(unread_messages));
 
         let active_queue = ConstructionQueue::find()

@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, memo, lazy, Suspense } from "react";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 import { ConnectionStatus, getConnectionStatusColor, getConnectionStatusText } from '@/hooks/useWebSocket';
@@ -61,7 +61,9 @@ interface PlanetSummary {
 }
 
 
-export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar, onNavigateToGalaxy, onNavigateToOverview, speedFactor = 10, wsStatus = 'disconnected' }: EmpireBarProps) {
+// FE-16: mémoïser le composant pour éviter les re-renders quand le parent met à jour
+// un état non lié (ex: tick de ressources dans PlanetOverview)
+const EmpireBar = memo(function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, onOpenMessages, onToggleSidebar, onNavigateToGalaxy, onNavigateToOverview, speedFactor = 10, wsStatus = 'disconnected' }: EmpireBarProps) {
 
   const [myPlanets, setMyPlanets] = useState<PlanetSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -175,10 +177,37 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
   const prodCrystal = planet.crystal_production || 0;
   const prodDeut = planet.deuterium_production || 0;
 
-  const storageLevel = getBuildingLevel(planet, 'resource_storage');
-  const storageCapacity = storageLevel === 0 ? 600000 : Math.floor(600000 * Math.pow(1.6, storageLevel));
+  // FE-11: utiliser la capacité de stockage calculée par le serveur.
+  // Fallback sur le calcul local si le champ n'est pas encore présent dans le payload
+  // (transition progressive vers le nouveau backend).
+  const storageCapacity = (() => {
+    if (typeof planet.storage_capacity_metal === 'number') {
+      return planet.storage_capacity_metal;
+    }
+    const storageLevel = getBuildingLevel(planet, 'resource_storage');
+    return storageLevel === 0 ? 600000 : Math.floor(600000 * Math.pow(1.6, storageLevel));
+  })();
 
   const energyColor = energyRatio < 50 ? '#ef4444' : energyRatio < 100 ? '#f97316' : '#22c55e';
+
+  // FE-16: mémoïser le filtrage et le groupement des planètes par galaxie pour éviter
+  // de recalculer à chaque render quand les ressources temps-réel changent.
+  const filteredGrouped = useMemo(() => {
+    const filtered = myPlanets.filter(p =>
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      `${p.galaxy}:${p.system}:${p.position}`.includes(searchQuery)
+    );
+    return filtered.reduce((acc, p) => {
+      if (!acc[p.galaxy]) acc[p.galaxy] = [];
+      acc[p.galaxy].push(p);
+      return acc;
+    }, {} as Record<number, PlanetSummary[]>);
+  }, [myPlanets, searchQuery]);
+
+  const filteredGalaxies = useMemo(
+    () => Object.keys(filteredGrouped).map(Number).sort((a, b) => a - b),
+    [filteredGrouped]
+  );
 
   return (
     <div
@@ -305,19 +334,11 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
             <div className="max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-cyan-500/20 scrollbar-track-transparent">
               {myPlanets.length > 0 ? (
                 (() => {
-                  const filtered = myPlanets.filter(p =>
-                    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    `${p.galaxy}:${p.system}:${p.position}`.includes(searchQuery)
-                  );
-                  if (filtered.length === 0) {
+                  if (filteredGalaxies.length === 0) {
                     return <div className="px-4 py-6 text-center text-slate-500 text-xs">Aucune planète trouvée</div>;
                   }
-                  const grouped = filtered.reduce((acc, p) => {
-                    if (!acc[p.galaxy]) acc[p.galaxy] = [];
-                    acc[p.galaxy].push(p);
-                    return acc;
-                  }, {} as Record<number, PlanetSummary[]>);
-                  const galaxies = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+                  const grouped = filteredGrouped;
+                  const galaxies = filteredGalaxies;
                   return galaxies.map((galaxyNum) => (
                     <div key={galaxyNum}>
                       {galaxies.length > 1 && (
@@ -575,7 +596,9 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
       )}
     </div>
   );
-}
+});
+
+export default EmpireBar;
 
 function ResourceItem({ icon: Icon, value, label, iconColor, hudClass, production, max }: {
   icon: any;

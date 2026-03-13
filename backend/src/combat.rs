@@ -90,23 +90,29 @@ pub async fn load_defense_stats_into_cache(
     Ok(())
 }
 
-/// Load rapid fire rules from database
+/// Load rapid fire rules from database.
+/// CMB-005: Pre-load all ShipType rows into a HashMap to avoid N+1 queries.
+/// Previously this issued 2 queries per rule row; now it issues exactly 2 queries total.
 pub async fn load_rapid_fire_cache(db: &DatabaseConnection) -> Result<RapidFireCache, sea_orm::DbErr> {
     use sea_orm::EntityTrait;
     use crate::entities::prelude::{RapidFireRule, ShipType};
+
+    // Single query: load all ship types keyed by their numeric id
+    let all_ships = ShipType::find().all(db).await?;
+    let ship_key_by_id: HashMap<i32, String> = all_ships
+        .into_iter()
+        .map(|s| (s.id, s.ship_key))
+        .collect();
 
     let all_rules = RapidFireRule::find().all(db).await?;
 
     let mut cache = HashMap::new();
     for rule in all_rules {
-        if let (Some(attacker), Some(target)) = (
-            ShipType::find_by_id(rule.attacker_ship_type_id).one(db).await?,
-            ShipType::find_by_id(rule.target_ship_type_id).one(db).await?,
+        if let (Some(attacker_key), Some(target_key)) = (
+            ship_key_by_id.get(&rule.attacker_ship_type_id).cloned(),
+            ship_key_by_id.get(&rule.target_ship_type_id).cloned(),
         ) {
-            cache.insert(
-                (attacker.ship_key, target.ship_key),
-                rule.rapid_fire_value,
-            );
+            cache.insert((attacker_key, target_key), rule.rapid_fire_value);
         }
     }
 

@@ -14,8 +14,18 @@ export interface PlanetData {
   metal_production: number;
   crystal_production: number;
   deuterium_production: number;
+  // Sprint 2 P2-1: server-computed production rates (BAL-001)
+  metal_per_second?: number;
+  crystal_per_second?: number;
+  deuterium_per_second?: number;
+  // Sprint 2 P2-1: server-computed storage capacities (FE-11)
+  storage_capacity_metal?: number;
+  storage_capacity_crystal?: number;
+  storage_capacity_deuterium?: number;
+  // Sprint 2 P2-1: server-computed fleet capacity (FE-16)
+  fleet_capacity?: number;
   // Other fields exist but these are the critical ones for most components
-  [key: string]: any; 
+  [key: string]: any;
 }
 
 interface PlanetContextType {

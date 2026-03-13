@@ -135,6 +135,14 @@ pub fn random_biome() -> &'static str {
 
 // SPEED_FACTOR supprimé (v9.1) — utiliser config.production_speed / building_speed / etc.
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BAL-019 — Formule de production extraite pour éviter la duplication ×4
+// Formule : base * level * growth^level * plasma_bonus
+// ═══════════════════════════════════════════════════════════════════════════
+fn mine_production(base: f64, level: i32, growth: f64, plasma_bonus: f64) -> f64 {
+    base * level as f64 * growth.powi(level) * plasma_bonus
+}
+
 #[derive(Serialize, Clone)]
 pub struct Cost {
     pub metal: f64,
@@ -249,19 +257,16 @@ pub fn calculate_resources(
     // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
         ResourceType::Metal => {
-            let base = config.get_config("production_metal_base", 30.0);
-            let growth = config.get_config("production_metal_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_metal_base", 30.0), level,
+                config.get_config("production_metal_growth", 1.1), plasma_bonus)
         },
         ResourceType::Crystal => {
-            let base = config.get_config("production_crystal_base", 20.0);
-            let growth = config.get_config("production_crystal_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_crystal_base", 20.0), level,
+                config.get_config("production_crystal_growth", 1.1), plasma_bonus)
         },
         ResourceType::Deuterium => {
-            let base = config.get_config("production_deuterium_base", 15.0);
-            let growth = config.get_config("production_deuterium_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_deuterium_base", 15.0), level,
+                config.get_config("production_deuterium_growth", 1.1), plasma_bonus)
         },
     };
 
@@ -369,19 +374,16 @@ pub fn calculate_resource_production(
     // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
         ResourceType::Metal => {
-            let base = config.get_config("production_metal_base", 30.0);
-            let growth = config.get_config("production_metal_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_metal_base", 30.0), level,
+                config.get_config("production_metal_growth", 1.1), plasma_bonus)
         },
         ResourceType::Crystal => {
-            let base = config.get_config("production_crystal_base", 20.0);
-            let growth = config.get_config("production_crystal_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_crystal_base", 20.0), level,
+                config.get_config("production_crystal_growth", 1.1), plasma_bonus)
         },
         ResourceType::Deuterium => {
-            let base = config.get_config("production_deuterium_base", 15.0);
-            let growth = config.get_config("production_deuterium_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_deuterium_base", 15.0), level,
+                config.get_config("production_deuterium_growth", 1.1), plasma_bonus)
         },
     };
 
@@ -414,19 +416,16 @@ pub fn calculate_resources_with_energy(
     // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
         ResourceType::Metal => {
-            let base = config.get_config("production_metal_base", 30.0);
-            let growth = config.get_config("production_metal_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_metal_base", 30.0), level,
+                config.get_config("production_metal_growth", 1.1), plasma_bonus)
         },
         ResourceType::Crystal => {
-            let base = config.get_config("production_crystal_base", 20.0);
-            let growth = config.get_config("production_crystal_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_crystal_base", 20.0), level,
+                config.get_config("production_crystal_growth", 1.1), plasma_bonus)
         },
         ResourceType::Deuterium => {
-            let base = config.get_config("production_deuterium_base", 15.0);
-            let growth = config.get_config("production_deuterium_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_deuterium_base", 15.0), level,
+                config.get_config("production_deuterium_growth", 1.1), plasma_bonus)
         },
     };
 
@@ -622,18 +621,23 @@ pub fn get_build_time_with_nanite(level: i32, facility_level: i32, nanite_level:
 }
 
 /// Temps de production d'un vaisseau/défense, basé sur son coût réel.
-/// Formule : (metal + crystal) / (BUILD_RATE x shipyard_factor) * 3600 / ship_build_speed
-/// BUILD_RATE x5 par rapport à l'ancienne formule pour éviter des temps absurdes.
+/// Formule Ogame-style : (metal + crystal) / (BUILD_RATE * (1 + shipyard_level * BONUS)) * 3600
+/// puis divisé par ship_build_speed (multiplicateur de vitesse serveur).
+///
+/// BUILD_RATE = 2500 ressources/heure (base 1x universe).
+/// Exemple : Light Hunter (4000 res) à chantier L1 et vitesse x100 = ~52s.
+/// Sur un serveur 1x (ship_build_speed=1) : ~5200s ≈ 87 min — cohérent Ogame.
 pub fn get_ship_production_time(ship_type: &str, qty: i32, shipyard_level: i32, config: &ServerConfigCache) -> i64 {
     // BUILD_RATE en ressources/heure — doit être identique à la formule dans handlers/shipyard.rs
-    const BUILD_RATE: f64 = 3600.0;
+    // BAL-016 : 2500 corrige l'erreur dimensionnelle (ancienne valeur 3600 annulait le ×3600)
+    const BUILD_RATE: f64 = 2500.0;
     const SHIPYARD_BONUS: f64 = 0.10;
     const MIN_SECS_PER_UNIT: i64 = 5;
 
     let (metal, crystal) = get_unit_cost(ship_type, config);
     let cost_per_unit = metal + crystal;
     let effective_rate = BUILD_RATE * (1.0 + shipyard_level as f64 * SHIPYARD_BONUS);
-    // Temps brut sans diviseur de vitesse (en secondes)
+    // Temps brut en secondes : (coût / taux_horaire) * 3600
     let secs_per_unit = ((cost_per_unit / effective_rate) * 3600.0) as i64;
     let secs_per_unit = secs_per_unit.max(MIN_SECS_PER_UNIT);
     let total_secs = secs_per_unit * qty as i64;
@@ -1098,12 +1102,23 @@ pub fn resolve_pvp(
 }
 
 // --- NAVIGATION GALACTIQUE ---
+/// BAL-009 : distance inter-galaxies circulaire (wrap-around) pour neutraliser
+/// l'avantage structurel des galaxies centrales.
+/// Ancienne formule : |g1 - g2| * 20000 (linéaire, avantage G1/G9 vs G5).
+/// Nouvelle formule : min(|g1-g2|, N - |g1-g2|) * 20000 où N = nombre de galaxies.
 pub fn calculate_distance(start: (i32, i32, i32), end: (i32, i32, i32)) -> f64 {
+    calculate_distance_with_config(start, end, 9)
+}
+
+/// Variante configurable pour les tests et les configs serveur avec N != 9 galaxies.
+pub fn calculate_distance_with_config(start: (i32, i32, i32), end: (i32, i32, i32), total_galaxies: i32) -> f64 {
     let (g1, s1, p1) = start;
     let (g2, s2, p2) = end;
 
     if g1 != g2 {
-        return (g1 - g2).abs() as f64 * 20000.0;
+        let raw_diff = (g1 - g2).abs();
+        let circular_diff = raw_diff.min(total_galaxies - raw_diff);
+        return circular_diff as f64 * 20000.0;
     }
     if s1 != s2 {
         return (s1 - s2).abs() as f64 * 2000.0 + 2700.0;
@@ -1114,22 +1129,19 @@ pub fn calculate_distance(start: (i32, i32, i32), end: (i32, i32, i32)) -> f64 {
     5.0 // Même planète
 }
 
+/// BAL-008 : formule sqrt continue pour éliminer les falaises brutales aux seuils de distance.
+/// Ancienne formule : 3 branches if/else causant un ×3 de temps aux transitions (dist=1000, 10000).
+/// Nouvelle formule : base_time = 35 * sqrt(dist) + 30, puis divisé par flight_speed_multiplier.
+///
+/// Comportement à flight_speed_multiplier=5 (défaut serveur) :
+///   dist=5    (même planète)  → ~22s
+///   dist=500  (même système)  → ~2.7 min
+///   dist=4700 (même galaxie)  → ~8.6 min
+///   dist=40000 (2 galaxies)   → ~23 min
+///   dist=80000 (4 galaxies)   → ~33 min
 pub fn calculate_flight_time(dist: f64, flight_speed_multiplier: f64) -> i64 {
-    // Calculate base time based on distance ranges for more realistic travel times
-    let base_time = if dist < 1000.0 {
-        // Same system, different position: 30s to 2 minutes
-        dist / 10.0 + 30.0
-    } else if dist < 10000.0 {
-        // Same galaxy, different system: 5-15 minutes
-        dist / 5.0 + 200.0
-    } else {
-        // Different galaxy: 30 minutes to 1+ hour
-        dist / 2.0 + 500.0
-    };
-
-    // Apply flight speed multiplier (higher = faster travel)
-    let seconds = base_time / flight_speed_multiplier;
-    seconds.max(5.0) as i64
+    let base_time = 35.0 * dist.sqrt() + 30.0;
+    (base_time / flight_speed_multiplier).max(5.0) as i64
 }
 
 
@@ -1317,6 +1329,8 @@ pub fn get_slot_bonus(slots_count: i32, config: &ServerConfigCache) -> f64 {
 }
 
 /// Coût progressif pour débloquer un slot (slot_number de 1 à 4)
+/// BAL-006 : coût exponentiel base * 3^(slot-1) pour éviter le maxxage trivial.
+/// Slot 1: base, Slot 2: base×3, Slot 3: base×9, Slot 4: base×27
 pub fn get_slot_unlock_cost(slot_number: i32, _config: &ServerConfigCache) -> Cost {
     let base_cost = Cost {
         metal: 5000.0,
@@ -1324,7 +1338,8 @@ pub fn get_slot_unlock_cost(slot_number: i32, _config: &ServerConfigCache) -> Co
         deuterium: 1000.0,
     };
 
-    let multiplier = slot_number as f64; // x1, x2, x3, x4
+    // Ancienne formule : slot_number (linéaire) — remplacée par 3^(slot-1) (exponentielle)
+    let multiplier = 3_f64.powi(slot_number - 1);
     Cost {
         metal:     base_cost.metal     * multiplier,
         crystal:   base_cost.crystal   * multiplier,
@@ -1391,19 +1406,16 @@ pub fn calculate_resources_with_slots(
     // Production de base (ratio 3:2:1) - lire depuis config
     let base_production = match res_type {
         ResourceType::Metal => {
-            let base = config.get_config("production_metal_base", 30.0);
-            let growth = config.get_config("production_metal_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_metal_base", 30.0), level,
+                config.get_config("production_metal_growth", 1.1), plasma_bonus)
         },
         ResourceType::Crystal => {
-            let base = config.get_config("production_crystal_base", 20.0);
-            let growth = config.get_config("production_crystal_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_crystal_base", 20.0), level,
+                config.get_config("production_crystal_growth", 1.1), plasma_bonus)
         },
         ResourceType::Deuterium => {
-            let base = config.get_config("production_deuterium_base", 15.0);
-            let growth = config.get_config("production_deuterium_growth", 1.1);
-            base * (level as f64) * growth.powi(level) * plasma_bonus
+            mine_production(config.get_config("production_deuterium_base", 15.0), level,
+                config.get_config("production_deuterium_growth", 1.1), plasma_bonus)
         },
     };
 

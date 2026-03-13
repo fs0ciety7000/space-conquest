@@ -1,5 +1,84 @@
 # Changelog - Space Conquest
 
+## [14.2.0] - 2026-03-14 - Équilibrage & Frontend Autoritatif
+
+### Équilibrage — Formules corrigées
+- **Temps de construction** : formule dimensionnelle corrigée. Un Light Hunter se construit en ~1 min à vitesse ×1 (était 66 min à cause d'une erreur de conversion heures/secondes)
+- **Temps de vol** : courbe `sqrt(distance)` continue — plus de triplemet brutal du temps de trajet aux seuils 1 000 / 10 000 unités
+- **Distances inter-galaxies** : calcul circulaire (wrap-around). G1 et G9 sont maintenant voisines — fin de l'avantage structurel des galaxies centrales
+- **Coûts de slots de production** : progression exponentielle (×3 par slot). Slot 4 coûte 27× le slot 1 (était ×4)
+- **Formule de production** : unifiée en une seule fonction interne — les 4 copies divergentes sont supprimées
+
+### Frontend — Synchronisation avec le serveur
+- **Ressources affichées** : le taux de production vient désormais du serveur (`metal/crystal/deuterium_per_second`). Plus de calcul local susceptible de dériver
+- **Anti-dérive supprimé** : le mécanisme `Math.max(serveur, affiché)` qui faisait monter les ressources artificiellement est retiré
+- **Bonus énergie tech** : coefficient corrigé à 1%/niveau (était affiché à 10% — facteur 10 de dérive à Energy Tech 10)
+- **Temps de vol** : calculé côté serveur via `/fleet/estimate`. Le niveau Hyperespace est maintenant pris en compte
+- **Coûts de bâtiments et technologies** : lus depuis le serveur, plus de calcul client avec magic numbers
+- **Capacité de stockage** : lue depuis le serveur dans la barre d'empire
+- **Double-clic** : boutons "Construire", "Rechercher", "Améliorer" désactivés pendant la requête — impossible de spammer
+- **File de construction** : l'état revient à la normale en cas d'erreur HTTP (plus d'UI désynchronisée après un drag-drop raté)
+- **Performance** : EmpireBar mémoïsée, rafraîchissement UI suspendu quand l'onglet est en arrière-plan
+
+### Combat
+- **Rapid fire cache** : chargement en 1 requête au lieu de 2N — résolution de combat plus rapide en charge
+
+---
+
+## [14.1.0] - 2026-03-14 - Stabilité : Transactions & Résilience Serveur
+
+### Atomicité économique
+- **Achat de planète** : les 5 étapes (vérification, débit acheteur, crédit vendeur, transfert de propriété, suppression annonce) sont maintenant atomiques — impossible d'acheter deux fois la même planète ou de perdre des ressources sur crash
+- **Routes commerciales** : exécution source→destination en transaction avec vérification de solde suffisant au moment du débit
+- **Marché noir — extorsion** : déduction de crédits Syndicat atomique
+- **Vente NPC** : crédit + suppression de planète en transaction unique (plus d'exploit si le DELETE échoue)
+- **Recyclage, expéditions** : déduction carburant intégrée dans la transaction de dispatch
+- **Dissolution d'alliance** : 3 suppressions en transaction — plus de membres orphelins avec droits admin
+- **Transfert de leadership** : atomique — impossible d'avoir deux leaders ou zéro leader
+- **Recrutement d'officier** : coût + insertion en transaction
+
+### Résilience du worker de jeu
+- **Tick supervisé** : si le worker de tick plante (erreur ou panique Rust), il redémarre automatiquement en 5 secondes. Avant : toute la progression du jeu était gelée jusqu'au redémarrage manuel du serveur
+- **WebSocket** : à la déconnexion d'un joueur, les 3 tâches async associées sont correctement annulées — fin des fuites mémoire progressives
+- **Broadcasts PVE** : les notifications d'événements de serveur étaient des no-ops (`.await` manquant) — corrigé, les joueurs reçoivent maintenant les alertes en temps réel
+- **Paniques Tokio** : tous les `.unwrap()` dans les tâches async remplacés par une gestion d'erreur propre
+
+### Cohérence des ressources
+- **`last_update`** : mis à jour correctement après construction, annulation de construction et transport — plus de double-comptage de production
+- **Durée négative** : impossible d'obtenir une durée négative en cas de décalage NTP (clamp à 0)
+- **Niveau plasma tech** : lu depuis la base de données (était hardcodé à 0 — refus illégitime de constructions)
+
+---
+
+## [14.0.0] - 2026-03-14 - Sécurité : Authentification & Injection SQL
+
+> ⚠️ **Breaking change** : les tokens `jwt-{uuid}` non signés ne sont plus acceptés. Reconnectez-vous pour obtenir un JWT valide.
+
+### Authentification systémique
+- **Usurpation de compte supprimée** : le format `jwt-{uuid}` forgeable (connaissance de l'UUID suffisante) est rejeté. Seuls les JWT HMAC signés sont acceptés
+- **Routes de jeu protégées** : `/build-queue`, `/attack`, `/fleet/*`, `/planets/*` et toutes les routes de jeu exigent un JWT valide — les requêtes anonymes reçoivent 401
+- **Panel admin** : ne lit plus le `user_id` depuis le query string — identité extraite du JWT uniquement
+- **Marché & bounties** : `user_id`/`buyer_id` supprimés des payloads — l'identité provient du token, pas du client
+- **Colonisation** : vérification de propriété du vaisseau via JWT (plus via `current_planet_id` manipulable)
+- **Notifications** : lecture des alertes d'attaque restreinte au propriétaire du compte (plus d'accès cross-joueur)
+- **Bâtiments** : upgrade, rename, annulation de construction — vérification que la planète appartient bien à l'appelant
+- **Endpoint `/tick`** : protégé par `TICK_SECRET` (variable d'environnement) — plus accessible anonymement
+
+### Injection SQL
+- **Build queue** : `item_key` et `category` paramétrés via `Statement::from_sql_and_values` — injection SQL impossible
+- **Marché de planètes** : toutes les requêtes `format!()` remplacées par des requêtes paramétrées
+- **Crédits Syndicat** : UPDATE paramétré
+
+### Exploits économiques bloqués
+- **Coût zéro** : une clé de bâtiment absente du cache retourne maintenant une erreur 400 (était silencieusement 0 → construction gratuite infinie)
+- **Prix négatif** : une annonce avec `asking_price < 0` est rejetée 400 (était acceptée → l'acheteur recevait des ressources)
+- **Double-claim mission** : verrou exclusif + transaction atomique — impossible de recevoir la récompense deux fois en parallèle
+- **Double-claim récompense quotidienne** : idem
+- **Double-participation PVE** : `INSERT ... ON CONFLICT DO UPDATE` — une seule contribution enregistrée par événement
+- **Crash worker PVE** : `syndicate_credits NULL` ne plante plus le serveur
+
+---
+
 ## [13.1.0] - 2026-03-13 - UI Features: Bonus Panel, Deploy Recall, Inventory Active States
 
 ### Marché Noir — Inventaire

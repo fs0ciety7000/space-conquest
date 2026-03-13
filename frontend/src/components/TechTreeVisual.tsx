@@ -358,14 +358,19 @@ const TechNode = ({ data }: { data: any }) => {
             {!isLocked && !isResearching && (
               <Button
                 onClick={data.onResearch}
-                disabled={!canAfford}
+                disabled={!canAfford || data.isSubmittingThis}
                 className={`w-full h-8 text-[10px] font-black uppercase tracking-wider ${
                   !canAfford
                     ? 'bg-[rgba(10,5,32,0.85)] text-slate-500 border border-cyan-500/10'
-                    : 'bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:bg-purple-500/30'
+                    : data.isSubmittingThis
+                        ? 'bg-purple-500/10 text-purple-600 border border-purple-500/10 cursor-not-allowed'
+                        : 'bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:bg-purple-500/30'
                 }`}
               >
-                {canAfford ? `Rechercher Niv. ${data.current_level + 1}` : 'Ressources Manquantes'}
+                {data.isSubmittingThis
+                  ? <span className="flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> En cours...</span>
+                  : canAfford ? `Rechercher Niv. ${data.current_level + 1}` : 'Ressources Manquantes'
+                }
               </Button>
             )}
 
@@ -399,6 +404,8 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
   const [techTree, setTechTree] = useState<TechInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  // UI-09: guard double-clic sur les boutons de recherche
+  const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
 
   // React Flow instance ref — used to call fitView after layout
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -443,10 +450,15 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
 
   // Stable research handler — wrapped in useCallback so it doesn't re-trigger
   // the layout effect unnecessarily.
+  // UI-09: isSubmitting guard prevents double-clicks from firing duplicate requests.
   const handleResearch = useCallback(async (tech_key: string) => {
+    // UI-09: ne pas lancer si déjà en cours pour cette tech
+    if (isSubmitting) return;
+
     const token = localStorage.getItem('token');
     const tech = techTree.find(t => t.tech_key === tech_key);
     const targetLevel = tech ? tech.current_level + 1 : undefined;
+    setIsSubmitting(tech_key);
     try {
       const res = await fetch(apiUrl(`/planets/${planet.id}/upgrade/${tech_key}`), {
         method: 'POST',
@@ -475,8 +487,10 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
     } catch (e) {
       toast.error('Erreur de connexion');
       console.error(e);
+    } finally {
+      setIsSubmitting(null);
     }
-  }, [planet.id, techTree, onUpdate]);
+  }, [isSubmitting, planet.id, techTree, onUpdate]);
 
   // Build nodes + edges and run dagre layout whenever the data changes.
   // This avoids the useMemo/useNodesState initialisation timing race.
@@ -516,6 +530,8 @@ export default function TechTreeVisual({ planet, onUpdate }: TechTreeVisualProps
           metal,
           crystal,
           deuterium,
+          // UI-09: transmettre l'état submitting au noeud pour désactiver le bouton
+          isSubmittingThis: isSubmitting === tech.tech_key,
           onResearch: () => handleResearch(tech.tech_key),
         },
       };

@@ -50,6 +50,7 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/transport", post(transport_handler))
         .route("/fleet/deploy", post(deploy_handler))
         .route("/fleet/missions/:mission_id/recall", delete(recall_deploy_handler))
+        .route("/fleet/estimate", get(fleet_estimate_handler))
         .route("/planets/:id/expedition-v2", post(expedition_v2_handler))
         // ZAC — Zone Aérienne de Combat
         .route("/planets/:id/combat-zone", get(get_combat_zone_handler))
@@ -2812,5 +2813,84 @@ async fn get_acs_handler(
         "resolved_at": group.resolved_at,
         "member_count": members.len(),
         "members": members,
+    }))).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /fleet/estimate?planet_id=X&target_galaxy=1&target_system=5&target_position=3&speed_percent=100
+// P2-1.4 — Returns flight_time_seconds and deuterium_cost for a hypothetical
+//           fleet dispatch so the frontend can display travel info before
+//           committing to the mission. Read-only, no state mutation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+struct FleetEstimateQuery {
+    planet_id: Uuid,
+    target_galaxy: i32,
+    target_system: i32,
+    target_position: i32,
+    /// Speed as a percentage of maximum (1–100). Defaults to 100.
+    speed_percent: Option<i32>,
+    /// Optional fleet composition as JSON-encoded map {"light_hunter": 5, ...}.
+    /// Used to compute deuterium cost from per-ship fuel_consumption.
+    fleet: Option<String>,
+}
+
+async fn fleet_estimate_handler(
+    State(state): State<AppState>,
+    Query(params): Query<FleetEstimateQuery>,
+) -> impl IntoResponse {
+    let planet = match Planet::find_by_id(params.planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
+    };
+
+    let dist = game_logic::calculate_distance(
+        (planet.galaxy, planet.system, planet.position),
+        (params.target_galaxy, params.target_system, params.target_position),
+    );
+
+    let config = state.config.read().unwrap().clone();
+    let base_speed = config.get_config("flight_speed_multiplier", 5.0);
+    let hyperspace_level = tech_tree::get_planet_tech_level(&state.db, params.planet_id, "hyperspace_tech")
+        .await
+        .unwrap_or(0);
+
+    // Apply speed_percent: 100% = full speed, lower values scale down the multiplier.
+    let speed_pct = params.speed_percent.unwrap_or(100).clamp(1, 100) as f64 / 100.0;
+    let effective_speed = base_speed * (1.0 + hyperspace_level as f64 * 0.15) * speed_pct;
+
+    let flight_time_seconds = game_logic::calculate_flight_time(dist, effective_speed);
+
+    // Deuterium cost: sum of (count × fuel_consumption) × distance / 1000
+    // Ship types are pre-loaded in a single query to avoid N+1.
+    let deuterium_cost = if let Some(fleet_json) = &params.fleet {
+        let fleet_map: HashMap<String, i32> = serde_json::from_str(fleet_json).unwrap_or_default();
+        if fleet_map.is_empty() {
+            0.0
+        } else {
+            let all_ships = ShipType::find().all(&state.db).await.unwrap_or_default();
+            let fuel_by_key: HashMap<String, i32> = all_ships
+                .iter()
+                .map(|s| (s.ship_key.clone(), s.fuel_consumption))
+                .collect();
+            let total_fuel_per_unit: f64 = fleet_map
+                .iter()
+                .map(|(key, &count)| {
+                    let fuel = fuel_by_key.get(key).copied().unwrap_or(0);
+                    count as f64 * fuel as f64
+                })
+                .sum();
+            (total_fuel_per_unit * dist / 1000.0).ceil().max(1.0)
+        }
+    } else {
+        0.0
+    };
+
+    (StatusCode::OK, Json(json!({
+        "flight_time_seconds": flight_time_seconds,
+        "deuterium_cost": deuterium_cost as i64,
+        "distance": dist as i64,
     }))).into_response()
 }

@@ -71,6 +71,8 @@ const Shipyard = React.memo(function Shipyard({ planet, onUpdate }: ShipyardProp
   const [shipTypes, setShipTypes] = useState<ShipTypeInfo[]>([]);
   const [buildQueue, setBuildQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // FE-05: guard double-clic sur les boutons de construction de vaisseaux
+  const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchShipTypes = async () => {
@@ -154,9 +156,13 @@ const Shipyard = React.memo(function Shipyard({ planet, onUpdate }: ShipyardProp
   };
 
   const buildShip = async (type: string) => {
+    // FE-05: guard double-clic
+    if (isSubmitting) return;
+
     const amount = qty[type] || 1;
     if (amount > remainingSpace) { toast.error("Capacité insuffisante !"); return; }
     const token = localStorage.getItem('token');
+    setIsSubmitting(type);
     try {
         const res = await fetch(apiUrl(`/planets/${planet.id}/build-ships/${type}/${amount}`), {
             method: 'POST',
@@ -187,7 +193,11 @@ const Shipyard = React.memo(function Shipyard({ planet, onUpdate }: ShipyardProp
             const err = await res.json();
             toast.error(err.error || "Erreur");
         }
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(null);
+    }
   };
 
   if (loading) {
@@ -405,19 +415,23 @@ const Shipyard = React.memo(function Shipyard({ planet, onUpdate }: ShipyardProp
                     />
                     <Button
                       onClick={() => buildShip(ship.ship_key)}
-                      disabled={locked || !canAfford || (qty[ship.ship_key] || 0) <= 0 || isFull}
+                      disabled={locked || !canAfford || (qty[ship.ship_key] || 0) <= 0 || isFull || isSubmitting === ship.ship_key}
                       className={`flex-1 h-10 font-black uppercase text-[10px] tracking-[0.2em] transition-all duration-200 rounded-lg relative overflow-hidden group/btn ${
                         isFull
                           ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed'
                           : !canAfford
                             ? 'bg-red-950/20 text-red-500 border border-red-900/40 cursor-not-allowed'
-                            : `bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/40 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(0,245,255,0.1)]`
+                            : isSubmitting === ship.ship_key
+                                ? 'bg-cyan-500/10 text-cyan-600 border border-cyan-500/20 cursor-not-allowed'
+                                : `bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/40 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(0,245,255,0.1)]`
                       }`}
                     >
                         {isFull ? (
                             <span className="relative z-10">Hangar Saturé</span>
                         ) : !canAfford ? (
                             <span className="relative z-10">Manque Ress.</span>
+                        ) : isSubmitting === ship.ship_key ? (
+                            <span className="flex items-center gap-2 relative z-10"><Hammer size={14} className="animate-spin" /> En cours...</span>
                         ) : (
                             <span className="flex items-center gap-2 relative z-10"><Hammer size={14} /> Produire</span>
                         )}

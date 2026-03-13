@@ -153,9 +153,42 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
   // Hook pour ressources en temps réel
   const realtimeResources = useRealtimeResources(planet, speedFactor, config);
 
+  // FE-14: conditionner le timer de tick sur la visibilité de la page.
+  // Quand l'onglet est masqué, aucune mise à jour d'affichage n'est nécessaire —
+  // suspendre l'interval évite des renders inutiles en arrière-plan.
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
-    return () => clearInterval(interval);
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const startTick = () => {
+      if (intervalId !== null) return; // Déjà actif
+      intervalId = setInterval(() => setTick(t => t + 1), 1000);
+    };
+
+    const stopTick = () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopTick();
+      } else {
+        startTick();
+      }
+    };
+
+    // Démarrer seulement si la page est visible au moment du mount
+    if (!document.hidden) {
+      startTick();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      stopTick();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   // Récupérer la configuration serveur

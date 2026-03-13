@@ -6,7 +6,7 @@ import {
   Hammer, Microscope, Timer, ArrowUpCircle,
   Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp, Lock, ShieldCheck, Shield, Package
 } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
@@ -37,6 +37,10 @@ interface BuildingTypeInfo {
   current_level: number;
   requirements: BuildingRequirement[];
   next_level_time_seconds?: number;
+  // Sprint 2 P2-1: server-computed next-level costs (UI-01)
+  next_level_cost_metal?: number;
+  next_level_cost_crystal?: number;
+  next_level_cost_deuterium?: number;
 }
 
 interface FacilitiesProps {
@@ -138,6 +142,8 @@ const cardVariant = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } }
 const Facilities = React.memo(function Facilities({ planet, onUpgrade }: FacilitiesProps) {
   const [buildingTypes, setBuildingTypes] = useState<BuildingTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  // FE-05: guard contre les double-clics
+  const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
   const [config, setConfig] = useState<any>({
     hangar_capacity_base: 500,
     hangar_capacity_per_level: 500,
@@ -227,7 +233,10 @@ const Facilities = React.memo(function Facilities({ planet, onUpgrade }: Facilit
     }
   };
 
-  const handleUpgrade = async (building_key: string) => {
+  const handleUpgrade = useCallback(async (building_key: string) => {
+    // FE-05: empêcher les double-clics
+    if (isSubmitting) return;
+
     const building = buildingTypes.find(b => b.building_key === building_key);
     if (!building) return;
 
@@ -239,6 +248,7 @@ const Facilities = React.memo(function Facilities({ planet, onUpgrade }: Facilit
 
     const token = localStorage.getItem('token');
     const targetLevel = building.current_level + 1;
+    setIsSubmitting(building_key);
     try {
       const res = await fetch(apiUrl(`/planets/${planet.id}/upgrade/${building_key}`), {
         method: 'POST',
@@ -268,16 +278,33 @@ const Facilities = React.memo(function Facilities({ planet, onUpgrade }: Facilit
     } catch (e) {
       console.error(e);
       toast.error("Erreur lors de l'amélioration");
+    } finally {
+      setIsSubmitting(null);
     }
-  };
+  }, [isSubmitting, buildingTypes, planet.id, onUpgrade]);
 
+  // UI-01: utiliser les coûts calculés par le serveur si disponibles.
+  // Fallback sur le calcul local uniquement si le backend est trop ancien pour
+  // renvoyer next_level_cost_* (évite de casser la compatibilité immédiate).
   const getCost = (building: BuildingTypeInfo) => {
+    if (
+      typeof building.next_level_cost_metal === 'number' &&
+      typeof building.next_level_cost_crystal === 'number' &&
+      typeof building.next_level_cost_deuterium === 'number'
+    ) {
+      return {
+        m: building.next_level_cost_metal,
+        c: building.next_level_cost_crystal,
+        d: building.next_level_cost_deuterium,
+      };
+    }
+    // Fallback: calcul local (ancien backend)
     const level = building.current_level;
     const multiplier = building.cost_multiplier;
     return {
-      m: Math.floor(building.base_cost_metal   * Math.pow(multiplier, level)),
+      m: Math.floor(building.base_cost_metal    * Math.pow(multiplier, level)),
       c: Math.floor(building.base_cost_crystal  * Math.pow(multiplier, level)),
-      d: Math.floor(building.base_cost_deuterium * Math.pow(multiplier, level))
+      d: Math.floor(building.base_cost_deuterium * Math.pow(multiplier, level)),
     };
   };
 
@@ -428,19 +455,23 @@ const Facilities = React.memo(function Facilities({ planet, onUpgrade }: Facilit
 
                 <Button
                   onClick={() => handleUpgrade(building.building_key)}
-                  disabled={locked || !canAfford}
+                  disabled={locked || !canAfford || isSubmitting === building.building_key}
                   className={`w-full font-black uppercase tracking-widest transition-all duration-200 ${
                       locked
                           ? 'bg-[rgba(10,5,32,0.85)] text-slate-600 border border-red-900/20 cursor-not-allowed'
                           : !canAfford
                               ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
-                              : `bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 hover:border-cyan-500/30 text-cyan-400 hover:shadow-[0_0_15px_rgba(0,245,255,0.1)]`
+                              : isSubmitting === building.building_key
+                                  ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-600 cursor-not-allowed'
+                                  : `bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 hover:border-cyan-500/30 text-cyan-400 hover:shadow-[0_0_15px_rgba(0,245,255,0.1)]`
                   }`}
                 >
                   {locked ? (
                       "Accès Refusé"
                   ) : !canAfford ? (
                       "Ressources Insuffisantes!"
+                  ) : isSubmitting === building.building_key ? (
+                      <span className="flex items-center gap-2"><ArrowUpCircle size={16} className="animate-spin" /> En cours...</span>
                   ) : (
                       <span className="flex items-center gap-2"><ArrowUpCircle size={16} /> Améliorer</span>
                   )}

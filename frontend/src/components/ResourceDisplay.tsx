@@ -18,7 +18,7 @@ import {
   Pickaxe, Gem, Droplets, Zap, Timer, ArrowUpCircle,
   Box, TrendingUp, Activity, ChevronRight, Lock, Unlock, Power, PowerOff, ChevronDown, Layers, AlertCircle, Clock, TrendingDown
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { apiUrl } from '@/config/api';
 import { toast } from "sonner";
 import { GameImage } from '@/components/ui/game-image';
@@ -77,6 +77,8 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
   const [extraSlots, setExtraSlots] = useState<ResourceSlot[]>([]);
   const [buildingTypes, setBuildingTypes] = useState<BuildingTypeInfo[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; slotNumber: number; cost: any } | null>(null);
+  // FE-06 / UI-09: guard contre les double-clics sur les boutons d'upgrade
+  const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
   const [config, setConfig] = useState<any>({
     production_metal_base: 30,
     production_crystal_base: 20,
@@ -219,10 +221,14 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
 
   if (!planet) return null;
 
-  const handleUpgrade = async (type: string) => {
+  const handleUpgrade = useCallback(async (type: string) => {
+    // FE-06 / UI-09: guard double-clic
+    if (isSubmitting) return;
+
     const token = localStorage.getItem('token');
     const building = buildingTypes.find(b => b.building_key === type);
     const targetLevel = building ? building.current_level + 1 : undefined;
+    setIsSubmitting(type);
     try {
       const res = await fetch(apiUrl(`/planets/${planet.id}/upgrade/${type}`), {
         method: 'POST',
@@ -248,8 +254,12 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
       } else {
         console.error("Erreur upgrade", await res.text().catch(() => ''));
       }
-    } catch (e) { console.error("Erreur upgrade", e); }
-  };
+    } catch (e) {
+      console.error("Erreur upgrade", e);
+    } finally {
+      setIsSubmitting(null);
+    }
+  }, [isSubmitting, buildingTypes, planet.id, onUpgrade]);
 
   // --- FORMULES AVEC PRISE EN COMPTE DES SLOTS ---
   const calculateEnergyProd = (level: number) => {
@@ -500,18 +510,24 @@ export default function ResourceDisplay({ planet, onUpgrade, speedFactor = 10 }:
               <div className="mt-auto">
                 <Button
                   onClick={() => handleUpgrade(build.id)}
-                  disabled={!canAfford}
+                  disabled={!canAfford || isSubmitting === build.id}
                   className={`w-full h-10 font-black uppercase text-[10px] tracking-[0.2em] transition-all rounded-lg relative overflow-hidden group/btn ${
                     !canAfford
                         ? 'bg-red-950/20 text-red-500 border border-red-900/30 cursor-not-allowed'
-                        : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow}`
+                        : isSubmitting === build.id
+                            ? 'bg-slate-900 text-slate-500 border border-slate-700 cursor-not-allowed'
+                            : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow}`
                   }`}
                 >
-                  {canAfford && (
+                  {canAfford && isSubmitting !== build.id && (
                       <div className={`absolute top-0 bottom-0 w-2 bg-white/20 blur-md -skew-x-12 -left-10 group-hover/btn:left-[120%] transition-all duration-700`}></div>
                   )}
                   {!canAfford ? (
                     <span className="relative z-10">Ressources Manquantes</span>
+                  ) : isSubmitting === build.id ? (
+                    <span className="flex items-center gap-2 relative z-10">
+                      <ArrowUpCircle size={14} className="animate-spin" /> En cours...
+                    </span>
                   ) : (
                     <span className="flex items-center gap-2 relative z-10">
                       <ArrowUpCircle size={14}/> Améliorer Niv. {build.lv + 1}

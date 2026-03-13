@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import {
   Layers, FlaskConical, Rocket, Shield, Pickaxe, Building2,
@@ -114,10 +114,12 @@ const LABELS: Record<string, string> = {
 
 function getLabel(key: string) { return LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
 
-function getTimeLeft(endTime: string | null | undefined) {
+// UI-05: getTimeLeft utilise l'offset serveur si disponible pour corriger le décalage d'horloge.
+// L'offset est stocké dans serverTimeOffsetMsRef (mis à jour à la connexion WS).
+function getTimeLeft(endTime: string | null | undefined, serverOffsetMs: number = 0) {
   if (!endTime) return 0;
   const end = new Date(endTime.endsWith('Z') ? endTime : endTime + 'Z').getTime();
-  return Math.max(0, Math.floor((end - Date.now()) / 1000));
+  return Math.max(0, Math.floor((end - (Date.now() + serverOffsetMs)) / 1000));
 }
 
 interface ActiveBuild {
@@ -210,6 +212,10 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
   const dragOverId = useRef<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
 
+  // UI-05: offset entre l'horloge serveur et Date.now() pour les calculs de timer.
+  // Mis à jour lors de la réception de l'événement WS 'connected' qui contient server_time.
+  const serverTimeOffsetMsRef = useRef<number>(0);
+
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(apiUrl(`/planets/${planetId}/build-queue`));
@@ -226,6 +232,19 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
     const id = setInterval(fetchStatus, 10_000);
     return () => clearInterval(id);
   }, [fetchStatus]);
+
+  // UI-05: écouter l'événement WS 'connected' pour synchroniser l'horloge avec le serveur.
+  // L'événement est dispatché par useWebSocket.ts avec server_time (timestamp ms UTC).
+  useEffect(() => {
+    const handleWsConnected = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && typeof detail.server_time === 'number') {
+        serverTimeOffsetMsRef.current = detail.server_time - Date.now();
+      }
+    };
+    window.addEventListener('ws-connected', handleWsConnected);
+    return () => window.removeEventListener('ws-connected', handleWsConnected);
+  }, []);
 
   // Tick every second to update countdowns
   useEffect(() => {
@@ -342,6 +361,10 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
 
     const orderedIds = reordered.map(i => i.id);
 
+    // UI-04: sauvegarder l'état AVANT la mise à jour optimiste pour pouvoir revenir
+    // en arrière si le serveur renvoie une erreur HTTP (pas seulement une erreur réseau).
+    const previousStatus = status;
+
     // Optimistic update
     const updatedItems = status.pending_items.map(item => {
       const pos = orderedIds.indexOf(item.id);
@@ -350,13 +373,20 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
     setStatus(s => s ? { ...s, pending_items: updatedItems } : s);
 
     try {
-      await fetch(apiUrl(`/planets/${planetId}/build-queue/reorder`), {
+      const res = await fetch(apiUrl(`/planets/${planetId}/build-queue/reorder`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category: activeCategory, ordered_ids: orderedIds }),
       });
+      // UI-04: revert sur erreur HTTP (pas seulement sur exception réseau)
+      if (!res.ok) {
+        toast.error('Impossible de réorganiser la file');
+        setStatus(previousStatus);
+      }
     } catch {
-      fetchStatus(); // revert on error
+      // UI-04: revert sur erreur réseau
+      toast.error('Erreur réseau lors de la réorganisation');
+      setStatus(previousStatus);
     }
   };
 
@@ -477,7 +507,7 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
                 <p className="text-slate-500 text-sm">Aucune construction active dans cette catégorie.</p>
               ) : (
                 activeBuilds.map((build) => {
-                  const tl = getTimeLeft(build.endTime);
+                  const tl = getTimeLeft(build.endTime, serverTimeOffsetMsRef.current);
                   return (
                     <div key={build.key} className="flex items-center gap-3 bg-[rgba(0,245,255,0.05)] rounded-lg p-2.5 border border-cyan-500/10">
                       <CheckCircle2 size={14} className={`${colors.text} shrink-0 animate-pulse`} />

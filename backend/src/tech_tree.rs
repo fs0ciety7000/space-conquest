@@ -152,6 +152,10 @@ pub struct TechInfo {
     pub base_cost_deuterium: i32,
     pub base_time_seconds: i32,
     pub cost_multiplier: f64,
+    // P2-1.3: exact costs for current_level + 1 — eliminates client-side formula duplication
+    pub next_level_cost_metal: i32,
+    pub next_level_cost_crystal: i32,
+    pub next_level_cost_deuterium: i32,
     pub current_level: i32,
     pub requirements: Vec<TechRequirement>,
     pub next_level_time_seconds: Option<i64>, // Calculated time for next level research
@@ -211,6 +215,10 @@ pub struct BuildingTypeInfo {
     pub current_level: i32,
     pub requirements: Vec<BuildingRequirementInfo>,
     pub next_level_time_seconds: Option<i64>, // Calculated time for next level upgrade
+    // P2-1.2: exact costs for current_level + 1, so the frontend never needs to recompute
+    pub next_level_cost_metal: i32,
+    pub next_level_cost_crystal: i32,
+    pub next_level_cost_deuterium: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -340,6 +348,11 @@ pub async fn get_tech_tree_for_planet(
             None
         };
 
+        // P2-1.3: compute next-level costs once server-side
+        let next_cost_metal = calculate_tech_cost(tech.base_cost_metal, tech.cost_multiplier, current_level);
+        let next_cost_crystal = calculate_tech_cost(tech.base_cost_crystal, tech.cost_multiplier, current_level);
+        let next_cost_deuterium = calculate_tech_cost(tech.base_cost_deuterium, tech.cost_multiplier, current_level);
+
         result.push(TechInfo {
             id: tech.id,
             tech_key: tech.tech_key,
@@ -351,6 +364,9 @@ pub async fn get_tech_tree_for_planet(
             base_time_seconds: tech.base_time_seconds,
             cost_multiplier: tech.cost_multiplier,
             current_level,
+            next_level_cost_metal: next_cost_metal,
+            next_level_cost_crystal: next_cost_crystal,
+            next_level_cost_deuterium: next_cost_deuterium,
             requirements,
             next_level_time_seconds: next_level_time,
         });
@@ -727,10 +743,14 @@ pub async fn get_building_types_for_planet(
         let current_level = *planet_building_levels.get(&building.building_key).unwrap_or(&0);
         let requirements = get_building_requirements(db, building.id, planet_id).await?;
 
+        // P2-1.2: calculate exact costs for the next level so the frontend
+        // never has to reimplement the exponential formula.
+        let next_cost_metal = calculate_building_cost(building.base_cost_metal, building.cost_multiplier, current_level);
+        let next_cost_crystal = calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, current_level);
+        let next_cost_deuterium = calculate_building_cost(building.base_cost_deuterium, building.cost_multiplier, current_level);
+
         // Calculate next level build time (with nanite_factory reduction)
         let next_level_time = if current_level >= 0 {
-            let _next_cost_metal = calculate_building_cost(building.base_cost_metal, building.cost_multiplier, current_level);
-            let _next_cost_crystal = calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, current_level);
             Some(game_logic::get_build_time_with_nanite(current_level + 1, shipyard_level, nanite_level, game_logic::building_category_factor(&building.building_key), config))
         } else {
             None
@@ -749,6 +769,9 @@ pub async fn get_building_types_for_planet(
             current_level,
             requirements,
             next_level_time_seconds: next_level_time,
+            next_level_cost_metal: next_cost_metal,
+            next_level_cost_crystal: next_cost_crystal,
+            next_level_cost_deuterium: next_cost_deuterium,
         });
     }
 

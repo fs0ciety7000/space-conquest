@@ -135,13 +135,57 @@ Sans cette variable, le fallback `"change-me-in-production"` est public dans le 
 
 ---
 
-## SPRINT 2 — À venir
+## SPRINT 2 — Formules & Combat ✅ TERMINÉ
 
 **Objectif:** Formules server-side, combat fonctionnel, frontend propre.
+**Agents:** @backend-architect · @game-designer · @frontend-developer · @reality-checker
+**Reality Checker:** READY (B) — 0 erreur backend, build frontend clean
 
-### P2-1 — Supprimer formules dupliquées client (BAL-001/002/003, UI-01/02, FE-01/02/03/04)
-### P2-2 — Combat tous vaisseaux actifs (BAL-010/011, CMB-005/008)
-### P2-3 — Équilibrage formules (BAL-006/007/008/009/016/017)
+### P2-1 Backend — Exposer données calculées ✅
+
+| Fix | Fichier | Bug |
+|-----|---------|-----|
+| `GET /planets/:id` → `metal/crystal/deuterium_per_second` + `storage_capacity_*` | `handlers/planets.rs` | BAL-001/FE-03 |
+| Building types → `next_level_cost_*` | `tech_tree.rs` | UI-01/FE-02 |
+| Tech tree → `next_level_cost_*` | `tech_tree.rs` | FE-02 |
+| Nouveau endpoint `GET /fleet/estimate` | `handlers/fleet.rs` | FE-01 |
+| N+1 rapid fire: 1 query au lieu de 2N | `combat.rs` | CMB-005 |
+
+### P2-1 Frontend — Supprimer formules dupliquées ✅
+
+| Fix | Fichier | Bug |
+|-----|---------|-----|
+| `Math.max(serverVal, displayed)` supprimé, base = serverVal | `useRealtimeResources.ts` | BAL-002 |
+| `metal_per_second` serveur comme base (fallback local uniquement) | `useRealtimeResources.ts` | BAL-001 |
+| `energy_tech_bonus: 0.10` → `0.01` | `useRealtimeResources.ts` | BAL-003 |
+| `safeConfig` mémoïsé (deps scalaires stables) | `useRealtimeResources.ts` | UI-06 |
+| Coûts depuis `building.next_level_cost_*` serveur | `Facilities.tsx` | UI-01 |
+| `calculateFlightTime()` local → appel `/fleet/estimate` (debounce 500ms) | `FleetDispatcher.tsx` | FE-01 |
+| Guard `isSubmitting` sur tous les boutons d'action | `Facilities.tsx`, `Shipyard.tsx`, `ResourceDisplay.tsx`, `TechTreeVisual.tsx` | FE-05/06/UI-09 |
+| `EmpireBar`: `React.memo` + `useMemo` groupement + storage cap serveur | `EmpireBar.tsx` | FE-11/16 |
+| `setInterval` 1s conditionnel sur visibilité onglet | `PlanetOverview.tsx` | FE-14 |
+| Revert optimiste sur `!res.ok` | `BuildQueueManager.tsx` | UI-04 |
+| Offset horloge serveur depuis event WS `connected` | `BuildQueueManager.tsx` | UI-05 |
+
+### P2-2 — Combat ✅ (BAL-011 et CMB-008 déjà corrects)
+
+| Fix | Fichier | Bug |
+|-----|---------|-----|
+| N+1 rapid fire → HashMap pré-chargé | `combat.rs` | CMB-005 |
+| loss_ratio clamp: déjà en place | `combat.rs` | CMB-008 ✓ |
+| Tous ship types déjà dans le combat | `combat.rs` | BAL-011 ✓ |
+| BAL-010 (hull-priority): différé (tests requis) | — | — |
+
+### P2-3 — Équilibrage formules ✅
+
+| Fix | Formule | Bug |
+|-----|---------|-----|
+| `BUILD_RATE = 2500.0` → `(cost/2500)*3600` (vraie conversion h→s) | `game_logic.rs` | BAL-016 |
+| `mine_production()` fonction unique, 4 duplications supprimées | `game_logic.rs` | BAL-019 |
+| Coûts slots: `3^(slot-1)` (slot 4 = ×27 au lieu de ×4) | `game_logic.rs` | BAL-006 |
+| Temps de vol: `35*sqrt(dist)+30` (courbe continue, zéro falaise) | `game_logic.rs` | BAL-008 |
+| Distance circulaire: `min(diff, N-diff)` (wrap-around 9 galaxies) | `game_logic.rs` | BAL-009 |
+| Consommation deutérium flottes: déjà implémentée | `handlers/fleet.rs` | BAL-017 ✓ |
 
 ---
 
@@ -161,5 +205,6 @@ Sans cette variable, le fallback `"change-me-in-production"` est public dans le 
 |--------|----------|------|--------|-----|-------|
 | ✅ Corrigé Sprint 0 | 22 | 0 | 0 | 0 | 22 |
 | ✅ Corrigé Sprint 1 | 15 | 0 | 0 | 0 | 15 |
-| 🔄 Restant | 5 | 62 | 46 | 12 | 125 |
+| ✅ Corrigé Sprint 2 | 2 | 22 | 8 | 0 | 32 |
+| 🔄 Restant | 3 | 40 | 38 | 12 | 93 |
 | **Initial** | **42** | **62** | **46** | **12** | **162** |

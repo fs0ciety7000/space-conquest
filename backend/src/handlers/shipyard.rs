@@ -127,7 +127,8 @@ pub async fn get_ship_types_handler(
                 .iter()
                 .map(|s| {
                     // Constantes alignées avec game_logic::get_ship_production_time
-                    const SHIP_BUILD_RATE: f64 = 3600.0;
+                    // BAL-016 : 2500 corrige l'erreur dimensionnelle (ancienne valeur 3600 = cost secondes)
+                    const SHIP_BUILD_RATE: f64 = 2500.0;
                     const SHIP_SHIPYARD_BONUS: f64 = 0.10;
                     let cost_total = s.cost_metal as f64 + s.cost_crystal as f64;
                     let effective_rate = SHIP_BUILD_RATE * (1.0 + shipyard_level as f64 * SHIP_SHIPYARD_BONUS);
@@ -763,7 +764,8 @@ pub async fn build_ships_handler(
             .await
             .unwrap_or(0);
     // Constantes alignées avec game_logic::get_ship_production_time
-    const SHIP_BUILD_RATE_QUEUE: f64 = 3600.0;
+    // BAL-016 : 2500 corrige l'erreur dimensionnelle (ancienne valeur 3600 = cost secondes)
+    const SHIP_BUILD_RATE_QUEUE: f64 = 2500.0;
     const SHIP_SHIPYARD_BONUS_QUEUE: f64 = 0.10;
     let cost_total = ship.cost_metal as f64 + ship.cost_crystal as f64;
     let effective_rate = SHIP_BUILD_RATE_QUEUE * (1.0 + shipyard_level as f64 * SHIP_SHIPYARD_BONUS_QUEUE);
