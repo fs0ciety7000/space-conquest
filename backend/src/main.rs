@@ -596,13 +596,17 @@ async fn main() {
     });
     println!("🕒 Tâches périodiques de nettoyage démarrées (intervalle: 1h)");
 
-    // Start automatic tick processing loop
-    tokio::spawn(async move {
+    // Start automatic tick processing loop with panic-restart supervision
+    async fn run_tick_worker(
+        db: DatabaseConnection,
+        config: std::sync::Arc<std::sync::RwLock<backend::ServerConfigCache>>,
+        ws: websocket::WsState,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(2));
         loop {
             interval.tick().await;
-            let config = config_tick.read().unwrap().clone();
-            match tick_system::process_tick(&db_tick, &config).await {
+            let cfg = config.read().unwrap_or_else(|e: std::sync::PoisonError<_>| e.into_inner()).clone();
+            match tick_system::process_tick(&db, &cfg).await {
                 Ok(stats) => {
                     if stats.research_completed > 0 || stats.ships_completed > 0 ||
                        stats.defenses_completed > 0 || stats.buildings_completed > 0 {
@@ -610,20 +614,40 @@ async fn main() {
                             stats.research_completed, stats.ships_completed,
                             stats.defenses_completed, stats.buildings_completed);
                     }
-                    // Émettre les WS events pour les constructions/recherches terminées
                     for item in &stats.completed_constructions {
                         match item.category {
                             "building" => websocket::notify_construction_complete(
-                                &ws_tick, item.planet_id, &item.item_key, item.level_or_qty
+                                &ws, item.planet_id, &item.item_key, item.level_or_qty
                             ),
                             "research" => websocket::notify_research_complete(
-                                &ws_tick, item.planet_id, &item.item_key, item.level_or_qty
+                                &ws, item.planet_id, &item.item_key, item.level_or_qty
                             ),
                             _ => {}
                         }
                     }
                 }
-                Err(e) => eprintln!("❌ Tick error: {:?}", e),
+                Err(e) => tracing::error!("Tick error: {:?}", e),
+            }
+        }
+    }
+
+    tokio::spawn(async move {
+        loop {
+            let result = tokio::spawn(run_tick_worker(
+                db_tick.clone(),
+                config_tick.clone(),
+                ws_tick.clone(),
+            )).await;
+            match result {
+                Ok(Ok(())) => break, // clean stop
+                Ok(Err(e)) => {
+                    tracing::error!("Tick worker error: {e}, restarting in 5s");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                }
+                Err(e) => {
+                    tracing::error!("Tick worker panicked: {e}, restarting in 5s");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                }
             }
         }
     });
@@ -2136,12 +2160,11 @@ async fn expedition_handler(
     // Crédits syndicat pour l'outcome "découverte"
     if syndicate_credits_earned > 0.0 {
         use sea_orm::{ConnectionTrait, Statement, DbBackend};
-        let _ = state.db.execute(Statement::from_string(
+        use sea_orm::Value;
+        let _ = state.db.execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            format!(
-                "UPDATE \"user\" SET syndicate_credits = syndicate_credits + {} WHERE id = '{}'",
-                syndicate_credits_earned, p.owner_id
-            ),
+            "UPDATE \"user\" SET syndicate_credits = syndicate_credits + $1 WHERE id = $2",
+            [Value::Double(Some(syndicate_credits_earned)), p.owner_id.into()],
         )).await;
     }
 
@@ -3584,9 +3607,11 @@ async fn get_market_listings_handler(
 // POST /market/listings - Create a new market listing
 async fn create_market_listing_handler(
     State(state): State<AppState>,
+    auth: backend::auth::AuthUser,
     Json(payload): Json<CreateListingPayload>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let db = &state.db;
+    let caller_id = auth.user_id;
 
     // Validate resource types
     if market::ResourceType::from_str(&payload.resource_type).is_none() {
@@ -3606,8 +3631,8 @@ async fn create_market_listing_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    // Verify ownership
-    if planet.owner_id != payload.user_id {
+    // Verify ownership via JWT (SEC-04)
+    if planet.owner_id != caller_id {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -3640,7 +3665,7 @@ async fn create_market_listing_handler(
     let listing = market_listing::ActiveModel {
         id: Set(Uuid::new_v4()),
         seller_planet_id: Set(payload.planet_id),
-        seller_user_id: Set(payload.user_id),
+        seller_user_id: Set(caller_id),
         resource_type: Set(payload.resource_type.clone()),
         quantity: Set(payload.quantity),
         price_per_unit: Set(payload.price_per_unit),
@@ -3754,10 +3779,12 @@ struct BuyFromListingByPathPayload {
 async fn buy_from_listing_by_path_handler(
     Path(listing_id): Path<Uuid>,
     State(state): State<AppState>,
+    auth: backend::auth::AuthUser,
     Json(payload): Json<BuyFromListingByPathPayload>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     buy_from_listing_handler(
         State(state),
+        auth,
         Json(BuyFromListingPayload {
             listing_id,
             buyer_planet_id: payload.buyer_planet_id,
@@ -3770,9 +3797,11 @@ async fn buy_from_listing_by_path_handler(
 // POST /market/buy - Buy from player listing
 async fn buy_from_listing_handler(
     State(state): State<AppState>,
+    auth: backend::auth::AuthUser,
     Json(payload): Json<BuyFromListingPayload>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let db = &state.db;
+    let buyer_id = auth.user_id;
 
     // Get listing
     let listing = MarketListing::find_by_id(payload.listing_id)
@@ -3799,13 +3828,13 @@ async fn buy_from_listing_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    // Verify buyer ownership
-    if buyer_planet.owner_id != payload.buyer_user_id {
+    // Verify buyer ownership via JWT (SEC-04)
+    if buyer_planet.owner_id != buyer_id {
         return Err(StatusCode::FORBIDDEN);
     }
 
     // Cannot buy from yourself
-    if listing.seller_user_id == payload.buyer_user_id {
+    if listing.seller_user_id == buyer_id {
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -3890,7 +3919,7 @@ async fn buy_from_listing_handler(
         seller_planet_id: Set(listing.seller_planet_id),
         seller_user_id: Set(listing.seller_user_id),
         buyer_planet_id: Set(payload.buyer_planet_id),
-        buyer_user_id: Set(payload.buyer_user_id),
+        buyer_user_id: Set(buyer_id),
         resource_sold: Set(listing.resource_type.clone()),
         resource_paid: Set(listing.target_resource.clone()),
         quantity_sold: Set(payload.quantity),
@@ -3925,7 +3954,7 @@ async fn buy_from_listing_handler(
 
     // 7. Notify seller via WebSocket
     if let Some(ref ws) = state.ws {
-        let buyer_name = User::find_by_id(payload.buyer_user_id)
+        let buyer_name = User::find_by_id(buyer_id)
             .one(db).await.ok().flatten()
             .map(|u| u.username)
             .unwrap_or_else(|| "Joueur inconnu".to_string());
@@ -3955,9 +3984,11 @@ async fn buy_from_listing_handler(
 // POST /market/npc/buy - Exchange with NPC
 async fn buy_from_npc_handler(
     State(state): State<AppState>,
+    auth: backend::auth::AuthUser,
     Json(payload): Json<BuyFromNpcPayload>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let db = &state.db;
+    let caller_id = auth.user_id;
 
     // Validate resource types
     let sell_resource = market::ResourceType::from_str(&payload.sell_resource)
@@ -3976,8 +4007,8 @@ async fn buy_from_npc_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    // Verify ownership
-    if planet.owner_id != payload.user_id {
+    // Verify ownership via JWT (SEC-04)
+    if planet.owner_id != caller_id {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -4046,7 +4077,7 @@ async fn buy_from_npc_handler(
     let npc_transaction = market_transaction::ActiveModel {
         id: Set(Uuid::new_v4()),
         seller_planet_id: Set(payload.planet_id),
-        seller_user_id: Set(payload.user_id),
+        seller_user_id: Set(caller_id),
         buyer_planet_id: Set(Uuid::nil()),
         buyer_user_id: Set(Uuid::nil()),
         resource_sold: Set(payload.sell_resource.clone()),
@@ -5108,9 +5139,20 @@ async fn build_defenses_handler(
 ///
 /// This endpoint should be called periodically (e.g., via cron job)
 /// to process time-based game mechanics like research completion.
+/// Protected by the TICK_SECRET header to prevent unauthorized invocations (SEC-05).
 async fn tick_handler(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
 ) -> impl IntoResponse {
+    // Verify the shared tick secret
+    let expected = std::env::var("TICK_SECRET").unwrap_or_else(|_| "change-me-in-production".to_string());
+    let provided = headers
+        .get("X-Tick-Secret")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if provided != expected.as_str() {
+        return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Unauthorized"}))).into_response();
+    }
     let config = state.config.read().unwrap().clone();
     match tick_system::process_tick(&state.db, &config).await {
         Ok(stats) => {
@@ -5625,9 +5667,12 @@ async fn get_bounties_handler(
 
 async fn create_bounty_handler(
     State(state): State<AppState>,
+    auth: backend::auth::AuthUser,
     Json(payload): Json<CreateBountyPayload>,
 ) -> impl IntoResponse {
-    if payload.poster_id == payload.target_id {
+    // Use JWT-authenticated caller as poster (SEC-09)
+    let poster_id = auth.user_id;
+    if poster_id == payload.target_id {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas vous cibler vous-même"}))).into_response();
     }
 
@@ -5645,7 +5690,7 @@ async fn create_bounty_handler(
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))).into_response(),
     };
 
-    if planet.owner_id != payload.poster_id {
+    if planet.owner_id != poster_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Non autorisé"}))).into_response();
     }
 
@@ -5664,7 +5709,7 @@ async fn create_bounty_handler(
     let now = Utc::now().naive_utc();
     let new_bounty = bounty::ActiveModel {
         id: Set(Uuid::new_v4()),
-        poster_id: Set(payload.poster_id),
+        poster_id: Set(poster_id),
         target_id: Set(payload.target_id),
         mercenary_id: Set(None),
         reward_metal: Set(reward_metal),
@@ -5691,14 +5736,15 @@ struct BountyActionPayload {
 async fn cancel_bounty_handler(
     Path(bounty_id): Path<Uuid>,
     State(state): State<AppState>,
-    Json(payload): Json<BountyActionPayload>,
+    auth: backend::auth::AuthUser,
 ) -> impl IntoResponse {
+    let caller_id = auth.user_id;
     let b = match Bounty::find_by_id(bounty_id).one(&state.db).await.unwrap_or(None) {
         Some(b) => b,
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Prime introuvable"}))).into_response(),
     };
 
-    if b.poster_id != payload.user_id {
+    if b.poster_id != caller_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Seul le donneur d'ordre peut annuler"}))).into_response();
     }
     if b.status != "open" {
@@ -5729,8 +5775,9 @@ async fn cancel_bounty_handler(
 async fn accept_bounty_handler(
     Path(bounty_id): Path<Uuid>,
     State(state): State<AppState>,
-    Json(payload): Json<BountyActionPayload>,
+    auth: backend::auth::AuthUser,
 ) -> impl IntoResponse {
+    let caller_id = auth.user_id;
     let b = match Bounty::find_by_id(bounty_id).one(&state.db).await.unwrap_or(None) {
         Some(b) => b,
         None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Prime introuvable"}))).into_response(),
@@ -5739,12 +5786,12 @@ async fn accept_bounty_handler(
     if b.status != "open" {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Cette prime n'est plus disponible"}))).into_response();
     }
-    if b.target_id == payload.user_id || b.poster_id == payload.user_id {
+    if b.target_id == caller_id || b.poster_id == caller_id {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas accepter cette prime"}))).into_response();
     }
 
     let mut active: bounty::ActiveModel = b.into();
-    active.mercenary_id = Set(Some(payload.user_id));
+    active.mercenary_id = Set(Some(caller_id));
     active.status = Set("accepted".to_string());
     match active.update(&state.db).await {
         Ok(updated) => Json(json!(updated)).into_response(),

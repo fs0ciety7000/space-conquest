@@ -59,27 +59,21 @@ impl BuildingCostCache {
 /// using the data-driven cache loaded from the DB.
 ///
 /// Formula: `base * cost_factor^(level - 1)` — identical to the old hardcoded formula.
-/// Falls back to zero cost if the key is not found (graceful degradation).
+/// Returns `None` if the building key is not found in the cache (BAL-005: prevents
+/// free upgrades when an unknown key silently returned zero cost).
 pub fn get_upgrade_cost_from_cache(
     cache: &BuildingCostCache,
     building_key: &str,
     level: i32,
-) -> Cost {
-    match cache.costs.get(building_key) {
-        Some(entry) => {
-            let factor = entry.cost_factor.powi(level - 1);
-            Cost {
-                metal: entry.base_metal * factor,
-                crystal: entry.base_crystal * factor,
-                deuterium: entry.base_deuterium * factor,
-            }
+) -> Option<Cost> {
+    cache.costs.get(building_key).map(|entry| {
+        let factor = entry.cost_factor.powi(level - 1);
+        Cost {
+            metal: entry.base_metal * factor,
+            crystal: entry.base_crystal * factor,
+            deuterium: entry.base_deuterium * factor,
         }
-        None => {
-            // Key not found — fall back to the legacy static function so no
-            // existing functionality breaks during the migration period.
-            Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 }
-        }
-    }
+    })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -232,7 +226,7 @@ pub fn calculate_resources(
     config: &ServerConfigCache
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
-    let duration = now.signed_duration_since(last_update).num_seconds() as f64;
+    let duration = now.signed_duration_since(last_update).num_seconds().max(0) as f64;
 
     // Bonus technologie énergie (+1% par niveau)
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
@@ -407,7 +401,7 @@ pub fn calculate_resources_with_energy(
     config: &ServerConfigCache
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
-    let duration = now.signed_duration_since(last_update).num_seconds() as f64;
+    let duration = now.signed_duration_since(last_update).num_seconds().max(0) as f64;
 
     // Bonus technologie énergie (+1% par niveau)
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);
@@ -1373,7 +1367,7 @@ pub fn calculate_resources_with_slots(
     config: &ServerConfigCache,
 ) -> f64 {
     let now = chrono::Utc::now().naive_utc();
-    let duration = now.signed_duration_since(last_update).num_seconds() as f64;
+    let duration = now.signed_duration_since(last_update).num_seconds().max(0) as f64;
 
     // Bonus technologie énergie (+1% par niveau)
     let tech_bonus_factor = config.get_config("energy_tech_bonus", 0.01);

@@ -11,6 +11,7 @@ use uuid::Uuid;
 use axum::http::StatusCode;
 
 use crate::{AppState, ServerConfigCache, game_logic};
+use crate::auth::AuthUser;
 use crate::entities::{
     prelude::*,
     planet, planet_ship, planet_defense, planet_technology,
@@ -336,8 +337,19 @@ pub async fn acquire_planet_build_lock_pub(
 pub async fn get_queue_status_handler(
     Path(planet_id): Path<Uuid>,
     State(state): State<AppState>,
+    auth: AuthUser,
 ) -> impl IntoResponse {
-    let config = state.config.read().unwrap().clone();
+    // Verify ownership before returning any queue data
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB error"}))).into_response(),
+    };
+    if planet.owner_id != auth.user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your planet"}))).into_response();
+    }
+
+    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
 
     let rows = match state.db.query_all(Statement::from_sql_and_values(
         DbBackend::Postgres,
@@ -408,48 +420,82 @@ pub struct AddToQueueBody {
 pub async fn add_to_queue_handler(
     Path(planet_id): Path<Uuid>,
     State(state): State<AppState>,
+    auth: AuthUser,
     Json(body): Json<AddToQueueBody>,
 ) -> impl IntoResponse {
-    let config = state.config.read().unwrap().clone();
+    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
     let quantity = body.quantity.unwrap_or(1).max(1);
 
     if !ALL_CATEGORIES.contains(&body.category.as_str()) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid category"}))).into_response();
     }
 
-    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
-        Ok(Some(p)) => p,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB error"}))).into_response(),
-    };
+    // BQ-001/BQ-003: Acquire per-planet lock BEFORE fetching planet to prevent race
+    // conditions (double-click exploit). All resource checks and deductions happen
+    // inside this critical section under the lock + a DB transaction.
+    let _build_guard = acquire_planet_build_lock(&state, planet_id).await;
 
-    // Compute cost + validate requirements
+    // Compute cost + validate requirements (outside txn — read-only checks)
     let (cost_metal, cost_crystal, cost_deuterium, target_level) =
         match compute_cost_and_validate(&state.db, planet_id, &body.category, &body.item_key, quantity).await {
             Ok(v) => v,
             Err(e) => return e,
         };
 
-    // Check resources
+    // Begin transaction: fetch planet FOR UPDATE (row-level lock), check resources, deduct atomically
+    let txn = match state.db.begin().await {
+        Ok(t) => t,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB error"}))).into_response(),
+    };
+
+    let planet = match Planet::find_by_id(planet_id)
+        .lock_exclusive()
+        .one(&txn)
+        .await
+    {
+        Ok(Some(p)) => p,
+        Ok(None) => {
+            let _ = txn.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response();
+        }
+        Err(_) => {
+            let _ = txn.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB error"}))).into_response();
+        }
+    };
+
+    // Verify ownership inside the transaction (row is already locked)
+    if planet.owner_id != auth.user_id {
+        let _ = txn.rollback().await;
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your planet"}))).into_response();
+    }
+
+    // Check resources inside transaction (using the freshly locked row)
     if planet.metal_amount < cost_metal as f64
         || planet.crystal_amount < cost_crystal as f64
         || planet.deuterium_amount < cost_deuterium as f64
     {
+        let _ = txn.rollback().await;
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Insufficient resources"}))).into_response();
     }
 
-    // Deduct resources
+    // Deduct resources inside transaction
     let planet_owner_id = planet.owner_id;
     let planet_name = planet.name.clone();
     let mut active_planet: planet::ActiveModel = planet.into();
     active_planet.metal_amount = Set(active_planet.metal_amount.unwrap() - cost_metal as f64);
     active_planet.crystal_amount = Set(active_planet.crystal_amount.unwrap() - cost_crystal as f64);
     active_planet.deuterium_amount = Set(active_planet.deuterium_amount.unwrap() - cost_deuterium as f64);
-    if let Err(_) = active_planet.update(&state.db).await {
+    if let Err(_) = active_planet.update(&txn).await {
+        let _ = txn.rollback().await;
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct resources"}))).into_response();
     }
 
-    // Log economy event
+    if let Err(_) = txn.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction commit failed"}))).into_response();
+    }
+
+    // Log economy event (fire-and-forget, outside transaction)
     {
         let category_label = match body.category.as_str() {
             "research" => "Technologie",
@@ -483,9 +529,6 @@ pub async fn add_to_queue_handler(
             ).await;
         });
     }
-
-    // Acquire per-planet lock to serialize concurrent slot checks (prevents race conditions)
-    let _build_guard = acquire_planet_build_lock(&state, planet_id).await;
 
     // Check if a slot is immediately free
     let slots_total = get_category_slots(&state.db, &config, planet_id, &body.category).await;
@@ -523,19 +566,26 @@ pub async fn add_to_queue_handler(
 
     let item_id = Uuid::new_v4();
     let now = Utc::now().naive_utc();
+    let queue_pos = max_pos + 1;
 
-    let target_sql = match target_level {
-        Some(l) => l.to_string(),
-        None => "NULL".to_string(),
-    };
-
-    if let Err(e) = state.db.execute_unprepared(&format!(
+    // Use parameterized query to prevent SQL injection (BQ-008)
+    let insert_result = state.db.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
         "INSERT INTO build_queue_item (id, planet_id, category, item_key, quantity, target_level, queue_position, created_at) \
-         VALUES ('{}', '{}', '{}', '{}', {}, {}, {}, '{}')",
-        item_id, planet_id, body.category, body.item_key,
-        quantity, target_sql, max_pos + 1,
-        now.format("%Y-%m-%d %H:%M:%S")
-    )).await {
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        [
+            item_id.into(),
+            planet_id.into(),
+            body.category.as_str().into(),
+            body.item_key.as_str().into(),
+            quantity.into(),
+            target_level.into(),
+            queue_pos.into(),
+            now.into(),
+        ],
+    )).await;
+
+    if let Err(e) = insert_result {
         eprintln!("Failed to insert queue item: {:?}", e);
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to queue item"}))).into_response();
     }
@@ -554,11 +604,26 @@ pub async fn remove_from_queue_handler(
     Path(item_id): Path<Uuid>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
     State(state): State<AppState>,
+    auth: AuthUser,
 ) -> impl IntoResponse {
     let planet_id = match params.get("planet_id").and_then(|s| Uuid::parse_str(s).ok()) {
         Some(id) => id,
         None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "planet_id required"}))).into_response(),
     };
+
+    // Verify planet ownership before touching the queue
+    match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) if p.owner_id != auth.user_id => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your planet"}))).into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response();
+        }
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB error"}))).into_response();
+        }
+        Ok(Some(_)) => {} // ownership confirmed, continue
+    }
 
     // Fetch the queue item
     let rows = match state.db.query_all(Statement::from_sql_and_values(
@@ -587,19 +652,35 @@ pub async fn remove_from_queue_handler(
             Err(_) => (0, 0, 0, None),
         };
 
-    // Delete queue item
-    if let Err(_) = state.db.execute_unprepared(&format!(
-        "DELETE FROM build_queue_item WHERE id = '{}'", item_id
+    // BQ-004: DELETE + refund in atomic transaction to prevent partial state
+    let txn = match state.db.begin().await {
+        Ok(t) => t,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB error"}))).into_response(),
+    };
+
+    if let Err(_) = txn.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "DELETE FROM build_queue_item WHERE id = $1",
+        [item_id.into()],
     )).await {
+        let _ = txn.rollback().await;
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to remove item"}))).into_response();
     }
 
-    // Refund resources to planet
     if cost_metal > 0 || cost_crystal > 0 || cost_deuterium > 0 {
-        let _ = state.db.execute_unprepared(&format!(
-            "UPDATE planet SET metal_amount = metal_amount + {}, crystal_amount = crystal_amount + {}, deuterium_amount = deuterium_amount + {} WHERE id = '{}'",
-            cost_metal, cost_crystal, cost_deuterium, planet_id
-        )).await;
+        if let Err(_) = txn.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE planet SET metal_amount = metal_amount + $1, crystal_amount = crystal_amount + $2, \
+             deuterium_amount = deuterium_amount + $3 WHERE id = $4",
+            [cost_metal.into(), cost_crystal.into(), cost_deuterium.into(), planet_id.into()],
+        )).await {
+            let _ = txn.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to refund resources"}))).into_response();
+        }
+    }
+
+    if let Err(_) = txn.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction commit failed"}))).into_response();
     }
 
     Json(json!({ "success": true, "refunded": { "metal": cost_metal, "crystal": cost_crystal, "deuterium": cost_deuterium } })).into_response()
@@ -615,13 +696,40 @@ pub struct ReorderBody {
 pub async fn reorder_queue_handler(
     Path(planet_id): Path<Uuid>,
     State(state): State<AppState>,
+    auth: AuthUser,
     Json(body): Json<ReorderBody>,
 ) -> impl IntoResponse {
+    // Verify ownership before allowing any reorder
+    match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) if p.owner_id != auth.user_id => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your planet"}))).into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response();
+        }
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB error"}))).into_response();
+        }
+        Ok(Some(_)) => {} // ownership confirmed, continue
+    }
+
+    if !ALL_CATEGORIES.contains(&body.category.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid category"}))).into_response();
+    }
+
     for (pos, item_id) in body.ordered_ids.iter().enumerate() {
-        let _ = state.db.execute_unprepared(&format!(
-            "UPDATE build_queue_item SET queue_position = {} WHERE id = '{}' AND planet_id = '{}' AND category = '{}'",
-            pos, item_id, planet_id, body.category
-        )).await;
+        use sea_orm::sea_query::Value;
+        let stmt = Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE build_queue_item SET queue_position = $1 WHERE id = $2 AND planet_id = $3 AND category = $4",
+            vec![
+                Value::Int(Some(pos as i32)),
+                Value::Uuid(Some(Box::new(*item_id))),
+                Value::Uuid(Some(Box::new(planet_id))),
+                Value::String(Some(Box::new(body.category.clone()))),
+            ],
+        );
+        let _ = state.db.execute(stmt).await;
     }
     Json(json!({ "success": true })).into_response()
 }

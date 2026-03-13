@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -275,30 +275,39 @@ pub async fn recruit_officer_handler(
         ));
     }
 
-    // Déduire les ressources
-    let mut planet_active: crate::entities::planet::ActiveModel = planet.clone().into();
-    planet_active.metal_amount = Set(planet.metal_amount - actual_cost_metal);
-    planet_active.crystal_amount = Set(planet.crystal_amount - actual_cost_crystal);
-    planet_active.deuterium_amount = Set(planet.deuterium_amount - actual_cost_deuterium);
-    planet_active.last_update = Set(chrono::Utc::now().naive_utc());
-    planet_active.update(&state.db).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // Déduire les ressources + créer l'officier atomiquement
+    let new_metal = planet.metal_amount - actual_cost_metal;
+    let new_crystal = planet.crystal_amount - actual_cost_crystal;
+    let new_deuterium = planet.deuterium_amount - actual_cost_deuterium;
+    let planet_id_off = planet.id;
+    let now_off = chrono::Utc::now().naive_utc();
+    let new_officer_id = Uuid::new_v4();
 
-    // Créer l'officier
-    let new_officer = crate::entities::user_officer::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        user_id: Set(user_uuid),
-        officer_template_id: Set(template_uuid),
-        level: Set(1),
-        experience: Set(0),
-        is_active: Set(true),
-        recruited_at: Set(chrono::Utc::now().naive_utc()),
-    };
+    let officer = state.db.transaction::<_, crate::entities::user_officer::Model, sea_orm::DbErr>(|txn| {
+        Box::pin(async move {
+            let planet_active = crate::entities::planet::ActiveModel {
+                id: Set(planet_id_off),
+                metal_amount: Set(new_metal),
+                crystal_amount: Set(new_crystal),
+                deuterium_amount: Set(new_deuterium),
+                last_update: Set(now_off),
+                ..Default::default()
+            };
+            planet_active.update(txn).await?;
 
-    let officer = new_officer
-        .insert(&state.db)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            let new_officer = crate::entities::user_officer::ActiveModel {
+                id: Set(new_officer_id),
+                user_id: Set(user_uuid),
+                officer_template_id: Set(template_uuid),
+                level: Set(1),
+                experience: Set(0),
+                is_active: Set(true),
+                recruited_at: Set(now_off),
+            };
+            let officer = new_officer.insert(txn).await?;
+            Ok(officer)
+        })
+    }).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let current_bonus = calculate_bonus(&template, officer.level);
 

@@ -783,32 +783,40 @@ pub async fn build_ships_handler(
                     now + Duration::seconds(remaining_seconds + additional_build_time);
                 let new_quantity = ps.building_count.unwrap() + quantity;
 
-                // Deduct resources
-                let mut active_planet: planet::ActiveModel = planet.clone().into();
-                active_planet.metal_amount =
-                    Set(planet.metal_amount - total_cost_metal as f64);
-                active_planet.crystal_amount =
-                    Set(planet.crystal_amount - total_cost_crystal as f64);
-                active_planet.deuterium_amount =
-                    Set(planet.deuterium_amount - total_cost_deuterium as f64);
+                // Deduct resources + update build queue atomically (BQ-002 + BQ-012)
+                let new_metal = planet.metal_amount - total_cost_metal as f64;
+                let new_crystal = planet.crystal_amount - total_cost_crystal as f64;
+                let new_deuterium = planet.deuterium_amount - total_cost_deuterium as f64;
+                let ps_id = ps.planet_id;
+                let ship_type_id_txn = ps.ship_type_id;
+                let now_lazy = Utc::now().naive_utc();
 
-                if let Err(_) = active_planet.update(&state.db).await {
+                if let Err(_) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+                    Box::pin(async move {
+                        let active_planet: planet::ActiveModel = planet::ActiveModel {
+                            id: Set(planet_id),
+                            metal_amount: Set(new_metal),
+                            crystal_amount: Set(new_crystal),
+                            deuterium_amount: Set(new_deuterium),
+                            last_update: Set(now_lazy),
+                            ..Default::default()
+                        };
+                        active_planet.update(txn).await?;
+
+                        let active_ps = planet_ship::ActiveModel {
+                            planet_id: Set(ps_id),
+                            ship_type_id: Set(ship_type_id_txn),
+                            building_count: Set(Some(new_quantity)),
+                            build_end_time: Set(Some(new_end_time)),
+                            ..Default::default()
+                        };
+                        active_ps.update(txn).await?;
+                        Ok(())
+                    })
+                }).await {
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        axum::Json(json!({"error": "Failed to deduct resources"})),
-                    )
-                        .into_response();
-                }
-
-                // Update the build queue
-                let mut active_ps: planet_ship::ActiveModel = ps.clone().into();
-                active_ps.building_count = Set(Some(new_quantity));
-                active_ps.build_end_time = Set(Some(new_end_time));
-
-                if let Err(_) = active_ps.update(&state.db).await {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        axum::Json(json!({"error": "Failed to update building queue"})),
+                        axum::Json(json!({"error": "Failed to update build queue"})),
                     )
                         .into_response();
                 }
@@ -826,50 +834,56 @@ pub async fn build_ships_handler(
         }
     }
 
-    // Deduct resources for new build
-    let mut active_planet: planet::ActiveModel = planet.clone().into();
-    active_planet.metal_amount = Set(planet.metal_amount - total_cost_metal as f64);
-    active_planet.crystal_amount = Set(planet.crystal_amount - total_cost_crystal as f64);
-    active_planet.deuterium_amount = Set(planet.deuterium_amount - total_cost_deuterium as f64);
+    // Deduct resources + insert/update build queue atomically (BQ-002 + BQ-012)
+    let now_build = Utc::now().naive_utc();
+    let new_metal = planet.metal_amount - total_cost_metal as f64;
+    let new_crystal = planet.crystal_amount - total_cost_crystal as f64;
+    let new_deuterium = planet.deuterium_amount - total_cost_deuterium as f64;
+    let end_time = now_build + Duration::seconds(additional_build_time);
+    let ship_id = ship.id;
 
-    if let Err(_) = active_planet.update(&state.db).await {
+    let existing_build_snapshot = existing_build;
+
+    if let Err(_) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        let existing_snap = existing_build_snapshot.clone();
+        Box::pin(async move {
+            let active_planet = planet::ActiveModel {
+                id: Set(planet_id),
+                metal_amount: Set(new_metal),
+                crystal_amount: Set(new_crystal),
+                deuterium_amount: Set(new_deuterium),
+                last_update: Set(now_build),
+                ..Default::default()
+            };
+            active_planet.update(txn).await?;
+
+            if let Some(ps) = existing_snap {
+                let active_ps = planet_ship::ActiveModel {
+                    planet_id: Set(ps.planet_id),
+                    ship_type_id: Set(ps.ship_type_id),
+                    building_count: Set(Some(quantity)),
+                    build_end_time: Set(Some(end_time)),
+                    ..Default::default()
+                };
+                active_ps.update(txn).await?;
+            } else {
+                let new_ps = planet_ship::ActiveModel {
+                    planet_id: Set(planet_id),
+                    ship_type_id: Set(ship_id),
+                    count: Set(0),
+                    building_count: Set(Some(quantity)),
+                    build_end_time: Set(Some(end_time)),
+                };
+                new_ps.insert(txn).await?;
+            }
+            Ok(())
+        })
+    }).await {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            axum::Json(json!({"error": "Failed to deduct resources"})),
+            axum::Json(json!({"error": "Failed to start building"})),
         )
             .into_response();
-    }
-
-    let end_time = Utc::now().naive_utc() + Duration::seconds(additional_build_time);
-
-    if let Some(ps) = existing_build {
-        let mut active_ps: planet_ship::ActiveModel = ps.into();
-        active_ps.building_count = Set(Some(quantity));
-        active_ps.build_end_time = Set(Some(end_time));
-
-        if let Err(_) = active_ps.update(&state.db).await {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                axum::Json(json!({"error": "Failed to start building"})),
-            )
-                .into_response();
-        }
-    } else {
-        let new_ps = planet_ship::ActiveModel {
-            planet_id: Set(planet_id),
-            ship_type_id: Set(ship.id),
-            count: Set(0),
-            building_count: Set(Some(quantity)),
-            build_end_time: Set(Some(end_time)),
-        };
-
-        if let Err(_) = new_ps.insert(&state.db).await {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                axum::Json(json!({"error": "Failed to start building"})),
-            )
-                .into_response();
-        }
     }
 
     axum::Json(json!({

@@ -6,7 +6,7 @@
 /// - Defense construction completion
 
 use chrono::Utc;
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait, TransactionTrait};
 use crate::entities::{prelude::*, planet_technology, planet_ship, planet_defense, construction_queue, building_type, technology, planet_building};
 use crate::protection;
 use uuid::Uuid;
@@ -173,10 +173,21 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
         let building_type_str = item.building_type.clone();
         let target_level = item.level;
 
+        // BQ-005/BQ-006: Begin transaction so completion + delete are atomic.
+        // If the server crashes between the two, the item is re-processed on the
+        // next tick rather than leaving a ghost completion with no queue cleanup.
+        let txn = match db.begin().await {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("tick_system: failed to begin txn for item {:?}: {:?}", item.id, e);
+                continue;
+            }
+        };
+
         // Check if this is a technology from the new tech tree system
         let tech = Technology::find()
             .filter(technology::Column::TechKey.eq(&building_type_str))
-            .one(db)
+            .one(&txn)
             .await?;
 
         if let Some(tech_data) = tech {
@@ -184,7 +195,7 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
             let existing = PlanetTechnology::find()
                 .filter(planet_technology::Column::PlanetId.eq(planet_id))
                 .filter(planet_technology::Column::TechId.eq(tech_data.id))
-                .one(db)
+                .one(&txn)
                 .await?;
 
             if let Some(existing_tech) = existing {
@@ -195,7 +206,7 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
                 let apply_level = if target_level == safe_level { target_level } else { safe_level };
                 let mut tech_active: planet_technology::ActiveModel = existing_tech.into();
                 tech_active.current_level = Set(apply_level);
-                tech_active.update(db).await?;
+                tech_active.update(&txn).await?;
             } else {
                 // Insert new tech level
                 let new_tech = planet_technology::ActiveModel {
@@ -205,7 +216,7 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
                     researching_to_level: Set(None),
                     research_end_time: Set(None),
                 };
-                new_tech.insert(db).await?;
+                new_tech.insert(&txn).await?;
             }
 
             completed.push(CompletedItem {
@@ -227,7 +238,7 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
             if !is_ship_or_defense {
                 let building = BuildingType::find()
                     .filter(building_type::Column::BuildingKey.eq(&building_type_str))
-                    .one(db)
+                    .one(&txn)
                     .await?;
 
                 if let Some(building_data) = building {
@@ -235,7 +246,7 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
                     let existing = PlanetBuilding::find()
                         .filter(planet_building::Column::PlanetId.eq(planet_id))
                         .filter(planet_building::Column::BuildingTypeId.eq(building_data.id))
-                        .one(db)
+                        .one(&txn)
                         .await?;
 
                     if let Some(existing_building) = existing {
@@ -244,7 +255,7 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
                         building_active.level = Set(target_level);
                         building_active.upgrading_to_level = Set(None);
                         building_active.upgrade_end_time = Set(None);
-                        building_active.update(db).await?;
+                        building_active.update(&txn).await?;
                     } else {
                         // Insert new building level
                         let new_building = planet_building::ActiveModel {
@@ -255,7 +266,7 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
                             upgrade_end_time: Set(None),
                             updated_at: Set(Some(now)),
                         };
-                        new_building.insert(db).await?;
+                        new_building.insert(&txn).await?;
                     }
 
                     completed.push(CompletedItem {
@@ -273,9 +284,15 @@ pub async fn process_construction_queue_completion(db: &DatabaseConnection) -> R
             // They should use the new planet_ships/planet_defenses tables instead
         }
 
-        // Delete the completed construction from the queue
+        // Delete the completed construction from the queue (atomic with the update above)
         let construction_to_delete: construction_queue::ActiveModel = item.into();
-        construction_to_delete.delete(db).await?;
+        construction_to_delete.delete(&txn).await?;
+
+        // Commit the per-item transaction; if this fails, the item remains in the queue
+        // and will be retried on the next tick (idempotent recovery).
+        if let Err(e) = txn.commit().await {
+            eprintln!("tick_system: commit failed for planet {:?}: {:?}", planet_id, e);
+        }
     }
 
     Ok(completed)

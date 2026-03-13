@@ -22,7 +22,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use backend::{black_market, game_logic, tech_tree, AppState};
+use backend::{auth::AuthUser, black_market, game_logic, tech_tree, AppState};
 use backend::entities::{
     prelude::{DebrisField, Planet, User, FleetMission},
     debris_field, planet, fleet_mission,
@@ -284,22 +284,32 @@ pub fn generate_colony_name() -> String {
 
 pub async fn colonize_handler(
     State(state): State<AppState>,
+    auth: AuthUser,
     Query(params): Query<HashMap<String, String>>,
     Json(payload): Json<ColonizePayload>,
 ) -> impl IntoResponse {
     let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
     let current_id = Uuid::parse_str(&current_id_str).unwrap_or_default();
 
-    let att_planet_data = match Planet::find_by_id(current_id).one(&state.db).await.unwrap() {
+    let att_planet_data = match Planet::find_by_id(current_id).one(&state.db).await.unwrap_or(None) {
         Some(p) => p,
         None => {
             return (
-                StatusCode::UNAUTHORIZED,
+                StatusCode::NOT_FOUND,
                 Json(json!({"error": "Planète inconnue"})),
             )
                 .into_response()
         }
     };
+
+    // Verify JWT caller owns the source planet (GAL-004)
+    if att_planet_data.owner_id != auth.user_id {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Cette planète ne vous appartient pas"})),
+        )
+            .into_response();
+    }
 
     let ships = tech_tree::get_planet_ship_count(&state.db, current_id, "colony_ship")
         .await

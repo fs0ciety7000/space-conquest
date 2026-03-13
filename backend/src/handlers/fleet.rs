@@ -799,14 +799,23 @@ async fn recycle_handler(
         }))).into_response();
     }
 
-    // Déduire les recycleurs et le deutérium
-    if let Err(_) = tech_tree::deduct_ships(&state.db, current_id, "recycler", payload.recyclers).await {
+    // Déduire les recycleurs et le deutérium atomiquement
+    let fuel_after_recycle = (source_planet.deuterium_amount - fuel_needed).max(0.0);
+    let src_id_for_txn = current_id;
+    let recyclers_count = payload.recyclers;
+    if let Err(_) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        Box::pin(async move {
+            tech_tree::deduct_ships(txn, src_id_for_txn, "recycler", recyclers_count).await?;
+            let src = planet::ActiveModel {
+                id: Set(src_id_for_txn),
+                deuterium_amount: Set(fuel_after_recycle),
+                ..Default::default()
+            };
+            src.update(txn).await?;
+            Ok(())
+        })
+    }).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Impossible de déduire les recycleurs"}))).into_response();
-    }
-    {
-        let mut src: planet::ActiveModel = source_planet.clone().into();
-        src.deuterium_amount = Set((source_planet.deuterium_amount - fuel_needed).max(0.0));
-        let _ = src.update(&state.db).await;
     }
 
     // Temps de trajet aller-retour
@@ -1351,7 +1360,7 @@ async fn expedition_v2_handler(
     State(state): State<AppState>,
     Json(payload): Json<ExpeditionPayloadV2>,
 ) -> impl IntoResponse {
-    let planet = match Planet::find_by_id(id).one(&state.db).await {
+    let mut planet = match Planet::find_by_id(id).one(&state.db).await {
         Ok(Some(p)) => p,
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
     };
@@ -1454,9 +1463,23 @@ async fn expedition_v2_handler(
     }
 
     {
-        let mut planet_active: planet::ActiveModel = planet.clone().into();
-        planet_active.deuterium_amount = Set((planet.deuterium_amount - expedition_fuel_needed).max(0.0));
-        let _ = planet_active.update(&state.db).await;
+        let fuel_after = (planet.deuterium_amount - expedition_fuel_needed).max(0.0);
+        let planet_id_fuel = planet.id;
+        if let Err(_) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            Box::pin(async move {
+                let planet_active = planet::ActiveModel {
+                    id: Set(planet_id_fuel),
+                    deuterium_amount: Set(fuel_after),
+                    ..Default::default()
+                };
+                planet_active.update(txn).await?;
+                Ok(())
+            })
+        }).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Échec de la déduction de carburant"}))).into_response();
+        }
+        // Update local planet state to reflect the deduction
+        planet.deuterium_amount = fuel_after;
     }
 
     let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();

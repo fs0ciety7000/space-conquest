@@ -1,6 +1,7 @@
 use axum::{
-    extract::State,
-    http::StatusCode,
+    async_trait,
+    extract::{FromRequestParts, State},
+    http::{request::Parts, StatusCode},
     response::IntoResponse,
     Json,
 };
@@ -64,8 +65,7 @@ pub fn validate_jwt(token: &str) -> Result<Claims, JwtError> {
 }
 
 /// Extract a user UUID from a Bearer token in the Authorization header.
-/// Accepts both the new signed JWT format and the legacy `jwt-{uuid}` format
-/// to avoid breaking existing sessions during the migration window.
+/// Only accepts cryptographically signed JWTs — no legacy token formats are supported.
 pub fn extract_user_id_from_bearer(headers: &axum::http::HeaderMap) -> Option<Uuid> {
     let header = headers.get("Authorization")?.to_str().ok()?;
     let token = header.strip_prefix("Bearer ")?;
@@ -73,15 +73,61 @@ pub fn extract_user_id_from_bearer(headers: &axum::http::HeaderMap) -> Option<Uu
 }
 
 /// Extract user UUID from a raw token string.
-/// Tries real JWT first, then falls back to legacy `jwt-{uuid}` format.
+/// Only accepts cryptographically signed JWTs — the insecure `jwt-{uuid}` legacy
+/// format has been removed (SEC-01).
 pub fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
-    // Try real JWT first
-    if let Ok(claims) = validate_jwt(token) {
-        return Uuid::parse_str(&claims.sub).ok();
+    validate_jwt(token).ok().and_then(|claims| Uuid::parse_str(&claims.sub).ok())
+}
+
+// ── AuthUser extractor (SEC-03) ──────────────────────────────────────────────
+
+/// Axum extractor that validates the Bearer JWT and injects the authenticated
+/// caller's `user_id`. Returns 401 if the token is absent or invalid.
+///
+/// Usage in handlers:
+/// ```rust
+/// async fn my_handler(auth: AuthUser, ...) { let uid = auth.user_id; }
+/// ```
+#[derive(Debug, Clone)]
+pub struct AuthUser {
+    pub user_id: Uuid,
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for AuthUser
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, Json<serde_json::Value>);
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let auth_header = parts
+            .headers
+            .get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .ok_or_else(|| {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(serde_json::json!({"error": "Authorization header missing"})),
+                )
+            })?;
+
+        let token = auth_header.strip_prefix("Bearer ").ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "Bearer token required"})),
+            )
+        })?;
+
+        let user_id = extract_user_id_from_token(token).ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "Invalid or expired token"})),
+            )
+        })?;
+
+        Ok(AuthUser { user_id })
     }
-    // Legacy fallback: "jwt-{uuid}"
-    token.strip_prefix("jwt-")
-        .and_then(|id| Uuid::parse_str(id).ok())
 }
 
 
@@ -173,9 +219,9 @@ async fn find_free_slot(db: &sea_orm::DatabaseConnection, galaxy: i32) -> (i32, 
 }
 
 
-fn create_jwt(user_id: String) -> String {
-    let uuid = Uuid::parse_str(&user_id).unwrap_or_else(|_| Uuid::nil());
-    generate_jwt(uuid).unwrap_or_else(|_| format!("jwt-{}", user_id))
+fn create_jwt(user_id: String) -> Option<String> {
+    let uuid = Uuid::parse_str(&user_id).ok()?;
+    generate_jwt(uuid).ok()
 }
 
 fn generate_reset_token() -> String {
@@ -416,10 +462,13 @@ let (system, position) = {
     }
 
     // Générer JWT
-    let token = create_jwt(user_id.to_string());
+    let token = match create_jwt(user_id.to_string()) {
+        Some(t) => t,
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de génération du token"}))),
+    };
 
     (
-        StatusCode::CREATED, 
+        StatusCode::CREATED,
         Json(json!({
             "token": token,
             "user_id": user_id,
@@ -588,7 +637,10 @@ pub async fn login_handler(
         ),
     };
 
-    let token = create_jwt(user.id.to_string());
+    let token = match create_jwt(user.id.to_string()) {
+        Some(t) => t,
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de génération du token"}))),
+    };
 
     // ═══════════════════════════════════════════════════════════════════════════
     // MISE À JOUR DU LOGIN STREAK + LAST LOGIN

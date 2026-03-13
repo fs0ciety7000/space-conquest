@@ -818,9 +818,21 @@ pub async fn resolve_extortion_handler(
                 ).into_response();
             }
 
-            let mut user_active: user::ActiveModel = user.clone().into();
-            user_active.syndicate_credits = Set(user.syndicate_credits - tribute_cost);
-            let _ = user_active.update(&state.db).await;
+            let new_credits = user.syndicate_credits - tribute_cost;
+            let txn_result = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+                Box::pin(async move {
+                    let user_active = user::ActiveModel {
+                        id: Set(user_id),
+                        syndicate_credits: Set(new_credits),
+                        ..Default::default()
+                    };
+                    user_active.update(txn).await?;
+                    Ok(())
+                })
+            }).await;
+            if txn_result.is_err() {
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Échec du débit de crédits"}))).into_response();
+            }
 
             // Reveal attacker info to target (via combat log notification)
             let attacker = User::find_by_id(extortion.attacker_id)
@@ -848,9 +860,21 @@ pub async fn resolve_extortion_handler(
                 ).into_response();
             }
 
-            let mut user_active: user::ActiveModel = user.clone().into();
-            user_active.syndicate_credits = Set(user.syndicate_credits - retaliate_cost);
-            let _ = user_active.update(&state.db).await;
+            let new_credits_ret = user.syndicate_credits - retaliate_cost;
+            let txn_ret_result = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+                Box::pin(async move {
+                    let user_active = user::ActiveModel {
+                        id: Set(user_id),
+                        syndicate_credits: Set(new_credits_ret),
+                        ..Default::default()
+                    };
+                    user_active.update(txn).await?;
+                    Ok(())
+                })
+            }).await;
+            if txn_ret_result.is_err() {
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Échec du débit de crédits"}))).into_response();
+            }
 
             // Attacker receives a new extortion targeting their planet
             let attacker_planet = crate::entities::prelude::Planet::find()

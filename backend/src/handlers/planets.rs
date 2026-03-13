@@ -23,7 +23,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use backend::{black_market, build_queue, game_logic, missions, sabotage, tech_tree, websocket, AppState};
+use backend::{auth::AuthUser, black_market, build_queue, game_logic, missions, sabotage, tech_tree, websocket, AppState};
 use backend::entities::{
     prelude::{
         BuildingType, ConstructionQueue, DefenseType, Planet, PlanetBuilding, PlanetDefense,
@@ -552,10 +552,13 @@ async fn get_planet_handler(
                 active.deuterium_amount = Set(active.deuterium_amount.clone().unwrap() + m.deuterium);
             } else {
                 if let Ok(Some(target_planet)) = Planet::find_by_id(m.target_planet_id).one(&state.db).await {
+                    let resource_storage_level_t = tech_tree::get_planet_building_level(&state.db, target_planet.id, "resource_storage").await.unwrap_or(0);
+                    let storage_cap_t = game_logic::get_storage_capacity(resource_storage_level_t, &config);
                     let mut target_active: planet::ActiveModel = target_planet.clone().into();
-                    target_active.metal_amount = Set(target_planet.metal_amount + m.metal);
-                    target_active.crystal_amount = Set(target_planet.crystal_amount + m.crystal);
-                    target_active.deuterium_amount = Set(target_planet.deuterium_amount + m.deuterium);
+                    target_active.metal_amount = Set((target_planet.metal_amount + m.metal).min(storage_cap_t.max(target_planet.metal_amount)));
+                    target_active.crystal_amount = Set((target_planet.crystal_amount + m.crystal).min(storage_cap_t.max(target_planet.crystal_amount)));
+                    target_active.deuterium_amount = Set((target_planet.deuterium_amount + m.deuterium).min(storage_cap_t.max(target_planet.deuterium_amount)));
+                    target_active.last_update = Set(now);
                     let _ = target_active.update(&state.db).await;
                 }
             }
@@ -1151,12 +1154,19 @@ async fn get_planet_handler(
 async fn upgrade_mine_handler(
     Path((id, type_mine)): Path<(Uuid, String)>,
     State(state): State<AppState>,
+    auth: AuthUser,
 ) -> Result<StatusCode, StatusCode> {
     let p = Planet::find_by_id(id)
         .one(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Ownership check (GAL-001)
+    if p.owner_id != auth.user_id {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let config = state.config.read().unwrap().clone();
 
     let _build_guard = build_queue::acquire_planet_build_lock_pub(&state, p.id).await;
@@ -1298,19 +1308,20 @@ async fn upgrade_mine_handler(
             let solar_lv    = get_building_level(&state.db, p.id, "solar_plant").await;
             let fusion_lv   = get_building_level(&state.db, p.id, "fusion_plant").await;
             let energy_tech = tech_tree::get_planet_tech_level(&state.db, p.id, "energy_tech").await.unwrap_or(0);
+            let plasma_tech = tech_tree::get_planet_tech_level(&state.db, p.id, "plasma_tech").await.unwrap_or(0);
             let energy_ratio = game_logic::calculate_energy_ratio_with_fusion(solar_lv, energy_tech, fusion_lv, metal_lv, crystal_lv, deut_lv, &config);
 
             let m = game_logic::calculate_resources_with_slots(
                 game_logic::ResourceType::Metal, metal_lv, p.metal_amount,
-                p.last_update, energy_tech, 0, energy_ratio,
+                p.last_update, energy_tech, plasma_tech, energy_ratio,
                 &slot_1, &slot_2, &slot_3, &slot_4, &config);
             let c = game_logic::calculate_resources_with_slots(
                 game_logic::ResourceType::Crystal, crystal_lv, p.crystal_amount,
-                p.last_update, energy_tech, 0, energy_ratio,
+                p.last_update, energy_tech, plasma_tech, energy_ratio,
                 &slot_1, &slot_2, &slot_3, &slot_4, &config);
             let d = game_logic::calculate_resources_with_slots(
                 game_logic::ResourceType::Deuterium, deut_lv, p.deuterium_amount,
-                p.last_update, energy_tech, 0, energy_ratio,
+                p.last_update, energy_tech, plasma_tech, energy_ratio,
                 &slot_1, &slot_2, &slot_3, &slot_4, &config);
             (m, c, d)
         } else {
@@ -1379,10 +1390,15 @@ async fn upgrade_mine_handler(
 async fn rename_planet_handler(
     Path(id): Path<Uuid>,
     State(state): State<AppState>,
+    auth: AuthUser,
     Json(payload): Json<RenamePlanetPayload>,
 ) -> impl IntoResponse {
-    let p_opt = Planet::find_by_id(id).one(&state.db).await.unwrap();
+    let p_opt = Planet::find_by_id(id).one(&state.db).await.unwrap_or(None);
     if let Some(p) = p_opt {
+        // Ownership check (GAL-002)
+        if p.owner_id != auth.user_id {
+            return StatusCode::FORBIDDEN.into_response();
+        }
         if payload.new_name.trim().is_empty() || payload.new_name.len() > 20 {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": "Nom invalide"}))).into_response();
         }
@@ -1401,6 +1417,7 @@ async fn rename_planet_handler(
 async fn cancel_construction_handler(
     Path((planet_id, queue_id)): Path<(Uuid, Uuid)>,
     State(state): State<AppState>,
+    auth: AuthUser,
 ) -> Result<impl IntoResponse, StatusCode> {
     let item = ConstructionQueue::find_by_id(queue_id)
         .one(&state.db)
@@ -1415,6 +1432,11 @@ async fn cancel_construction_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Ownership check (GAL-003)
+    if p.owner_id != auth.user_id {
+        return Err(StatusCode::FORBIDDEN);
+    }
     let config = state.config.read().unwrap().clone();
 
     // Try DB lookup for ships first, then defenses, then building/tech formula
@@ -1434,12 +1456,15 @@ async fn cancel_construction_handler(
             let qty = item.level as f64;
             (dt.base_cost_metal as f64 * qty, dt.base_cost_crystal as f64 * qty, dt.base_cost_deuterium as f64 * qty, false, true)
         } else {
-            // Use data-driven cache (H2) — falls back to zeros for unknown keys
-            let cost = game_logic::get_upgrade_cost_from_cache(
+            // Use data-driven cache (H2) — unknown key is a hard error (BAL-005)
+            let cost = match game_logic::get_upgrade_cost_from_cache(
                 &state.building_cost_cache,
                 &item.building_type,
                 item.level,
-            );
+            ) {
+                Some(c) => c,
+                None => return Err(StatusCode::BAD_REQUEST),
+            };
             (cost.metal, cost.crystal, cost.deuterium, false, false)
         }
     };
@@ -1494,6 +1519,7 @@ async fn cancel_construction_handler(
     active.metal_amount = Set(active.metal_amount.unwrap() + refund_m);
     active.crystal_amount = Set(active.crystal_amount.unwrap() + refund_c);
     active.deuterium_amount = Set(active.deuterium_amount.unwrap() + refund_d);
+    active.last_update = Set(Utc::now().naive_utc());
 
     active
         .update(&state.db)

@@ -1,8 +1,9 @@
 use axum::{
-    extract::{Path, State, Query},
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json},
 };
+use crate::auth::AuthUser;
 use sea_orm::{
     ActiveModelTrait, EntityTrait, Set, QueryFilter, ColumnTrait, PaginatorTrait
 };
@@ -111,10 +112,9 @@ pub struct PlanetUpdate {
     pub interplanetary_missile_count: Option<i32>,
 }
 
-// Vérification admin - vérifie le rôle dans la DB
-async fn check_admin(user_id_str: &str, state: &AppState) -> Result<Uuid, StatusCode> {
-    let user_id = Uuid::parse_str(user_id_str).map_err(|_| StatusCode::UNAUTHORIZED)?;
-
+// Vérification admin - vérifie le rôle dans la DB (SEC-02)
+// Accepts the caller UUID extracted from the JWT by the AuthUser extractor.
+async fn check_admin(user_id: Uuid, state: &AppState) -> Result<Uuid, StatusCode> {
     // Récupérer l'utilisateur depuis la DB et vérifier son rôle
     let user = User::find_by_id(user_id)
         .one(&state.db)
@@ -131,10 +131,9 @@ async fn check_admin(user_id_str: &str, state: &AppState) -> Result<Uuid, Status
 
 pub async fn get_all_players_handler(
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
     .into_response();
     }
@@ -174,10 +173,9 @@ pub async fn get_all_players_handler(
 pub async fn get_planet_admin_handler(
     Path(planet_id): Path<Uuid>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -264,11 +262,10 @@ pub async fn get_planet_admin_handler(
 pub async fn update_planet_admin_handler(
     Path(planet_id): Path<Uuid>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(updates): Json<PlanetUpdate>,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -498,10 +495,9 @@ pub struct ServerStats {
 
 pub async fn get_server_stats_handler(
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -554,10 +550,9 @@ pub async fn get_server_stats_handler(
 // GET /admin/config - Récupérer toutes les configurations
 pub async fn get_server_config_handler(
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -582,17 +577,13 @@ pub struct ConfigUpdate {
 // PATCH /admin/config - Mettre à jour une ou plusieurs configurations
 pub async fn update_server_config_handler(
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(updates): Json<ConfigUpdate>,
 ) -> impl IntoResponse {
     println!("🚀 [ADMIN CONFIG] Handler called!");
-    println!("🚀 [ADMIN CONFIG] Query params: {:?}", params);
+    println!("🚀 [ADMIN CONFIG] Handler called with JWT auth (user: {})", auth.user_id);
 
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    println!("🚀 [ADMIN CONFIG] User ID: {}", user_id_str);
-
-    if check_admin(user_id_str, &state).await.is_err() {
-        println!("❌ [ADMIN CONFIG] Access denied for user: {}", user_id_str);
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -669,11 +660,10 @@ pub struct RoleUpdate {
 pub async fn update_user_role_handler(
     Path(target_user_id): Path<Uuid>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(update): Json<RoleUpdate>,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -719,11 +709,10 @@ pub struct UsernameUpdate {
 pub async fn update_username_handler(
     Path(target_user_id): Path<Uuid>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(update): Json<UsernameUpdate>,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -782,11 +771,10 @@ pub struct EmailUpdate {
 pub async fn update_email_handler(
     Path(target_user_id): Path<Uuid>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(update): Json<EmailUpdate>,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -845,11 +833,10 @@ pub struct SyndicateCreditsUpdate {
 pub async fn update_syndicate_credits_handler(
     Path(target_user_id): Path<Uuid>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(update): Json<SyndicateCreditsUpdate>,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"}))).into_response();
     }
     let target_user = match User::find_by_id(target_user_id).one(&state.db).await.unwrap_or(None) {
@@ -874,11 +861,10 @@ pub struct PasswordReset {
 pub async fn reset_password_handler(
     Path(target_user_id): Path<Uuid>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(reset): Json<PasswordReset>,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -925,19 +911,15 @@ pub async fn reset_password_handler(
 pub async fn delete_user_handler(
     Path(target_user_id): Path<Uuid>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-
     // Vérifier que l'admin n'essaie pas de se supprimer lui-même
-    if let Ok(admin_id) = Uuid::parse_str(user_id_str) {
-        if admin_id == target_user_id {
-            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas supprimer votre propre compte"})))
-                .into_response();
-        }
+    if auth.user_id == target_user_id {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas supprimer votre propre compte"})))
+            .into_response();
     }
 
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -1009,10 +991,9 @@ pub struct UpdateAnnouncement {
 // GET /admin/announcements - List all announcements
 pub async fn get_announcements_handler(
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -1028,11 +1009,10 @@ pub async fn get_announcements_handler(
 // POST /admin/announcements - Create a new announcement
 pub async fn create_announcement_handler(
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(new_announcement): Json<CreateAnnouncement>,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -1071,11 +1051,10 @@ pub async fn create_announcement_handler(
 pub async fn update_announcement_handler(
     Path(announcement_id): Path<i32>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(updates): Json<UpdateAnnouncement>,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -1132,10 +1111,9 @@ pub async fn update_announcement_handler(
 pub async fn delete_announcement_handler(
     Path(announcement_id): Path<i32>,
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }
@@ -1163,11 +1141,10 @@ pub struct BroadcastRequest {
 
 pub async fn admin_broadcast_handler(
     State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    auth: AuthUser,
     Json(body): Json<BroadcastRequest>,
 ) -> impl IntoResponse {
-    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
-    if check_admin(user_id_str, &state).await.is_err() {
+    if check_admin(auth.user_id, &state).await.is_err() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Accès refusé"})))
             .into_response();
     }

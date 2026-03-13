@@ -4,8 +4,8 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    ActiveModelTrait, EntityTrait, Set, 
-    QueryFilter, QueryOrder, ColumnTrait, Condition,
+    ActiveModelTrait, EntityTrait, Set,
+    QueryFilter, QueryOrder, ColumnTrait, Condition, TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -512,20 +512,23 @@ pub async fn dissolve_alliance_handler(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Seul le leader peut dissoudre l'alliance"}))).into_response();
     }
 
-    // Supprimer toutes les invitations
-    let _ = AllianceInvitation::delete_many()
-        .filter(alliance_invitation::Column::AllianceId.eq(alliance_id))
-        .exec(&state.db)
-        .await;
-
-    // Supprimer tous les membres
-    let _ = AllianceMember::delete_many()
-        .filter(alliance_member::Column::AllianceId.eq(alliance_id))
-        .exec(&state.db)
-        .await;
-
-    // Supprimer l'alliance
-    let _ = Alliance::delete_by_id(alliance_id).exec(&state.db).await;
+    // Supprimer invitations, membres et alliance atomiquement
+    if let Err(_) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        Box::pin(async move {
+            AllianceInvitation::delete_many()
+                .filter(alliance_invitation::Column::AllianceId.eq(alliance_id))
+                .exec(txn)
+                .await?;
+            AllianceMember::delete_many()
+                .filter(alliance_member::Column::AllianceId.eq(alliance_id))
+                .exec(txn)
+                .await?;
+            Alliance::delete_by_id(alliance_id).exec(txn).await?;
+            Ok(())
+        })
+    }).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Dissolution échouée"}))).into_response();
+    }
 
     (StatusCode::OK, Json(json!({"message": "Alliance dissoute"}))).into_response()
 }
@@ -758,29 +761,47 @@ pub async fn transfer_leadership_handler(
     };
 
     // Récupérer l'ancien leader
-    let old_leader = AllianceMember::find()
+    let old_leader = match AllianceMember::find()
         .filter(alliance_member::Column::AllianceId.eq(alliance_id))
         .filter(alliance_member::Column::UserId.eq(user_id))
         .one(&state.db)
         .await
         .ok()
         .flatten()
-        .unwrap();
+    {
+        Some(m) => m,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Membre leader introuvable"}))).into_response(),
+    };
 
-    // Mettre à jour les rôles
-    let mut old_active: alliance_member::ActiveModel = old_leader.into();
-    old_active.role = Set("officer".into()); // L'ancien leader devient officier
-    let _ = old_active.update(&state.db).await;
+    let old_leader_planet_id = old_leader.alliance_id;
+    let target_planet_id = target.alliance_id;
+    let now_ts = Utc::now().naive_utc();
 
-    let mut target_active: alliance_member::ActiveModel = target.into();
-    target_active.role = Set("leader".into());
-    let _ = target_active.update(&state.db).await;
+    // Mettre à jour les rôles et l'alliance atomiquement
+    if let Err(_) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        let old_leader = old_leader.clone();
+        let target = target.clone();
+        let alliance = alliance.clone();
+        Box::pin(async move {
+            let mut old_active: alliance_member::ActiveModel = old_leader.into();
+            old_active.role = Set("officer".into());
+            old_active.update(txn).await?;
 
-    // Mettre à jour l'alliance
-    let mut alliance_active: alliance::ActiveModel = alliance.into();
-    alliance_active.leader_id = Set(target_user_id);
-    alliance_active.updated_at = Set(Utc::now().naive_utc());
-    let _ = alliance_active.update(&state.db).await;
+            let mut target_active: alliance_member::ActiveModel = target.into();
+            target_active.role = Set("leader".into());
+            target_active.update(txn).await?;
+
+            let mut alliance_active: alliance::ActiveModel = alliance.into();
+            alliance_active.leader_id = Set(target_user_id);
+            alliance_active.updated_at = Set(now_ts);
+            alliance_active.update(txn).await?;
+
+            Ok(())
+        })
+    }).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transfert de leadership échoué"}))).into_response();
+    }
+    let _ = (old_leader_planet_id, target_planet_id); // suppress unused warnings
 
     (StatusCode::OK, Json(json!({"message": "Leadership transféré"}))).into_response()
 }

@@ -48,7 +48,8 @@
       "Bash(grep -n \"active_users\\\\|active_players\\\\|last_seen\\\\|last_login\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/admin.rs | head -10\ngrep -n \"active_users\\\\|active_players\\\\|last_seen\\\\|last_login\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/entities/user.rs | head -10)",
       "Bash(grep -n \"ws:\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -5\ngrep -n \"pub ws\\\\|ws: \" /var/home/phantomhex/Documents/code/space-conquest/backend/src/main.rs | head -10)",
       "Bash(grep -n \"planet_galaxy\\\\|GalaxySlot\\\\|struct GalaxySlot\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/models.rs | head -10\ngrep -n \"planet_galaxy\\\\|pub galaxy\\\\|GalaxySlot\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/handlers/galaxy.rs | head -15)",
-      "Bash(cd /var/home/phantomhex/Documents/code/space-conquest/frontend && npm install 2>&1 | tail -5)"
+      "Bash(cd /var/home/phantomhex/Documents/code/space-conquest/frontend && npm install 2>&1 | tail -5)",
+      "Bash(grep -n \"struct ServerConfigCache\" /var/home/phantomhex/Documents/code/space-conquest/backend/src/*.rs | head -5)"
     ]
   }
 }

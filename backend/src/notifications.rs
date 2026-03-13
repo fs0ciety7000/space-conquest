@@ -3,6 +3,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json},
 };
+use crate::auth::AuthUser;
 use sea_orm::{
     ActiveModelTrait, EntityTrait, Set,
     QueryFilter, QueryOrder, ColumnTrait, QuerySelect,
@@ -52,6 +53,7 @@ pub async fn create_notification(
 
 pub async fn get_notifications_handler(
     State(state): State<AppState>,
+    auth: AuthUser,
     Path(user_id_str): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
@@ -59,6 +61,11 @@ pub async fn get_notifications_handler(
         Ok(id) => id,
         Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid user id"}))).into_response(),
     };
+
+    // Ensure caller can only read their own notifications (WS-10)
+    if auth.user_id != user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Access denied"}))).into_response();
+    }
 
     let limit: u64 = params.get("limit")
         .and_then(|v| v.parse().ok())
@@ -101,12 +108,18 @@ pub async fn get_notifications_handler(
 
 pub async fn mark_all_read_handler(
     State(state): State<AppState>,
+    auth: AuthUser,
     Path(user_id_str): Path<String>,
 ) -> impl IntoResponse {
     let user_id = match Uuid::parse_str(&user_id_str) {
         Ok(id) => id,
         Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid user id"}))).into_response(),
     };
+
+    // Ensure caller can only mark their own notifications (WS-10)
+    if auth.user_id != user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Access denied"}))).into_response();
+    }
 
     let result = Notification::update_many()
         .col_expr(notification::Column::IsRead, Expr::value(true))

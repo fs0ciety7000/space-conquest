@@ -12,7 +12,7 @@ use chrono::{Utc, Duration};
 use sea_orm::{
     DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait,
     Set, ActiveModelTrait, QueryOrder, QuerySelect,
-    sea_query::Expr,
+    sea_query::Expr, ConnectionTrait, Statement, DbBackend,
 };
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -204,29 +204,17 @@ pub async fn record_contribution(
     planet_id: Uuid,
     damage: i32,
 ) -> Result<(), sea_orm::DbErr> {
-    // Upsert participation
-    let existing = ServerEventParticipation::find()
-        .filter(server_event_participation::Column::EventId.eq(event_id))
-        .filter(server_event_participation::Column::UserId.eq(user_id))
-        .one(db)
-        .await?;
-
-    if let Some(part) = existing {
-        let new_contrib = part.contribution + damage;
-        let mut active: server_event_participation::ActiveModel = part.into();
-        active.contribution = Set(new_contrib);
-        active.update(db).await?;
-    } else {
-        server_event_participation::ActiveModel {
-            id: Set(Uuid::new_v4()),
-            event_id: Set(event_id),
-            user_id: Set(user_id),
-            planet_id: Set(planet_id),
-            contribution: Set(damage),
-            rewarded: Set(false),
-            created_at: Set(Utc::now().into()),
-        }.insert(db).await?;
-    }
+    // WS-05: Atomic upsert — UNIQUE(event_id, user_id) constraint ensures exactly-once
+    // participation record. Concurrent requests from the same user are merged atomically
+    // at the DB level rather than via a racy SELECT + INSERT/UPDATE.
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "INSERT INTO server_event_participation (id, event_id, user_id, planet_id, contribution, rewarded, created_at) \
+         VALUES ($1, $2, $3, $4, $5, false, NOW()) \
+         ON CONFLICT (event_id, user_id) DO UPDATE \
+         SET contribution = server_event_participation.contribution + EXCLUDED.contribution",
+        [Uuid::new_v4().into(), event_id.into(), user_id.into(), planet_id.into(), damage.into()],
+    )).await?;
 
     // Journal de l'action
     server_event_action::ActiveModel {
@@ -303,7 +291,7 @@ pub async fn resolve_event(
             outcome: outcome.to_string(),
             rewards_distributed: true,
             top_contributors: top_names,
-        });
+        }).await;
     }
 
     Ok(())
@@ -393,7 +381,11 @@ pub async fn distribute_rewards(
         if sc > 0.0 {
             if let Ok(Some(u)) = User::find_by_id(part.user_id).one(&state.db).await {
                 let mut ua: user::ActiveModel = u.into();
-                ua.syndicate_credits = Set(ua.syndicate_credits.unwrap() + sc);
+                let current_sc = match ua.syndicate_credits.clone() {
+                    sea_orm::ActiveValue::Set(v) | sea_orm::ActiveValue::Unchanged(v) => v,
+                    sea_orm::ActiveValue::NotSet => 0.0,
+                };
+                ua.syndicate_credits = Set(current_sc + sc);
                 let _ = ua.update(&state.db).await;
             }
         }
@@ -454,7 +446,7 @@ pub async fn tick_events(state: &AppState) -> Result<(), sea_orm::DbErr> {
                 zone,
                 ends_at,
                 hp_max: event.hp_max,
-            });
+            }).await;
         }
     }
 
@@ -495,7 +487,7 @@ pub async fn tick_events(state: &AppState) -> Result<(), sea_orm::DbErr> {
                 zone,
                 starts_in_seconds: starts_in,
                 narrative,
-            });
+            }).await;
         }
     }
 

@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, ConnectionTrait, Statement, DbBackend, Value as SeaValue,
+    DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, ConnectionTrait, Statement, DbBackend, Value as SeaValue, TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -756,27 +756,39 @@ async fn execute_trade_route(
     let new_target_crystal = target_planet.crystal_amount + crystal_to_transfer;
     let new_target_deuterium = target_planet.deuterium_amount + deuterium_to_transfer;
 
-    let _ = db.execute(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "UPDATE planet SET metal_amount = $1, crystal_amount = $2, deuterium_amount = $3 WHERE id = $4",
-        [
-            SeaValue::Double(Some(new_source_metal)),
-            SeaValue::Double(Some(new_source_crystal)),
-            SeaValue::Double(Some(new_source_deuterium)),
-            SeaValue::Uuid(Some(Box::new(source_id))),
-        ],
-    )).await;
+    // Atomically drain source and credit target to prevent partial transfers
+    let transfer_result = db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        Box::pin(async move {
+            txn.execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "UPDATE planet SET metal_amount = $1, crystal_amount = $2, deuterium_amount = $3 WHERE id = $4",
+                [
+                    SeaValue::Double(Some(new_source_metal)),
+                    SeaValue::Double(Some(new_source_crystal)),
+                    SeaValue::Double(Some(new_source_deuterium)),
+                    SeaValue::Uuid(Some(Box::new(source_id))),
+                ],
+            )).await?;
 
-    let _ = db.execute(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "UPDATE planet SET metal_amount = $1, crystal_amount = $2, deuterium_amount = $3 WHERE id = $4",
-        [
-            SeaValue::Double(Some(new_target_metal)),
-            SeaValue::Double(Some(new_target_crystal)),
-            SeaValue::Double(Some(new_target_deuterium)),
-            SeaValue::Uuid(Some(Box::new(target_id))),
-        ],
-    )).await;
+            txn.execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "UPDATE planet SET metal_amount = $1, crystal_amount = $2, deuterium_amount = $3 WHERE id = $4",
+                [
+                    SeaValue::Double(Some(new_target_metal)),
+                    SeaValue::Double(Some(new_target_crystal)),
+                    SeaValue::Double(Some(new_target_deuterium)),
+                    SeaValue::Uuid(Some(Box::new(target_id))),
+                ],
+            )).await?;
+
+            Ok(())
+        })
+    }).await;
+
+    if transfer_result.is_err() {
+        eprintln!("[TRADE ROUTE] Transaction failed for route {route_id}, aborting transfer.");
+        return;
+    }
 
     log_and_advance_route(
         db, route_id, now, interval_hours, &schedule_type, daily_hour,

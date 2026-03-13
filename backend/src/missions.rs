@@ -5,7 +5,7 @@ use axum::{
 };
 use sea_orm::{
     ActiveModelTrait, EntityTrait, Set,
-    QueryFilter, QueryOrder, ColumnTrait,
+    QueryFilter, QueryOrder, ColumnTrait, TransactionTrait, QuerySelect,
 };
 use serde::Serialize;
 use serde_json::json;
@@ -283,23 +283,63 @@ pub async fn claim_mission_reward_handler(
     let crystal = mission.reward_crystal * bonus * prod_speed;
     let deuterium = mission.reward_deuterium * bonus * prod_speed;
 
+    // ALI-003: Begin transaction — credit resources + mark claimed are atomic.
+    // The mission row is re-read under a FOR UPDATE lock to prevent double-claim
+    // from concurrent requests (e.g., rapid double-click).
+    let txn = match state.db.begin().await {
+        Ok(t) => t,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "DB error"}))).into_response(),
+    };
+
+    // Re-read mission under row lock to guard against concurrent claim
+    let locked_mission = match UserDailyMission::find_by_id(mission_id)
+        .lock_exclusive()
+        .one(&txn)
+        .await
+    {
+        Ok(Some(m)) => m,
+        _ => {
+            let _ = txn.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Mission introuvable"}))).into_response();
+        }
+    };
+
+    // Guard: must still be "completed" (not already claimed by a concurrent request)
+    if locked_mission.status != "completed" {
+        let _ = txn.rollback().await;
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Récompense déjà réclamée ou mission non complétée"}))).into_response();
+    }
+
     // Créditer la planète
-    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+    let planet = match Planet::find_by_id(planet_id).one(&txn).await {
         Ok(Some(p)) => p,
-        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))).into_response(),
+        _ => {
+            let _ = txn.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète introuvable"}))).into_response();
+        }
     };
 
     let mut planet_active: planet::ActiveModel = planet.clone().into();
     planet_active.metal_amount = Set(planet.metal_amount + metal);
     planet_active.crystal_amount = Set(planet.crystal_amount + crystal);
     planet_active.deuterium_amount = Set(planet.deuterium_amount + deuterium);
-    let _ = planet_active.update(&state.db).await;
+    if let Err(_) = planet_active.update(&txn).await {
+        let _ = txn.rollback().await;
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB ressources"}))).into_response();
+    }
 
     // Marquer la mission comme réclamée
-    let mut mission_active: user_daily_mission::ActiveModel = user_mission.into();
+    let mut mission_active: user_daily_mission::ActiveModel = locked_mission.into();
     mission_active.status = Set("claimed".into());
     mission_active.claimed_at = Set(Some(Utc::now().naive_utc()));
-    let _ = mission_active.update(&state.db).await;
+    if let Err(_) = mission_active.update(&txn).await {
+        let _ = txn.rollback().await;
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB mission"}))).into_response();
+    }
+
+    if let Err(_) = txn.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction commit failed"}))).into_response();
+    }
 
     (StatusCode::OK, Json(json!({
         "message": "Récompense réclamée !",
@@ -748,7 +788,23 @@ async fn get_or_create_streak(state: &AppState, user_id: Uuid) -> login_streak::
         last_reward_date: Set(None),
     };
 
-    new_streak.insert(&state.db).await.unwrap()
+    match new_streak.insert(&state.db).await {
+        Ok(streak) => streak,
+        Err(e) => {
+            tracing::error!("Failed to create login streak for user {user_id}: {e}");
+            // Return a synthetic streak to avoid crashing the caller
+            login_streak::Model {
+                id: Uuid::new_v4(),
+                user_id,
+                current_streak: 1,
+                best_streak: 1,
+                total_login_days: 1,
+                last_login_date: Utc::now().naive_utc().date(),
+                daily_reward_claimed: false,
+                last_reward_date: None,
+            }
+        }
+    }
 }
 
 fn calculate_streak_bonus(streak: i32) -> f64 {
@@ -859,14 +915,43 @@ pub async fn daily_reward_claim_handler(
         None => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "planet_id requis"}))).into_response(),
     };
 
-    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+    // Pre-check: validate planet ownership before beginning the transaction
+    let _planet = match Planet::find_by_id(planet_id).one(&state.db).await {
         Ok(Some(p)) if p.owner_id == user_id => p,
         Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "Planète non possédée"}))).into_response(),
         _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Planète introuvable"}))).into_response(),
     };
 
+    // ALI-004: Begin transaction — all credits + streak update must be atomic.
+    // The streak row is re-read under FOR UPDATE lock to prevent double-claim
+    // from concurrent requests.
+    let txn = match state.db.begin().await {
+        Ok(t) => t,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "DB error"}))).into_response(),
+    };
+
+    // Re-read and lock the streak row to prevent concurrent double-claim
+    let locked_streak = match crate::entities::prelude::LoginStreak::find()
+        .filter(crate::entities::login_streak::Column::UserId.eq(user_id))
+        .lock_exclusive()
+        .one(&txn)
+        .await
+    {
+        Ok(Some(s)) => s,
+        _ => {
+            let _ = txn.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Streak introuvable"}))).into_response();
+        }
+    };
+
+    // Guard: must not have been claimed between the first check and the lock
+    if locked_streak.daily_reward_claimed && locked_streak.last_reward_date == Some(today) {
+        let _ = txn.rollback().await;
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Récompense déjà réclamée aujourd'hui"}))).into_response();
+    }
+
     // New streak value for day being claimed
-    let new_streak = streak.current_streak + 1;
+    let new_streak = locked_streak.current_streak + 1;
     let reward = daily_reward_for_streak(new_streak);
 
     // Apply speed multiplier to resource rewards
@@ -877,39 +962,53 @@ pub async fn daily_reward_claim_handler(
     let sc = reward.syndicate_credits;
 
     // Credit planet resources
-    let mut planet_active: planet::ActiveModel = planet.clone().into();
-    planet_active.metal_amount = Set(planet.metal_amount + metal);
-    planet_active.crystal_amount = Set(planet.crystal_amount + crystal);
-    planet_active.deuterium_amount = Set(planet.deuterium_amount + deuterium);
-    if let Err(e) = planet_active.update(&state.db).await {
+    let planet_locked = match Planet::find_by_id(planet_id).one(&txn).await {
+        Ok(Some(p)) => p,
+        _ => {
+            let _ = txn.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Planète introuvable"}))).into_response();
+        }
+    };
+    let mut planet_active: planet::ActiveModel = planet_locked.clone().into();
+    planet_active.metal_amount = Set(planet_locked.metal_amount + metal);
+    planet_active.crystal_amount = Set(planet_locked.crystal_amount + crystal);
+    planet_active.deuterium_amount = Set(planet_locked.deuterium_amount + deuterium);
+    if let Err(e) = planet_active.update(&txn).await {
         eprintln!("daily_reward_claim planet update error: {:?}", e);
+        let _ = txn.rollback().await;
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Erreur DB (planète)"}))).into_response();
     }
 
     // Credit SC if any
     if sc > 0.0 {
-        if let Ok(Some(user_row)) = UserEntity::find_by_id(user_id).one(&state.db).await {
+        if let Ok(Some(user_row)) = UserEntity::find_by_id(user_id).one(&txn).await {
             let mut user_active: user::ActiveModel = user_row.clone().into();
             user_active.syndicate_credits = Set(user_row.syndicate_credits + sc);
-            let _ = user_active.update(&state.db).await;
+            if let Err(_) = user_active.update(&txn).await {
+                let _ = txn.rollback().await;
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Erreur DB (SC)"}))).into_response();
+            }
         }
     }
 
     // Mark streak as claimed and advance
-    let mut streak_active: login_streak::ActiveModel = streak.into();
+    let best = locked_streak.best_streak.max(new_streak);
+    let total = locked_streak.total_login_days + 1;
+    let mut streak_active: login_streak::ActiveModel = locked_streak.into();
     streak_active.current_streak = Set(new_streak);
-    streak_active.best_streak = Set(match streak_active.best_streak.clone() {
-        sea_orm::ActiveValue::Set(v) | sea_orm::ActiveValue::Unchanged(v) => v.max(new_streak),
-        _ => new_streak,
-    });
-    streak_active.total_login_days = Set(match streak_active.total_login_days.clone() {
-        sea_orm::ActiveValue::Set(v) | sea_orm::ActiveValue::Unchanged(v) => v + 1,
-        _ => 1,
-    });
+    streak_active.best_streak = Set(best);
+    streak_active.total_login_days = Set(total);
     streak_active.daily_reward_claimed = Set(true);
     streak_active.last_reward_date = Set(Some(today));
     streak_active.last_login_date = Set(today);
-    let _ = streak_active.update(&state.db).await;
+    if let Err(_) = streak_active.update(&txn).await {
+        let _ = txn.rollback().await;
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Erreur DB (streak)"}))).into_response();
+    }
+
+    if let Err(_) = txn.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Transaction commit failed"}))).into_response();
+    }
 
     (StatusCode::OK, Json(serde_json::json!({
         "success": true,
