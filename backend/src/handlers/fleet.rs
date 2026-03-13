@@ -2273,7 +2273,7 @@ async fn piracy_handler(
         result: Set(if success { "success".to_string() } else { "failure".to_string() }),
         loot_metal: Set(0.0),
         loot_crystal: Set(0.0),
-        ships_lost: Set(if success { PROBES_ON_SUCCESS } else { PROBES_ON_FAILURE }),
+        ships_lost: Set(if success { PROBES_ON_SUCCESS } else { full_fleet_snapshot.values().sum::<i32>() }),
         date: Set(Utc::now().naive_utc()),
         detailed_report: Set(None),
         details: Set(None),

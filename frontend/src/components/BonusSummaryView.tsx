@@ -370,24 +370,57 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
           />
         )}
         {computerTech > 0 && (
-          <BonusRow
-            source={`Tech. Informatique niv. ${computerTech}`}
-            effect="Slots expédition (1 + niv./4)"
-            value={`${maxExpeditionSlots}`}
-            valueColor="text-cyan-400"
-          />
+          <>
+            <BonusRow
+              source={`Tech. Informatique niv. ${computerTech}`}
+              effect="Slots expédition (1 + niv./4, max 4)"
+              value={`${Math.min(maxExpeditionSlots, 4)} slots`}
+              valueColor="text-cyan-400"
+            />
+            <BonusRow
+              source={`Tech. Informatique niv. ${computerTech}`}
+              effect="Capacité cargo transporteur (+10%/niv.)"
+              value={`+${computerTech * 10}%`}
+              valueColor="text-cyan-300"
+            />
+          </>
         )}
         {espionageTech > 0 && (
           <BonusRow
             source={`Tech. Espionnage niv. ${espionageTech}`}
-            effect="Niveau rapport espionnage"
+            effect="Qualité rapports espionnage"
             value={`niveau ${espionageTech}`}
             valueColor="text-yellow-400"
           />
         )}
+        {laserTech > 0 && (
+          <BonusRow
+            source={`Tech. Laser niv. ${laserTech}`}
+            effect="Combat — attaque (alternative weapons)"
+            value={`+${laserTech * 10}%`}
+            valueColor="text-red-300"
+          />
+        )}
+        {plasmaTech > 0 && (
+          <BonusRow
+            source={`Tech. Plasma niv. ${plasmaTech}`}
+            effect="Débloque tourelles plasma & bombardier"
+            value={`niv. ${plasmaTech}`}
+            valueColor="text-fuchsia-400"
+          />
+        )}
+        {gravitonTech > 0 && (
+          <BonusRow
+            source={`Tech. Graviton niv. ${gravitonTech}`}
+            effect="Débloque systèmes gravitationnels"
+            value={`niv. ${gravitonTech}`}
+            valueColor="text-purple-400"
+          />
+        )}
 
         {weaponsTech === 0 && shieldTech === 0 && armourTech === 0 &&
-         astrophysics === 0 && computerTech === 0 && espionageTech === 0 && (
+         astrophysics === 0 && computerTech === 0 && espionageTech === 0 &&
+         laserTech === 0 && plasmaTech === 0 && gravitonTech === 0 && (
           <div className="text-center py-6 text-slate-600 text-[10px] uppercase font-bold italic">
             Aucune technologie recherchée sur cette planète
           </div>
