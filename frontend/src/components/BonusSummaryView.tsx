@@ -114,6 +114,9 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
   const espionageTech = getTechLevel(planet, "espionage_tech") || getTechLevel(planet, "espionage");
   const energyTech = getTechLevel(planet, "energy_tech");
   const hyperspaceLevel = getTechLevel(planet, "hyperspace_tech");
+  const laserTech = getTechLevel(planet, "laser_tech");
+  const plasmaTech = getTechLevel(planet, "plasma_tech");
+  const gravitonTech = getTechLevel(planet, "graviton_tech");
 
   // Active timed effects
   const resourceBoostActive = activeItems.find(i => i.effect_type === "resource_boost");
@@ -129,8 +132,8 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
   // (lvl 0-3 → 1 slot, lvl 4-7 → 2 slots, lvl 8-11 → 3 slots, lvl 12+ → 4 slots)
   const maxExpeditionSlots = 1 + Math.floor(computerTech / 4);
 
-  // Max colonies = astrophysics / 2 rounded down (typically)
-  const maxColonies = Math.floor(astrophysics / 2);
+  // Max colonies = astrophysics level, capped at 10 (server formula: min(astrophysics, 10)).
+  const maxColonies = Math.min(astrophysics, 10);
 
   return (
     <div className="space-y-6 pb-10">
@@ -320,7 +323,12 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
 
       {/* SECTION: Research bonuses (per-planet) */}
       <div className="rounded-2xl bg-[rgba(10,5,32,0.85)] border border-fuchsia-500/10 backdrop-blur-[12px] p-6 space-y-4">
-        <SectionHeader title={`Recherches — ${planet?.name || "cette planète"}`} />
+        <SectionHeader title={`Recherches de cette planète`} />
+
+        {/* Per-planet note */}
+        <p className="text-[10px] text-fuchsia-400/60 italic border border-fuchsia-500/10 rounded-lg px-3 py-2 bg-fuchsia-950/10">
+          Les recherches sont propres à chaque planète dans ce jeu. Les niveaux affichés sont ceux de <span className="font-bold text-fuchsia-300/70">{planet?.name || "cette planète"}</span>.
+        </p>
 
         {/* Column headers */}
         <div className="grid grid-cols-[1fr_1fr_auto] gap-3 mb-1">
@@ -356,7 +364,7 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
         {astrophysics > 0 && (
           <BonusRow
             source={`Astrophysique niv. ${astrophysics}`}
-            effect="Colonies max (niv. / 2)"
+            effect="Colonies max (= niveau, cap 10)"
             value={`${maxColonies}`}
             valueColor="text-violet-400"
           />

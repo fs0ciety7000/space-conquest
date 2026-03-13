@@ -1363,7 +1363,7 @@ async fn expedition_v2_handler(
     let computer_tech_level = tech_tree::get_planet_tech_level(&state.db, id, "computer_tech")
         .await
         .unwrap_or(0);
-    let max_expeditions = 1 + (computer_tech_level / 4);
+    let max_expeditions = (1 + (computer_tech_level / 4)).min(4);
 
     // Count active expedition fleet_missions for this player (all their planets)
     let player_planet_ids: Vec<Uuid> = Planet::find()
@@ -2199,19 +2199,26 @@ async fn piracy_handler(
     }
 
     // ── Require at least 5 spy_probes on attacker planet ──────────────────────
-    // 1 probe burned on success (the infiltrator), 5 burned on failure (squad intercepted).
+    // On success: 1 probe burned (operative spent).
+    // On failure: the ENTIRE fleet on the planet is lost (intercepted and destroyed).
+    // This is the core risk/reward of the piracy mechanic — M10 design spec.
     const MIN_PROBES: i32 = 5;
     const PROBES_ON_SUCCESS: i32 = 1;
-    const PROBES_ON_FAILURE: i32 = 5;
     let probe_count = tech_tree::get_planet_ship_count(&state.db, attacker_planet_id, "spy_probe")
         .await
         .unwrap_or(0);
     if probe_count < MIN_PROBES {
         return (StatusCode::BAD_REQUEST, Json(json!({
-            "error": format!("Mission de piratage requiert au moins {} sondes d'espionnage (disponibles: {}). Succès: 1 sonde consommée. Échec: 5 sondes perdues.",
+            "error": format!("Mission de piratage requiert au moins {} sondes d'espionnage (disponibles: {}). Succès: 1 sonde consommée. Échec: toute la flotte sur la planète est perdue.",
                 MIN_PROBES, probe_count)
         }))).into_response();
     }
+
+    // ── Snapshot the full fleet on this planet before the roll ────────────────
+    // Needed so that on failure we can report what was lost.
+    let full_fleet_snapshot = tech_tree::get_all_planet_ship_counts(&state.db, attacker_planet_id)
+        .await
+        .unwrap_or_default();
 
     // ── Fetch target user and verify they exist ────────────────────────────────
     let target_user = match User::find_by_id(payload.target_user_id).one(&state.db).await {
@@ -2370,18 +2377,31 @@ async fn piracy_handler(
             }))).into_response()
         }
     } else {
-        // ── Failure: lose PROBES_ON_FAILURE spy_probes (squad intercepted) ────
-        let _ = tech_tree::deduct_ships(&state.db, attacker_planet_id, "spy_probe", PROBES_ON_FAILURE).await;
+        // ── Failure: the ENTIRE fleet on the attacker planet is destroyed ─────
+        // The syndicate security forces intercept and annihilate the operation.
+        // This is the original M10 design intent: "Échec = perte de la flotte."
+        let mut destroyed_ships: HashMap<String, i32> = HashMap::new();
+        for (ship_key, count) in &full_fleet_snapshot {
+            if *count > 0 {
+                let _ = tech_tree::deduct_ships(
+                    &state.db,
+                    attacker_planet_id,
+                    ship_key.as_str(),
+                    *count,
+                ).await;
+                destroyed_ships.insert(ship_key.clone(), *count);
+            }
+        }
 
         (StatusCode::OK, Json(json!({
             "success": false,
             "credits_stolen": 0.0,
-            "probes_consumed": PROBES_ON_FAILURE,
             "attacker_espionage": attacker_espionage,
             "target_computer": target_computer,
             "success_chance": (success_chance * 100.0).round(),
             "cooldown_hours": PIRACY_COOLDOWN_HOURS,
-            "message": format!("{} sondes perdues — escouade interceptée. Cooldown 4h.", PROBES_ON_FAILURE),
+            "fleet_destroyed": destroyed_ships,
+            "message": "Opération interceptée. La sécurité du Syndicat a neutralisé toute la flotte engagée.",
         }))).into_response()
     }
 }
