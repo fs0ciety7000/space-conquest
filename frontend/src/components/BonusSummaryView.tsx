@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiUrl } from "@/config/api";
 import { formatTimeUntil } from "@/lib/utils";
-import { Zap, Shield, Sword, Telescope, Cpu, Eye, Star, Clock, TrendingUp, FlaskConical } from "lucide-react";
+import { Zap, Shield, Sword, Telescope, Clock, TrendingUp, FlaskConical } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,9 +125,9 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
   // Slot bonuses
   const slotBonuses = planet?.slot_bonuses;
 
-  // Expedition slots: 1 base + 1 per 2 levels of astrophysics, capped by computer_tech
-  const baseExpeditionSlots = 1 + Math.floor(astrophysics / 2);
-  const maxExpeditionSlots = Math.min(baseExpeditionSlots, computerTech);
+  // Expedition slots: 1 base + 1 per 4 levels of computer_tech (server formula)
+  // (lvl 0-3 → 1 slot, lvl 4-7 → 2 slots, lvl 8-11 → 3 slots, lvl 12+ → 4 slots)
+  const maxExpeditionSlots = 1 + Math.floor(computerTech / 4);
 
   // Max colonies = astrophysics / 2 rounded down (typically)
   const maxColonies = Math.floor(astrophysics / 2);
@@ -318,13 +318,13 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
         )}
       </div>
 
-      {/* SECTION: Account Bonuses (all planets) */}
+      {/* SECTION: Research bonuses (per-planet) */}
       <div className="rounded-2xl bg-[rgba(10,5,32,0.85)] border border-fuchsia-500/10 backdrop-blur-[12px] p-6 space-y-4">
-        <SectionHeader title="Bonus Compte — Toutes Planètes" />
+        <SectionHeader title={`Recherches — ${planet?.name || "cette planète"}`} />
 
         {/* Column headers */}
         <div className="grid grid-cols-[1fr_1fr_auto] gap-3 mb-1">
-          <span className="text-[9px] uppercase font-bold text-slate-600">Recherche</span>
+          <span className="text-[9px] uppercase font-bold text-slate-600">Technologie</span>
           <span className="text-[9px] uppercase font-bold text-slate-600">Effet</span>
           <span className="text-[9px] uppercase font-bold text-slate-600">Valeur</span>
         </div>
@@ -356,7 +356,7 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
         {astrophysics > 0 && (
           <BonusRow
             source={`Astrophysique niv. ${astrophysics}`}
-            effect="Colonies max"
+            effect="Colonies max (niv. / 2)"
             value={`${maxColonies}`}
             valueColor="text-violet-400"
           />
@@ -364,7 +364,7 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
         {computerTech > 0 && (
           <BonusRow
             source={`Tech. Informatique niv. ${computerTech}`}
-            effect="Slots expédition"
+            effect="Slots expédition (1 + niv./4)"
             value={`${maxExpeditionSlots}`}
             valueColor="text-cyan-400"
           />
@@ -381,7 +381,7 @@ export default function BonusSummaryView({ planet, userId }: BonusSummaryViewPro
         {weaponsTech === 0 && shieldTech === 0 && armourTech === 0 &&
          astrophysics === 0 && computerTech === 0 && espionageTech === 0 && (
           <div className="text-center py-6 text-slate-600 text-[10px] uppercase font-bold italic">
-            Aucune recherche active
+            Aucune technologie recherchée sur cette planète
           </div>
         )}
       </div>
