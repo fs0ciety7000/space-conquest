@@ -220,7 +220,7 @@ pub async fn get_player_profile_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let config = state.config.read().unwrap().clone();
-    use backend::entities::{prelude::*, planet, fleet_mission};
+    use backend::entities::planet;
 
     // Récupérer l'ID de l'utilisateur qui consulte (viewer)
     let viewer_id = params
@@ -308,7 +308,7 @@ pub async fn get_player_profile_handler(
     let show_economy = espionage_level >= 5;
     let show_military = espionage_level >= 7;
     let show_fleet = espionage_level >= 10;
-    let show_defenses = espionage_level >= 12;
+    let _show_defenses = espionage_level >= 12;
     let show_buildings = espionage_level >= 15;
     let show_techs = espionage_level >= 18;
     let show_all = is_own_profile;
@@ -342,7 +342,6 @@ pub async fn get_player_profile_handler(
     };
 
     // Statistiques de combat (72 dernières heures)
-    use backend::entities::{combat_log, prelude::CombatLog};
     let (combat_victories, combat_defeats, combat_total, combat_win_rate) =
         if !planet_ids.is_empty() {
             let now = chrono::Utc::now().naive_utc();
@@ -839,7 +838,7 @@ pub async fn get_friends_handler(
 // Wire type matching the original main.rs API contract (sender_id + receiver_username).
 // crate::models::FriendRequestPayload has a different shape, so we use a local struct.
 #[derive(serde::Deserialize)]
-struct SendFriendRequestWire {
+pub(crate) struct SendFriendRequestWire {
     sender_id: Uuid,
     receiver_username: String,
 }

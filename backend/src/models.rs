@@ -157,3 +157,11 @@ pub struct TransportPayload {
 pub struct ExpeditionPayloadV2 {
     pub fleet: HashMap<String, i32>,
 }
+
+/// Payload pour la mission "deploy" (Fleet Save vers une planète alliée du même joueur)
+#[derive(Deserialize)]
+pub struct DeployPayload {
+    pub origin_planet_id: Uuid,
+    pub destination_planet_id: Uuid,
+    pub fleet: HashMap<String, i32>,
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Crosshair, Rocket, AlertTriangle, X, Minus, Plus, BookmarkPlus, Trash2, Zap, ChevronDown, ChevronUp, Check, Truck, Eye, ArrowRight, ShieldAlert, Navigation } from "lucide-react";
+import { Crosshair, Rocket, AlertTriangle, X, Minus, Plus, BookmarkPlus, Trash2, Zap, ChevronDown, ChevronUp, Check, Truck, Eye, ArrowRight, ShieldAlert, Navigation, Shield } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ interface FleetPreset {
   composition: { [key: string]: number };
 }
 
-type MissionType = 'attack' | 'spy' | 'transport' | 'recycle';
+type MissionType = 'attack' | 'spy' | 'transport' | 'recycle' | 'deploy';
 
 interface FleetDispatcherProps {
   planetId: string;
@@ -35,6 +35,37 @@ interface FleetDispatcherProps {
   onClose: () => void;
   onSpySuccess: (report: any) => void;
   onActionSuccess: () => void;
+}
+
+// Mirrors the backend flight time formula (backend/src/handlers/fleet.rs)
+function calculateFlightTime(
+  from: { galaxy: number; system: number; position: number },
+  to: { galaxy: number; system: number; position: number },
+  flightSpeedMultiplier: number,
+  hyperspaceLevel: number = 0
+): number {
+  let dist: number;
+  if (from.galaxy !== to.galaxy) {
+    dist = Math.abs(from.galaxy - to.galaxy) * 20000;
+  } else if (from.system !== to.system) {
+    dist = Math.abs(from.system - to.system) * 2000 + 2700;
+  } else if (from.position !== to.position) {
+    dist = Math.abs(from.position - to.position) * 5 + 1000;
+  } else {
+    dist = 5;
+  }
+
+  let baseTime: number;
+  if (dist < 1000) {
+    baseTime = dist / 10.0 + 30.0;
+  } else if (dist < 10000) {
+    baseTime = dist / 5.0 + 200.0;
+  } else {
+    baseTime = dist / 2.0 + 500.0;
+  }
+
+  const effectiveSpeed = flightSpeedMultiplier * (1.0 + hyperspaceLevel * 0.15);
+  return Math.max(5, Math.floor(baseTime / effectiveSpeed));
 }
 
 export default function FleetDispatcher({
@@ -65,6 +96,16 @@ export default function FleetDispatcher({
   const [metal, setMetal] = useState(0);
   const [crystal, setCrystal] = useState(0);
   const [deuterium, setDeuterium] = useState(0);
+
+  // === CONFIRMATION D'ATTAQUE ===
+  const [showAttackConfirm, setShowAttackConfirm] = useState(false);
+
+  // === DEPLOY — sélection planète destination ===
+  const [myPlanets, setMyPlanets] = useState<Array<{ id: string; name: string; galaxy: number; system: number; position: number }>>([]);
+  const [deployDestinationId, setDeployDestinationId] = useState<string>('');
+
+  // === CONFIG SERVEUR (flight_speed_multiplier) ===
+  const [flightSpeedMultiplier, setFlightSpeedMultiplier] = useState(5.0);
 
   const userId = localStorage.getItem('user_id');
 
@@ -97,25 +138,59 @@ export default function FleetDispatcher({
       .catch(() => {});
   }, [userId]);
 
-  // Flight time calculation
+  // Fetch server config for dynamic flight_speed_multiplier
   useEffect(() => {
-      const g1 = currentPlanet.galaxy || 1;
-      const s1 = currentPlanet.system || 1;
-      const p1 = currentPlanet.position || 1;
-      const g2 = targetPlanet.galaxy || g1;
-      const s2 = targetPlanet.system || s1;
-      const p2 = targetPlanet.position || p1;
+    fetch(apiUrl('/config'))
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.flight_speed_multiplier) {
+          setFlightSpeedMultiplier(parseFloat(data.flight_speed_multiplier) || 5.0);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
-      let dist = 5.0;
-      if (g1 !== g2) dist = Math.abs(g1 - g2) * 20000;
-      else if (s1 !== s2) dist = Math.abs(s1 - s2) * 2000 + 2700;
-      else if (p1 !== p2) dist = Math.abs(p1 - p2) * 5 + 1000;
+  // Load player's own planets for deploy destination picker
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    fetch(apiUrl('/my-planets'), { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((planets: Array<{ id: string; name: string; galaxy: number; system: number; position: number }>) => {
+        const deployable = planets.filter(p => p.id !== currentPlanet?.id);
+        setMyPlanets(deployable);
+        if (deployable.length > 0 && !deployDestinationId) {
+          setDeployDestinationId(deployable[0].id);
+        }
+      })
+      .catch(() => {});
+  }, [currentPlanet?.id]);
 
-      const speedFactor = 500; // TODO: fetch from backend
-      const baseTime = 10 + Math.sqrt(dist) / 2;
-      const seconds = Math.max(5, Math.floor((baseTime * 100) / speedFactor));
-      setFlightTime(seconds);
-  }, [currentPlanet, targetPlanet]);
+  // Flight time calculation — mirrors the backend formula exactly
+  useEffect(() => {
+      const from = {
+        galaxy: currentPlanet.galaxy || 1,
+        system: currentPlanet.system || 1,
+        position: currentPlanet.position || 1,
+      };
+
+      // For deploy mission, resolve destination from myPlanets selection
+      let effectiveTarget = targetPlanet;
+      if (mission === 'deploy' && deployDestinationId) {
+        const found = myPlanets.find(p => p.id === deployDestinationId);
+        if (found) effectiveTarget = found;
+      }
+
+      const to = {
+        galaxy: effectiveTarget.galaxy || from.galaxy,
+        system: effectiveTarget.system || from.system,
+        position: effectiveTarget.position || from.position,
+      };
+
+      // TODO: pass hyperspace_tech_level from planet data
+      const hyperspaceLevel = 0;
+
+      setFlightTime(calculateFlightTime(from, to, flightSpeedMultiplier, hyperspaceLevel));
+  }, [currentPlanet, targetPlanet, flightSpeedMultiplier, mission, deployDestinationId, myPlanets]);
 
   // Calculations
   const totalPower = availableShips.reduce((sum, ship) => sum + (ship.attack * (shipSelection[ship.ship_key] || 0)), 0);
@@ -208,9 +283,25 @@ export default function FleetDispatcher({
     } catch {}
   };
 
+  const handleLaunchClick = () => {
+    if (mission === 'attack') {
+      const fleet = Object.entries(shipSelection)
+        .filter(([_, count]) => count > 0)
+        .reduce((acc, [key, count]) => ({ ...acc, [key]: count }), {});
+      if (Object.keys(fleet).length === 0) {
+        toast.error("Sélectionnez au moins un vaisseau");
+        return;
+      }
+      setShowAttackConfirm(true);
+      return;
+    }
+    handleLaunch();
+  };
+
   const handleLaunch = async () => {
     const token = localStorage.getItem('token');
     setIsLaunching(true);
+    setShowAttackConfirm(false);
 
     try {
         if (mission === 'spy') {
@@ -249,6 +340,37 @@ export default function FleetDispatcher({
             } else {
                 const err = await res.json();
                 toast.error(err.error || "Erreur lors de l'attaque");
+            }
+        }
+        else if (mission === 'deploy') {
+            const fleet = Object.entries(shipSelection)
+              .filter(([_, count]) => count > 0)
+              .reduce((acc, [key, count]) => ({ ...acc, [key]: count }), {});
+
+            if (Object.keys(fleet).length === 0) {
+              toast.error("Sélectionnez au moins un vaisseau");
+              return setIsLaunching(false);
+            }
+
+            if (!deployDestinationId) {
+              toast.error("Sélectionnez une planète de destination");
+              return setIsLaunching(false);
+            }
+
+            const res = await fetch(apiUrl(`/fleet/deploy?current_planet_id=${planetId}`), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ origin_planet_id: planetId, destination_planet_id: deployDestinationId, fleet })
+            });
+
+            if (res.ok) {
+                toast.success("Flotte déployée en transit sécurisé", {
+                    description: "Vos vaisseaux ne peuvent pas être attaqués pendant le transit."
+                });
+                onActionSuccess();
+            } else {
+                const err = await res.json();
+                toast.error(err.error || "Erreur lors du déploiement");
             }
         }
         else if (mission === 'transport') {
@@ -304,17 +426,20 @@ export default function FleetDispatcher({
         <div className={`p-6 border-b flex justify-between items-start transition-colors duration-500 ${
             mission === 'attack' ? 'bg-red-950/40 border-red-900/50' :
             mission === 'spy' ? 'bg-blue-950/40 border-blue-900/50' :
+            mission === 'deploy' ? 'bg-violet-950/40 border-violet-900/50' :
             'bg-emerald-950/40 border-emerald-900/50'
         }`}>
             <div className="flex gap-4 items-center">
                 <div className={`p-3 rounded-xl border ${
                     mission === 'attack' ? 'bg-red-900/40 border-red-500/50 text-red-400 animate-pulse' :
                     mission === 'spy' ? 'bg-blue-900/40 border-blue-500/50 text-blue-400' :
+                    mission === 'deploy' ? 'bg-violet-900/40 border-violet-500/50 text-violet-400' :
                     'bg-emerald-900/40 border-emerald-500/50 text-emerald-400'
                 }`}>
                     {mission === 'attack' && <Crosshair size={28} />}
                     {mission === 'spy' && <Eye size={28} />}
                     {mission === 'transport' && <Truck size={28} />}
+                    {mission === 'deploy' && <Shield size={28} />}
                 </div>
                 <div>
                     <h2 className="text-xl font-black uppercase tracking-widest text-slate-200">Dispatcher de flotte</h2>
@@ -369,6 +494,17 @@ export default function FleetDispatcher({
             >
                 <Truck size={14} className="mr-2"/> Transport
             </Button>
+            <Button
+                variant="ghost"
+                onClick={() => setMission('deploy')}
+                className={`flex-1 h-10 text-xs font-bold uppercase tracking-wider transition-colors ${
+                    mission === 'deploy'
+                        ? 'border border-violet-500/40 text-violet-400 bg-violet-500/8 hover:bg-violet-600/20'
+                        : 'border border-slate-600/30 text-slate-500 bg-transparent hover:border-cyan-500/25 hover:text-slate-300'
+                }`}
+            >
+                <Shield size={14} className="mr-2"/> Déployer
+            </Button>
         </div>
 
         {/* CONTENT */}
@@ -385,6 +521,86 @@ export default function FleetDispatcher({
                         <p className="text-sm text-slate-400 max-w-sm">
                             Envoyer une sonde d'espionnage furtive vers {targetPlanet.name}. Vous recevrez un rapport détaillé sur les infrastructures et la flotte en stationnement.
                         </p>
+                    </div>
+                </div>
+            ) : mission === 'deploy' ? (
+                <div className="space-y-6">
+                    <div className="py-4 flex flex-col items-center text-center space-y-3">
+                        <div className="w-20 h-20 rounded-full bg-violet-900/20 border-2 border-dashed border-violet-500/30 flex items-center justify-center relative">
+                            <div className="absolute inset-0 rounded-full border border-violet-400/20 animate-ping"></div>
+                            <Shield size={36} className="text-violet-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-bold text-slate-200 mb-1 uppercase tracking-wide">Transit Sécurisé</h3>
+                            <p className="text-xs text-slate-400 max-w-xs">
+                                Déployez votre flotte vers l'une de vos colonies. Vos vaisseaux ne peuvent pas être attaqués pendant le transit.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 px-4 py-2 bg-violet-900/20 border border-violet-500/20 rounded-lg text-xs text-violet-300">
+                            <Shield size={12} />
+                            <span>Protection totale en transit — Déploiement longue distance</span>
+                        </div>
+                    </div>
+
+                    {/* Destination picker */}
+                    {myPlanets.length === 0 ? (
+                        <div className="flex items-center gap-3 px-4 py-3 bg-amber-950/30 border border-amber-500/30 rounded-lg text-amber-300 text-xs">
+                            <ShieldAlert size={16} className="shrink-0" />
+                            <span>Vous devez posséder au moins 2 planètes pour déployer votre flotte.</span>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 pb-2 border-b border-cyan-500/10">
+                                <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-violet-400 to-transparent flex-shrink-0" />
+                                <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-violet-500/70">Destination</span>
+                            </div>
+                            <div className="grid gap-2">
+                                {myPlanets.map(p => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => setDeployDestinationId(p.id)}
+                                        className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-left transition-colors ${
+                                            deployDestinationId === p.id
+                                                ? 'bg-violet-900/30 border-violet-500/50 text-violet-200'
+                                                : 'bg-[rgba(5,0,15,0.8)] border-violet-500/10 text-slate-300 hover:bg-violet-500/5 hover:border-violet-500/30'
+                                        }`}
+                                    >
+                                        <span className="text-sm font-medium">{p.name}</span>
+                                        <span className="text-[10px] font-mono text-slate-500">[{p.galaxy}:{p.system}:{p.position}]</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {/* Ship selection for deploy */}
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 pb-2 border-b border-cyan-500/10">
+                            <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-violet-400 to-transparent flex-shrink-0" />
+                            <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-violet-500/70">Flotte à déployer</span>
+                        </div>
+                        {availableShips.length === 0 ? (
+                            <p className="text-center text-slate-500 text-sm py-4">Aucun vaisseau disponible</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {availableShips.map((ship) => {
+                                    const selected = shipSelection[ship.ship_key] || 0;
+                                    return (
+                                        <div key={ship.ship_key} className="bg-[rgba(5,0,15,0.8)] border border-violet-500/10 px-4 py-3 rounded-lg flex items-center justify-between hover:bg-violet-500/5 transition-colors duration-150">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-medium text-slate-200 mb-0.5">{ship.display_name}</span>
+                                                <span className="text-[10px] text-slate-500 font-mono">Dispo: <span className="text-violet-400 tabular-nums">{ship.current_count}</span></span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => handleShipCountChange(ship.ship_key, selected - 1)} className="p-1.5 bg-[rgba(5,0,15,0.8)] hover:bg-violet-500/10 border border-violet-500/15 text-slate-400 rounded transition-colors"><Minus size={12} /></button>
+                                                <Input type="number" min="0" max={ship.current_count} value={selected} onChange={(e) => handleShipCountChange(ship.ship_key, parseInt(e.target.value) || 0)} onFocus={(e) => e.target.select()} className="w-16 h-8 bg-[rgba(5,0,15,0.8)] border border-violet-500/15 text-slate-200 text-center font-mono text-sm focus:border-violet-500/50" />
+                                                <button onClick={() => handleShipCountChange(ship.ship_key, selected + 1)} className="p-1.5 bg-[rgba(5,0,15,0.8)] hover:bg-violet-500/10 border border-violet-500/15 text-slate-400 rounded transition-colors"><Plus size={12} /></button>
+                                                <button onClick={() => handleShipCountChange(ship.ship_key, ship.current_count)} className="px-2 py-1.5 bg-violet-900/20 hover:bg-violet-900/40 border border-violet-500/20 text-violet-400 font-bold text-[10px] rounded transition-colors">MAX</button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : (
@@ -508,18 +724,58 @@ export default function FleetDispatcher({
             <div className="flex gap-4">
             <Button onClick={onClose} variant="ghost" className="flex-1 border border-cyan-500/10 font-bold uppercase tracking-widest text-slate-400 hover:border-cyan-500/25 hover:text-slate-300">Annuler</Button>
             <Button
-                onClick={handleLaunch}
-                disabled={isLaunching || (mission !== 'spy' && totalShips === 0) || (mission !== 'transport' && totalShips > 0 && !hasSufficientFuel)}
+                onClick={handleLaunchClick}
+                disabled={isLaunching || (mission !== 'spy' && totalShips === 0) || (mission === 'deploy' && myPlanets.length === 0) || (mission !== 'transport' && mission !== 'deploy' && totalShips > 0 && !hasSufficientFuel)}
                 className={`flex-[2] font-black uppercase tracking-widest shadow-lg hover:-translate-y-1 transition-all ${
                     mission === 'attack' ? 'bg-red-600 hover:bg-red-500 text-slate-200 shadow-red-600/20' :
                     mission === 'spy' ? 'bg-blue-600 hover:bg-blue-500 text-slate-200 shadow-blue-600/20' :
+                    mission === 'deploy' ? 'bg-violet-600 hover:bg-violet-500 text-slate-200 shadow-violet-600/20' :
                     'bg-emerald-600 hover:bg-emerald-500 text-slate-200 shadow-emerald-600/20'
                 }`}
             >
-                {isLaunching ? "LANCEMENT..." : "ORDRE D'EXÉCUTION"}
+                {isLaunching ? "LANCEMENT..." : mission === 'deploy' ? "DÉPLOYER LA FLOTTE" : "ORDRE D'EXÉCUTION"}
             </Button>
             </div>
         </div>
+
+        {/* Modal de confirmation d'attaque */}
+        {showAttackConfirm && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 rounded-2xl">
+                <div className="bg-[rgba(16,8,46,0.98)] border border-red-500/30 rounded-2xl shadow-2xl w-full max-w-sm space-y-4 p-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-red-900/40 border border-red-500/50 text-red-400 animate-pulse">
+                            <AlertTriangle size={22} />
+                        </div>
+                        <h3 className="text-base font-black uppercase tracking-widest text-red-400">Confirmer l'attaque</h3>
+                    </div>
+                    <div className="space-y-2 text-xs text-slate-300">
+                        <div className="flex justify-between items-center p-2 bg-black/40 rounded border border-cyan-500/10">
+                            <span className="text-slate-500 uppercase font-bold">Cible</span>
+                            <span className="font-mono text-slate-200">{targetPlanet.name} {targetPlanet.galaxy ? `[${targetPlanet.galaxy}:${targetPlanet.system}:${targetPlanet.position}]` : ''}</span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-black/40 rounded border border-cyan-500/10">
+                            <span className="text-slate-500 uppercase font-bold">Vaisseaux</span>
+                            <span className="font-mono text-slate-200">{totalShips} unité(s)</span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-black/40 rounded border border-cyan-500/10">
+                            <span className="text-slate-500 uppercase font-bold">ETA aller</span>
+                            <span className="font-mono text-slate-200">{flightTime}s</span>
+                        </div>
+                        <div className="p-2 bg-red-950/20 rounded border border-red-900/40 text-red-300 text-[10px] text-center font-bold uppercase tracking-wider">
+                            Cette action est irréversible
+                        </div>
+                    </div>
+                    <div className="flex gap-3 pt-1">
+                        <Button variant="ghost" onClick={() => setShowAttackConfirm(false)} className="flex-1 border border-cyan-500/10 text-slate-400 hover:text-slate-200 text-xs font-bold uppercase">
+                            Annuler
+                        </Button>
+                        <Button onClick={handleLaunch} disabled={isLaunching} className="flex-[2] bg-red-600 hover:bg-red-500 text-slate-200 font-black uppercase tracking-widest text-xs shadow-lg shadow-red-600/20">
+                            {isLaunching ? "LANCEMENT..." : "Confirmer l'attaque"}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        )}
 
       </DialogContent>
     </Dialog>

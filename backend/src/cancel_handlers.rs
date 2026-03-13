@@ -33,11 +33,12 @@ pub async fn cancel_ship_build_handler(
     use crate::entities::ship_type;
 
     // Get planet (read-only pre-check)
-    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
-        Ok(Some(p)) => p,
+    // Verify planet exists before proceeding
+    match Planet::find_by_id(planet_id).one(&state.db).await {
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response(),
-    };
+        Ok(Some(_)) => {}
+    }
 
     // Get ship type
     let ship = match ShipType::find()

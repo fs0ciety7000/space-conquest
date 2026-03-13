@@ -36,7 +36,7 @@ impl MigrationTrait for Migration {
         Ok(())
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
         // Don't remove columns in down migration for safety
         // If you really need to rollback, do it manually
         Ok(())

@@ -73,6 +73,8 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
     const [showNearby, setShowNearby] = useState(false);
     const [showPlayerPlanets, setShowPlayerPlanets] = useState(true);
     const [radialMenu, setRadialMenu] = useState<{ slot: GalaxySlot; position: { x: number; y: number } } | null>(null);
+    const [recycleModal, setRecycleModal] = useState<{ slot: GalaxySlot; maxRecyclers: number } | null>(null);
+    const [recycleCount, setRecycleCount] = useState<number>(1);
 
     useEffect(() => { fetchSystem(); setRadialMenu(null); }, [galaxy, system]);
     useEffect(() => { fetchPlayerPlanets(); }, []);
@@ -180,8 +182,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
         }
     };
 
-    const handleRecycle = async (slot: GalaxySlot) => {
-        const token = localStorage.getItem('token');
+    const handleRecycle = (slot: GalaxySlot) => {
         const availableRecyclers = getShipCount(planet, 'recycler');
 
         if (availableRecyclers === 0) {
@@ -191,7 +192,16 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
             return;
         }
 
-        const recyclersToSend = Math.min(availableRecyclers, 50);
+        setRecycleCount(Math.min(availableRecyclers, 50));
+        setRecycleModal({ slot, maxRecyclers: availableRecyclers });
+        setRadialMenu(null);
+    };
+
+    const confirmRecycle = async () => {
+        if (!recycleModal) return;
+        const token = localStorage.getItem('token');
+        const { slot } = recycleModal;
+        const recyclersToSend = Math.max(1, Math.min(recycleCount, recycleModal.maxRecyclers));
 
         try {
             const res = await fetch(apiUrl(`/recycle?current_planet_id=${planet.id}`), {
@@ -207,6 +217,7 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
             const data = await res.json();
             if (res.ok) {
                 toast.success(`${recyclersToSend} recycleur(s) en route`, { description: data.message });
+                setRecycleModal(null);
                 fetchSystem();
             } else {
                 toast.error("Échec recyclage", { description: data.error || "Erreur inconnue" });
@@ -482,6 +493,61 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                 <div className="text-xs text-cyan-400 font-mono tabular-nums">[{p.galaxy}:{p.system}:{p.position}]</div>
                             </button>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de confirmation de recyclage */}
+            {recycleModal && (
+                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setRecycleModal(null)}>
+                    <div className="bg-[rgba(16,8,46,0.95)] backdrop-blur-[12px] border border-amber-500/20 rounded-2xl shadow-2xl max-w-sm w-full card-depth" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-5 border-b border-amber-500/20 flex items-center justify-between">
+                            <h3 className="font-bold text-amber-400 text-sm uppercase tracking-wider flex items-center gap-2">
+                                <Recycle size={16} /> Recyclage de débris
+                            </h3>
+                            <button onClick={() => setRecycleModal(null)} className="text-slate-500 hover:text-slate-200 transition-colors">
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div className="text-xs text-slate-400 space-y-1">
+                                <p>Champ de débris en <span className="font-mono text-amber-300">[{recycleModal.slot.planet_galaxy}:{system}:{recycleModal.slot.position}]</span></p>
+                                <div className="flex gap-4 mt-2">
+                                    <span className="text-slate-300">Métal: <span className="font-mono text-slate-200">{Math.floor(recycleModal.slot.debris_metal).toLocaleString()}</span></span>
+                                    <span className="text-cyan-300">Cristal: <span className="font-mono text-slate-200">{Math.floor(recycleModal.slot.debris_crystal).toLocaleString()}</span></span>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-2">
+                                    Recycleurs à envoyer (max: {recycleModal.maxRecyclers})
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={recycleModal.maxRecyclers}
+                                        value={recycleCount}
+                                        onChange={(e) => setRecycleCount(Math.max(1, Math.min(recycleModal.maxRecyclers, parseInt(e.target.value) || 1)))}
+                                        onFocus={(e) => e.target.select()}
+                                        className="flex-1 h-9 bg-[rgba(5,0,15,0.8)] border border-amber-500/20 text-slate-200 text-center font-mono focus:border-amber-500/50"
+                                    />
+                                    <button
+                                        onClick={() => setRecycleCount(recycleModal.maxRecyclers)}
+                                        className="px-3 py-1.5 bg-amber-900/20 hover:bg-amber-900/40 border border-amber-500/20 text-amber-400 font-bold text-[10px] rounded transition-colors"
+                                    >
+                                        MAX
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <Button variant="ghost" onClick={() => setRecycleModal(null)} className="flex-1 border border-cyan-500/10 text-slate-400 hover:text-slate-200 text-xs font-bold uppercase">
+                                    Annuler
+                                </Button>
+                                <Button onClick={confirmRecycle} className="flex-[2] bg-amber-600/80 hover:bg-amber-500 text-slate-200 font-bold uppercase text-xs shadow-lg">
+                                    <Recycle size={14} className="mr-2" /> Envoyer {recycleCount} recycleur(s)
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

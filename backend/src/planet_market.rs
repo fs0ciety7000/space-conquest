@@ -10,10 +10,9 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
-use chrono::Utc;
 
 use crate::AppState;
 

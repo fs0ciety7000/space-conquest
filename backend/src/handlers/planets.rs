@@ -758,6 +758,37 @@ async fn get_planet_handler(
             }
 
             let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
+        } else if m.mission_type == "deploy" {
+            // ── Fleet Save / Deploy : ajouter les vaisseaux à la planète de destination ──
+            // La flotte est stockée en JSON dans fleet_data (ship_key → count).
+            // Les vaisseaux ont déjà été déduits de la planète source au moment de l'envoi.
+            if let Some(fleet_json) = &m.fleet_data {
+                if let Ok(fleet_map) = serde_json::from_str::<HashMap<String, i32>>(fleet_json) {
+                    for (ship_key, count) in &fleet_map {
+                        if *count > 0 {
+                            let _ = tech_tree::add_ships(&state.db, m.target_planet_id, ship_key, *count).await;
+                        }
+                    }
+
+                    // Notification WS — flotte arrivée à destination
+                    if let Some(ref ws) = state.ws {
+                        let fleet_summary = fleet_map.iter()
+                            .filter(|(_, &c)| c > 0)
+                            .map(|(k, c)| format!("{}×{}", c, k))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        ws.push_notification(
+                            p.owner_id,
+                            "fleet",
+                            "Flotte déployée",
+                            &format!("Déploiement arrivé sur {} : {}", p.name, fleet_summary),
+                            None,
+                        )
+                        .await;
+                    }
+                }
+            }
+            let _ = FleetMission::delete_by_id(m.id).exec(&state.db).await;
         }
     }
 
@@ -1395,7 +1426,12 @@ async fn cancel_construction_handler(
             let qty = item.level as f64;
             (dt.base_cost_metal as f64 * qty, dt.base_cost_crystal as f64 * qty, dt.base_cost_deuterium as f64 * qty, false, true)
         } else {
-            let cost = game_logic::get_upgrade_cost(&item.building_type, item.level, &config);
+            // Use data-driven cache (H2) — falls back to zeros for unknown keys
+            let cost = game_logic::get_upgrade_cost_from_cache(
+                &state.building_cost_cache,
+                &item.building_type,
+                item.level,
+            );
             (cost.metal, cost.crystal, cost.deuterium, false, false)
         }
     };

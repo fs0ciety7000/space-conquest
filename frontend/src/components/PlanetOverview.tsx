@@ -16,6 +16,7 @@ import { getTechLevel, getBuildingLevel, getShipCount, getDefenseCount, getShipS
 import { formatDuration } from '@/lib/utils';
 import { usePlanet } from '@/contexts/PlanetContext';
 import ZACManager from '@/components/ZACManager';
+import ActiveMissions from '@/components/ActiveMissions';
 // --- Dictionnaire de noms ---
 const getBiomeStyle = (key: string): string => {
   const styles: Record<string, string> = {
@@ -630,6 +631,11 @@ export default function PlanetOverview({ planet, speedFactor }: { planet: any, s
     </CardContent>
 </Card>
           </div>
+      )}
+
+      {/* FLOTTES EN TRANSIT — widget compact */}
+      {(incomingMissions.length > 0 || outgoingMissions.length > 0) && (
+        <ActiveMissions planet={planet} />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

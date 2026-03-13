@@ -7,7 +7,7 @@
 
 use chrono::Utc;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait};
-use crate::entities::{prelude::*, planet_technology, planet_ship, planet_defense, construction_queue, building_type, technology, planet_building, planet};
+use crate::entities::{prelude::*, planet_technology, planet_ship, planet_defense, construction_queue, building_type, technology, planet_building};
 use crate::protection;
 use uuid::Uuid;
 
@@ -305,10 +305,18 @@ pub async fn update_all_user_points(db: &DatabaseConnection) -> Result<usize, se
 /// Process all tick-based game mechanics
 ///
 /// This is the main tick function that should be called periodically
-/// (e.g., every 10 seconds via a background task or cron job)
+/// (e.g., every 2 seconds via a background task).
+///
+/// The tick counter is used to throttle expensive operations:
+/// - Score recalculation : toutes les 150 ticks (= 5 minutes à 2s/tick)
 ///
 /// Returns statistics about what was processed
 pub async fn process_tick(db: &DatabaseConnection, config: &crate::ServerConfigCache) -> Result<TickStats, sea_orm::DbErr> {
+    // Atomic counter shared across calls via a static — no allocations, no mutex.
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static TICK_COUNTER: AtomicU64 = AtomicU64::new(0);
+    let tick_count = TICK_COUNTER.fetch_add(1, Ordering::Relaxed);
+
     let research_completed = process_research_completion(db).await?;
     let ships_completed = process_ship_building_completion(db).await?;
     let defenses_completed = process_defense_building_completion(db).await?;
@@ -319,8 +327,13 @@ pub async fn process_tick(db: &DatabaseConnection, config: &crate::ServerConfigC
     // Auto-start pending build queue items when slots free up
     crate::build_queue::process_build_queue(db, config).await;
 
-    // Update all user points after processing completions
-    let points_updated = update_all_user_points(db).await.unwrap_or(0);
+    // Recalcul des scores : toutes les 150 ticks (5 min à 2s/tick) au lieu de chaque tick.
+    // Réduit la charge DB de 150× sur cette opération coûteuse.
+    let points_updated = if tick_count % 150 == 0 {
+        update_all_user_points(db).await.unwrap_or(0)
+    } else {
+        0
+    };
 
     Ok(TickStats {
         research_completed: research_completed + tech_completed_queue,
@@ -345,7 +358,5 @@ pub struct TickStats {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // Add tests here when needed
 }

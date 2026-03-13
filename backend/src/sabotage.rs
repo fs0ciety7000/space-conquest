@@ -3,12 +3,12 @@ use axum::{
     http::{StatusCode, HeaderMap},
     response::{IntoResponse, Json},
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, DbErr, PaginatorTrait, Condition, TransactionTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, DbErr, PaginatorTrait, TransactionTrait};
 use chrono::{Utc, Duration};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::entities::{prelude::*, planet, user, sabotage_effect, casus_belli, combat_log, construction_queue};
+use crate::entities::{prelude::*, planet, user, sabotage_effect, casus_belli, combat_log};
 use crate::AppState;
 
 /// Helper: extraire user_id depuis le header Authorization

@@ -10,8 +10,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    ActiveModelTrait, DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait,
-    Set, QueryOrder, QuerySelect,
+    DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -19,7 +18,7 @@ use uuid::Uuid;
 use chrono::{Utc, Duration};
 
 use crate::AppState;
-use crate::entities::{prelude::*, planet, fleet_mission};
+use crate::entities::{prelude::*, fleet_mission};
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -57,6 +56,7 @@ pub struct UpdateRoutePayload {
 }
 
 #[derive(Serialize)]
+#[allow(dead_code)]
 struct RouteLog {
     id: String,
     executed_at: String,
@@ -80,8 +80,8 @@ fn compute_travel_time_seconds(
 ) -> i64 {
     let dist = crate::game_logic::calculate_distance(src, tgt);
     let base_time = crate::game_logic::calculate_flight_time(dist, flight_speed);
-    // Hyperspace tech: each level gives +10% speed → reduce time
-    let bonus = 1.0 + hyperspace_level as f64 * 0.10;
+    // Hyperspace tech: each level gives +15% speed → reduce time (aligné avec les missions de flotte)
+    let bonus = 1.0 + hyperspace_level as f64 * 0.15;
     ((base_time as f64) / bonus).max(1.0) as i64
 }
 

@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -5,7 +6,6 @@ import {
   Rocket, Shield, Info, Lock, CheckCircle2, XCircle, Timer,
   Hammer, Crosshair, Truck, Box, Zap, Scan, Sword, Warehouse, ShieldCheck
 } from "lucide-react";
-import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
@@ -64,7 +64,9 @@ const container = {
 };
 const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 
-export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
+// TODO: callbacks onUpdate passé en prop — le wrapper parent devrait useCallback pour éviter
+// les re-renders du memo en cas de recréation de la fonction à chaque render parent.
+const Shipyard = React.memo(function Shipyard({ planet, onUpdate }: ShipyardProps) {
   const [qty, setQty] = useState<Record<string, number>>({});
   const [shipTypes, setShipTypes] = useState<ShipTypeInfo[]>([]);
   const [buildQueue, setBuildQueue] = useState<any[]>([]);
@@ -96,9 +98,12 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
   }, [planet.id]);
 
   // --- CALCULS TECHNOLOGIQUES ---
-  const bonusAtk  = 1 + ((getTechLevel(planet, 'laser_tech'))  * 0.1);
-  const bonusShd  = 1 + ((getTechLevel(planet, 'energy_tech')) * 0.1);
-  const bonusHull = 1 + ((getTechLevel(planet, 'armour_tech')) * 0.1);
+  // weapons_tech: +10% attaque par niveau (source: combat.rs)
+  // shield_tech:  +10% bouclier par niveau (source: combat.rs)
+  // armour_tech:  +10% coque par niveau (source: combat.rs)
+  const bonusAtk  = 1 + ((getTechLevel(planet, 'weapons_tech')) * 0.1);
+  const bonusShd  = 1 + ((getTechLevel(planet, 'shield_tech'))  * 0.1);
+  const bonusHull = 1 + ((getTechLevel(planet, 'armour_tech'))  * 0.1);
 
   // Calculate current fleet from dynamic ship types data
   const currentFleet = shipTypes.reduce((total, ship) => total + ship.current_count, 0);
@@ -427,7 +432,9 @@ export default function Shipyard({ planet, onUpdate }: ShipyardProps) {
       </motion.div>
     </div>
   );
-}
+});
+
+export default Shipyard;
 
 function StatBox({ icon: Icon, label, value, color }: { icon: any, label: string, value: number, color: string }) {
     return (

@@ -1,18 +1,18 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::{IntoResponse, Json},
+    response::Json,
 };
 use sea_orm::{
-    ActiveModelTrait, EntityTrait, Set, QueryFilter, ColumnTrait, ActiveValue
+    ActiveModelTrait, EntityTrait, Set, QueryFilter, ColumnTrait,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 
 use crate::entities::{
     prelude::*,
     ship_type, building_type, defense_type, ship_requirement, building_requirement,
-    defense_requirement, technology, officer_template, flagship_module_type,
+    defense_requirement, flagship_module_type,
 };
 use crate::AppState;
 

@@ -94,7 +94,7 @@ pub async fn calculate_user_points(
     db: &DatabaseConnection,
     user_id: Uuid,
 ) -> Result<i64, sea_orm::DbErr> {
-    use crate::entities::{prelude::*, planet_ship, ship_type, planet_building, building_type};
+    use crate::entities::{prelude::*, planet_ship, planet_building};
 
     // Get all planets owned by this user
     let planets = Planet::find()
@@ -211,6 +211,41 @@ pub async fn validate_attack(
 
         if defender_is_new_account && is_planet_in_beginner_zone(db, defender_planet_id, beginner_zone_galaxy_max).await.unwrap_or(false) {
             return Err(format!("Cette planète est dans la zone débutant (galaxie ≤ {}, compte < {} jours)", beginner_zone_galaxy_max, beginner_zone_max_account_days));
+        }
+    }
+
+    // ── Anti-farm : vérification du ratio de points (C1) ──────────────────────
+    // Si anti_farm_enabled est actif, le ratio défenseur/attaquant doit être dans
+    // [anti_farm_min_ratio, anti_farm_max_ratio].
+    // Par défaut : min=0.20, max=5.0 → on ne peut pas attaquer quelqu'un 5× plus faible
+    // ni quelqu'un 5× plus fort.
+    let anti_farm_enabled = config.get_config("anti_farm_enabled", 1.0) >= 1.0;
+    if anti_farm_enabled {
+        let attacker_user = User::find_by_id(attacker_user_id)
+            .one(db)
+            .await
+            .map_err(|e| format!("Erreur DB attaquant: {}", e))?;
+        let defender_user = User::find_by_id(defender_user_id)
+            .one(db)
+            .await
+            .map_err(|e| format!("Erreur DB défenseur: {}", e))?;
+
+        if let (Some(att), Some(def)) = (attacker_user, defender_user) {
+            let attacker_pts = att.total_points;
+            let defender_pts = def.total_points;
+
+            let min_ratio = config.get_config("anti_farm_min_ratio", 0.20);
+            let max_ratio = config.get_config("anti_farm_max_ratio", 5.0);
+
+            if !is_attack_allowed_by_points(attacker_pts, defender_pts, min_ratio, max_ratio) {
+                let ratio_pct_min = (min_ratio * 100.0) as i32;
+                let ratio_pct_max = (max_ratio * 100.0) as i32;
+                return Err(format!(
+                    "Protection anti-farm : l'écart de points est trop important. \
+                     Le défenseur doit avoir entre {}% et {}% de vos points.",
+                    ratio_pct_min, ratio_pct_max
+                ));
+            }
         }
     }
 

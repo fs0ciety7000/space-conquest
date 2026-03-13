@@ -6,7 +6,7 @@ import {
   Hammer, Microscope, Timer, ArrowUpCircle,
   Warehouse, Zap, Scan, Activity, ChevronRight, TrendingUp, Lock, ShieldCheck, Shield, Package
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
@@ -122,7 +122,9 @@ const container = {
 };
 const cardVariant = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 
-export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
+// TODO: callback onUpgrade passé en prop — le parent devrait useCallback pour éviter
+// les re-renders inutiles du memo quand la fonction est recréée.
+const Facilities = React.memo(function Facilities({ planet, onUpgrade }: FacilitiesProps) {
   const [buildingTypes, setBuildingTypes] = useState<BuildingTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<any>({
@@ -436,4 +438,6 @@ export default function Facilities({ planet, onUpgrade }: FacilitiesProps) {
       </motion.div>
     </div>
   );
-}
+});
+
+export default Facilities;

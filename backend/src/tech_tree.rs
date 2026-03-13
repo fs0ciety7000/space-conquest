@@ -1,7 +1,7 @@
 // backend/src/tech_tree.rs
 // Tech Tree System - Dynamic relational database queries
 
-use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, QuerySelect, ActiveModelTrait, Set};
+use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set};
 use crate::entities::{prelude::*, technology, planet_technology, ship_type, planet_ship, technology_requirement, ship_requirement, ship_building_requirement, building_type, building_requirement, planet_building, defense_type, defense_requirement, planet_defense};
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
@@ -417,7 +417,7 @@ pub async fn can_research_tech(
 
 /// Get ship count for a planet
 pub async fn get_planet_ship_count(
-    db: &DatabaseConnection,
+    db: &impl sea_orm::ConnectionTrait,
     planet_id: Uuid,
     ship_key: &str,
 ) -> Result<i32, sea_orm::DbErr> {
@@ -729,8 +729,8 @@ pub async fn get_building_types_for_planet(
 
         // Calculate next level build time (with nanite_factory reduction)
         let next_level_time = if current_level >= 0 {
-            let next_cost_metal = calculate_building_cost(building.base_cost_metal, building.cost_multiplier, current_level);
-            let next_cost_crystal = calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, current_level);
+            let _next_cost_metal = calculate_building_cost(building.base_cost_metal, building.cost_multiplier, current_level);
+            let _next_cost_crystal = calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, current_level);
             Some(game_logic::get_build_time_with_nanite(current_level + 1, shipyard_level, nanite_level, game_logic::building_category_factor(&building.building_key), config))
         } else {
             None

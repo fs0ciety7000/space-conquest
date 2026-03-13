@@ -14,7 +14,7 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, IntoActiveModel,
+    ActiveModelTrait, ColumnTrait, Condition, EntityTrait,
     PaginatorTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
 };
 use sea_orm::DatabaseConnection;
@@ -28,15 +28,15 @@ use backend::entities::{
         AllianceMember, CombatLog, DebrisField, DefenseType, Flagship, FlagshipModule,
         FlagshipModuleType, FleetMission, Friendship,
         Planet, PlanetCombatZone, PlanetDefense, PlanetShip, PlanetTechnology, ShipType, Technology,
-        TransportLog, User,
+        User,
     },
     alliance_member, combat_log, debris_field, defense_type, flagship, flagship_module,
-    flagship_module_type, fleet_mission, friendship,
-    planet, planet_combat_zone, planet_defense, planet_ship, planet_technology, ship_type, technology,
+    fleet_mission, friendship,
+    planet, planet_combat_zone, planet_defense, planet_ship, planet_technology, ship_type,
     transport_log, user,
 };
 
-use crate::models::{AttackPayloadV2, ExpeditionPayloadV2, RecyclePayload, SpyPayloadV2, TransportPayload};
+use crate::models::{AttackPayloadV2, DeployPayload, ExpeditionPayloadV2, RecyclePayload, SpyPayloadV2, TransportPayload};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Router
@@ -48,6 +48,8 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/spy/v2", post(spy_v2_handler))
         .route("/recycle", post(recycle_handler))
         .route("/transport", post(transport_handler))
+        .route("/fleet/deploy", post(deploy_handler))
+        .route("/fleet/missions/:mission_id/recall", delete(recall_deploy_handler))
         .route("/planets/:id/expedition-v2", post(expedition_v2_handler))
         // ZAC — Zone Aérienne de Combat
         .route("/planets/:id/combat-zone", get(get_combat_zone_handler))
@@ -292,18 +294,6 @@ async fn attack_v2_handler(
         }))).into_response();
     }
 
-    for (ship_key, &count) in &payload.fleet {
-        if let Err(_) = tech_tree::deduct_ships(&state.db, attacker_id, ship_key, count).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to deduct {}", ship_key)}))).into_response();
-        }
-    }
-
-    {
-        let mut att_active: planet::ActiveModel = att_planet.clone().into();
-        att_active.deuterium_amount = Set((att_planet.deuterium_amount - fuel_needed).max(0.0));
-        let _ = att_active.update(&state.db).await;
-    }
-
     let attack_base_speed = {
         let config = state.config.read().unwrap_or_else(|e| e.into_inner());
         config.get_config("flight_speed_multiplier", 5.0)
@@ -331,8 +321,28 @@ async fn attack_v2_handler(
         recyclers_sent: Set(0),
         departure_time: Set(Utc::now().naive_utc()),
     };
-    if let Err(e) = new_mission.insert(&state.db).await {
-        eprintln!("[ATTACK] Erreur insertion mission: {e:?}");
+
+    // Transaction atomique : déduction vaisseaux + deutérium + création mission
+    // Les trois opérations sont atomiques pour éviter tout TOCTOU (double-spend
+    // si deux requêtes simultanées passent la validation avant déduction).
+    let att_deut_remaining = (att_planet.deuterium_amount - fuel_needed).max(0.0);
+    let fleet_clone = payload.fleet.clone();
+    if let Err(e) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        let fleet_clone = fleet_clone.clone();
+        let new_mission = new_mission.clone();
+        let att_planet = att_planet.clone();
+        Box::pin(async move {
+            for (ship_key, &count) in &fleet_clone {
+                tech_tree::deduct_ships(txn, attacker_id, ship_key, count).await?;
+            }
+            let mut att_active: planet::ActiveModel = att_planet.into();
+            att_active.deuterium_amount = Set(att_deut_remaining);
+            att_active.update(txn).await?;
+            new_mission.insert(txn).await?;
+            Ok(())
+        })
+    }).await {
+        eprintln!("[ATTACK TXN FAILED] attacker={attacker_id}: {e:?}");
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors du lancement de la flotte"}))).into_response();
     }
 
@@ -1837,4 +1847,197 @@ pub(crate) async fn load_zac_ships_for_combat(
         .filter(|e| e.assigned_count > 0)
         .map(|e| (e.ship_key, e.assigned_count))
         .collect()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /fleet/deploy — Fleet Save (C2)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Envoie une flotte en "déploiement" vers une autre planète du même joueur.
+// Les vaisseaux sont immédiatement déduits de la planète source et ne peuvent
+// pas être attaqués pendant le transit.
+// La mission est résolue dans planets.rs quand arrival_time est dépassé.
+
+async fn deploy_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<DeployPayload>,
+) -> impl IntoResponse {
+    // ── Validation de base ──────────────────────────────────────────────────
+    if payload.fleet.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucun vaisseau sélectionné"}))).into_response();
+    }
+    if payload.origin_planet_id == payload.destination_planet_id {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "La destination doit être différente de l'origine"}))).into_response();
+    }
+    if payload.fleet.values().any(|&v| v <= 0) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Les quantités de vaisseaux doivent être positives"}))).into_response();
+    }
+
+    // ── Vérifier que les deux planètes appartiennent au même joueur ─────────
+    let origin = match Planet::find_by_id(payload.origin_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète source introuvable"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+    };
+    let destination = match Planet::find_by_id(payload.destination_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète destination introuvable"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+    };
+
+    if origin.owner_id != destination.owner_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Vous ne pouvez déployer que vers vos propres planètes"}))).into_response();
+    }
+
+    // ── Calculer le temps de transit ────────────────────────────────────────
+    let dist = game_logic::calculate_distance(
+        (origin.galaxy, origin.system, origin.position),
+        (destination.galaxy, destination.system, destination.position),
+    );
+    let config_clone = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let base_speed = config_clone.get_config("flight_speed_multiplier", 5.0);
+    let hyperspace_level = tech_tree::get_planet_tech_level(&state.db, payload.origin_planet_id, "hyperspace_tech")
+        .await
+        .unwrap_or(0);
+    // Vitesse de déploiement = 10% de la vitesse normale (transit lent, protection longue)
+    let deploy_speed = base_speed * (1.0 + hyperspace_level as f64 * 0.15) * 0.1;
+    let travel_time = game_logic::calculate_flight_time(dist, deploy_speed);
+    let arrival = Utc::now().naive_utc() + Duration::seconds(travel_time);
+
+    // ── Sérialiser la flotte avant la transaction ────────────────────────────
+    let fleet_json = match serde_json::to_string(&payload.fleet) {
+        Ok(j) => j,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur sérialisation flotte"}))).into_response(),
+    };
+
+    let total_ships: i32 = payload.fleet.values().sum();
+    let origin_planet_id = payload.origin_planet_id;
+    let destination_planet_id = payload.destination_planet_id;
+    let fleet_clone = payload.fleet.clone();
+
+    // ── Transaction atomique : validation + déduction + création mission ─────
+    // Validation et déduction sont dans la même transaction pour éviter tout
+    // TOCTOU (double-spend si deux requêtes passent la validation en parallèle).
+    let new_mission = fleet_mission::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        source_planet_id: Set(origin_planet_id),
+        target_planet_id: Set(destination_planet_id),
+        mission_type: Set("deploy".to_string()),
+        arrival_time: Set(arrival),
+        metal: Set(0.0),
+        crystal: Set(0.0),
+        deuterium: Set(0.0),
+        ships_count: Set(total_ships),
+        fleet_data: Set(Some(fleet_json)),
+        recyclers_sent: Set(0),
+        departure_time: Set(Utc::now().naive_utc()),
+    };
+
+    if let Err(e) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        let fleet_clone = fleet_clone.clone();
+        let new_mission = new_mission.clone();
+        Box::pin(async move {
+            // Validation dans la transaction — la lecture est visible par rapport aux
+            // autres transactions concurrentes qui auraient déjà déduisé.
+            for (ship_key, &count) in &fleet_clone {
+                let current = tech_tree::get_planet_ship_count(txn, origin_planet_id, ship_key)
+                    .await
+                    .unwrap_or(0);
+                if count > current {
+                    return Err(sea_orm::DbErr::Custom(format!(
+                        "Vaisseaux insuffisants : {} requis mais {} disponibles pour {}",
+                        count, current, ship_key
+                    )));
+                }
+            }
+            for (ship_key, &count) in &fleet_clone {
+                tech_tree::deduct_ships(txn, origin_planet_id, ship_key, count).await?;
+            }
+            new_mission.insert(txn).await?;
+            Ok(())
+        })
+    }).await {
+        let msg = e.to_string();
+        if msg.contains("Vaisseaux insuffisants") {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": msg}))).into_response();
+        }
+        eprintln!("[DEPLOY TXN FAILED] origin={origin_planet_id}: {e:?}");
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors du déploiement"}))).into_response();
+    }
+
+    (StatusCode::OK, Json(json!({
+        "status": "success",
+        "message": format!("{} vaisseaux en route vers {} (arrivée dans {}s)", total_ships, destination.name, travel_time),
+        "arrival": arrival.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        "travel_time_seconds": travel_time,
+    }))).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /fleet/missions/:mission_id/recall — Rappel d'une mission de déploiement (C2)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Annule une mission "deploy" en cours et restitue la flotte à la planète source.
+// Seul le propriétaire de la mission peut la rappeler.
+
+async fn recall_deploy_handler(
+    Path(mission_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    // On identifie le joueur appelant via le current_planet_id (même pattern que les autres handlers)
+    let caller_planet_id_str = params.get("current_planet_id").cloned().unwrap_or_default();
+    let caller_planet_id = match Uuid::parse_str(&caller_planet_id_str) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Paramètre current_planet_id invalide"}))).into_response(),
+    };
+
+    let caller_planet = match Planet::find_by_id(caller_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Planète introuvable"}))).into_response(),
+    };
+
+    // Charger la mission
+    let mission = match FleetMission::find_by_id(mission_id).one(&state.db).await {
+        Ok(Some(m)) => m,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Mission introuvable"}))).into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+    };
+
+    // Vérifier que la mission appartient bien à ce joueur (via planète source)
+    let source_planet = match Planet::find_by_id(mission.source_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Planète source introuvable"}))).into_response(),
+    };
+
+    if source_planet.owner_id != caller_planet.owner_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Vous ne pouvez rappeler que vos propres missions"}))).into_response();
+    }
+
+    // Seule une mission "deploy" peut être rappelée via cet endpoint
+    if mission.mission_type != "deploy" {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Seules les missions de déploiement peuvent être rappelées"}))).into_response();
+    }
+
+    // Restituer les vaisseaux à la planète source
+    if let Some(fleet_json) = &mission.fleet_data {
+        if let Ok(fleet_map) = serde_json::from_str::<HashMap<String, i32>>(fleet_json) {
+            for (ship_key, count) in &fleet_map {
+                if *count > 0 {
+                    let _ = tech_tree::add_ships(&state.db, mission.source_planet_id, ship_key, *count).await;
+                }
+            }
+        }
+    }
+
+    // Supprimer la mission
+    if let Err(e) = FleetMission::delete_by_id(mission_id).exec(&state.db).await {
+        eprintln!("[RECALL] Erreur suppression mission {mission_id}: {e:?}");
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors du rappel"}))).into_response();
+    }
+
+    (StatusCode::OK, Json(json!({
+        "status": "recalled",
+        "message": "Flotte rappelée avec succès. Les vaisseaux ont été restitués à la planète source.",
+    }))).into_response()
 }

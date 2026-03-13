@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getTechLevel, getShipCount } from '@/utils/techTreeCompat';
 import { Card, CardContent } from "@/components/ui/card";
 import { Zap, Target, Atom, Microscope, Cpu, ArrowUpCircle, Sparkles, Eye, ScanLine, Lock, Loader2, AlertTriangle, ChevronRight, Box, Gem, Droplets, TrendingUp, Network, LayoutGrid } from "lucide-react";
@@ -49,7 +49,7 @@ const getBonusInfo = (id: string, level: number) => {
     switch(id) {
         case 'research': return { label: "Vitesse R&D", current: `${(1 + level) * 100}%`, next: `${(1 + next) * 100}%`, desc: "Accélère le développement technologique." };
         case 'energy_tech': return { label: "Output Énergie", current: `+${level * 5}%`, next: `+${next * 5}%`, desc: "Augmente la production des mines." };
-        case 'laser': return { label: "Puissance Feu", current: `+${level * 10}%`, next: `+${next * 10}%`, desc: "Bonus de dégâts pour toute la flotte." };
+        case 'laser': return { label: "Débloquage Tech", current: `Niv. ${level}`, next: `Niv. ${next}`, desc: "Débloque des technologies avancées (bonus en développement)." };
         case 'espionage': return { label: "Niveau Scan", current: `Niv. ${level}`, next: `Niv. ${next}`, desc: "Permet de voir les détails ennemis." };
         default: return { label: "Bonus", current: "-", next: "-", desc: "Amélioration standard." };
     }
@@ -66,16 +66,26 @@ const getCost = (tech: TechInfo) => {
     };
 };
 
-export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: () => void }) {
+// TODO: callback onUpdate passé en prop — le parent devrait useCallback pour éviter
+// les re-renders inutiles du memo quand la fonction est recréée.
+const TechTree = React.memo(function TechTree({ planet, onUpdate }: { planet: any, onUpdate: () => void }) {
   // Timer unique pour rafraîchir l'affichage toutes les secondes
+  // Uniquement actif si une recherche est en cours, pour économiser les cycles CPU
   const [now, setNow] = useState(new Date().getTime());
   const [technologies, setTechnologies] = useState<TechInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const hasActiveResearch = useMemo(() => {
+    const queue = planet.research_queue || [];
+    const constructions = planet.constructions || [];
+    return queue.length > 0 || constructions.some((c: any) => c.is_research);
+  }, [planet.research_queue, planet.constructions]);
+
   useEffect(() => {
+    if (!hasActiveResearch) return;
     const interval = setInterval(() => setNow(new Date().getTime()), 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [hasActiveResearch]);
 
   useEffect(() => {
     const fetchTechnologies = async () => {
@@ -150,4 +160,6 @@ export default function TechTree({ planet, onUpdate }: { planet: any, onUpdate: 
       <TechTreeVisual planet={planet} onUpdate={onUpdate} />
     </div>
   );
-}
+});
+
+export default TechTree;

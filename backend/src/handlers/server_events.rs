@@ -20,7 +20,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json},
     Router,
-    routing::{get, post, patch, delete},
+    routing::{get, post, patch},
 };
 use sea_orm::{
     EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait,
@@ -34,7 +34,7 @@ use chrono::Utc;
 use crate::AppState;
 use crate::entities::{
     prelude::*,
-    server_event, server_event_type, server_event_participation,
+    server_event, server_event_type,
 };
 use crate::server_events::{
     self, enrich_event, get_top_contributors_public,
@@ -42,7 +42,7 @@ use crate::server_events::{
 
 // ─── Router ──────────────────────────────────────────────────────────────────
 
-pub fn router(state: AppState) -> Router<AppState> {
+pub fn router(_state: AppState) -> Router<AppState> {
     Router::new()
         // Publiques
         .route("/server-events",                         get(list_events_handler))
@@ -201,7 +201,7 @@ async fn admin_create_handler(
                     zone: crate::server_events::format_zone_public(&event),
                     starts_in_seconds: starts_in_secs,
                     narrative: payload.narrative.unwrap_or_default(),
-                });
+                }).await;
             }
 
             (StatusCode::CREATED, Json(json!({ "event": summary }))).into_response()
@@ -225,7 +225,7 @@ async fn admin_cancel_handler(
                     outcome: "cancelled".to_string(),
                     rewards_distributed: false,
                     top_contributors: vec![],
-                });
+                }).await;
             }
             Json(json!({"success": true})).into_response()
         }
@@ -370,6 +370,6 @@ async fn broadcast_progress(state: &AppState, event: &server_event::Model) {
             hp_max: event_fresh.hp_max,
             top_contributors: top_names,
             percent,
-        });
+        }).await;
     }
 }

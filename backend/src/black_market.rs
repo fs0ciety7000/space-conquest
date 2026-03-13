@@ -29,23 +29,24 @@ use axum::{
 use chrono::Utc;
 use rand::Rng;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set,
     ActiveValue::NotSet,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::entities::{
     prelude::*,
-    black_market_item, user, user_inventory, pirate_extortion, planet_technology, technology,
+    black_market_item, user, user_inventory, pirate_extortion, planet_technology,
 };
 use crate::AppState;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const ESPIONAGE_REQ: i32 = 13;
-const COMPUTER_REQ: i32 = 10;
+/// Seuil d'accès réduit (v9.2) : Espionnage ≥ 8 et Informatique ≥ 6
+const ESPIONAGE_REQ: i32 = 8;
+const COMPUTER_REQ: i32 = 6;
 
 /// Price fluctuation interval (seconds). 6 hours.
 pub const PRICE_TICK_INTERVAL_SECS: i64 = 6 * 3600;

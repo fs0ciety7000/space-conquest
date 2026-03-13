@@ -154,6 +154,7 @@ async fn send_reset_email(to_email: &str, token: &str) -> Result<(), String> {
 }
 
 
+#[allow(dead_code)]
 fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
     // Token format: "jwt-{uuid}"
     token.strip_prefix("jwt-")

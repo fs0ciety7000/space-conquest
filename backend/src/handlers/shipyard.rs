@@ -19,10 +19,10 @@ use sea_orm::{
 use serde_json::json;
 use uuid::Uuid;
 
-use backend::{build_queue, game_logic, sabotage, tech_tree, AppState};
+use backend::{build_queue, game_logic, officers, sabotage, tech_tree, AppState};
 use backend::entities::{
     prelude::{
-        BuildingType, DefenseType, Planet, PlanetDefense, PlanetShip, PlanetTechnology,
+        DefenseType, Planet, PlanetDefense, PlanetShip, PlanetTechnology,
         ShipType, Technology,
     },
     defense_type, planet, planet_defense, planet_ship, planet_technology,
@@ -51,18 +51,38 @@ async fn apply_lazy_eval(
         solar_level, energy_tech, fusion_level, metal_level, crystal_level, deuterium_level, config,
     );
 
-    planet.metal_amount = game_logic::calculate_resources_with_energy(
+    // C3 — Bonus de production des officiers (OfficerBonuses::production_mult)
+    let officer_bonuses = officers::get_officer_bonuses(db, planet.owner_id).await;
+    let prod_mult = officer_bonuses.production_mult;
+
+    let base_metal = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Metal, metal_level, planet.metal_amount, planet.last_update,
         energy_tech, plasma_tech, energy_ratio, config,
     );
-    planet.crystal_amount = game_logic::calculate_resources_with_energy(
+    // Le bonus est appliqué sur la production (delta), pas sur le stock courant.
+    // base_metal = stock + delta ; donc bonus = stock + delta * prod_mult
+    let delta_metal = (base_metal - planet.metal_amount).max(0.0);
+    planet.metal_amount = planet.metal_amount + delta_metal * prod_mult;
+
+    let base_crystal = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Crystal, crystal_level, planet.crystal_amount, planet.last_update,
         energy_tech, plasma_tech, energy_ratio, config,
     );
-    planet.deuterium_amount = game_logic::calculate_resources_with_energy(
+    let delta_crystal = (base_crystal - planet.crystal_amount).max(0.0);
+    planet.crystal_amount = planet.crystal_amount + delta_crystal * prod_mult;
+
+    let base_deuterium = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Deuterium, deuterium_level, planet.deuterium_amount, planet.last_update,
         energy_tech, plasma_tech, energy_ratio, config,
     );
+    let delta_deuterium = (base_deuterium - planet.deuterium_amount).max(0.0);
+    planet.deuterium_amount = planet.deuterium_amount + delta_deuterium * prod_mult;
+
+    // H11 — Appliquer le cap de stockage après mise à jour lazy
+    let storage_level = tech_tree::get_planet_building_level(db, planet.id, "resource_storage").await.unwrap_or(0);
+    planet.metal_amount = game_logic::apply_storage_cap(planet.metal_amount, storage_level, config);
+    planet.crystal_amount = game_logic::apply_storage_cap(planet.crystal_amount, storage_level, config);
+    planet.deuterium_amount = game_logic::apply_storage_cap(planet.deuterium_amount, storage_level, config);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -541,7 +561,14 @@ pub async fn build_ships_handler(
     if quantity <= 0 {
         return (
             StatusCode::BAD_REQUEST,
-            axum::Json(json!({"error": "Invalid quantity"})),
+            axum::Json(json!({"error": "Quantité invalide"})),
+        )
+            .into_response();
+    }
+    if quantity > 100_000 {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(json!({"error": "Quantité trop élevée (max 100 000)"})),
         )
             .into_response();
     }
@@ -654,10 +681,11 @@ pub async fn build_ships_handler(
             .into_response();
     }
 
-    // Calculate total cost
-    let total_cost_metal = ship.cost_metal * quantity;
-    let total_cost_crystal = ship.cost_crystal * quantity;
-    let total_cost_deuterium = ship.cost_deuterium * quantity;
+    // Calculate total cost — cast to i64 before multiplication to prevent i32 overflow
+    // with large quantities (e.g. 100 000 ships * high cost)
+    let total_cost_metal = ship.cost_metal as i64 * quantity as i64;
+    let total_cost_crystal = ship.cost_crystal as i64 * quantity as i64;
+    let total_cost_deuterium = ship.cost_deuterium as i64 * quantity as i64;
 
     // Check if planet has enough resources
     if planet.metal_amount < total_cost_metal as f64
@@ -1148,7 +1176,7 @@ pub async fn build_fleet_handler(
     State(state): State<AppState>,
 ) -> Result<StatusCode, StatusCode> {
     use backend::entities::prelude::{ConstructionQueue, ShipType as ShipTypeEntity};
-    use backend::entities::{construction_queue, ship_type as ship_type_mod};
+    use backend::entities::ship_type as ship_type_mod;
 
     let p = Planet::find_by_id(id)
         .one(&state.db)

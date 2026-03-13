@@ -9,7 +9,7 @@
 //! DATABASE_URL doit être défini dans l'environnement ou dans .env
 
 use std::collections::HashMap;
-use sea_orm::{Database, EntityTrait};
+use sea_orm::Database;
 use backend::combat::{
     load_ship_stats_cache, load_defense_stats_into_cache, load_rapid_fire_cache,
     simulate_pvp_combat, CombatBonuses,

@@ -32,7 +32,8 @@ pub enum ResourceType {
     Deuterium,
 }
 
-// Ajoutez cette fonction au début du fichier, avant vos handlers
+// Helper: extract user UUID from simple JWT-like token
+#[allow(dead_code)]
 fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
     // Token format: "jwt-{uuid}"
     token.strip_prefix("jwt-")

@@ -4,13 +4,83 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::entities::prelude::*;
 use crate::AppState;
+
+// ============================================================================
+// OFFICER BONUSES — bonus applicables au tick de production et au combat
+// ============================================================================
+
+/// Struct résumant les bonus combinés de tous les officiers actifs d'un joueur.
+/// Les multiplicateurs sont additifs (1.0 = pas de bonus, 1.15 = +15%).
+#[derive(Debug, Clone)]
+pub struct OfficerBonuses {
+    /// Multiplie la production de métal/cristal/deutérium (tick de production)
+    pub production_mult: f64,
+    /// Multiplie les armes en combat (weapons_mult)
+    pub combat_attack_mult: f64,
+    /// Multiplie les boucliers en combat (shield_mult)
+    pub combat_shield_mult: f64,
+    /// Multiplie le blindage en combat (armour_mult)
+    pub combat_armour_mult: f64,
+}
+
+impl Default for OfficerBonuses {
+    fn default() -> Self {
+        OfficerBonuses {
+            production_mult: 1.0,
+            combat_attack_mult: 1.0,
+            combat_shield_mult: 1.0,
+            combat_armour_mult: 1.0,
+        }
+    }
+}
+
+/// Charge tous les officiers actifs d'un joueur et calcule leurs bonus cumulés.
+///
+/// Mapping des `bonus_type` de la DB vers les champs de OfficerBonuses :
+/// - "production_boost"   → production_mult
+/// - "attack_boost"       → combat_attack_mult
+/// - "shield_boost"       → combat_shield_mult
+/// - "armour_boost"       → combat_armour_mult
+///
+/// Les bonus sont additifs sur le multiplicateur de base 1.0 :
+///   ex. deux officiers production à +10% et +15% donnent production_mult = 1.25
+pub async fn get_officer_bonuses(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+) -> OfficerBonuses {
+    let officers = UserOfficer::find()
+        .filter(crate::entities::user_officer::Column::UserId.eq(user_id))
+        .filter(crate::entities::user_officer::Column::IsActive.eq(true))
+        .find_also_related(OfficerTemplate)
+        .all(db)
+        .await
+        .unwrap_or_default();
+
+    let mut bonuses = OfficerBonuses::default();
+
+    for (officer, template_opt) in officers {
+        if let Some(template) = template_opt {
+            let current_bonus = calculate_bonus(&template, officer.level);
+            // current_bonus est en fraction (e.g. 0.10 pour +10%)
+            match template.bonus_type.as_str() {
+                "production_boost" => bonuses.production_mult += current_bonus,
+                "attack_boost"     => bonuses.combat_attack_mult += current_bonus,
+                "shield_boost"     => bonuses.combat_shield_mult += current_bonus,
+                "armour_boost"     => bonuses.combat_armour_mult += current_bonus,
+                _ => {}
+            }
+        }
+    }
+
+    bonuses
+}
 
 // ============================================================================
 // TYPES

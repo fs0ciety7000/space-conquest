@@ -281,8 +281,8 @@ async fn start_item_immediately(
             let new_level = target_level.unwrap_or(effective_level + 1);
 
             // Calculate cost at effective level for build time
-            let cost_m = tech_tree::calculate_building_cost(building.base_cost_metal, building.cost_multiplier, effective_level);
-            let cost_c = tech_tree::calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, effective_level);
+            let _cost_m = tech_tree::calculate_building_cost(building.base_cost_metal, building.cost_multiplier, effective_level);
+            let _cost_c = tech_tree::calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, effective_level);
 
             // Determine facility level for build time formula
             let facility_key = if category == "resources" { "shipyard" } else { "shipyard" };
@@ -832,7 +832,7 @@ async fn compute_cost_and_validate(
 /// Uses stored target_level to reconstruct the cost that was paid at enqueue time.
 async fn compute_cost_for_refund(
     db: &DatabaseConnection,
-    planet_id: Uuid,
+    _planet_id: Uuid,
     category: &str,
     item_key: &str,
     quantity: i32,

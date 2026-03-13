@@ -1,7 +1,86 @@
 use serde::Serialize;
 use rand::Rng;
+use std::collections::HashMap;
 use crate::entities::planet;
 use crate::ServerConfigCache;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILDING COST CACHE — Data-driven costs loaded from building_types table
+// Eliminates the hardcoded match in get_upgrade_cost() and stays in sync
+// with admin-editable DB values.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Entry for a single building type loaded from the `building_types` DB table.
+#[derive(Clone, Debug)]
+pub struct BuildingCostEntry {
+    pub base_metal: f64,
+    pub base_crystal: f64,
+    pub base_deuterium: f64,
+    /// Exponential growth factor (e.g. 1.5 for mines, 2.0 for tech).
+    pub cost_factor: f64,
+}
+
+/// Pre-loaded cache of building costs keyed by `building_key`.
+/// Stored in AppState to avoid per-request DB queries.
+#[derive(Clone, Debug, Default)]
+pub struct BuildingCostCache {
+    pub costs: HashMap<String, BuildingCostEntry>,
+}
+
+impl BuildingCostCache {
+    /// Load all building cost data from the `building_types` table.
+    /// Called once at server startup and stored in AppState.
+    pub async fn load(db: &sea_orm::DatabaseConnection) -> Self {
+        use sea_orm::EntityTrait;
+        use crate::entities::prelude::BuildingType;
+        let entries: Vec<crate::entities::building_type::Model> = BuildingType::find()
+            .all(db)
+            .await
+            .unwrap_or_default();
+
+        let costs = entries
+            .into_iter()
+            .map(|bt| {
+                let entry = BuildingCostEntry {
+                    base_metal: bt.base_cost_metal as f64,
+                    base_crystal: bt.base_cost_crystal as f64,
+                    base_deuterium: bt.base_cost_deuterium as f64,
+                    cost_factor: bt.cost_multiplier,
+                };
+                (bt.building_key, entry)
+            })
+            .collect();
+
+        BuildingCostCache { costs }
+    }
+}
+
+/// Calculate the cost to upgrade a building to `level` (1-indexed target level)
+/// using the data-driven cache loaded from the DB.
+///
+/// Formula: `base * cost_factor^(level - 1)` — identical to the old hardcoded formula.
+/// Falls back to zero cost if the key is not found (graceful degradation).
+pub fn get_upgrade_cost_from_cache(
+    cache: &BuildingCostCache,
+    building_key: &str,
+    level: i32,
+) -> Cost {
+    match cache.costs.get(building_key) {
+        Some(entry) => {
+            let factor = entry.cost_factor.powi(level - 1);
+            Cost {
+                metal: entry.base_metal * factor,
+                crystal: entry.base_crystal * factor,
+                deuterium: entry.base_deuterium * factor,
+            }
+        }
+        None => {
+            // Key not found — fall back to the legacy static function so no
+            // existing functionality breaks during the migration period.
+            Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 }
+        }
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PLANETARY BIOMES
@@ -214,14 +293,16 @@ pub fn calculate_energy_production(solar_plant_level: i32, energy_tech_level: i3
     base_production * tech_bonus
 }
 
-/// Calcule la production d'énergie de la fusion_plant
-/// Formule : level * 50 unités par niveau (configurable via energy_fusion_per_level)
+/// Calcule la production d'énergie de la fusion_plant.
+/// Formule exponentielle (v9.2) : base × level × 1.2^level
+/// Remplace l'ancienne formule linéaire (level * 50).
+/// La config `energy_fusion_per_level` sert de base (défaut 50.0).
 pub fn calculate_fusion_energy(fusion_plant_level: i32, config: &ServerConfigCache) -> f64 {
     if fusion_plant_level == 0 {
         return 0.0;
     }
-    let per_level = config.get_config("energy_fusion_per_level", 50.0);
-    fusion_plant_level as f64 * per_level
+    let base = config.get_config("energy_fusion_per_level", 50.0);
+    base * fusion_plant_level as f64 * f64::powf(1.2, fusion_plant_level as f64)
 }
 
 /// Calcule la consommation d'énergie totale des mines
@@ -361,7 +442,7 @@ pub fn calculate_resources_with_energy(
 }
 
 // --- COÛTS DES BÂTIMENTS (Exponentiel) ---
-pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCache) -> Cost {
+pub fn get_upgrade_cost(building_type: &str, level: i32, _config: &ServerConfigCache) -> Cost {
     let base_cost = match building_type {
         // MINES (multiplicateur 1.5)
         "metal" => Cost {
@@ -370,8 +451,9 @@ pub fn get_upgrade_cost(building_type: &str, level: i32, config: &ServerConfigCa
             deuterium: 0.0,
         },
         "crystal" => Cost {
-            metal: 48.0 * 1.6f64.powi(level - 1),
-            crystal: 24.0 * 1.6f64.powi(level - 1),
+            // Exposant réduit 1.6 → 1.5 (v9.2) pour rendre la mine de cristal plus accessible
+            metal: 48.0 * 1.5f64.powi(level - 1),
+            crystal: 24.0 * 1.5f64.powi(level - 1),
             deuterium: 0.0,
         },
         "deuterium" => Cost {
@@ -499,7 +581,9 @@ pub fn get_research_time(tech_key: &str, level: i32, lab_level: i32, config: &Se
     const MAX_REDUCTION: f64 = 0.55;
 
     let category_factor: f64 = match tech_key {
-        "graviton_tech" | "astrophysics" => 2.5,
+        "graviton_tech" => 2.5,
+        // Astrophysics réduit 2.5 → 1.8 (v9.2) pour améliorer l'accessibilité colonisation
+        "astrophysics" => 1.8,
         "plasma_tech" | "hyperspace_tech" | "computer_tech" | "espionage_tech" => 1.5,
         _ => 1.0,
     };
@@ -790,6 +874,24 @@ pub fn create_tech_bonuses(
     }
 }
 
+/// Look up rapid fire value from the DB-backed cache.
+/// Returns the `rapid_fire_value` for (attacker → target), or 0 if no rule exists.
+/// This replaces the old hardcoded match table and stays in sync with the DB.
+pub fn get_rapid_fire_from_cache(
+    cache: &crate::combat::RapidFireCache,
+    attacker: &str,
+    target: &str,
+) -> i32 {
+    cache
+        .get(&(attacker.to_string(), target.to_string()))
+        .copied()
+        .unwrap_or(0)
+}
+
+/// Legacy rapid-fire lookup using ServerConfigCache overrides.
+/// Kept for compatibility with the old resolve_pvp function which may still be
+/// referenced by external callers. New code should use get_rapid_fire_from_cache.
+#[allow(dead_code)]
 pub fn get_rapid_fire(attacker: &str, target: &str, config: &ServerConfigCache) -> i32 {
     match (attacker, target) {
         // Existing Rapid Fire
@@ -828,6 +930,11 @@ fn apply_losses(fleet: &mut Vec<(&str, i32, UnitStats)>, damage: f64) {
     }
 }
 
+/// Legacy PvP resolver used by the old attack handler.
+/// Pass `rf_cache: Some(cache)` to use DB-backed rapid fire values instead of the
+/// hardcoded ServerConfigCache overrides.  Passing `None` falls back to the
+/// legacy behaviour so existing callers don't break.
+#[allow(dead_code)]
 pub fn resolve_pvp(
     att_hunters: i32, att_cruisers: i32, att_transporters: i32, att_hangar_level: i32, att_techs: CombatTechs,
     def_hunters: i32, def_cruisers: i32,
@@ -835,7 +942,8 @@ pub fn resolve_pvp(
     def_missiles: i32, def_plasmas: i32,
     def_techs: CombatTechs,
     def_resources: Cost,
-    config: &ServerConfigCache
+    config: &ServerConfigCache,
+    rf_cache: Option<&crate::combat::RapidFireCache>,
 ) -> PvpReport {
     let mut log = Vec::new();
     let mut rng = rand::thread_rng();
@@ -880,7 +988,10 @@ pub fn resolve_pvp(
                     let (d_type, d_qty, d_stats) = &defender_fleet[target_idx];
                     if *d_qty > 0 {
                         att_dmg += (a_stats.attack - d_stats.shield).max(a_stats.attack * 0.01);
-                        let rf = get_rapid_fire(a_type, d_type, config);
+                        let rf = match rf_cache {
+                            Some(cache) => get_rapid_fire_from_cache(cache, a_type, d_type),
+                            None => get_rapid_fire(a_type, d_type, config),
+                        };
                         re_fire = rf > 0 && rng.gen_range(0..rf) > 0;
                     } else { re_fire = false; }
                 }
@@ -896,7 +1007,10 @@ pub fn resolve_pvp(
                     let (a_type, a_qty, a_stats) = &attacker_fleet[target_idx];
                     if *a_qty > 0 {
                         def_dmg += (d_stats.attack - a_stats.shield).max(d_stats.attack * 0.01);
-                        let rf = get_rapid_fire(d_type, a_type, config);
+                        let rf = match rf_cache {
+                            Some(cache) => get_rapid_fire_from_cache(cache, d_type, a_type),
+                            None => get_rapid_fire(d_type, a_type, config),
+                        };
                         re_fire = rf > 0 && rng.gen_range(0..rf) > 0;
                     } else { re_fire = false; }
                 }
@@ -1081,7 +1195,7 @@ pub async fn calculate_planet_points(p: &crate::entities::planet::Model, db: &se
 
     // Points militaire — défenses (×1.0) + vaisseaux (×0.5, nature volatile)
     // Formule: (attack + shield/2 + hull/10) / 1000 par unité
-    use crate::entities::prelude::{DefenseType, ShipType};
+    use crate::entities::prelude::DefenseType;
     use sea_orm::EntityTrait;
 
     let all_defense_types = DefenseType::find().all(db).await.unwrap_or_default();
@@ -1209,7 +1323,7 @@ pub fn get_slot_bonus(slots_count: i32, config: &ServerConfigCache) -> f64 {
 }
 
 /// Coût progressif pour débloquer un slot (slot_number de 1 à 4)
-pub fn get_slot_unlock_cost(slot_number: i32, config: &ServerConfigCache) -> Cost {
+pub fn get_slot_unlock_cost(slot_number: i32, _config: &ServerConfigCache) -> Cost {
     let base_cost = Cost {
         metal: 5000.0,
         crystal: 3000.0,

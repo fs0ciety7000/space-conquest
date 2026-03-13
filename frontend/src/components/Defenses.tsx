@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shield, Zap, Target, Crosshair, Timer, Terminal, Lock, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -43,7 +43,9 @@ const container = {
 };
 const itemVariant = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 
-export default function Defenses({ planet, onBuild }: { planet: any, onBuild: () => void }) {
+// TODO: callback onBuild passé en prop — le parent devrait useCallback pour éviter
+// les re-renders inutiles du memo quand la fonction est recréée.
+const Defenses = React.memo(function Defenses({ planet, onBuild }: { planet: any, onBuild: () => void }) {
   const [selected, setSelected] = useState<string>('');
   const [qty, setQty] = useState(1);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -405,4 +407,6 @@ export default function Defenses({ planet, onBuild }: { planet: any, onBuild: ()
       </Card>
     </div>
   );
-}
+});
+
+export default Defenses;

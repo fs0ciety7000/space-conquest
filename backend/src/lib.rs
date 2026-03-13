@@ -33,7 +33,7 @@ pub mod rate_limit;
 pub mod governance;
 
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
-use entities::{prelude::{ServerConfig, LawEffect}, server_config, law_effect};
+use entities::{prelude::{ServerConfig, LawEffect}, law_effect};
 
 #[derive(Clone)]
 pub struct ServerConfigCache {
@@ -196,6 +196,12 @@ pub struct AppState {
     pub rate_limit_attack: Arc<rate_limit::RateLimiter>,
     /// Rate limiter pour les constructions (vaisseaux, défenses, recherches) : 10 requêtes / 10s par IP.
     pub rate_limit_build: Arc<rate_limit::RateLimiter>,
+    /// Data-driven building costs loaded from `building_types` table at startup.
+    /// Replaces the hardcoded match in game_logic::get_upgrade_cost.
+    pub building_cost_cache: Arc<game_logic::BuildingCostCache>,
+    /// Rapid-fire rules loaded from `rapid_fire_rule` table at startup.
+    /// Single source of truth so spy reports and combat use identical RF values.
+    pub rapid_fire_cache: Arc<combat::RapidFireCache>,
 }
 
 // Fonction helper pour recharger la config

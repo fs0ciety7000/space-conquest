@@ -7,7 +7,7 @@ use sea_orm::{
     ActiveModelTrait, EntityTrait, Set,
     QueryFilter, QueryOrder, ColumnTrait,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;

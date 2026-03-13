@@ -3,6 +3,70 @@
 
 ---
 
+## Suivi d'implémentation — Sprint 1 & 2
+
+> Dernière mise à jour : 2026-03-13
+
+### Sprint 1 — Critique
+
+| # | Tâche | Statut | Notes |
+|---|---|---|---|
+| C1 | Anti-farm `is_attack_allowed_by_points` dans `validate_attack` | ✅ Fait | `protection.rs` — config keys `anti_farm_enabled/min_ratio/max_ratio`, charge `total_points` depuis DB |
+| C2 | Mission "deploy" / fleet save | ✅ Fait | Backend: `fleet.rs` — `POST /fleet/deploy` + `DELETE /fleet/missions/:id/recall` + résolution dans `planets.rs`. Frontend: onglet Déployer dans FleetDispatcher |
+| C3 | Bonus officiers dans tick + combat | ✅ Fait | `officers.rs` — `OfficerBonuses` + `get_officer_bonuses()`. Appliqué dans `apply_lazy_eval` (production) et `resolve_attack_mission` (combat) |
+| C4 | Corrections descriptions 6 techs mensongères | ✅ Fait | `TechTreeVisual.tsx`, `TechTree.tsx` — plasma, computer, laser, hyperspace, ion, graviton |
+| C5 | Masquer 5 bâtiments fantômes (`is_available=false`) | ✅ Fait | Migration `m20260313_000002_disable_phantom_buildings` — nanite_factory, terraformer, alliance_depot, missile_silo |
+| C6 | Mapping tech Shipyard (`weapons_tech` / `shield_tech`) | ✅ Fait | `Shipyard.tsx:99-100` — bonusAtk→weapons_tech, bonusShd→shield_tech |
+| C7 | Débris dans GalaxyView + confirmation recyclage | ✅ Fait | `GalaxyView.tsx` — modal confirmation avec sélecteur nombre de recycleurs |
+| C8 | Guard overflow i64 sur coût de flotte | ✅ Fait | `shipyard.rs` — cast i64 + guard `quantity > 100_000` |
+
+### Sprint 2 — Haute Priorité
+
+| # | Tâche | Statut | Notes |
+|---|---|---|---|
+| H1 | Score recalcul toutes les 5min (vs 2s) | ✅ Fait | `tick_system.rs` — `AtomicU64 TICK_COUNTER`, appel `update_all_user_points` si `tick % 150 == 0` |
+| H2 | Coûts bâtiments data-driven | ✅ Fait | `BuildingCostCache` dans AppState. `get_upgrade_cost_from_cache()` remplace le match hardcodé. `building_types` table déjà peuplée, pas de migration nécessaire |
+| H3 | Score militaire frontend | ❌ ANNULÉ | Formule frontend conservée intentionnellement |
+| H4 | `laser_tech` + `hyperspace_tech` dans fleet v5 | ✅ Déjà en place | `laser_tech` +0.05 weapons/niveau dans `load_planet_tech_bonuses`. `hyperspace_tech` ×0.15/niveau dans tous les handlers |
+| H5 | ETA de vol — formule correcte | ✅ Fait | `FleetDispatcher.tsx` — state `flightSpeedMultiplier` (défaut 5.0), clé `flight_speed_multiplier`, formule piecewise 3 branches exacte backend. `hyperspace_tech_level=0` en fallback (TODO prop) |
+| H6 | Confirmation avant lancement d'attaque | ✅ Fait | `FleetDispatcher.tsx` — modal inline cible/vaisseaux/ETA |
+| H7 | Marché Noir seuil réduit (Esp 8, Comp 6) | ✅ Fait | `black_market.rs` — `ESPIONAGE_REQ` 13→8, `COMPUTER_REQ` 10→6 |
+| H8 | Fusion Plant en exponentielle | ✅ Fait | `game_logic.rs` — `calculate_fusion_energy()` : `base * level * 1.2^level` |
+| H9 | Crystal mine facteur 1.6→1.5 | ✅ Fait | `game_logic.rs` — `get_upgrade_cost()` branche crystal : 1.6→1.5 |
+| H10 | Astrophysics category_factor 2.5→1.8 | ✅ Fait | `game_logic.rs` — astrophysics dissocié de graviton_tech : 2.5→1.8 |
+| H11 | `apply_storage_cap` dans lazy eval | ✅ Fait | `shipyard.rs` — `apply_lazy_eval()` applique le cap après chaque production update |
+| H12 | Vue "Flottes en transit" avec ETA | ✅ Fait | `ActiveMissions.tsx` créé, intégré dans `PlanetOverview.tsx` |
+| H13 | React.memo sur composants lourds | ✅ Fait | Shipyard, Defenses, Facilities, TechTree, ReportsTerminal + timer conditionnel TechTree |
+| H14 | Rapid fire spy → lecture DB | ✅ Fait | `get_rapid_fire_from_cache()` dans `game_logic.rs`. `RapidFireCache` dans AppState chargé au démarrage. `resolve_pvp` accepte `Option<&RapidFireCache>` |
+| H15 | Uniformiser hyperspace_tech (15% partout) | ✅ Fait | `trade_routes.rs` — `compute_travel_time_seconds()` : 0.10→0.15 |
+| H16 | Base deuterium frontend (10→15) | ✅ N/A | Déjà correct dans tout le codebase |
+
+---
+
+## Reality Checker — Résultats (2026-03-13)
+
+> Rating : **B-** | Production Readiness : **NEEDS WORK**
+
+### Blocants (à corriger avant merge)
+
+| # | Sévérité | Problème | Fichier |
+|---|---|---|---|
+| RC1 | ✅ Corrigé | `deploy_handler` : wrappé dans `db.transaction()` — validate + deduct + insert atomiques. `get_planet_ship_count` élargi à `&impl ConnectionTrait` | `fleet.rs:1884-1944` |
+| RC2 | ✅ Corrigé | `attack_v2_handler` : deduct ships + update deuterium + insert mission dans une seule transaction | `fleet.rs:297-350` |
+| RC3 | ✅ Corrigé | 3 missing `.await` sur `broadcast_global` dans `server_events.rs` (lignes 204, 228, 373) | `server_events.rs` |
+| RC4 | ✅ Corrigé | Description `hyperspace_drive` : "+15% vitesse des flottes et routes commerciales par niveau" | `TechTreeVisual.tsx:137` |
+| RC5 | ✅ Confirmé OK | `computer_tech` +10% cargo confirmé implémenté dans `get_transporter_capacity_with_tech` | `game_logic.rs:584` |
+| RC6 | ✅ Corrigé | Guard deploy : picker de planètes (filtre currentPlanet), warning si planète unique | `FleetDispatcher.tsx:103-569` |
+| RC7 | ✅ Corrigé | 144 warnings → 0 sur 28 fichiers. Imports inutilisés, variables mortes, shadowing supprimés | `backend/` |
+
+### Points validés par Reality Checker
+- C1 ✅ | C3 ✅ | C5 ✅ | C8 ✅ | H1 ✅ | H7 ✅ | H8 ✅ | H9 ✅ | H10 ✅ | H11 ✅
+- C6 ✅ | C7 ✅ | H5 ✅ | H6 ✅ | H12 ✅ | H13 ✅
+
+---
+
+---
+
 ## Table des matières
 
 1. [Sécurité — Critique](#1-sécurité--critique)

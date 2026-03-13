@@ -1,7 +1,9 @@
 #![recursion_limit = "512"]
+// Handlers are called via Axum router, compiler can't see the references.
+#![allow(dead_code)]
 
 use axum::{
-    extract::{Path, State, Query, Multipart, DefaultBodyLimit},
+    extract::{Path, State, Query, Multipart},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{get, post, delete, patch, put},
@@ -34,7 +36,7 @@ use tower_http::{
     services::ServeDir,
 };
 use uuid::Uuid;
-use chrono::{Utc, Duration, DateTime, NaiveDateTime};
+use chrono::{Utc, Duration, NaiveDateTime};
 use rand::Rng;
 
 use sea_orm_migration::MigratorTrait;
@@ -66,8 +68,8 @@ use websocket::WsState;
 
 // ✅ IMPORTS EXPLICITES
 use entities::{
-    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, BuildingType, PlanetBuilding, DefenseType, PlanetDefense, AllianceMember, Friendship, FleetPreset, Bounty, Flagship, FlagshipModuleType, FlagshipModule, DebrisField},
-    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, building_type, planet_building, defense_type, planet_defense, alliance_member, friendship, fleet_preset, bounty, flagship, flagship_module_type, flagship_module, debris_field
+    prelude::{Planet, User, CombatLog, FleetMission, TransportLog, ConstructionQueue, MarketListing, MarketTransaction, MarketPriceHistory, ShipType, PlanetShip, Technology, PlanetTechnology, DefenseType, PlanetDefense, Friendship, FleetPreset, Bounty, Flagship, FlagshipModuleType, FlagshipModule, DebrisField},
+    planet, user, combat_log, fleet_mission, transport_log, construction_queue, market_listing, market_transaction, market_price_history, planet_ship, ship_type, technology, planet_technology, defense_type, planet_defense, friendship, fleet_preset, bounty, flagship, flagship_module_type, flagship_module, debris_field
 };
 
 #[derive(Serialize, Clone)]
@@ -248,6 +250,20 @@ async fn main() {
     let config_tick = config_trade.clone();
     let config_score_refresh = config_trade.clone();
 
+    // --- Data-driven caches (H2 + H14) ---
+    println!("Loading building cost cache from DB...");
+    let building_cost_cache = std::sync::Arc::new(
+        backend::game_logic::BuildingCostCache::load(&db).await
+    );
+    println!("Building cost cache loaded: {} building types", building_cost_cache.costs.len());
+
+    println!("Loading rapid fire cache from DB...");
+    let rapid_fire_cache_data = backend::combat::load_rapid_fire_cache(&db)
+        .await
+        .unwrap_or_default();
+    let rapid_fire_cache = std::sync::Arc::new(rapid_fire_cache_data);
+    println!("Rapid fire cache loaded: {} rules", rapid_fire_cache.len());
+
     let state = AppState {
         db,
         config,
@@ -259,6 +275,8 @@ async fn main() {
         rate_limit_attack: std::sync::Arc::new(backend::rate_limit::RateLimiter::new(10, 60)),
         // Build : 10 constructions par 10 secondes (anti double-clic)
         rate_limit_build: std::sync::Arc::new(backend::rate_limit::RateLimiter::new(10, 10)),
+        building_cost_cache,
+        rapid_fire_cache,
     };
     let cors = CorsLayer::permissive();
 
@@ -805,6 +823,16 @@ async fn resolve_attack_mission(
     def_bonuses.shield_mult  *= def_flagship.shield_mult;
     def_bonuses.armour_mult  *= def_flagship.armour_mult;
 
+    // C3 — Bonus des officiers (combat_attack_mult / combat_shield_mult / combat_armour_mult)
+    let att_officer = officers::get_officer_bonuses(db, att_user.id).await;
+    let def_officer = officers::get_officer_bonuses(db, def_user.id).await;
+    att_bonuses.weapons_mult *= att_officer.combat_attack_mult;
+    att_bonuses.shield_mult  *= att_officer.combat_shield_mult;
+    att_bonuses.armour_mult  *= att_officer.combat_armour_mult;
+    def_bonuses.weapons_mult *= def_officer.combat_attack_mult;
+    def_bonuses.shield_mult  *= def_officer.combat_shield_mult;
+    def_bonuses.armour_mult  *= def_officer.combat_armour_mult;
+
     // Load defender planetary defenses (participate in combat, keyed "def_{defense_key}")
     let defender_defenses = load_planet_defenses_for_combat(db, mission.target_planet_id).await;
 
@@ -829,7 +857,7 @@ async fn resolve_attack_mission(
 
     let mut def_active: planet::ActiveModel = def_planet_raw.clone().into();
     let mut planet_conquered = false;
-    let mut conquest_notification = String::new();
+    let mut _conquest_notification = String::new();
 
     if result.winner == "attacker" {
         // Calculer le pourcentage de ressources volées
@@ -853,17 +881,14 @@ async fn resolve_attack_mission(
             // On ne peut conquérir que si le défenseur a plus d'une planète
             if defender_planets > 1 {
                 planet_conquered = true;
-                conquest_notification = format!("🎯 CONQUÊTE ! Vous avez conquis la planète {} !", def_planet.name);
+                _conquest_notification = format!("Vous avez conquis la planète {} !", def_planet.name);
 
                 // Transférer la propriété
                 def_active.owner_id = Set(att_user.id);
 
                 // Notification pour le défenseur
-                let defender_notif = json!({
-                    "type": "planet_lost",
-                    "message": format!("⚠️ ALERTE CRITIQUE ! Votre planète {} a été conquise par {} !", def_planet.name, att_user.username)
-                });
-                // On stocke cette notification dans unread_report
+                // Notification défenseur (TODO: implémenter via WS)
+                // let _defender_notif = json!({ "type": "planet_lost", ... });
             }
         }
 
@@ -1797,8 +1822,8 @@ async fn expedition_handler(
     }
 
     // Compteurs backwards-compat (utilisés dans les configs loot)
-    let hunters  = fleet.get("light_hunter").copied().unwrap_or(0);
-    let cruisers = fleet.get("cruiser").copied().unwrap_or(0);
+    let _hunters  = fleet.get("light_hunter").copied().unwrap_or(0);
+    let _cruisers = fleet.get("cruiser").copied().unwrap_or(0);
     let recyclers = fleet.get("recycler").copied().unwrap_or(0);
 
     // Puissance de combat effective (pour comparer aux pirates)
@@ -1832,8 +1857,8 @@ async fn expedition_handler(
     let cruiser_deut_range = config_clone.get_config("expedition_cruiser_deut_range", 30.0);
     let deuterium_chance = config_clone.get_config("expedition_deuterium_chance", 0.5);
     let recycler_multiplier = config_clone.get_config("expedition_recycler_bonus_multiplier", 2.0);
-    let hunter_vuln_mult = config_clone.get_config("expedition_hunter_vulnerability", 1.0);
-    let cruiser_vuln_mult = config_clone.get_config("expedition_cruiser_vulnerability", 0.5);
+    let _hunter_vuln_mult = config_clone.get_config("expedition_hunter_vulnerability", 1.0);
+    let _cruiser_vuln_mult = config_clone.get_config("expedition_cruiser_vulnerability", 0.5);
     let calm_bonus = config_clone.get_config("expedition_calm_sector_bonus", 1.2);
     // production_speed = 250 = old (speed_factor/100) × mining_speed; recover compat divisor
     let speed_factor = config_clone.production_speed * 2.0;
@@ -1842,9 +1867,9 @@ async fn expedition_handler(
     let base_metal_per_hunter = hunter_metal_min + rand::thread_rng().gen_range(0.0..=hunter_metal_range);
     let base_crystal_per_hunter = hunter_crystal_min + rand::thread_rng().gen_range(0.0..=hunter_crystal_range);
     let base_deut_per_hunter = hunter_deut_min + rand::thread_rng().gen_range(0.0..=hunter_deut_range);
-    let base_metal_per_cruiser = cruiser_metal_min + rand::thread_rng().gen_range(0.0..=cruiser_metal_range);
-    let base_crystal_per_cruiser = cruiser_crystal_min + rand::thread_rng().gen_range(0.0..=cruiser_crystal_range);
-    let base_deut_per_cruiser = cruiser_deut_min + rand::thread_rng().gen_range(0.0..=cruiser_deut_range);
+    let _base_metal_per_cruiser = cruiser_metal_min + rand::thread_rng().gen_range(0.0..=cruiser_metal_range);
+    let _base_crystal_per_cruiser = cruiser_crystal_min + rand::thread_rng().gen_range(0.0..=cruiser_crystal_range);
+    let _base_deut_per_cruiser = cruiser_deut_min + rand::thread_rng().gen_range(0.0..=cruiser_deut_range);
     let found_deuterium = rand::thread_rng().gen_bool(deuterium_chance);
 
     let total_ships: i32 = fleet.values().sum();
@@ -2195,7 +2220,6 @@ async fn scout_expedition_handler(
     }
 
     // Simulation du scan (aléatoire mais basé sur la force de la flotte)
-    let mut rng = rand::thread_rng();
     let base_danger = rand::thread_rng().gen_range(0..100);
 
     let (danger_level, color, probability, recommendation) = if base_danger < 30 {
@@ -2721,7 +2745,6 @@ async fn scan_nearby_planets_handler(
 fn generate_colony_name() -> String {
     let prefixes = ["Néo", "Alpha", "Terra", "Nova", "Proxima", "Sector", "Base", "Outpost"];
     let suffixes = ["Prime", "Secundus", "X", "Y", "Z", "Major", "Minor", "Delta", "Omicron"];
-    let mut rng = rand::thread_rng();
     let prefix = prefixes[rand::thread_rng().gen_range(0..prefixes.len())];
     let suffix = suffixes[rand::thread_rng().gen_range(0..suffixes.len())];
     let num = rand::thread_rng().gen_range(1..999);
@@ -3083,7 +3106,7 @@ async fn get_player_profile_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let config = state.config.read().unwrap().clone();
-    use crate::entities::{prelude::*, user, planet, fleet_mission};
+    use crate::entities::{planet, fleet_mission};
     
     // ✅ Récupérer l'ID de l'utilisateur qui consulte (viewer)
     let viewer_id = params.get("viewer_id")
@@ -3164,7 +3187,7 @@ async fn get_player_profile_handler(
     let show_economy = espionage_level >= 5;
     let show_military = espionage_level >= 7;
     let show_fleet = espionage_level >= 10;
-    let show_defenses = espionage_level >= 12;
+    let _show_defenses = espionage_level >= 12;
     let show_buildings = espionage_level >= 15;
     let show_techs = espionage_level >= 18;
     let show_all = is_own_profile;
@@ -4431,9 +4454,6 @@ async fn get_tech_details_handler(
     State(state): State<AppState>,
     Path(tech_key): Path<String>,
 ) -> impl IntoResponse {
-    use entities::prelude::Technology;
-    use entities::technology;
-
     match Technology::find()
         .filter(technology::Column::TechKey.eq(&tech_key))
         .one(&state.db)
@@ -4503,9 +4523,6 @@ async fn start_research_handler(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
 ) -> impl IntoResponse {
-    use entities::{prelude::*, technology, planet_technology};
-    use sea_orm::ActiveModelTrait;
-
     let ip = backend::rate_limit::RateLimiter::extract_ip(&headers);
     if !state.rate_limit_build.check(&ip) {
         return (axum::http::StatusCode::TOO_MANY_REQUESTS,
@@ -4660,9 +4677,6 @@ async fn build_ships_handler(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
 ) -> Response {
-    use entities::{prelude::*, ship_type, planet_ship};
-    use sea_orm::ActiveModelTrait;
-
     let ip = backend::rate_limit::RateLimiter::extract_ip(&headers);
     if !state.rate_limit_build.check(&ip) {
         return (StatusCode::TOO_MANY_REQUESTS,
@@ -4874,9 +4888,6 @@ async fn build_defenses_handler(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
 ) -> Response {
-    use entities::{prelude::*, defense_type, planet_defense};
-    use sea_orm::ActiveModelTrait;
-
     let ip = backend::rate_limit::RateLimiter::extract_ip(&headers);
     if !state.rate_limit_build.check(&ip) {
         return (StatusCode::TOO_MANY_REQUESTS,

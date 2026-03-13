@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ScrollText, Swords, Truck, ArrowDownLeft, ArrowUpRight, ShieldAlert, Trophy, BarChart3, Skull } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -46,7 +46,9 @@ interface ExtortionEvent {
   resolved_at: string | null;
 }
 
-export default function ReportsTerminal({ planetId, initialView }: { planetId: string; initialView?: 'combat' | 'transport' | 'economy' | 'pirates' }) {
+// ReportsTerminal est un composant lourd (logs de combat + transport + piraterie).
+// Le memo évite de le re-rendre quand d'autres parties du parent changent (ex: ressources).
+const ReportsTerminal = React.memo(function ReportsTerminal({ planetId, initialView }: { planetId: string; initialView?: 'combat' | 'transport' | 'economy' | 'pirates' }) {
   const [combatLogs, setCombatLogs] = useState<CombatLog[]>([]);
   const [transportLogs, setTransportLogs] = useState<TransportLog[]>([]);
   const [extortionHistory, setExtortionHistory] = useState<ExtortionEvent[]>([]);
@@ -627,4 +629,6 @@ export default function ReportsTerminal({ planetId, initialView }: { planetId: s
       )}
     </motion.div>
   );
-}
+});
+
+export default ReportsTerminal;

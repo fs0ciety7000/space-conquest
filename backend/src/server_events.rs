@@ -297,7 +297,7 @@ pub async fn resolve_event(
 
     // Broadcast WS résolution
     if let Some(ref ws) = state.ws {
-        ws.broadcast_global(crate::websocket::WsEvent::ServerEventResolved {
+        let _ = ws.broadcast_global(crate::websocket::WsEvent::ServerEventResolved {
             event_id: event_id.to_string(),
             event_type: event.event_type_key.clone(),
             outcome: outcome.to_string(),
@@ -445,7 +445,7 @@ pub async fn tick_events(state: &AppState) -> Result<(), sea_orm::DbErr> {
         let ends_at = event.ends_at.to_rfc3339();
 
         if let Some(ref ws) = state.ws {
-            ws.broadcast_global(crate::websocket::WsEvent::ServerEventStarted {
+            let _ = ws.broadcast_global(crate::websocket::WsEvent::ServerEventStarted {
                 event_id: event.id.to_string(),
                 event_type: event.event_type_key.clone(),
                 name,
@@ -486,7 +486,7 @@ pub async fn tick_events(state: &AppState) -> Result<(), sea_orm::DbErr> {
         let narrative = event.narrative.clone().unwrap_or_default();
 
         if let Some(ref ws) = state.ws {
-            ws.broadcast_global(crate::websocket::WsEvent::ServerEventAnnounced {
+            let _ = ws.broadcast_global(crate::websocket::WsEvent::ServerEventAnnounced {
                 event_id: event.id.to_string(),
                 event_type: event.event_type_key.clone(),
                 name,
@@ -576,7 +576,7 @@ pub async fn send_system_inbox_message(
     subject: &str,
     content: &str,
 ) -> Result<(), sea_orm::DbErr> {
-    use crate::entities::{prelude::Message, message};
+    use crate::entities::message;
     let now = chrono::Utc::now().naive_utc();
     message::ActiveModel {
         id: Set(Uuid::new_v4()),

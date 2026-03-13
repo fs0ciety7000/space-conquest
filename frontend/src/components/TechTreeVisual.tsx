@@ -124,19 +124,19 @@ const getTechConfig = (tech_key: string) => {
 const getTechGainPerLevel = (tech_key: string): string => {
   const gains: Record<string, string> = {
     energy_tech:       '+10% production des mines',
-    laser_tech:        '+5% attaque / prérequis armes avancées',
+    laser_tech:        'Débloque des technologies avancées (bonus en développement)',
     armour_tech:       '+10% points de coque',
     espionage_tech:    '+1 couche de données espionnage',
-    ion_tech:          '+3% attaque / prérequis moteurs avancés',
-    plasma_tech:       '+1% production ressources/niveau',
+    ion_tech:          'Prérequis pour d\'autres technologies avancées',
+    plasma_tech:       '+1% production de ressources par niveau',
     shield_tech:       '+10% bouclier des vaisseaux',
     weapons_tech:      '+10% attaque globale',
-    computer_tech:     '+10% cargo transporteurs/niveau',
+    computer_tech:     '+10% capacité cargo des transporteurs par niveau',
     combustion_drive:  '+10% vitesse (chasseurs légers)',
     impulse_drive:     '+20% vitesse (croiseurs)',
-    hyperspace_drive:  '+30% vitesse (battleships)',
+    hyperspace_drive:  '+15% vitesse des flottes et routes commerciales par niveau',
     astrophysics:      '+1 slot de colonie',
-    graviton_tech:     'Perturbe les rapports espions adverses',
+    graviton_tech:     'Technologie expérimentale (effets en cours d\'implémentation)',
   };
   return gains[tech_key] || '+1 niveau';
 };
