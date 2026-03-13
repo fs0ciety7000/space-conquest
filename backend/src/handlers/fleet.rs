@@ -2198,9 +2198,9 @@ async fn piracy_handler(
 
     if success {
         // ── Steal SC ──────────────────────────────────────────────────────────
-        // Steal between 10 % and 30 % of target's SC, capped at 1 000.
+        // Steal between 10 % and 30 % of target's SC, capped at 100.
         let steal_pct = 0.10 + rand::random::<f64>() * 0.20; // 10–30 %
-        let credits_stolen = (target_user.syndicate_credits * steal_pct).min(1_000.0).floor();
+        let credits_stolen = (target_user.syndicate_credits * steal_pct).min(100.0).floor();
 
         if credits_stolen > 0.0 && target_user.syndicate_credits >= credits_stolen {
             // Atomic debit from target + credit to attacker via transaction
