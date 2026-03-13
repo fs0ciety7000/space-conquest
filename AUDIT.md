@@ -11,7 +11,7 @@
 |---------|-------|-------------|---------|-----------|--------|
 | Build Queue & Construction | 18 | 6 | 6 | 4 | 2 |
 | Production de ressources | 12 | 2 | 4 | 4 | 2 |
-| Formules & Équilibrage | 15 | 3 | 4 | 5 | 3 |
+| Formules & Équilibrage | 19 | 5 | 4 | 7 | 3 |
 | Combat & Missions de flotte | 14 | 3 | 4 | 5 | 2 |
 | Marché, Économie & Routes | 18 | 5 | 7 | 5 | 1 |
 | Auth, Sécurité & Rate Limit | 15 | 4 | 5 | 6 | 0 |
@@ -20,7 +20,7 @@
 | Galaxie, Planètes & Gouvernance | 10 | 3 | 6 | 1 | 0 |
 | Frontend — Core | 13 | 2 | 7 | 3 | 1 |
 | Frontend — Étendu | 19 | 4 | 8 | 6 | 1 |
-| **TOTAL** | **158** | **40** | **62** | **44** | **12** |
+| **TOTAL** | **162** | **42** | **62** | **46** | **12** |
 
 > ⚠️ **40 bugs CRITIQUES** confirmés. Le jeu n'est **pas déployable en l'état**.
 > La cause racine la plus fréquente : **opérations multi-étapes sans transaction SeaORM** + **absence totale de middleware d'authentification sur les routes de jeu**.
@@ -134,6 +134,16 @@
 **BAL-013** · `game_logic.rs:459` — Deutérium mine ne coûte jamais de deutérium → sink économique manquant.
 **BAL-014** · `game_logic.rs:650` — Capacité hangar linéaire → pas d'anti-snowball pour les top joueurs.
 **BAL-015** · `game_logic.rs:672` — Constante `TRANSPORTER_CAPACITY` dépréciée toujours exportée.
+
+### 🔴 CRITICAL (ajout Game Designer — analyse formules complètes)
+
+**BAL-016** · `game_logic.rs:633` — **Erreur dimensionnelle BUILD_RATE**: `secs = (cost / 3600.0) * 3600.0` = `secs = cost`. Un Light Hunter (4 000 ressources) prend **4 000 secondes (66 min)** à construire. La double conversion annule le taux. L'économie de flotte entière est non-fonctionnelle à vitesse serveur standard.
+**BAL-017** · `game_logic.rs` (global) — **Aucune consommation de deutérium pour les flottes**. Zéro `deuterium_cost` dans la logique de dispatch de flotte. Résultat : l'agression n'a aucun coût économique, l'archétype Mineur/Raider est indifférencié, la tension "fleet save" n'existe pas. C'est le mécanisme central d'un jeu Ogame-style — il est absent.
+
+### 🟡 MEDIUM (ajout Game Designer)
+
+**BAL-018** · `game_logic.rs:472` — Commentaire dit `multiplicateur 2.0` mais le code utilise `1.5f64.powi(level-1)` pour tous les bâtiments infrastructure. À niveau 15: différence de 175k vs 6.5M métal. Si 1.5 est intentionnel, le commentaire est un piège à bug futur.
+**BAL-019** · `game_logic.rs:256,376,421,1398` — Formule de production `base * level * growth.powi(level)` copiée-collée 4 fois. Tout correctif appliqué à une copie divergera silencieusement des autres → production affichée ≠ production accumulée.
 
 ---
 
@@ -655,4 +665,4 @@ done; wait
 ---
 
 *Rapport généré par audit multi-agents · Space Conquest · 2026-03-13*
-*158 bugs · 40 CRITICAL · 62 HIGH · 44 MEDIUM · 12 LOW*
+*162 bugs · 42 CRITICAL · 62 HIGH · 46 MEDIUM · 12 LOW*
