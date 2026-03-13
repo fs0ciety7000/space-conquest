@@ -17,7 +17,7 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager.get_connection().execute_unprepared(r#"
-            UPDATE building_type
+            UPDATE building_types
             SET is_available = false
             WHERE building_key IN ('nanite_factory', 'terraformer', 'alliance_depot', 'missile_silo');
         "#).await?;
@@ -27,7 +27,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager.get_connection().execute_unprepared(r#"
-            UPDATE building_type
+            UPDATE building_types
             SET is_available = true
             WHERE building_key IN ('nanite_factory', 'terraformer', 'alliance_depot', 'missile_silo');
         "#).await?;
