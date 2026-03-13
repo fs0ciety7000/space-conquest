@@ -41,6 +41,19 @@ export default function ColonizeModal({
   const colonyShips = currentPlanet?.colony_ship_count || 0;
   const hasColonyShip = colonyShips > 0;
 
+  // Réserves minimales obligatoires sur la planète source
+  const MIN_METAL = 20_000;
+  const MIN_CRYSTAL = 20_000;
+  const MIN_DEUT = 15_000;
+  const maxMetal = Math.max(0, Math.floor(availableResources.metal) - MIN_METAL);
+  const maxCrystal = Math.max(0, Math.floor(availableResources.crystal) - MIN_CRYSTAL);
+  const maxDeuterium = Math.max(0, Math.floor(availableResources.deuterium) - MIN_DEUT);
+
+  const hasEnoughReserve =
+    availableResources.metal >= MIN_METAL &&
+    availableResources.crystal >= MIN_CRYSTAL &&
+    availableResources.deuterium >= MIN_DEUT;
+
   // Calculer distance et temps de vol
   const distance = currentPlanet ? calculateDistance(
     { galaxy: currentPlanet.galaxy, system: currentPlanet.system, position: currentPlanet.position },
@@ -49,10 +62,10 @@ export default function ColonizeModal({
 
   const travelTime = Math.round(distance / 100); // Temps en secondes
 
+  const canColonize = hasColonyShip && hasEnoughReserve;
+
   const handleSubmit = () => {
-    if (!hasColonyShip) {
-      return; // Bloquer si pas de vaisseau
-    }
+    if (!canColonize) return;
     onConfirm(position, metal, crystal, deuterium);
   };
 
@@ -97,6 +110,20 @@ export default function ColonizeModal({
             </div>
           )}
 
+          {/* Avertissement ressources insuffisantes pour la base obligatoire */}
+          {hasColonyShip && !hasEnoughReserve && (
+            <div className="bg-amber-900/20 border border-amber-500/40 p-4 rounded-xl glass-card">
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase mb-2">
+                <AlertTriangle size={14} /> Ressources insuffisantes
+              </div>
+              <p className="text-slate-400 text-xs">
+                La colonisation envoie automatiquement <span className="text-orange-400 font-bold">20 000 Métal</span>,{' '}
+                <span className="text-cyan-400 font-bold">20 000 Cristal</span> et{' '}
+                <span className="text-emerald-400 font-bold">15 000 Deutérium</span> à la nouvelle colonie. Votre planète source n'a pas assez de ressources.
+              </p>
+            </div>
+          )}
+
           {/* Info */}
           <div className="bg-emerald-900/10 border border-emerald-500/20 p-4 rounded-xl glass-card">
             <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase mb-2">
@@ -118,19 +145,19 @@ export default function ColonizeModal({
           <div className="bg-[rgba(5,0,15,0.8)] border border-cyan-500/10 p-3 rounded-xl">
             <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/10">
               <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-cyan-400 to-transparent flex-shrink-0" />
-              <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">Ressources de départ</span>
+              <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-cyan-500/70">Base obligatoire (toujours envoyée)</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-[10px]">
               <div className="text-center">
-                <div className="text-orange-400 font-bold tabular-nums">500</div>
+                <div className="text-orange-400 font-bold tabular-nums">20 000</div>
                 <div className="text-slate-500">Métal</div>
               </div>
               <div className="text-center">
-                <div className="text-cyan-400 font-bold tabular-nums">500</div>
+                <div className="text-cyan-400 font-bold tabular-nums">20 000</div>
                 <div className="text-slate-500">Cristal</div>
               </div>
               <div className="text-center">
-                <div className="text-emerald-400 font-bold tabular-nums">0</div>
+                <div className="text-emerald-400 font-bold tabular-nums">15 000</div>
                 <div className="text-slate-500">Deutérium</div>
               </div>
             </div>
@@ -143,13 +170,13 @@ export default function ColonizeModal({
                 <Package size={12} className="text-orange-400" />
                 Métal à transporter
               </span>
-              <span className="text-slate-200">Dispo: {Math.floor(availableResources.metal).toLocaleString()}</span>
+              <span className="text-slate-200">Max supplément: <span className="text-orange-400">{maxMetal.toLocaleString()}</span> <span className="text-slate-500">(base: 20 000 auto)</span></span>
             </div>
             <div className="flex gap-4 items-center">
               <Input
                 type="range"
                 min="0"
-                max={Math.floor(availableResources.metal)}
+                max={maxMetal}
                 value={metal}
                 onChange={(e) => setMetal(parseInt(e.target.value))}
                 className="flex-1 h-2 bg-[rgba(5,0,15,0.8)] accent-orange-500 cursor-pointer"
@@ -157,9 +184,9 @@ export default function ColonizeModal({
               <Input
                 type="number"
                 min="0"
-                max={Math.floor(availableResources.metal)}
+                max={maxMetal}
                 value={metal}
-                onChange={(e) => setMetal(Math.min(Math.floor(availableResources.metal), parseInt(e.target.value) || 0))}
+                onChange={(e) => setMetal(Math.min(maxMetal, parseInt(e.target.value) || 0))}
                 onFocus={(e) => e.target.select()}
                 className="w-28 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-right font-mono focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]"
               />
@@ -173,13 +200,13 @@ export default function ColonizeModal({
                 <Package size={12} className="text-cyan-400" />
                 Cristal à transporter
               </span>
-              <span className="text-slate-200">Dispo: {Math.floor(availableResources.crystal).toLocaleString()}</span>
+              <span className="text-slate-200">Max supplément: <span className="text-cyan-400">{maxCrystal.toLocaleString()}</span> <span className="text-slate-500">(base: 20 000 auto)</span></span>
             </div>
             <div className="flex gap-4 items-center">
               <Input
                 type="range"
                 min="0"
-                max={Math.floor(availableResources.crystal)}
+                max={maxCrystal}
                 value={crystal}
                 onChange={(e) => setCrystal(parseInt(e.target.value))}
                 className="flex-1 h-2 bg-[rgba(5,0,15,0.8)] accent-cyan-500 cursor-pointer"
@@ -187,9 +214,9 @@ export default function ColonizeModal({
               <Input
                 type="number"
                 min="0"
-                max={Math.floor(availableResources.crystal)}
+                max={maxCrystal}
                 value={crystal}
-                onChange={(e) => setCrystal(Math.min(Math.floor(availableResources.crystal), parseInt(e.target.value) || 0))}
+                onChange={(e) => setCrystal(Math.min(maxCrystal, parseInt(e.target.value) || 0))}
                 onFocus={(e) => e.target.select()}
                 className="w-28 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-right font-mono focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]"
               />
@@ -203,13 +230,13 @@ export default function ColonizeModal({
                 <Package size={12} className="text-emerald-400" />
                 Deutérium à transporter
               </span>
-              <span className="text-slate-200">Dispo: {Math.floor(availableResources.deuterium).toLocaleString()}</span>
+              <span className="text-slate-200">Max supplément: <span className="text-emerald-400">{maxDeuterium.toLocaleString()}</span> <span className="text-slate-500">(base: 15 000 auto)</span></span>
             </div>
             <div className="flex gap-4 items-center">
               <Input
                 type="range"
                 min="0"
-                max={Math.floor(availableResources.deuterium)}
+                max={maxDeuterium}
                 value={deuterium}
                 onChange={(e) => setDeuterium(parseInt(e.target.value))}
                 className="flex-1 h-2 bg-[rgba(5,0,15,0.8)] accent-green-500 cursor-pointer"
@@ -217,9 +244,9 @@ export default function ColonizeModal({
               <Input
                 type="number"
                 min="0"
-                max={Math.floor(availableResources.deuterium)}
+                max={maxDeuterium}
                 value={deuterium}
-                onChange={(e) => setDeuterium(Math.min(Math.floor(availableResources.deuterium), parseInt(e.target.value) || 0))}
+                onChange={(e) => setDeuterium(Math.min(maxDeuterium, parseInt(e.target.value) || 0))}
                 onFocus={(e) => e.target.select()}
                 className="w-28 bg-[rgba(5,0,15,0.8)] border border-cyan-500/15 text-slate-200 text-right font-mono focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(0,245,255,0.1)]"
               />
@@ -234,15 +261,15 @@ export default function ColonizeModal({
             </div>
             <div className="grid grid-cols-3 gap-3 text-xs">
               <div className="text-center">
-                <div className="text-orange-400 font-bold text-lg tabular-nums">{(500 + metal).toLocaleString()}</div>
+                <div className="text-orange-400 font-bold text-lg tabular-nums">{(MIN_METAL + metal).toLocaleString()}</div>
                 <div className="text-slate-500">Métal</div>
               </div>
               <div className="text-center">
-                <div className="text-cyan-400 font-bold text-lg tabular-nums">{(500 + crystal).toLocaleString()}</div>
+                <div className="text-cyan-400 font-bold text-lg tabular-nums">{(MIN_CRYSTAL + crystal).toLocaleString()}</div>
                 <div className="text-slate-500">Cristal</div>
               </div>
               <div className="text-center">
-                <div className="text-emerald-400 font-bold text-lg tabular-nums">{deuterium.toLocaleString()}</div>
+                <div className="text-emerald-400 font-bold text-lg tabular-nums">{(MIN_DEUT + deuterium).toLocaleString()}</div>
                 <div className="text-slate-500">Deutérium</div>
               </div>
             </div>
@@ -258,14 +285,14 @@ export default function ColonizeModal({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!hasColonyShip}
+              disabled={!canColonize}
               className={`${
-                hasColonyShip
+                canColonize
                   ? 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)] hover:-translate-y-1 hover:shadow-2xl hover:scale-105'
-                  : 'bg-[rgba(5,0,15,0.8)] border border-cyan-500/10 cursor-not-allowed'
+                  : 'bg-[rgba(5,0,15,0.8)] border border-cyan-500/10 cursor-not-allowed opacity-50'
               } text-slate-200 font-black uppercase tracking-widest card-depth transition-all duration-300`}
             >
-              {hasColonyShip ? 'Coloniser' : 'Vaisseau Requis'}
+              {!hasColonyShip ? 'Vaisseau Requis' : !hasEnoughReserve ? 'Ressources insuffisantes' : 'Coloniser'}
             </Button>
           </div>
         </div>

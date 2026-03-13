@@ -2809,20 +2809,30 @@ async fn colonize_handler(
         ).into_response();
     }
 
-    // Récupérer les ressources à transporter (optionnelles)
+    // Récupérer les ressources à transporter (supplément optionnel)
     let metal_to_transport = payload.metal.unwrap_or(0.0).max(0.0);
     let crystal_to_transport = payload.crystal.unwrap_or(0.0).max(0.0);
     let deuterium_to_transport = payload.deuterium.unwrap_or(0.0).max(0.0);
 
-    // Vérifier que la planète source a assez de ressources
-    if metal_to_transport > att_planet_data.metal_amount {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de métal"}))).into_response();
+    // Base obligatoire toujours envoyée à la nouvelle colonie
+    const BASE_METAL: f64 = 20_000.0;
+    const BASE_CRYSTAL: f64 = 20_000.0;
+    const BASE_DEUT: f64 = 15_000.0;
+
+    // Total = base obligatoire + supplément choisi
+    let total_metal = BASE_METAL + metal_to_transport;
+    let total_crystal = BASE_CRYSTAL + crystal_to_transport;
+    let total_deut = BASE_DEUT + deuterium_to_transport;
+
+    // Vérifier que la planète source a assez pour la base + le supplément
+    if total_metal > att_planet_data.metal_amount {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Métal insuffisant. La colonisation nécessite au moins {:.0} de métal (base 20 000 + {:.0} supplément).", total_metal, metal_to_transport)}))).into_response();
     }
-    if crystal_to_transport > att_planet_data.crystal_amount {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de cristal"}))).into_response();
+    if total_crystal > att_planet_data.crystal_amount {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Cristal insuffisant. La colonisation nécessite au moins {:.0} de cristal (base 20 000 + {:.0} supplément).", total_crystal, crystal_to_transport)}))).into_response();
     }
-    if deuterium_to_transport > att_planet_data.deuterium_amount {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Pas assez de deutérium"}))).into_response();
+    if total_deut > att_planet_data.deuterium_amount {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Deutérium insuffisant. La colonisation nécessite au moins {:.0} de deutérium (base 15 000 + {:.0} supplément).", total_deut, deuterium_to_transport)}))).into_response();
     }
 
     // Vérifier que l'emplacement n'est pas déjà occupé
@@ -2875,9 +2885,9 @@ async fn colonize_handler(
         "target_galaxy": payload.galaxy,
         "target_system": payload.system,
         "target_position": payload.position,
-        "metal": metal_to_transport,
-        "crystal": crystal_to_transport,
-        "deuterium": deuterium_to_transport,
+        "metal": total_metal,
+        "crystal": total_crystal,
+        "deuterium": total_deut,
         "owner_id": owner_id.to_string(),
         "password": att_planet_data.password.clone()
     });
@@ -2889,9 +2899,9 @@ async fn colonize_handler(
         target_planet_id: Set(current_id), // On utilise la même planète comme placeholder
         mission_type: Set("colonize".to_string()),
         arrival_time: Set(arrival),
-        metal: Set(metal_to_transport),
-        crystal: Set(crystal_to_transport),
-        deuterium: Set(deuterium_to_transport),
+        metal: Set(total_metal),
+        crystal: Set(total_crystal),
+        deuterium: Set(total_deut),
         ships_count: Set(1),
         fleet_data: Set(Some(colonize_data.to_string())),
         recyclers_sent: Set(0),
@@ -2903,9 +2913,9 @@ async fn colonize_handler(
     // Déduire le vaisseau et les ressources de la planète source
     let _ = tech_tree::deduct_ships(&state.db, current_id, "colony_ship", 1).await;
     let mut att_planet = att_planet_data.clone().into_active_model();
-    att_planet.metal_amount = Set(att_planet_data.metal_amount - metal_to_transport);
-    att_planet.crystal_amount = Set(att_planet_data.crystal_amount - crystal_to_transport);
-    att_planet.deuterium_amount = Set(att_planet_data.deuterium_amount - deuterium_to_transport);
+    att_planet.metal_amount = Set(att_planet_data.metal_amount - total_metal);
+    att_planet.crystal_amount = Set(att_planet_data.crystal_amount - total_crystal);
+    att_planet.deuterium_amount = Set(att_planet_data.deuterium_amount - total_deut);
     let _ = att_planet.update(&state.db).await;
 
     // Formater le temps de vol pour l'affichage
