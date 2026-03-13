@@ -1,819 +1,658 @@
-# Space Conquest — Audit Complet
-> Généré le 2026-03-13 par Backend Architect + Game Designer + Frontend Developer + Senior PM
+# AUDIT COMPLET — Space Conquest
+**Date :** 2026-03-13
+**Rôles :** @project-manager · @game-designer · @backend-architect · @frontend-developer · @reality-checker
+**Périmètre :** 111 fichiers Rust · 132 fichiers TypeScript/React · 103 migrations SeaORM
 
 ---
 
-## Table des matières
+## SYNTHÈSE EXÉCUTIVE
 
-1. [Sécurité — Critique](#1-sécurité--critique)
-2. [Bugs Backend](#2-bugs-backend)
-3. [Valeurs Hardcodées à Externaliser](#3-valeurs-hardcodées-à-externaliser)
-4. [Fonctions pas Data-Driven](#4-fonctions-pas-data-driven)
-5. [TODOs et Stubs Non Implémentés](#5-todos-et-stubs-non-implémentés)
-6. [Incohérences entre Modules](#6-incohérences-entre-modules)
-7. [Performance et Scalabilité](#7-performance-et-scalabilité)
-8. [Frontend — Bugs et Incohérences](#8-frontend--bugs-et-incohérences)
-9. [Frontend — UX Manquante](#9-frontend--ux-manquante)
-10. [Frontend — Performance](#10-frontend--performance)
-11. [Matrice de Complétude Features](#11-matrice-de-complétude-features)
-12. [Équilibrage du Jeu](#12-équilibrage-du-jeu)
-13. [Systèmes Manquants](#13-systèmes-manquants)
-14. [Features Sympas à Implémenter](#14-features-sympas-à-implémenter)
-15. [Rétention Joueur](#15-rétention-joueur)
-16. [Recommandations Prioritisées](#16-recommandations-prioritisées)
+| Domaine | Total | 🔴 CRITICAL | 🟠 HIGH | 🟡 MEDIUM | 🟢 LOW |
+|---------|-------|-------------|---------|-----------|--------|
+| Build Queue & Construction | 18 | 6 | 6 | 4 | 2 |
+| Production de ressources | 12 | 2 | 4 | 4 | 2 |
+| Formules & Équilibrage | 15 | 3 | 4 | 5 | 3 |
+| Combat & Missions de flotte | 14 | 3 | 4 | 5 | 2 |
+| Marché, Économie & Routes | 18 | 5 | 7 | 5 | 1 |
+| Auth, Sécurité & Rate Limit | 15 | 4 | 5 | 6 | 0 |
+| Tech Tree, Alliance & Missions | 12 | 5 | 6 | 1 | 0 |
+| WebSocket, Notifications & Tick | 12 | 3 | 5 | 4 | 0 |
+| Galaxie, Planètes & Gouvernance | 10 | 3 | 6 | 1 | 0 |
+| Frontend — Core | 13 | 2 | 7 | 3 | 1 |
+| Frontend — Étendu | 19 | 4 | 8 | 6 | 1 |
+| **TOTAL** | **158** | **40** | **62** | **44** | **12** |
 
----
-
-## 1. Sécurité — Critique
-
-### 1.1 JWT est un pseudo-token sans signature — BLOQUANT
-
-`backend/src/auth.rs:106-108`
-
-Le "JWT" est `format!("jwt-{}", user_id)`. Pas de signature cryptographique, pas d'expiration, pas de validation côté serveur. N'importe qui connaissant l'UUID d'un utilisateur peut forger un token valide et agir à sa place. Cette logique est dupliquée dans 7 fichiers : `main.rs`, `black_market.rs`, `governance.rs`, `auth.rs`, `sabotage.rs`, `economy_log.rs`, `market.rs`.
-
-**Fix** : Implémenter HMAC-SHA256 (crate `jsonwebtoken`) avec expiration 24h.
-
-### 1.2 WebSocket sans Authentification — BLOQUANT
-
-`backend/src/websocket.rs:388`
-
-```rust
-// TODO: Valider le token JWT si fourni
-```
-
-N'importe qui avec un `planet_id` valide peut se connecter au WebSocket et recevoir : rapports de combat, alertes de sabotage, prix du marché souterrain, événements d'alliance.
-
-### 1.3 Aucune validation de propriété sur les endpoints flotte et chantier
-
-`backend/src/handlers/fleet.rs:183-189` (`attack_v2_handler`)
-
-L'`attacker_planet_id` vient du query string sans vérification que l'utilisateur authentifié possède réellement cette planète. Idem pour `spy_v2_handler` (ligne 398), `recycle_handler` (ligne 718), `transport_handler` (ligne 832), et tous les handlers de `handlers/shipyard.rs`.
-
-### 1.4 Injection SQL sur les champs texte libres
-
-`backend/src/trade_routes.rs:349-362` (et ~12 occurrences dans ce fichier, ~15 dans `planet_market.rs`, ~4 dans `build_queue.rs`)
-
-Le champ `name` des routes commerciales est string-interpolé dans des requêtes SQL via `execute_unprepared(&format!(...))`. Un simple `replace('\'', "''")` ne suffit pas. **Fix** : utiliser `Statement::from_sql_and_values` (requêtes paramétrées).
-
-### 1.5 `user_id` depuis le body/query param non vérifié contre le JWT
-
-`backend/src/trade_routes.rs:266` (`create_route_handler`) — `owner_id` vient du JSON body, pas du token JWT. `delete_route_handler` — `user_id` vient du query param. Un joueur peut créer des routes ou en supprimer au nom d'un autre.
-
-### 1.6 Integer Overflow sur calcul de coût de flotte
-
-`backend/src/handlers/shipyard.rs:658-660`
-
-```rust
-let total_cost_metal   = ship.cost_metal   * quantity;   // i32 * i32
-let total_cost_crystal = ship.cost_crystal * quantity;   // overflow silencieux en release
-```
-
-Un destroyer à 60 000 métal × 36 000 quantité overflow silencieusement en mode release.
-
-### 1.7 Rate Limiting partiel et contournable
-
-Seules 3 routes protégées : auth (5/60s), attack (10/60s), build (10/10s). Les routes `sabotage`, `trade-routes`, `market`, `bounties`, `flagship` ne sont pas protégées. Le limiter est basé sur l'IP uniquement et ne persiste pas entre redémarrages (`DashMap` en mémoire, pas Redis). `config.rs` a un champ `redis_url` mais Redis n'est jamais utilisé.
+> ⚠️ **40 bugs CRITIQUES** confirmés. Le jeu n'est **pas déployable en l'état**.
+> La cause racine la plus fréquente : **opérations multi-étapes sans transaction SeaORM** + **absence totale de middleware d'authentification sur les routes de jeu**.
 
 ---
 
-## 2. Bugs Backend
+## 🔴 TOP 10 — BLOCKERS ABSOLUS (déploiement impossible)
 
-### 2.1 Race Conditions — Transactions Manquantes (CRITIQUE)
-
-Plusieurs flux critiques effectuent plusieurs écritures DB sans `db.transaction()` :
-
-- **`attack_v2_handler`** (`fleet.rs:295-305`) : `deduct_ships` (N writes) puis déduction deutérium séparée.
-- **`spy_v2_handler`** (`fleet.rs:469-478`) : même pattern.
-- **`recycle_handler`** (`fleet.rs:772-778`) : même pattern.
-- **`start_research_handler`** (`shipyard.rs:476-520`) : ressources déduites, puis `planet_technology` insérée/updatée séparément.
-- **`build_ships_handler`** (`shipyard.rs:569`) : le mutex Tokio `acquire_planet_build_lock_pub` protège en mémoire mais pas contre un crash ou multi-instances.
-- **`buy_item_handler`** (`black_market.rs:284-316`) : crédits débités, puis inventaire mis à jour séparément.
-
-Un crash serveur entre deux writes crée des états incohérents (ressources perdues sans construction démarrée, crédits perdus sans item livré).
-
-### 2.2 GET `/planets/:id` déclenche des writes en DB
-
-`backend/src/handlers/planets.rs:523-572`
-
-`GET /planets/:id` résout les missions d'attaque et crédite des ressources. Les GET doivent être idempotents. Deux requêtes GET concurrentes peuvent traiter la même mission deux fois.
-
-### 2.3 `flagship_xp_for_level` peut boucler indéfiniment
-
-`backend/src/handlers/fleet.rs:150-158`
-
-```rust
-loop {
-    let xp_needed = flagship_xp_for_level(new_level + 1);
-    if new_xp >= xp_needed { new_xp -= xp_needed; new_level += 1; }
-    else { break; }
-}
-```
-
-Aucun niveau maximum. Si `xp_gain` est anormalement grand (bug), la boucle tourne O(sqrt(xp)) itérations sur le thread async.
-
-### 2.4 Deux systèmes de complétion de recherche parallèles
-
-`tick_system.rs` a `process_research_completion` (lit `planet_technologies.research_end_time`) ET `process_construction_queue_completion` (lit `construction_queue.end_time`). Les recherches peuvent atterrir dans les deux tables selon le chemin de code emprunté. Double-complétion ou saut de niveau possible.
-
-### 2.5 Bonus de biome non appliqué dans `apply_lazy_eval`
-
-`backend/src/handlers/planets.rs:280-290`
-
-Le multiplicateur de biome est appliqué dans `get_planet_handler` mais pas dans `apply_lazy_eval` de `shipyard.rs`. Les ressources calculées avant une construction ne tiennent pas compte du biome. Divergence entre les valeurs affichées et les ressources réellement déduites.
-
-### 2.6 Loot expédition avec ratios cristal/deutérium hardcodés
-
-`backend/src/handlers/fleet.rs:1019-1023`
-
-```rust
-let crystal    = metal * 0.4;
-let deuterium  = metal * 0.2;
-```
-
-Ces ratios ne viennent pas de `ServerConfigCache`.
-
-### 2.7 Endpoint legacy `/attack` stocke les vaisseaux dans les colonnes ressources
-
-`backend/src/main.rs:1700-1702`
-
-```rust
-metal:     Set(payload.hunters as f64),      // abuse du champ metal
-crystal:   Set(payload.cruisers as f64),
-deuterium: Set(payload.transporters as f64),
-```
-
-Le `resolve_attack_mission` doit gérer les deux formats. Fragile.
-
-### 2.8 `unwrap()` en production qui panique le serveur
-
-12+ occurrences de `.unwrap()` dans des chemins hot-path :
-- `main.rs:1708`, `main.rs:2108`, `main.rs:2401-2402`, `main.rs:5313`
-- `missions.rs:751`, `alliance.rs:571,768`
-
-Un timeout DB ou erreur transitoire crash tout le processus Axum.
-
-### 2.9 Mission "recycle" jamais résolue dans le tick
-
-`CLAUDE_HANDOFF.md` (TODO explicite) : `tick_system.rs` ne traite pas les missions de type `"recycle"`. Les missions sont créées mais ne se résolvent jamais.
-
-### 2.10 Conquête de planète irréversible sans guard
-
-`backend/src/main.rs:844`
-
-```rust
-if loot_percentage >= 99.0 { /* conquête permanente */ }
-```
-
-Pas de confirmation côté joueur ni de période de grâce. Un bug de calcul peut transférer une planète définitivement.
+| # | ID | Description | Fichier |
+|---|----|-------------|---------|
+| 1 | SEC-01 | Token non signé `jwt-{uuid}` accepté → usurpation de tout compte dont l'UUID est connu | `auth.rs:77` |
+| 2 | SEC-02 | Tous les endpoints admin lisent `user_id` depuis le query string, pas de JWT | `admin.rs:136+` |
+| 3 | SEC-03 | Aucun middleware d'auth sur les routes de jeu (`/attack`, `/build-queue`, etc.) | `main.rs:298` |
+| 4 | SEC-04 | `user_id`/`buyer_user_id` acceptés depuis le body de la requête pour les actions marché | `main.rs:3610` |
+| 5 | BQ-008 | Injection SQL via `item_key` dans la build queue (`format!()` non paramétré) | `build_queue.rs:534` |
+| 6 | GAL-004 | Colonisation identifie l'appelant via `current_planet_id` (pas de JWT) → vol de vaisseaux | `galaxy.rs:285` |
+| 7 | WS-10 | Endpoint notifications sans auth → lecture des alertes d'attaque de n'importe quel joueur | `notifications.rs:53` |
+| 8 | MKT-009 | Prix négatif autorisé sur les annonces de planètes → création de ressources ex nihilo | `planet_market.rs:253` |
+| 9 | BAL-005 | Clé de bâtiment absente du cache → coût = 0 → amélioration gratuite infinie | `game_logic.rs:77` |
+| 10 | WS-09 | `.unwrap()` sur `syndicate_credits` NULL → crash permanent du worker PVE | `server_events.rs:396` |
 
 ---
 
-## 3. Valeurs Hardcodées à Externaliser
+## DOMAINE 1 — BUILD QUEUE & CONSTRUCTION
 
-### 3.1 Constantes de temps de construction/recherche
+### 🔴 CRITICAL
 
-`backend/src/game_logic.rs:496-543` — valeurs critiques d'équilibrage nécessitant un recompile pour changer :
+**BQ-001** · `build_queue.rs:420` — Lock acquis APRÈS déduction des ressources (TOCTOU). Double-spend possible par double-clic.
+**BQ-002** · `shipyard.rs:787` — Déduction ressources + INSERT queue non atomiques pour vaisseaux et défenses.
+**BQ-003** · `build_queue.rs:444` — `add_to_queue`: déduction + démarrage immédiat non atomiques. Pas de rollback.
+**BQ-004** · `build_queue.rs:591` — Cancel: `DELETE` + remboursement dans deux statements séparés. Duplication de remboursement possible.
+**BQ-005** · `tick_system.rs:171` — Complétion tick: `UPDATE` + `DELETE` non atomiques → bâtiment complété deux fois après redémarrage.
+**BQ-006** · `tick_system.rs:44` — Complétion research/ships/defense: pas de transaction → duplication de vaisseaux après instabilité serveur.
 
-```rust
-const BASE_TECH_TIME: f64      = 2400.0;
-const TECH_EXPONENT: f64       = 1.50;
-const LAB_REDUCTION: f64       = 0.07;
-const MAX_REDUCTION: f64       = 0.55;
-const BASE_TIME: f64           = 1800.0;
-const EXPONENT: f64            = 1.40;
-const REDUCTION_PER_LEVEL: f64 = 0.08;
-```
+### 🟠 HIGH
 
-### 3.2 Taux de build ships/defenses dupliqué en 3 endroits
+**BQ-007** · `build_queue.rs:288` — Les deux branches de `facility_key` retournent `"shipyard"` → temps de construction des bâtiments erronés.
+**BQ-008** · `build_queue.rs:534` — **Injection SQL** via `body.item_key` interpolé dans `format!()`.
+**BQ-009** · `shipyard.rs:1313` — Handler fleet legacy: pas de transaction + pas de vérification propriété planète.
+**BQ-010** · `shipyard.rs:320` — `start_research_handler`: propriété de la planète jamais vérifiée.
+**BQ-011** · `build_queue.rs:632` — Pattern N+1: 500 planètes × 5 catégories × 4 queries = 10 000 requêtes DB/tick.
+**BQ-012** · `shipyard.rs:37` — `apply_lazy_eval` ne persiste jamais en DB → `last_update` non mis à jour → duplication passive de ressources.
 
-- `game_logic.rs:551` → `const BUILD_RATE: f64 = 3600.0`
-- `shipyard.rs:110` → `const SHIP_BUILD_RATE: f64 = 3600.0`
-- `shipyard.rs:723` → `const SHIP_BUILD_RATE_QUEUE: f64 = 3600.0`
-- `shipyard.rs:255` → `const DEFENSE_BUILD_RATE_DISP: f64 = 1800.0`
+### 🟡 MEDIUM
 
-Un changement dans l'un ne se propage pas aux autres → divergence affichage / réalité.
+**BQ-013** · `tick_system.rs:193` — Level clamping silencieux: corrige sans loguer, bâtiment avance quand même.
+**BQ-014** · `shipyard.rs:778` — `.unwrap()` sur `Option<i32>` après `.is_some()` → panique possible.
+**BQ-015** · `build_queue.rs:413` — `RwLock::read().unwrap()` → panique en cascade si lock empoisonné.
+**BQ-016** · `shipyard.rs:130` — Formule temps d'affichage vs temps réel divergent à haute vitesse de serveur.
 
-### 3.3 Capacité cargo recycler dupliquée et bypassant la config
+### 🟢 LOW
 
-- `planets.rs:588` → `let capacity = m.recyclers_sent as f64 * 20000.0;` (hardcodé)
-- `game_logic.rs:687` → `config.get_config("cargo_recycler", 20000.0)` (config-driven)
-
-Un admin changeant `cargo_recycler` en DB ne verra pas l'effet dans `get_planet_handler`.
-
-### 3.4 Seuil de conquête planétaire
-
-`main.rs:844` → `if loot_percentage >= 99.0` — mécanisme de jeu majeur, devrait être `config.get_config("conquest_loot_threshold_pct", 99.0)`.
-
-### 3.5 Seuils d'accès au Marché Noir
-
-`black_market.rs:47-48`
-
-```rust
-const ESPIONAGE_REQ: i32 = 13;
-const COMPUTER_REQ: i32  = 10;
-```
-
-### 3.6 Paramètres de combat des pirates en expédition
-
-`combat.rs:239-251` — facteur de scaling (0.5 + rand * 0.6), rounds max (6), facteurs de force par type de vaisseau (0.6-0.7), tous hardcodés.
-
-### 3.7 Constantes économiques du marché
-
-`market.rs` — `NPC_BUY_MARGIN = 0.85`, `NPC_SELL_MARGIN = 1.18`, `MARKET_TAX_RATE = 0.02` hardcodés.
-
-### 3.8 Ratio de débris (30%) et loot extorsion (20%)
-
-`combat.rs` — ratio débris 30% métal + 30% cristal hardcodé.
-`black_market.rs:666` — `let loot_percent = 0.20_f64; // TODO: adjust by defense ratio`
+**BQ-017** · `build_queue.rs:691` — Start + DELETE non atomiques → double-démarrage sur crash.
+**BQ-018** · `construction_queue.rs` — Pas de `created_at`, ordre non déterministe.
 
 ---
 
-## 4. Fonctions pas Data-Driven
+## DOMAINE 2 — PRODUCTION DE RESSOURCES
 
-### 4.1 Coûts de bâtiments : deux systèmes incompatibles
+### 🔴 CRITICAL
 
-`backend/src/game_logic.rs:364-490` — `get_upgrade_cost()` contient des coûts de base hardcodés pour chaque bâtiment dans un `match`. La table `building_type` en DB a des colonnes `base_cost_metal/crystal/deuterium` mais cette fonction les **ignore**.
+**RES-001** · `planets.rs:1155` — `upgrade_mine_handler`: pas de transaction DB + pas de SELECT FOR UPDATE → double-spend concurrent multi-instance.
+**RES-002** · `main.rs:4823` — `build_ships_handler`: déduction calculée sur snapshot externe, jamais recalculée dans la transaction → race condition.
 
-Les technologies utilisent `tech_tree::calculate_tech_cost` (data-driven depuis DB). Les bâtiments utilisent le `match` hardcodé. Si un admin modifie les coûts en DB via AdminContentManager, les bâtiments ne reflètent pas le changement.
+### 🟠 HIGH
 
-### 4.2 Rapid Fire : deux sources parallèles qui peuvent diverger
+**RES-003** · `game_logic.rs:235` — Durée négative non clampée → ressources drainées si `last_update` dans le futur.
+**RES-004** · `planets.rs:1493` — Cancel construction: remboursement sans mise à jour de `last_update` → production comptée deux fois.
+**RES-005** · `planets.rs:549` — Transport/recycle: ressources ajoutées sans `last_update` + sans cap de stockage.
+**RES-006** · `game_logic.rs:77` — Clé absente du cache → coût = 0 (voir BAL-005).
 
-`game_logic.rs:793-799` — table statique hardcodée pour les menaces spy.
-`combat.rs:95-115` — table DB `rapid_fire_rule` pour le combat réel.
+### 🟡 MEDIUM
 
-Si un admin ajoute une règle RF en DB, l'évaluation de menace du spy ne la prend pas en compte.
+**RES-007** · `main.rs:1003` — Loot attaquant: `last_update` non mis à jour après combat.
+**RES-008** · `planets.rs:1305` — `plasma_tech_level` hardcodé à `0` dans le pré-check → refus de construction légitimes.
+**RES-009** · `planets.rs:295` — Cap de stockage: planète déjà au-dessus du cap continue à accumuler indéfiniment.
+**RES-010** · `game_logic.rs:246` — Fonction legacy `calculate_resources` ignore l'énergie fusion.
 
-### 4.3 Bonus de tech appliqués différemment selon le module
+### 🟢 LOW
 
-- Fleet handlers (`fleet.rs:312`) : `speed * (1.0 + hyperspace_level * 0.15)` → **15%/niveau**
-- Trade routes (`trade_routes.rs:84`) : `1.0 + hyperspace_level * 0.10` → **10%/niveau**
-- Frontend `Shipyard.tsx:99-100` : `laser_tech` booste l'attaque, `energy_tech` booste le bouclier — tous les deux **faux** selon le backend v5.
-
-### 4.4 `is_ship_or_defense` whitelist incomplète dans tick_system
-
-`tick_system.rs:221-225` — manquent `heavy_hunter`, `battleship`, `bomber`, `destroyer`, `light_laser`, `heavy_laser`, `gauss_cannon`, `ion_cannon`, `small_shield`, `large_shield`. Si ces unités passent par la `construction_queue` legacy, elles sont silencieusement ignorées.
-
-### 4.5 Officiers : système complet sans effet sur le jeu
-
-`officers.rs` — recrutement, level-up, et calcul de bonus implémentés. **Mais** aucun appel à un getter de bonus officier dans `tick_system.rs`, `combat.rs`, ou `game_logic.rs`. Les officiers sont des cosmétiques coûteux.
-
-### 4.6 Cinq bâtiments construisables sans effet
-
-| Bâtiment | Problème |
-|---|---|
-| `nanite_factory` | `get_build_time` ne lit jamais son niveau pour réduire les temps |
-| `terraformer` | Aucune mécanique de "cases planète" dans le backend |
-| `alliance_depot` | Aucun handler ne l'utilise |
-| `missile_silo` | Aucun système de missiles interplanétaires |
-| `fusion_plant` | Intégration partielle — certains chemins passent `fusion_level=0` |
-
-Ces bâtiments apparaissent dans l'UI (AdminContentManager les liste en DB) mais investir dedans n'a aucun retour.
-
-### 4.7 Technologies affichant de faux bonus
-
-| Tech | Affiché en UI | Effet réel backend |
-|---|---|---|
-| `plasma_tech` | "+5% ATK/SHD/HULL en combat" | +1% production ressources/niveau |
-| `computer_tech` | "+1 slot de flotte" | +10% cargo transporteurs/niveau |
-| `laser_tech` | "+10% attaque vaisseaux" | Legacy seulement, jamais lu par `attack_v2` |
-| `hyperspace_tech` | "+30% vitesse battleships" | Routes commerciales uniquement |
-| `ion_tech` | "+20% dégâts ioniques" | Aucun effet, les "dégâts ioniques" n'existent pas |
-| `graviton_tech` | (fallback générique) | Aucun effet, coût x2.5 |
+**RES-011** · `planets.rs:1694` — `/my-planets` retourne des ressources sans lazy evaluation.
+**RES-012** · `economy_log.rs:59` — Échecs de log silencieux, pas de métrique observable.
 
 ---
 
-## 5. TODOs et Stubs Non Implémentés
+## DOMAINE 3 — FORMULES & ÉQUILIBRAGE
 
-### 5.1 Shield absorption tracking absent
+### 🔴 CRITICAL
 
-`combat.rs:602`
-```rust
-shields_absorbed: 0.0, // TODO: track shield absorption per round
+**BAL-001** · `useRealtimeResources.ts:89` — Formule complète de production dupliquée côté client (exploit: anti-oscillation favorise le client).
+**BAL-002** · `useRealtimeResources.ts:182` — `Math.max(serverVal, displayedVal)` → dérive permanente vers le haut des ressources affichées.
+**BAL-005** · `game_logic.rs:77` — Clé de bâtiment absente → coût = 0 → amélioration gratuite infinie.
+
+### 🟠 HIGH
+
+**BAL-003** · `useRealtimeResources.ts:67` — Bonus énergie tech: `0.10` côté client vs `0.01` backend → facteur **10x de dérive** à Energy Tech 10.
+**BAL-004** · `game_logic.rs:445` — `get_upgrade_cost()` legacy ignore `_config` → dead code trap, changements admin sans effet.
+**BAL-006** · `game_logic.rs:1326` — Coûts de slots linéaires (×1,×2,×3,×4) au lieu d'exponentiels → trivial à maxxer en début de partie.
+**BAL-007** · `game_logic.rs:635` — Light Fighter = 66 min à Chantier naval niveau 0. Trop lent, session-killer pour nouveaux joueurs.
+
+### 🟡 MEDIUM
+
+**BAL-008** · `game_logic.rs:1123` — Formule temps de vol: falaises brutales à dist=1000 et dist=10 000 (3x plus long d'un coup).
+**BAL-009** · `game_logic.rs:1107` — Distance inter-galaxies linéaire, pas circulaire → avantage structurel galaxies centrales.
+**BAL-010** · `game_logic.rs:923` — `apply_losses()` distribution uniforme → Cruiser quasi-immortel caché derrière les Light Fighters.
+**BAL-011** · `game_logic.rs:964` — `resolve_pvp()` ignore 4 types de vaisseaux sur 6 → Heavy Hunters/Battleships/Bombers/Destroyers ne servent à rien.
+**BAL-012** · `game_logic.rs:238` — Collision de nom: `energy_tech_bonus` (1%/level mines) vs `energy_tech_solar_bonus` (10%/level solaire).
+
+### 🟢 LOW
+
+**BAL-013** · `game_logic.rs:459` — Deutérium mine ne coûte jamais de deutérium → sink économique manquant.
+**BAL-014** · `game_logic.rs:650` — Capacité hangar linéaire → pas d'anti-snowball pour les top joueurs.
+**BAL-015** · `game_logic.rs:672` — Constante `TRANSPORTER_CAPACITY` dépréciée toujours exportée.
+
+---
+
+## DOMAINE 4 — COMBAT & MISSIONS DE FLOTTE
+
+### 🔴 CRITICAL
+
+**CMB-001** · `fleet.rs:803` — Recycleur: déduction vaisseaux + fuel dans deux statements séparés.
+**CMB-002** · `fleet.rs:1456` — Expédition: fuel, vaisseaux et loot non atomiques (`let _ =` sur update fuel).
+**CMB-003** · `fleet.rs:2603` — ACS join: vérification disponibilité vaisseaux HORS transaction → TOCTOU.
+
+### 🟠 HIGH
+
+**CMB-004** · `fleet.rs:2383` — Échec piraterie: boucle de destruction de flotte non atomique + snapshot périmé.
+**CMB-005** · `combat.rs:94` — Cache rapid fire: 1+2R requêtes par résolution de combat (N+1 par règle).
+**CMB-006** · `fleet.rs:416` — Spy handler: UUID nil silencieux au lieu de 401 sur token invalide.
+**CMB-007** · `fleet.rs:630` — Logs de combat espionnage silencieusement supprimés → mécanisme anti-harcèlement contournable.
+
+### 🟡 MEDIUM
+
+**CMB-008** · `combat.rs:207` — Underflow float dans ratio de pertes → survivants en nombre négatif possible (cast `i32::MAX`).
+**CMB-009** · `fleet.rs:1829` — `set_combat_zone_handler`: propriété de la planète non vérifiée.
+**CMB-010** · `fleet.rs:2088` — Recall deploy: restauration vaisseaux non atomique → duplication de flotte par double requête.
+**CMB-011** · `fleet.rs:1116` — `update_planet_ships_after_combat` utilise une valeur périmée → vaisseaux construits pendant combat peuvent disparaître.
+**CMB-012** · `fleet.rs:1276` — N+1 requêtes pour bonus modules flagship par dispatch d'attaque.
+
+### 🟢 LOW
+
+**CMB-013** · `combat.rs:704` — `simulate_pvp_combat` ignore cargo cap et débris → tests ne couvrent pas ces chemins critiques.
+**CMB-014** · `fleet.rs:192` — Toute la chaîne d'auth flotte repose sur `current_planet_id` query param, pas sur JWT.
+
+---
+
+## DOMAINE 5 — MARCHÉ, ÉCONOMIE & ROUTES COMMERCIALES
+
+### 🔴 CRITICAL
+
+**MKT-001** · `planet_market.rs:532` — Achat planète: 5 SQL statements séparés sans transaction → duplication ressources sur crash.
+**MKT-002** · `planet_market.rs:687` — Vente NPC: crédit avant suppression planète → exploit infini si DELETE échoue.
+**MKT-003** · `trade_routes.rs:759` — Exécution route: source drainée + destination créditée en 2 statements séparés.
+**MKT-004** · `planet_market.rs:438` — Pas de SELECT FOR UPDATE sur l'annonce → double-vente possible par race condition.
+**MKT-005** · `black_market.rs:820` — Résolution extorsion: déduction crédits hors transaction → double-dépense.
+
+### 🟠 HIGH
+
+**MKT-006** · `trade_routes.rs:404` — `PATCH /trade-routes/:id`: pas de vérification propriété → n'importe quel joueur peut modifier les routes d'un autre.
+**MKT-007** · `black_market.rs:385` — N+1 requêtes par item d'inventaire + dans la boucle tick.
+**MKT-008** · `planet_market.rs:62+` — Interpolation UUID dans `format!()` SQL (pattern dangereux).
+**MKT-009** · `planet_market.rs:253` — **Prix négatif autorisé** → `metal_amount - (-1_000_000)` = +1M métal pour l'acheteur.
+**MKT-010** · `trade_routes.rs:835` — N+1 requêtes piraterie dans le tick: M+2 queries par route d'exécution.
+**MKT-011** · `market_listing.rs:12` — `quantity` et `price_per_unit` en `f64` sans contrainte `> 0`.
+**MKT-012** · `market.rs:92` — `calculate_server_resource_totals` charge toutes les planètes en mémoire au lieu d'un `SUM()` SQL.
+
+### 🟡 MEDIUM
+
+**MKT-013** · `black_market.rs:153` — Pas de cap de prix → admin peut fixer `base_price` à l'infini.
+**MKT-014** · `trade_routes.rs:720` — Drift float sur ressources après milliers d'exécutions de routes.
+**MKT-015** · `economy_log.rs:211` — Requête log marché planètes référence de mauvaises colonnes → événements jamais enregistrés.
+**MKT-016** · `trade_routes.rs:496` — `let _ = db.execute(...)` → echec UPDATE silencieux, retour 200 faux.
+**MKT-017** · `black_market.rs:560` — Activation effet temporel: vérification hors transaction → activation double possible.
+
+### 🟢 LOW
+
+**MKT-018** · `market.rs:122` — `.unwrap()` sur UUID hardcodé (pattern non-conforme à la règle no-unwrap).
+
+---
+
+## DOMAINE 6 — AUTH, SÉCURITÉ & RATE LIMITING
+
+### 🔴 CRITICAL
+
+**SEC-01** · `auth.rs:77` — **Token non signé `jwt-{uuid}` accepté** → usurpation de n'importe quel compte.
+**SEC-02** · `admin.rs:136+` — **Tous les handlers admin lisent `user_id` du query string**, pas de JWT.
+**SEC-03** · `main.rs:298` — **Aucun middleware d'auth sur les routes de jeu** (`/attack`, `/build-queue`, etc.).
+**SEC-04** · `main.rs:3610` — **`user_id`/`buyer_user_id` acceptés depuis le body** pour les actions marché.
+
+### 🟠 HIGH
+
+**SEC-05** · `main.rs:5111` — `POST /tick` totalement non authentifié → accélération artificielle de toute la progression.
+**SEC-06** · `build_queue.rs:534` — Injection SQL via `item_key` (voir BQ-008).
+**SEC-07** · `planet_market.rs:59+` — Pattern SQL injection via interpolation UUID.
+**SEC-08** · `main.rs:2142` — Interpolation `f64` dans raw SQL → SQL invalide si NaN/Inf.
+**SEC-09** · `main.rs:5694` — Bounty: `user_id` depuis le body, pas de JWT.
+
+### 🟡 MEDIUM
+
+**SEC-10** · `auth.rs:491` — Reset mot de passe accepte min 6 caractères vs 8 à l'inscription.
+**SEC-11** · `auth.rs:519` — Pas d'invalidation de session sur changement de mot de passe (7 jours de grâce pour l'attaquant).
+**SEC-12** · `auth.rs:445` — Pas de rate limiting sur `forgot_password` → email bombing possible.
+**SEC-13** · `main.rs:281` — `CorsLayer::permissive()` → toutes origines autorisées.
+**SEC-14** · `auth.rs:270` — `bcrypt::DEFAULT_COST` implicite, non configurable.
+**SEC-15** · `main.rs:1430` — Colonne ORDER BY depuis input utilisateur dans `format!()` (fallback protège aujourd'hui).
+
+---
+
+## DOMAINE 7 — TECH TREE, ALLIANCE & MISSIONS
+
+### 🔴 CRITICAL
+
+**ALI-001** · `tech_tree.rs:393` — Prérequis tech vérifiés hors transaction → bypass tech tree par race condition.
+**ALI-002** · `officers.rs:278` — Recrutement/levelup officier: coût non atomique avec l'insert.
+**ALI-003** · `missions.rs:286` — Récompense mission: crédit planète PUIS statut `claimed` séparés → duplication de récompenses.
+**ALI-004** · `missions.rs:847` — Récompense journalière: race condition double-claim.
+**ALI-005** · `alliance.rs:206` — Rejoindre alliance: check membre hors transaction → multi-appartenance simultanée possible.
+
+### 🟠 HIGH
+
+**ALI-006** · `alliance.rs:494` — Dissolution alliance: 3 DELETE séparés → membres orphelins avec accès admin.
+**ALI-007** · `alliance.rs:761` — Transfert leadership: 3 UPDATE séparés → deux leaders ou zéro leader.
+**ALI-008** · `missions.rs:751` — `.unwrap()` dans `get_or_create_streak` → panique serveur exploitable.
+**ALI-009** · `alliance.rs:768` — `.unwrap()` dans `transfer_leadership_handler` → panique par race condition.
+**ALI-010** · `protection.rs:10` — Protection débutant ré-applicable → immunité permanente aux attaques.
+**ALI-011** · `tech_tree.rs:287+` — N+1 queries dans `PlanetData::load` → ~2 650 queries pour détail alliance 50 membres.
+
+### 🟡 MEDIUM
+
+**ALI-012** · `officers.rs:54` — Bonus officiers globaux (pas par planète) → design gap potentiel.
+
+---
+
+## DOMAINE 8 — WEBSOCKET, NOTIFICATIONS & TICK SYSTEM
+
+### 🔴 CRITICAL
+
+**WS-05** · `server_events.rs:200` — `record_contribution`: race condition → double-participation = duplication de récompenses PVE.
+**WS-09** · `server_events.rs:396` — `.unwrap()` sur `syndicate_credits` NULL → crash permanent du worker PVE.
+**WS-10** · `notifications.rs:53` — **Endpoint notifications sans auth** → lecture des alertes d'attaque de tout joueur.
+
+### 🟠 HIGH
+
+**WS-02** · `websocket.rs:391` — Identité JWT extraite mais jamais passée à `handle_socket` → auth découplée de l'autorisation.
+**WS-03** · `websocket.rs:480` — `recv_task` jamais annulée → fuite de tasks Tokio à chaque déconnexion.
+**WS-04** · `server_events.rs:300` — `.await` manquant sur `broadcast_global` → tous les broadcasts PVE sont des no-ops.
+**WS-06** · `tick_system.rs:32` — Tick non tickless: 4 full table scans toutes les 2s (O(N) croissant avec le nb joueurs).
+**WS-07** · `main.rs:600` — Worker tick: pas de restart logic → une panique freeze toute la progression du jeu.
+**WS-08** · `websocket.rs:441+` — `.unwrap()` dans tasks Tokio → cascade si RwLock empoisonné.
+
+### 🟡 MEDIUM
+
+**WS-01** · `websocket.rs:413` — Joueur authentifié peut s'abonner au channel WebSocket d'une planète adverse.
+**WS-11** · `server_events.rs:473` — Annonce événement re-broadcastée toutes les 30s pendant 1h → 120 doublons par joueur.
+**WS-12** · `websocket.rs:538` — `send_task` et `update_task` non annulées quand `recv_task` termine (fin propre client).
+
+---
+
+## DOMAINE 9 — GALAXIE, PLANÈTES, SABOTAGE & GOUVERNANCE
+
+### 🔴 CRITICAL
+
+**GAL-001** · `planets.rs:1151` — `upgrade_mine_handler` sans vérification propriété: tout joueur peut upgrader toute planète et drainer ses ressources.
+**GAL-003** · `planets.rs:1401` — Cancel construction: sans auth + sans transaction → double-remboursement + griefing inter-joueur.
+**GAL-004** · `galaxy.rs:285` — Colonisation identifie l'appelant via `current_planet_id` (pas de JWT) → vol de colony ships.
+
+### 🟠 HIGH
+
+**GAL-002** · `planets.rs:1379` — `rename_planet_handler`: aucune vérification auth.
+**GAL-005** · `galaxy.rs:285` — Pas de validation coordonnées → planètes hors limites créables (overflow dans distance calc).
+**GAL-006** · `galaxy.rs:388` — Race condition: deux joueurs colonisent le même slot simultanément → perte de colony ship sans refund.
+**GAL-007** · `sabotage.rs:399` — Effets durables de sabotage empilables sans limite → verrouillage production permanent via rotation d'attaquants.
+**GAL-008** · `governance.rs:678` — Vote loi: INSERT vote + UPDATE compteur non atomiques → votes non comptés sur crash.
+**GAL-009** · `governance.rs:233` — Effets de loi appliqués en boucle hors transaction → application partielle irréversible.
+
+### 🟡 MEDIUM
+
+**GAL-010** · `galaxy.rs:109` — Vue galaxie expose `owner_id` UUID publiquement → amplifie tous les exploits d'usurpation (SEC-01 combiné).
+
+---
+
+## DOMAINE 10 — FRONTEND CORE
+
+### 🔴 CRITICAL
+
+**UI-01** · `Facilities.tsx:274` — Coûts d'upgrade calculés côté client → affichage trompeur, fausse sécurité visuelle.
+**UI-02** · `Shipyard.tsx:104` — Stats de combat (attack/shield/hull) calculées côté client avec coefficient `0.1` hardcodé.
+
+### 🟠 HIGH
+
+**UI-03** · `useRealtimeResources.ts:71` — Formule production dupliquée côté client avec fallback hardcodé divergent du backend.
+**UI-04** · `BuildQueueManager.tsx:310` — Drag-and-drop optimiste ne se revert pas sur erreur HTTP non-2xx.
+**UI-05** · `BuildQueueManager.tsx:117` — Timers utilisent `Date.now()` sans synchronisation horloge serveur → décalage affiché.
+**UI-06** · `useRealtimeResources.ts:108` — `safeConfig` instable → boucle infinie potentielle si `config` undefined.
+**UI-07** · `useWebSocket.ts:546` — `connect` exclue du dependency array avec eslint-disable → régression silencieuse future.
+**UI-09** · `Shipyard.tsx:156` / `Facilities.tsx:230` — Pas de guard double-click → deux requêtes simultanées possibles.
+
+### 🟡 MEDIUM
+
+**UI-08** · `useWebSocket.ts:199` — Callback ref pattern non documenté → piège à maintenance.
+**UI-10** · `Shipyard.tsx:72` — État local `buildQueue` désynchronise l'overlay "ASSEMBLAGE".
+**UI-11** · `Facilities.tsx:241` — `targetLevel` calculé côté client → niveau erroné si requête concurrente.
+**UI-12** · `WebSocketContext.tsx:25` — Paramètres son lus une fois depuis localStorage, jamais mis à jour.
+**UI-13** · `PlanetContext.tsx:93` — Double fetch quand `token` change (dépendance dupliquée).
+
+---
+
+## DOMAINE 11 — FRONTEND ÉTENDU
+
+### 🔴 CRITICAL
+
+**FE-01** · `FleetDispatcher.tsx:41` — Temps de vol calculé côté client, `hyperspaceLevel` hardcodé à `0` avec TODO.
+**FE-02** · `TechTree.tsx:59` / `ResourceDisplay.tsx:326` — Formules de coût tech + bâtiments avec fallback hardcodé (magic numbers `60`, `48`, `225`...).
+**FE-03** · `ResourceDisplay.tsx:255` / `PlanetOverview.tsx:340` — Taux de production calculé côté client, commentaire interne: *"diverge du backend"*.
+**FE-04** · `ResourceDisplay.tsx:178` — Coût activation slot hardcodé (`5000 * 2^slotIndex`) non sourcé du serveur.
+
+### 🟠 HIGH
+
+**FE-05** · `ResourceDisplay.tsx:222` — Pas de guard submitting sur bouton upgrade → double-click exploit.
+**FE-06** · `TechTree.tsx:111` — Pas de guard submitting sur recherche.
+**FE-07** · Multiple fichiers — Echecs de fetch silencieux (`catch { /* silently ignore */ }`) dans 5+ composants.
+**FE-08** · `Marketplace.tsx:24` — Polling marché toutes les 5s → devrait utiliser WebSocket.
+**FE-09** · 7 composants — `localStorage.getItem('token')` et `user_id` dans chaque composant → XSS = takeover total.
+**FE-10** · `FleetDispatcher.tsx:227` — Cap de vaisseaux côté client avec données périmées depuis le dernier fetch.
+**FE-11** · `EmpireBar.tsx:179` — Capacité de stockage hardcodée (`600 000 × 1.6^level`) non sourcée du serveur.
+**FE-12** · `PlanetOverview.tsx:400` — Capacité hangar hardcodée (`500 + 500×level`) non sourcée du serveur.
+
+### 🟡 MEDIUM
+
+**FE-13** · `PlanetOverview.tsx:379` — Multiplicateurs tech combat hardcodés (`0.1`, `0.05`), pas du config serveur.
+**FE-14** · `PlanetOverview.tsx:156` — `setInterval` 1s inconditionnel force re-render complet de tout PlanetOverview.
+**FE-15** · `GalaxyView.tsx:80` — `fetchPlayerPlanets` jamais relancé après colonisation → marqueurs planètes obsolètes.
+**FE-16** · `EmpireBar.tsx:64` — EmpireBar non mémoisé + calcul groupement planètes non mémoisé (re-render à chaque tick WS).
+**FE-17** · `FleetDispatcher.tsx:271` — Sauvegarde/suppression preset sans header `Authorization`.
+**FE-18** · `Marketplace.tsx:24` — Pas d'indicateur visuel de rafraîchissement (stale data invisible).
+
+### 🟢 LOW
+
+**FE-19** · `TechTree.tsx:90` — Fetch technologies inutile, résultat jamais passé à `TechTreeVisual`.
+
+---
+
+---
+
+# 🗺️ PLAN D'ATTAQUE — Hand-off Document
+
+## SPRINT 0 — BLOCKERS ABSOLUS (avant tout déploiement)
+*Objectif: rendre le jeu non-exploitable par un attaquant extérieur.*
+
+### P0-1 · Authentification & Autorisation Systémique
+**Priorité: MUST** | **Agent: @backend-architect** | **Durée: 3-4 jours**
+
+| Step | Action | Bug fixé |
+|------|--------|----------|
+| 1 | `auth.rs:77` — Supprimer le fallback `jwt-{uuid}` non signé | SEC-01 |
+| 2 | `main.rs:298` — Créer middleware Axum `RequireAuth`, l'appliquer à toutes les routes de jeu | SEC-03 |
+| 3 | `admin.rs:136+` — Remplacer `params.get("user_id")` par extraction JWT dans chaque handler admin | SEC-02 |
+| 4 | `main.rs:3610` — Supprimer `user_id`/`buyer_user_id` des request bodies, dériver depuis JWT | SEC-04 |
+| 5 | `main.rs:5694` — Même correction sur bounty handlers | SEC-09 |
+| 6 | `galaxy.rs:285` — Remplacer auth via `current_planet_id` par JWT + `planet.owner_id == caller_id` | GAL-004 |
+| 7 | `notifications.rs:53` — Ajouter auth middleware + check `user_id == caller_id` | WS-10 |
+| 8 | `planets.rs:1151,1379,1401` — Vérification propriété planète sur upgrade, rename, cancel | GAL-001,002,003 |
+| 9 | `websocket.rs:391` — Passer `authenticated_user_id` dans `handle_socket`, vérifier ownership | WS-01,02 |
+| 10 | `main.rs:5111` — Protéger `/tick` avec secret header ou supprimer l'endpoint HTTP | SEC-05 |
+
+**DoD:** Toutes les routes de jeu retournent 401 sans JWT valide. Test: requête avec UUID d'un autre joueur → 403.
+
+---
+
+### P0-2 · Injections SQL
+**Priorité: MUST** | **Agent: @backend-architect** | **Durée: 1 jour**
+
+| Step | Action | Bug fixé |
+|------|--------|----------|
+| 1 | `build_queue.rs:534` — Paramétrer INSERT via `Statement::from_sql_and_values` | BQ-008 / SEC-06 |
+| 2 | `planet_market.rs:62+` — Paramétrer toutes les queries `format!()` | SEC-07 / MKT-008 |
+| 3 | `main.rs:2142` — Paramétrer l'update `syndicate_credits` | SEC-08 |
+| 4 | `build_queue.rs:591+` — Paramétrer DELETE et UPDATE dans reorder | BQ-008 |
+
+**DoD:** `grep -r "execute_unprepared(&format!" backend/src/` → 0 résultat.
+
+---
+
+### P0-3 · Exploits de duplication critiques
+**Priorité: MUST** | **Agent: @backend-architect** | **Durée: 2-3 jours**
+
+| Step | Action | Bug fixé |
+|------|--------|----------|
+| 1 | `game_logic.rs:77` — Retourner `Err` au lieu de `Cost { 0,0,0 }` sur cache miss | BAL-005 |
+| 2 | `planet_market.rs:253` — Valider `asking_price_* >= 0` avant INSERT | MKT-009 |
+| 3 | `server_events.rs:396` — `.unwrap_or(0.0)` sur `syndicate_credits` | WS-09 |
+| 4 | `build_queue.rs:420` — Lock AVANT fetch planète + tout en transaction | BQ-001,003 |
+| 5 | `build_queue.rs:591` — DELETE + remboursement en transaction | BQ-004 |
+| 6 | `tick_system.rs:171` — Completion + delete en transaction par item | BQ-005,006 |
+| 7 | `missions.rs:286` — Crédit ressources + `claimed` en transaction atomique | ALI-003 |
+| 8 | `missions.rs:847` — Daily reward en transaction + SELECT FOR UPDATE | ALI-004 |
+| 9 | `server_events.rs:200` — UNIQUE `(event_id, user_id)` + upsert atomique | WS-05 |
+
+**DoD:** Test stress 50 requêtes simultanées sur claim mission → 0 doublon confirmé en DB.
+
+---
+
+## SPRINT 1 — STABILITÉ CRITIQUE
+*Objectif: zéro crash serveur et zéro perte de ressources sur instabilité DB.*
+
+### P1-1 · Transactions manquantes (économie)
+**Priorité: MUST** | **Agent: @backend-architect** | **Durée: 3 jours**
+
+Wrapping en transactions SeaORM:
+- `shipyard.rs:787` — Ships + defense builds (BQ-002)
+- `planet_market.rs:532` — Achat planète 5-steps atomiques (MKT-001)
+- `planet_market.rs:687` — Vente NPC (MKT-002)
+- `trade_routes.rs:759` — Exécution routes avec atomic SQL `WHERE amount >= deduct` (MKT-003)
+- `black_market.rs:820` — Résolution extorsion (MKT-005)
+- `fleet.rs:803` — Recycleur (CMB-001)
+- `fleet.rs:1456` — Expédition (CMB-002)
+- `fleet.rs:2603` — ACS join + re-check disponibilité intra-transaction (CMB-003)
+- `alliance.rs:494` — Dissolution avec CASCADE FK ou transaction + ON DELETE CASCADE (ALI-006)
+- `alliance.rs:761` — Transfert leadership (ALI-007)
+- `officers.rs:278` — Recrutement/levelup officier (ALI-002)
+- `tech_tree.rs:393` — Research avec SELECT FOR UPDATE sur planète (ALI-001)
+
+**DoD:** Aucun `INSERT/UPDATE/DELETE` sans transaction pour toute opération multi-table. Code review checklist.
+
+---
+
+### P1-2 · Crash serveur & panique Tokio
+**Priorité: MUST** | **Agent: @backend-architect** | **Durée: 2 jours**
+
+| Step | Action | Bug fixé |
+|------|--------|----------|
+| 1 | `main.rs:600` — Supervision worker tick (`catch_unwind` + restart loop + back-off) | WS-07 |
+| 2 | `websocket.rs:441+` — Remplacer tous les `.unwrap()` dans les Tokio tasks | WS-08 |
+| 3 | `missions.rs:751`, `alliance.rs:768` — Propager en `Result` | ALI-008,009 |
+| 4 | `build_queue.rs:413+` — `RwLock.read().unwrap_or_else(|e| e.into_inner())` | BQ-015 |
+| 5 | `server_events.rs:300` — Ajouter `.await` sur `broadcast_global()` | WS-04 |
+| 6 | `websocket.rs:480` — Annuler toutes les tasks à la déconnexion | WS-03,12 |
+
+**DoD:** `cargo clippy -- -D warnings` → 0 warnings. Test: tuer DB pendant tick → worker redémarre en <5s.
+
+---
+
+### P1-3 · Lazy Evaluation — cohérence `last_update`
+**Priorité: MUST** | **Agent: @backend-architect** | **Durée: 1 jour**
+
+| Step | Action | Bug fixé |
+|------|--------|----------|
+| 1 | `shipyard.rs:37` — `apply_lazy_eval` persiste `last_update = now` dans même transaction | BQ-012 |
+| 2 | `planets.rs:1493` — Cancel: ajouter `last_update = now` au remboursement | RES-004 |
+| 3 | `planets.rs:549` — Transport/recycle: `last_update = now` + cap stockage | RES-005 |
+| 4 | `game_logic.rs:235` — Clamp duration à `max(0)` | RES-003 |
+| 5 | `planets.rs:295` — Storage cap inconditionnel: `new_metal.min(storage_cap)` | RES-009 |
+| 6 | `planets.rs:1305` — Fetcher `plasma_tech_level` réel au lieu de `0` | RES-008 |
+
+**DoD:** Script de vérification: `SELECT count(*) FROM planet WHERE last_update > NOW()` → 0 après N opérations.
+
+---
+
+## SPRINT 2 — CORRECTNESS & FORMULES
+
+### P2-1 · Supprimer les formules dupliquées côté client
+**Priorité: MUST** | **Agents: @game-designer + @backend-architect + @frontend-developer** | **Durée: 3 jours**
+
+| Step | Agent | Action | Bug fixé |
+|------|-------|--------|----------|
+| 1 | Backend | Exposer `metal_per_second`, `crystal_per_second`, `deuterium_per_second` dans payload planète | BAL-001 |
+| 2 | Backend | Exposer `next_level_cost_*` dans `/building-types` et `/tech-tree` | UI-01,02,FE-02 |
+| 3 | Backend | Exposer `storage_capacity` et `fleet_capacity` dans payload planète | FE-11,12 |
+| 4 | Backend | Exposer coûts d'activation slot dans `/resource-slots` | FE-04 |
+| 5 | Frontend | Supprimer `calculateProductionPerSecond()` de `useRealtimeResources.ts` | BAL-001,FE-03 |
+| 6 | Frontend | Supprimer `getCost()` de `Facilities.tsx` et `TechTree.tsx` | UI-01,FE-02 |
+| 7 | Frontend | Supprimer `calculateFlightTime()`, appel API `/fleet/estimate` | FE-01 |
+| 8 | Frontend | Supprimer fallback hardcodé dans `ResourceDisplay.tsx:326+` | FE-02 |
+| 9 | Frontend | Corriger `Math.max(serverVal, displayedVal)` → base = `serverVal` uniquement | BAL-002 |
+| 10 | Frontend | Corriger default `energy_tech_bonus: 0.10` → `0.01` | BAL-003 |
+
+**DoD:** `grep -r "Math.pow.*cost_multiplier\|calculateProduction\|getCost\|calculateFlightTime" frontend/src/` → 0 résultat.
+
+---
+
+### P2-2 · Combat — Tous les vaisseaux actifs & pertes correctes
+**Priorité: MUST** | **Agents: @game-designer + @backend-architect** | **Durée: 2 jours**
+
+| Step | Action | Bug fixé |
+|------|--------|----------|
+| 1 | `game_logic.rs:964` — Ajouter heavy_hunter, battleship, bomber, destroyer dans `resolve_pvp()` | BAL-011 |
+| 2 | `game_logic.rs:923` — `apply_losses()` distribution proportionnelle par type | BAL-010 |
+| 3 | `combat.rs:207` — Clamp `(1.0 - loss_ratio).max(0.0)` avant multiplication | CMB-008 |
+| 4 | `combat.rs:94` — Pré-charger ShipType HashMap, éliminer N+1 rapid fire | CMB-005 |
+
+**DoD:** Simulation 100 LF vs 10 Cruisers → LF meurent en premier. Battleship change l'issue d'un combat.
+
+---
+
+### P2-3 · Équilibrage formules
+**Priorité: SHOULD** | **Agent: @game-designer** | **Durée: 2 jours**
+
+| Action | Bug fixé |
+|--------|----------|
+| Coûts slots exponentiels: `Base * 3^(slot-1)` | BAL-006 |
+| Revoir `BUILD_RATE`: Light Fighter niveau 0 cible 2-5 min | BAL-007 |
+| Formule temps vol: `(35000/speed) * sqrt(distance*10) / universe_speed` | BAL-008 |
+| Distance inter-galaxies circulaire (wrap-around) | BAL-009 |
+| Capacité hangar exponentielle | BAL-014 |
+
+**DoD:** Simulation jour 1→30: aucun joueur ne peut construire un Battleship avant jour 7. ROI Metal Mine validé.
+
+---
+
+## SPRINT 3 — PERFORMANCE & POLISH
+
+### P3-1 · Élimination des N+1 queries
+**Priorité: SHOULD** | **Agent: @backend-architect** | **Durée: 2 jours**
+
+| Action | Bug fixé |
+|--------|----------|
+| `tech_tree.rs:287+` — `PlanetData::load`: HashMap statique au démarrage | ALI-011 |
+| `build_queue.rs:632` — Batch query par planète dans le tick | BQ-011 |
+| `fleet.rs:1276` — Flagship modules: HashMap pré-chargé | CMB-012 |
+| `market.rs:92` — `SELECT SUM(...)` SQL au lieu de `find().all()` | MKT-012 |
+| `trade_routes.rs:835` — Piracy check: JOIN SQL au lieu de loop | MKT-010 |
+
+**DoD:** `EXPLAIN ANALYZE` sur queries critiques. Aucune query > 100ms à 1000 joueurs simulés.
+
+---
+
+### P3-2 · Tick System → Event-Driven
+**Priorité: SHOULD** | **Agent: @backend-architect** | **Durée: 2 jours**
+
+| Action | Bug fixé |
+|--------|----------|
+| Remplacer polling 2s par `SELECT MIN(end_time)` sleep | WS-06 |
+| `update_all_user_points`: SQL batch `UPDATE` au lieu de loop Rust | WS-06 |
+| Worker supervision restart avec back-off exponentiel | WS-07 |
+
+**DoD:** CPU idle < 1% à vide. 0 queries DB quand aucun événement en attente.
+
+---
+
+### P3-3 · Frontend — Sécurité & Performance
+**Priorité: SHOULD** | **Agent: @frontend-developer** | **Durée: 2 jours**
+
+| Action | Bug fixé |
+|--------|----------|
+| Centraliser auth dans `AuthContext`, supprimer localStorage scattered | FE-09 |
+| Guards `isSubmitting` sur tous les boutons d'action | FE-05,06,UI-09 |
+| Mémoïser `safeConfig` dans `useRealtimeResources` | UI-06 |
+| `EmpireBar`: `React.memo` + `useMemo` groupement planètes | FE-16 |
+| Supprimer `setInterval` 1s inconditionnel dans `PlanetOverview` | FE-14 |
+| Supprimer polling 5s Marketplace, migrer vers WS event | FE-08 |
+| `BuildQueueManager`: revert optimiste sur `!res.ok` | UI-04 |
+| Synchronisation horloge serveur dans WS `connected` event | UI-05 |
+| Headers `Authorization` sur requêtes preset fleet | FE-17 |
+| Relancer `fetchPlayerPlanets` après colonisation | FE-15 |
+
+**DoD:** React Profiler: 0 re-render superflu sur tick WS ressources. Aucun `localStorage.getItem('token')` hors `AuthContext`.
+
+---
+
+## 🔬 SCÉNARIOS DE TEST — @reality-checker
+
+### Test 1 — Auth bypass (SEC-01) — MUST FAIL avant fix
+```bash
+VICTIM_UUID=$(curl /galaxy/1/1 | jq -r '.planets[0].owner_id')
+curl -X POST /planets/$VICTIM_PLANET/build-queue \
+  -H "Authorization: Bearer jwt-$VICTIM_UUID" \
+  -d '{"category":"resources","item_key":"metal"}'
+# AVANT fix: 200 OK → CRITICAL
+# APRÈS fix: 401 Unauthorized
 ```
 
-### 5.2 DetailedCombatReport non affiché en frontend
-
-`combat.rs:735-742` — `PvpCombatReport.details` est toujours populé serveur-side mais `ReportsTerminal` ne le consomme pas.
-
-### 5.3 Tech levels non passés à `resolve_pvp_combat`
-
-`main.rs:822`
-```rust
-None, // TODO: pass attacker tech levels for BonusSummary
+### Test 2 — Double-spend build queue (BQ-001)
+```bash
+for i in {1..50}; do
+  curl -s -X POST /planets/$PLANET/build-queue \
+    -H "Authorization: Bearer $TOKEN" \
+    -d '{"category":"resources","item_key":"metal"}' &
+done; wait
+# AVANT fix: ressources négatives possibles, items dupliqués
+# APRÈS fix: 1 seul item en queue, metal_amount >= 0
 ```
 
-`attacker_tech_levels` et `defender_tech_levels` sont toujours `None` → les bonus tech sont à 0 dans les rapports.
-
-### 5.4 Alliance WebSocket sans notification
-
-`alliance.rs:879`
-```rust
-// TODO: Notification WebSocket
+### Test 3 — Prix négatif marché (MKT-009)
+```bash
+curl -X POST /planet-market/list \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"planet_id":"...","asking_price_metal":-1000000}'
+# AVANT fix: 200 OK + acheteur reçoit +1M métal → CRITICAL
+# APRÈS fix: 400 Bad Request
 ```
 
-Join/leave/kick ne déclenche pas de notification WS.
-
-### 5.5 4 items du Marché Noir sans effet backend
-
-`black_market.rs:431-438` — `resource_boost`, `stealth`, `coordinate_jam`, `eco_virus` tombent dans un bras générique qui retourne `"Effet activé..."` — **faux**. Aucun tick ne les traite.
-
-### 5.6 `apply_storage_cap` jamais appelée dans tick et lazy eval
-
-`game_logic.rs:592`
-```rust
-/// TODO: intégrer dans tick_system.rs + calculate_resources() callers
-pub fn apply_storage_cap(...)
+### Test 4 — Notification cross-player (WS-10)
+```bash
+VICTIM_ID=$(curl /leaderboard | jq -r '.[1].user_id')
+curl /users/$VICTIM_ID/notifications \
+  -H "Authorization: Bearer $MY_TOKEN"
+# AVANT fix: 200 + toutes les alertes d'attaque de la victime → CRITICAL
+# APRÈS fix: 403 Forbidden
 ```
 
-Les ressources peuvent s'accumuler au-delà du cap silencieusement.
-
-### 5.7 Piracy mission — raider ne gagne rien
-
-`check_piracy_interception` applique une perte à la cible mais ne crédite aucune ressource au raider. La mécanique est passive et incomplète.
-
-### 5.8 Chat de la page maintenance non implémenté
-
-`MaintenancePage.tsx:98`
-```ts
-// TODO: Send message to server via WebSocket or API
+### Test 5 — Formule ressources (BAL-003)
+```bash
+# Joueur avec Energy Tech niveau 10
+# Comparer metal_per_second affiché vs metal_amount en DB après 60s
+# AVANT fix: affichage ~82% supérieur à la réalité (facteur 0.10 vs 0.01)
+# APRÈS fix: écart < 1%
 ```
 
-### 5.9 Débris non affichés dans GalaxyView
-
-`handlers/galaxy.rs:509` — endpoint `get_system_debris_handler` existe. `GalaxyView.tsx` ne l'appelle pas. `RadialMenu` n'a pas d'option "Envoyer recycleurs" sur les champs de débris.
-
----
-
-## 6. Incohérences entre Modules
-
-### 6.1 N+1 Queries
-
-| Endroit | Problème |
-|---|---|
-| `combat.rs:95-115` (`load_rapid_fire_cache`) | 2N queries pour N règles RF |
-| `black_market.rs:373-387` (`get_inventory_handler`) | 1 SELECT par item d'inventaire |
-| `planets.rs:206-236` (`get_planet_handler`) | 12+ queries pour 6 niveaux de bâtiments |
-| `fleet.rs:1184-1198` | Charge toute la table `technologies` pour filtrer en Rust |
-| `tick_system.rs:290-302` | O(N users × M queries) toutes les 2 secondes |
-
-### 6.2 Score militaire frontend ≠ backend
-
-`techTreeCompat.ts:344`
-```ts
-const unitScore = (atk, shd, hul) => atk/50 + shd/10 + hul/400;
-```
-MEMORY : `Score militaire v3.6 : (attack + shield/2 + hull/10) / 1000`
-
-Formule totalement différente. Le classement calculé en backend est incohérent avec ce qu'affiche PlanetOverview.
-
-### 6.3 Hyperspace tech : 15% dans fleet.rs, 10% dans trade_routes.rs
-
-`fleet.rs:312` → `speed * (1.0 + level * 0.15)`
-`trade_routes.rs:84` → `1.0 + level * 0.10`
-
-### 6.4 Base deuterium mine : 15 backend, 10 frontend
-
-`game_logic.rs` → `base=15`. `ResourceDisplay.tsx` → fallback `base=10`. Calculs de ROI faux côté client.
-
-### 6.5 Recalcul de score toutes les 2 secondes pour tous les joueurs
-
-`tick_system.rs:290-302` — `update_all_user_points` sur chaque tick (2s). À 1 000 joueurs : potentiellement 8 000+ requêtes/tick. **Déplacer vers un intervalle de 5 minutes minimum.**
-
----
-
-## 7. Performance et Scalabilité
-
-### 7.1 `ServerConfigCache` cloné à chaque handler
-
-`state.config.read().unwrap()` appelé 3 fois séparément dans `attack_v2_handler`. Clone l'intégralité de la struct config à chaque invocation.
-
-### 7.2 `process_due_trade_routes` sans transaction globale
-
-`trade_routes.rs:573-631` — pour chaque route due, N SELECT + UPDATE séparés sans wrapping transactionnel. Avec beaucoup de routes actives et une DB lente → timeout ou état partiel.
-
-### 7.3 Rate limiter mémoire — non persistant et non distribué
-
-`DashMap<String, Vec<Instant>>` perdu à chaque restart. `redis_url` dans config mais Redis jamais utilisé.
-
----
-
-## 8. Frontend — Bugs et Incohérences
-
-### 8.1 Mapping tech incorrect dans Shipyard.tsx (critique)
-
-`Shipyard.tsx:99-100`
-
-```ts
-const bonusAtk  = 1 + (getTechLevel(planet, 'laser_tech')  * 0.1);  // FAUX — doit être weapons_tech
-const bonusShd  = 1 + (getTechLevel(planet, 'energy_tech') * 0.1);  // FAUX — doit être shield_tech
+### Test 6 — Claim mission race condition (ALI-003)
+```bash
+for i in {1..20}; do
+  curl -s -X POST /missions/$MISSION_ID/claim \
+    -H "Authorization: Bearer $TOKEN" &
+done; wait
+# AVANT fix: ressources créditées plusieurs fois
+# APRÈS fix: 1 seul crédit, status = claimed, autres 409
 ```
 
-Les stats de vaisseaux affichées dans le chantier sont fausses pour tout joueur avec des techs avancées.
+---
 
-### 8.2 CombatSimulator.tsx — modèle v1 obsolète toujours accessible
+## RÉCAPITULATIF PLANNING
 
-`CombatSimulator.tsx:27-28`
-```ts
-const HUNTER_POWER = 50;
-const CRUISER_POWER = 400;
-```
+| Sprint | Priorité | Durée | Agents principaux | Bloque quoi |
+|--------|----------|-------|-------------------|-------------|
+| S0 — Auth & SQL Injection | MUST | ~6 jours | @backend-architect | Déploiement impossible |
+| S1 — Transactions & Stabilité | MUST | ~6 jours | @backend-architect | Duplication de ressources, crashes |
+| S2 — Formules & Combat | MUST/SHOULD | ~7 jours | @game-designer + @backend-architect + @frontend-developer | Jeu jouable et honnête |
+| S3 — Performance & Polish | SHOULD | ~6 jours | @backend-architect + @frontend-developer | Scalabilité & UX |
 
-Ne connaît que 2 types de vaisseaux, ignore toutes les défenses et tous les bonus tech. Importé via lazy load dans `App.tsx`.
-
-### 8.3 AttackModal.tsx — composant v1 résiduel
-
-```ts
-const power = (hunters * 10) + (cruisers * 50);
-```
-
-Plus cohérent avec aucun système actuel. Résiduel dangereux.
-
-### 8.4 ETA de vol ignore le speed_factor serveur
-
-`FleetDispatcher.tsx:114`
-```ts
-const speedFactor = 500; // TODO: fetch from backend
-```
-
-Sur un serveur x10 ou x5, l'ETA affiché est faux d'un facteur 20-50.
-
-### 8.5 TechTree.tsx — `getBonusInfo` vide pour 7 techs sur 11
-
-`TechTree.tsx:47-55` — `plasma_tech`, `shield_tech`, `weapons_tech`, `armour_tech`, `hyperspace_tech`, `computer_tech`, `astrophysics`, `graviton_tech` affichent `"Bonus: -"`.
-
-### 8.6 Race condition sur switch de planète dans useRealtimeResources
-
-`useRealtimeResources.ts:116-120` — stale closure possible entre state et ref. Oscillation des ressources pendant 100-200ms au changement de planète.
-
-### 8.7 `useUnitCosts` — clé incorrecte `missile_launcher`
-
-`useUnitCosts.ts:16` — interface utilise `missile_launcher`, la DB utilise `rocket_launcher`.
-
-### 8.8 Flagship non intégré dans les calculs de flotte affichés
-
-`FlagshipView.tsx` affiche correctement les stats. `calculateFleetAttack/calculateFleetHull` dans `techTreeCompat.ts` n'incluent pas les bonus du flagship.
-
-### 8.9 Defenses.tsx — re-fetch déclenché sur chaque changement de ressources
-
-`Defenses.tsx:77` — dépend de `planet.metal_amount` et `planet.crystal_amount`. Potentiellement fréquent si planet devient un objet live re-créé souvent.
-
-### 8.10 Texte statique "Intégrité 100%" dans Defenses
-
-`Defenses.tsx:399-401` — texte fixe non lié à aucune donnée réelle.
-
-### 8.11 Texte UI SC incohérent avec la config serveur
-
-`UndergroundMarket.tsx:394`
-```
-Les crédits s'obtiennent aléatoirement lors des expéditions (1–2 SC par expédition, 50% de chances).
-```
-Ces valeurs sont configurables via `expedition_syndicate_credit_chance/min/max`. Si un admin les change, l'UI affiche des informations fausses.
-
-### 8.12 Mission recycle absente du FleetDispatcher
-
-`FleetDispatcher.tsx:28` — type `recycle` déclaré mais aucune branche dans `handleLaunch`. Le recyclage se fait via `GalaxyView.tsx` avec un nombre fixe de recycleurs (min(available, 50)) sans choix joueur.
-
-### 8.13 Score militaire frontend ≠ backend
-
-`techTreeCompat.ts:344` — formule frontend `atk/50 + shd/10 + hul/400` vs backend `(attack + shield/2 + hull/10) / 1000`.
+**Total: ~25 jours de développement pour un jeu production-ready.**
 
 ---
 
-## 9. Frontend — UX Manquante
-
-### 9.1 Aucune confirmation avant lancement d'attaque militaire
-
-`FleetDispatcher.tsx` — clic sur "ORDRE D'EXÉCUTION" sans dialogue de confirmation. Action irréversible.
-
-### 9.2 Aucune vue "Flottes en transit"
-
-Aucun composant n'affiche les missions actives (attaque en route, transport, expédition, recyclage) avec ETA en temps réel. Seul feedback : toast de confirmation au lancement.
-
-### 9.3 Erreurs réseau silencieuses
-
-`UndergroundMarket.tsx:122` — `} catch { // ignore }` — spinner infini si le backend est en erreur.
-`FleetDispatcher.tsx:80-88` — toast générique sans retry ni état persistent.
-
-### 9.4 BuildQueue sans barre de progression déterminée
-
-`BuildQueue.tsx:28-29` — `startTime` non retourné par le backend → barre animée indéterminée.
-
-### 9.5 Pas de confirmation pour recyclage et colonisation
-
-`GalaxyView.tsx:183-210` — `handleRecycle` s'exécute immédiatement, envoie `Math.min(availableRecyclers, 50)` sans que le joueur puisse choisir le nombre ni confirmer.
-
----
-
-## 10. Frontend — Performance
-
-### 10.1 Re-renders à 100ms sur composants non mémoïsés
-
-`useRealtimeResources.ts:214` — `setResources` 10×/seconde. Consommé dans `EmpireBar` ET `PlanetOverview` simultanément. Sans `React.memo`, tous leurs enfants se re-rendent à 10 Hz.
-
-### 10.2 TechTree.tsx — setInterval à 1s même sans recherche active
-
-`TechTree.tsx:76` — `setNow(new Date().getTime())` toutes les secondes force un re-render complet du TechTree même quand aucune recherche n'est en cours.
-
-### 10.3 Polling non coordonné — jusqu'à 20 requêtes/min
-
-| Composant | Intervalle | Route |
-|---|---|---|
-| App.tsx — fetchCredits | 30s | `/users/:id` |
-| App.tsx — maintenanceStatus | 5s | `/maintenance` |
-| App.tsx — messages/reports | 1-5s | `/messages` |
-| App.tsx — fetchPlanet | 60s | `/planets/:id` |
-| Marketplace | 5s | `/market/stats` |
-| PlanetOverview | 10s | `/build-queue` |
-| EmpireBar | 30s | `/online-count` |
-
-Aucun de ces polling n'est coordonné ou conditionnel à la visibilité de l'onglet.
-
-### 10.4 Pas de cache mutualisé entre composants
-
-`useGameCatalog` a un cache module-level. Tous les autres hooks font leurs propres requêtes sans coordination. Pas de SWR/React Query.
-
-### 10.5 Absence quasi-totale de React.memo sur composants lourds
-
-`Shipyard`, `Defenses`, `Facilities`, `TechTree`, `ReportsTerminal` — aucun `React.memo`. Re-renders complets sur chaque poll.
-
----
-
-## 11. Matrice de Complétude Features
-
-| Feature | Backend | Frontend | Statut |
-|---|---|---|---|
-| Auth complet | ✅ | ✅ | Stable |
-| Planètes CRUD | ✅ | ✅ | Stable |
-| Production details (`/production-details`) | ✅ | ❌ | Backend expose, frontend ignore |
-| Tech Tree | ✅ | ✅ | Stable (descriptions fausses) |
-| Vaisseaux / Défenses — construction | ✅ | ✅ | Stable |
-| Build Queue | ✅ | ✅ | Stable |
-| Combat v2 | ✅ | ✅ | Stable |
-| **Mission recycle — résolution tick** | ❌ | ❌ | CRITIQUE — missions jamais résolues |
-| **Débris dans GalaxyView** | ✅ endpoint | ❌ UI | Frontend manquant |
-| Transport | ✅ | ✅ | Stable |
-| Expédition v2 | ✅ | ✅ | Stable |
-| Galaxy View | ✅ | ✅ | Stable |
-| Colonisation | ✅ | ✅ | Stable |
-| Marché ressources | ✅ | ✅ | Stable |
-| Routes commerciales | ✅ | ✅ | Stable |
-| Marché souterrain — achat/inventaire | ✅ | ✅ | Stable |
-| Items marché souterrain — `orbital_strike` | ✅ | ✅ | Stable |
-| Items marché souterrain — 4 autres | ❌ stub backend | ⚠️ "Bientôt" | Incomplet |
-| Notifications | ✅ | ✅ | Stable |
-| Messages | ✅ | ✅ | Stable |
-| Alliances (CRUD) | ✅ | ✅ | Stable |
-| Missions journalières / Achievements | ✅ | ✅ | Stable |
-| **Officiers — bonus appliqués** | ❌ jamais lus | ✅ affiché | CRITIQUE — cosmétiques coûteux |
-| ZAC | ✅ | ✅ | Stable |
-| Gouvernance / Lois | ✅ | ✅ | Stable |
-| Événements PvE serveur | ✅ | ✅ | Stable |
-| Bounty Board | ✅ | ✅ | Stable |
-| Flagship + Modules | ✅ | ✅ | Stable |
-| Sabotages | ✅ | ✅ | Stable |
-| Analytics / Dashboard | ✅ | ✅ | Stable |
-| Admin Panel | ✅ | ✅ | Stable |
-| **JWT signé** | ❌ pseudo-token | N/A | BLOQUANT |
-| **WebSocket auth** | ❌ TODO | N/A | BLOQUANT |
-| **Bâtiments fantômes** (5) | ❌ sans effet | ✅ affiché | CRITIQUE |
-| **Techs aux descriptions mensongères** (6) | ⚠️ partiel | ❌ descriptions fausses | Haute priorité |
-| Rate limiting complet | ⚠️ partiel | N/A | Lacune sécurité |
-| Tests unitaires (hors combat/market) | ❌ | ❌ | Lacune qualité |
-
----
-
-## 12. Équilibrage du Jeu
-
-### 12.1 Fusion Plant — générateur linéaire dans un monde exponentiel
-
-`calculate_fusion_energy` retourne `level * 50.0` (linéaire). À niveau 10 : 500 unités. Solar plant niveau 10 : ~1 557 unités. La fusion ne devient **jamais** économiquement viable. Aucun sink de deutérium efficace.
-
-**Fix** : Passer à `base * level * 1.2^level`.
-
-### 12.2 Crystal mine — facteur d'exponentiation 1.6 vs 1.5 pour le métal
-
-La crystal mine est 6-7% plus chère par niveau mais produit 33% moins. ROI mécaniquement inférieur à chaque niveau. Pousse les joueurs à négliger le cristal qui est pourtant la ressource tech critique.
-
-**Fix** : Passer le facteur crystal à 1.5 ou augmenter la production base de 20 à 22.
-
-### 12.3 Astrophysics — verrou de colonisation trop cher
-
-Niveau 10 : ~8M de ressources + 9+ heures de recherche (labo 8, réduction max). Bloque l'expansion multi-planètes qui est le cœur de la boucle macro.
-
-**Fix** : Réduire `category_factor` astrophysics de 2.5 à 1.8.
-
-### 12.4 Heavy Hunter obsolète vs Cruiser
-
-Efficacité attaque/coût quasi-identique mais le Cruiser a Rapid Fire ×6 sur les light hunters. Aucune raison de construire des Heavy Hunters une fois le Cruiser débloqué.
-
-**Fix** : Donner au Heavy Hunter RF×4 contre les Cruisers pour en faire un contre naturel.
-
-### 12.5 Bomber sous-optimal vs Battleship
-
-Bomber : 50 000M / 25 000C, attack=1000. Battleship : 45 000M / 15 000C, attack=1000. Le Bomber est plus cher pour des dégâts identiques. Son RF sur défenses n'est rentable que face à des défenseurs passifs.
-
-**Fix** : Réduire le coût Bomber à 40 000M / 20 000C, ou augmenter son attack à 1400.
-
-### 12.6 Ion Cannon mathématiquement inférieur au Gauss Cannon
-
-Ion Cannon : 150 attack, 500 shield, 800 hull. Gauss Cannon : 1100 attack, 200 shield, 3500 hull. 7× moins puissant en attaque, 4× moins résistant, coût similaire. Défense à éviter.
-
-### 12.7 Anti-Farm désactivé malgré le code existant
-
-`protection.rs` — `is_attack_allowed_by_points` existe mais **n'est pas appelé** dans `validate_attack`. Un joueur rank 1 peut farmer un joueur rank 500 indéfiniment après le cooldown de 2h.
-
-**Fix immédiat (30 min)** : Intégrer `is_attack_allowed_by_points` dans `validate_attack`.
-
-### 12.8 Expéditions — slot unique et récompenses non scalées en late-game
-
-Un seul slot d'expédition par planète. Les récompenses (`value_per_cap = 800`) scalent linéairement alors que la production des mines late-game scale exponentiellement → expéditions économiquement négligeables en late-game.
-
-### 12.9 Syndicate Credits — source unique et aléatoire
-
-SC obtenables uniquement via expédition (5% de chance). Impossible de planifier des achats.
-
-**Sources manquantes** : missions daily, streak, victoires PvP, top classement hebdomadaire.
-
-### 12.10 Accès Marché Noir trop restrictif
-
-Espionnage ≥ 13 + Informatique ≥ 10 → ~1M de cristal en tech seul. La majorité des joueurs mid-game n'y accède jamais.
-
-**Fix** : Accès de base à (Esp ≥ 8, Comp ≥ 6) avec catalogue limité. Items puissants gardent la condition actuelle.
-
----
-
-## 13. Systèmes Manquants
-
-### 13.1 Fleet Save / Mission "Deploy" — CRITIQUE RÉTENTION
-
-Aucune mécanique permettant de mettre sa flotte hors de portée des attaquants. Tout joueur avec une grosse flotte la perd pendant son sommeil. **Cause probable numéro 1 de churn pour les joueurs sérieux.**
-
-**Fix** : Ajouter un type de mission `"deploy"` / `"station"` qui laisse les vaisseaux en transit jusqu'à rappel.
-
-### 13.2 ACS — Coordination de Flotte Inter-Joueurs
-
-Aucune mécanique permettant à plusieurs joueurs d'envoyer des flottes qui arrivent simultanément. Fondamental pour l'alliance PvP. Génère les plus grandes batailles et événements.
-
-### 13.3 Protection Anti-Bullying Post-3 Jours
-
-La protection débutant dure 3 jours puis disparaît totalement. Pas de protection par ratio de points (code désactivé — voir 12.7).
-
-### 13.4 Notifications Email
-
-WS en place mais pas d'email pour : attaque entrante, construction terminée (joueur absent), route commerciale interceptée. Sans notification, les joueurs doivent checker obsessivement ou abandonner.
-
-### 13.5 Cooldown d'Attaque Trop Court
-
-2h de cooldown par paire. Permet le "farming en rotation" pour les coalitions.
-
-**Fix** : Après victoire, augmenter à 4-6h.
-
-### 13.6 Casus Belli d'Espionnage Exploitable
-
-Le CB se déclenche au 5ème espionnage en 24h. Un joueur peut activer un CB sur une cible en spammant des sondes bon marché. Vérifier que le compteur est par **attaquant**, pas global.
-
----
-
-## 14. Features Sympas à Implémenter
-
-### 14.1 Événements Serveur Périodiques (tables déjà en place)
-
-Tables `server_event`, `server_event_type`, `server_event_participation` existent. Idées :
-- **Ruée vers l'astéroïde** : coordonnées aléatoires, premiers recycleurs gagnent des ressources massives
-- **Invasion Pirate Galactique** : défense collaborative d'une galaxie entière
-- **Marché Noir Éclaté** : prix ×3 + items exclusifs pendant 6h
-- **Bonus de Weekend** : production ×1.5 vendredi-dimanche
-
-### 14.2 Système de Bounty (table déjà en place)
-
-Table `bounty` existe. Afficher dans le leaderboard, créditer automatiquement le chasseur de prime.
-
-### 14.3 Gouvernance / Lois (tables déjà en place)
-
-Tables `law_proposal`, `law_vote`, `law_effect` existent. Les joueurs les mieux classés votent sur des "lois" qui modifient les règles pendant 1 semaine.
-
-### 14.4 Classement Multi-Dimensionnel
-
-Ajouter :
-- **Classement d'expédition** (ressources récupérées)
-- **Classement de recherche** (total niveaux de tech)
-- **Hall of Fame** des plus grandes batailles de la semaine
-
-### 14.5 Daily Login Reward
-
-Table `login_streak` existe. Implémenter :
-- Jour 1 : +500 Métal | Jour 7 : +5 000 Cristal | Jour 30 : +1 SC
-- Connexion consécutive : production +5% pour 24h
-
-### 14.6 Piracy Mission Complète
-
-`check_piracy_interception` inflige une perte mais ne crédite rien au raider. Compléter : 30% des ressources interceptées créditées en SC au raider.
-
-### 14.7 Slots d'Expédition Multiples via computer_tech
-
-1 slot d'expédition par tranche de niveau de `computer_tech` (ex: 1 slot par 3 niveaux). Donne une utilité concrète à computer_tech et maintient les expéditions pertinentes en late-game.
-
-### 14.8 Saisons / Resets Périodiques
-
-Reset tous les 3-6 mois avec récompenses permanentes (cosmétiques, titres) pour les meilleurs joueurs. Relance l'engagement et attire les nouveaux joueurs.
-
----
-
-## 15. Rétention Joueur
-
-### 15.1 Onboarding / Tutoriel absent
-
-Aucun tutoriel interactif visible. Un joueur sans guide abandonne en 10 minutes (ratio énergie à 0, mines qui ne produisent rien). **Recommandation** : quêtes guidées pour les 3 premiers jours.
-
-### 15.2 Missions Journalières sans dimension sociale
-
-Les daily missions ne couvrent pas les interactions sociales (envoyer des ressources à un allié, rejoindre une alliance). Sans ça, elles n'encouragent pas le PvP qui retient les joueurs.
-
-### 15.3 Absence de WS event pour `recycle_complete` et `transport_complete`
-
-L'expéditeur d'un transport ou recyclage n'a aucun feedback WS quand la mission est résolue. Seul le destinataire reçoit un event.
-
----
-
-## 16. Recommandations Prioritisées
-
-### 🔴 BLOQUANT — Avant toute ouverture publique
-
-| # | Action | Effort | Fichier(s) |
-|---|---|---|---|
-| B1 | Remplacer pseudo-JWT par HMAC-SHA256 | 1 jour | `auth.rs` + 7 modules |
-| B2 | Authentifier les connexions WebSocket | 2h | `websocket.rs:388` |
-| B3 | Wrapper les flux critiques dans `db.transaction()` | 2 jours | `fleet.rs`, `shipyard.rs`, `black_market.rs` |
-| B4 | Paramétrer toutes les requêtes SQL (injection) | 1 jour | `trade_routes.rs`, `planet_market.rs`, `build_queue.rs` |
-| B5 | Résoudre les missions "recycle" dans tick_system | 4h | `tick_system.rs` |
-
-### 🟠 CRITIQUE — Sprint 1
-
-| # | Action | Effort | Fichier(s) |
-|---|---|---|---|
-| C1 | Activer `is_attack_allowed_by_points` dans `validate_attack` | 30min | `fleet.rs` / `main.rs` |
-| C2 | Ajouter mission de type "deploy" / fleet save | 1 jour | `fleet.rs`, `tick_system.rs` |
-| C3 | Implémenter les bonus d'officiers dans tick et combat | 1 jour | `officers.rs`, `tick_system.rs`, `combat.rs` |
-| C4 | Corriger les descriptions de techs mensongères (6 techs) | 2h | `TechTreeVisual.tsx` |
-| C5 | Masquer les bâtiments fantômes (`is_available=false`) | 2h | AdminContentManager / DB |
-| C6 | Corriger le mapping tech dans Shipyard.tsx | 30min | `Shipyard.tsx:99-100` |
-| C7 | Afficher les débris dans GalaxyView + option recyclage | 4h | `GalaxyView.tsx`, `RadialMenu.tsx` |
-| C8 | Guard integer overflow sur quantité de vaisseaux | 30min | `shipyard.rs:658-660` |
-
-### 🟡 HAUTE PRIORITÉ — Sprint 2
-
-| # | Action | Effort | Fichier(s) |
-|---|---|---|---|
-| H1 | Déplacer recalcul scores vers interval 5min (vs 2s) | 2h | `tick_system.rs` |
-| H2 | Fusionner les deux systèmes de coûts bâtiments (data-driven) | 2 jours | `game_logic.rs`, `building_type` table |
-| H3 | Corriger la formule score militaire frontend | 30min | `techTreeCompat.ts:344` |
-| H4 | Brancher `laser_tech` et `hyperspace_tech` dans fleet v5 | 4h | `fleet.rs:1180-1182` |
-| H5 | ETA de vol depuis config serveur | 1h | `FleetDispatcher.tsx:114` |
-| H6 | Ajouter confirmation avant lancement d'attaque | 1h | `FleetDispatcher.tsx` |
-| H7 | Réduire seuil marché noir + ajouter sources SC | 4h | `black_market.rs`, daily missions |
-| H8 | Passer Fusion Plant en exponentielle | 30min | `game_logic.rs` |
-| H9 | Anti-farm crystal mine (facteur 1.5 ou +2 base prod) | 30min | `game_logic.rs` |
-| H10 | Réduire category_factor Astrophysics de 2.5 à 1.8 | 30min | `game_logic.rs` |
-| H11 | Ajouter `apply_storage_cap` dans tick et lazy eval | 2h | `tick_system.rs`, `shipyard.rs` |
-| H12 | Vue "Flottes en transit" avec ETA temps réel | 1 jour | Nouveau composant `ActiveMissions.tsx` |
-| H13 | React.memo sur composants lourds | 4h | `Shipyard`, `Defenses`, `Facilities`, `TechTree` |
-| H14 | Remplacer rapid fire hardcodé spy par lecture DB | 2h | `game_logic.rs:793-799` |
-| H15 | Corriger les deux formules hyperspace_tech (15% vs 10%) | 1h | `fleet.rs:312` ou `trade_routes.rs:84` |
-| H16 | Corriger base deuterium mine frontend (10→15) | 30min | `ResourceDisplay.tsx` |
-
-### 🟢 MOYENNE PRIORITÉ — Sprint 3+
-
-| # | Action | Effort |
-|---|---|---|
-| M1 | Implémenter `resource_boost` (effet tick) | 2 jours |
-| M2 | Implémenter `stealth` (masquer coordonnées) | 2 jours |
-| M3 | Slots d'expédition multiples via computer_tech | 1 jour |
-| M4 | Daily Login Reward (streak table déjà en place) | 4h |
-| M5 | Classement expédition + recherche + Hall of Fame | 1 jour |
-| M6 | Email notifications (attaque entrante, construction terminée) | 2 jours |
-| M7 | ACS — coordination de flotte inter-joueurs | 3 jours |
-| M8 | Déplacer constantes combat/marché dans ServerConfig | 1 jour |
-| M9 | Tests unitaires tick_system, game_logic, auth, handlers | 3 jours |
-| M10 | Piracy mission — créditer le raider en SC | 4h |
-| M11 | Cooldown d'attaque augmenté après victoire (2h→4-6h) | 2h |
-| M12 | Soft-delete comptes utilisateur | 4h |
-| M13 | Cargo recycler unifié (supprimer le hardcodé de planets.rs) | 1h |
-| M14 | Réduire coût Bomber ou augmenter attack | 30min |
-| M15 | Bonus RF Heavy Hunter vs Cruiser | 30min |
-| M16 | Confirmation avant recyclage (choix du nombre de recycleurs) | 2h |
-
----
-
-## Quick Wins (< 2h chacun, impact élevé)
-
-1. **Activer anti-farm** — `is_attack_allowed_by_points` dans `validate_attack` — **30min**, churn majeur évité
-2. **Corriger mapping tech Shipyard** — `weapons_tech` / `shield_tech` — **30min**, stats vaisseaux correctes
-3. **Corriger formule score militaire frontend** — **30min**, classement cohérent
-4. **Passer Fusion Plant en exponentielle** — **30min**, sink de deutérium viable
-5. **Réduire seuil Marché Noir** — **1h**, feature accessible à 10× plus de joueurs
-6. **Corriger descriptions techs mensongères** — **2h**, confiance joueur restaurée
-7. **Masquer bâtiments fantômes dans l'UI** — **2h**, éliminer les money traps
-8. **Descendre recalcul scores à toutes les 5 minutes** — **2h**, réduction massive de charge DB
-9. **Guard overflow quantité vaisseaux (cast i64)** — **30min**, crash en production évité
-10. **Corriger base deuterium mine frontend** — **30min**, ROI affiché correct
+*Rapport généré par audit multi-agents · Space Conquest · 2026-03-13*
+*158 bugs · 40 CRITICAL · 62 HIGH · 44 MEDIUM · 12 LOW*
