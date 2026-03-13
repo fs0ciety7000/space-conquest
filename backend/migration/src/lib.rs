@@ -97,6 +97,7 @@ mod m20261001_000002_expand_missions;
 mod m20261002_000001_fix_building_descriptions;
 mod m20261002_000002_black_market_active_items;
 mod m20261002_000003_acs_system;
+mod m20261002_000004_user_ui_prefs;
 mod m20260313_000002_disable_phantom_buildings;
 
 pub struct Migrator;
@@ -203,6 +204,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261002_000002_black_market_active_items::Migration),
             Box::new(m20261002_000003_acs_system::Migration),
             Box::new(m20260313_000002_disable_phantom_buildings::Migration),
+            Box::new(m20261002_000004_user_ui_prefs::Migration),
         ]
     }
 }

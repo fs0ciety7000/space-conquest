@@ -216,7 +216,8 @@ export function useWebSocket(planetId: string | null, options: UseWebSocketOptio
     // Convertir http(s) en ws(s)
     const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
     const wsHost = apiUrl.replace(/^https?:\/\//, '');
-    return `${wsProtocol}://${wsHost}/ws?planet_id=${planetId}`;
+    const token = localStorage.getItem('token') ?? '';
+    return `${wsProtocol}://${wsHost}/ws?planet_id=${planetId}&token=${encodeURIComponent(token)}`;
   }, [planetId]);
 
   // Gérer les messages entrants

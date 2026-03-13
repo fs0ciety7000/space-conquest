@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Target, ArrowRight, X, Rocket, Shield, Crosshair } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SpaceBackground } from '@/components/ui/space-background';
+import { useUiPrefs } from '../hooks/useUiPrefs';
 
 interface TourStep {
     targetId?: string; // S'il y a un data-tour="id" on peut s'y accrocher, sinon affichage full screen
@@ -44,14 +45,14 @@ export default function OnboardingTour() {
     const [isVisible, setIsVisible] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
     const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+    const { prefs, loaded, updatePrefs } = useUiPrefs();
 
     useEffect(() => {
-        // Vérifier si c'est la première connexion
-        const hasSeenTour = localStorage.getItem('has_seen_onboarding_tour');
-        if (!hasSeenTour) {
+        if (!loaded) return;
+        if (!prefs.onboarding_seen) {
             setIsVisible(true);
         }
-    }, []);
+    }, [loaded, prefs.onboarding_seen]);
 
     useEffect(() => {
         if (!isVisible) return;
@@ -85,7 +86,7 @@ export default function OnboardingTour() {
 
     const handleClose = () => {
         setIsVisible(false);
-        localStorage.setItem('has_seen_onboarding_tour', 'true');
+        updatePrefs({ onboarding_seen: true });
     };
 
     if (!isVisible) return null;

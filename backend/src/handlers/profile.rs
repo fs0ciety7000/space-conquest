@@ -63,6 +63,8 @@ pub fn router(state: crate::AppState) -> axum::Router<crate::AppState> {
         .route("/users/:id/fleet-presets", axum::routing::post(create_fleet_preset_handler))
         .route("/users/:id/fleet-presets/:preset_id", axum::routing::put(update_fleet_preset_handler))
         .route("/users/:id/fleet-presets/:preset_id", axum::routing::delete(delete_fleet_preset_handler))
+        .route("/users/:id/ui-prefs", axum::routing::get(get_ui_prefs_handler))
+        .route("/users/:id/ui-prefs", axum::routing::patch(patch_ui_prefs_handler))
         .with_state(state)
 }
 
@@ -1343,4 +1345,64 @@ pub async fn get_player_planets_handler(
         .collect();
 
     Ok(Json(json!({ "planets": planet_list })))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /users/:id/ui-prefs
+// Retourne les préférences UI persistées côté serveur.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub async fn get_ui_prefs_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let user = match User::find_by_id(user_id).one(&state.db).await {
+        Ok(Some(u)) => u,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"}))).into_response(),
+    };
+
+    // Parse JSON ou retourner objet vide
+    let prefs: serde_json::Value = serde_json::from_str(&user.ui_prefs)
+        .unwrap_or_else(|_| json!({}));
+
+    (StatusCode::OK, Json(prefs)).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /users/:id/ui-prefs
+// Met à jour des clés spécifiques dans les préférences UI (merge partiel).
+// Body: { "tutorial_completed": "1.0.0", "onboarding_seen": true, ... }
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub async fn patch_ui_prefs_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(patch): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user = match User::find_by_id(user_id).one(&state.db).await {
+        Ok(Some(u)) => u,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Utilisateur introuvable"}))).into_response(),
+    };
+
+    // Merge: clés du patch écrasent celles existantes
+    let mut prefs: serde_json::Value = serde_json::from_str(&user.ui_prefs)
+        .unwrap_or_else(|_| json!({}));
+
+    if let (Some(obj), Some(patch_obj)) = (prefs.as_object_mut(), patch.as_object()) {
+        for (k, v) in patch_obj {
+            obj.insert(k.clone(), v.clone());
+        }
+    }
+
+    let prefs_str = serde_json::to_string(&prefs).unwrap_or_else(|_| "{}".to_string());
+
+    let mut active: user::ActiveModel = user.into();
+    active.ui_prefs = Set(prefs_str);
+
+    if let Err(e) = active.update(&state.db).await {
+        eprintln!("[ui-prefs] Erreur update user {user_id}: {e:?}");
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur sauvegarde"}))).into_response();
+    }
+
+    (StatusCode::OK, Json(prefs)).into_response()
 }

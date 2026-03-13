@@ -296,6 +296,7 @@ pub async fn register_handler(
         total_score: Set(0),
         economy_score: Set(0),
         military_score: Set(0),
+        ui_prefs: Set("{}".to_string()),
     };
 
     if new_user.insert(&state.db).await.is_err() {

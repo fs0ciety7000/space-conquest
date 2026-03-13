@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Joyride, { Step, CallBackProps, STATUS, EVENTS } from 'react-joyride';
 import { toast } from 'sonner';
+import { useUiPrefs } from '../hooks/useUiPrefs';
 
 // ✅ Version du tutoriel - changez uniquement si vous voulez forcer le re-affichage
 const TUTORIAL_VERSION = "1.0.0";
@@ -235,19 +236,16 @@ export default function Tutorial({ run, onComplete }: TutorialProps) {
   );
 }
 
-// ✅ Hook pour gérer l'état du tutoriel avec versioning
+// ✅ Hook pour gérer l'état du tutoriel avec versioning (persisté côté serveur)
 export function useTutorial() {
   const [showTutorial, setShowTutorial] = useState(false);
-
-  // Le tutoriel ne se lance JAMAIS automatiquement
-  // Il peut uniquement être démarré manuellement via startTutorial()
+  const { updatePrefs } = useUiPrefs();
 
   const startTutorial = () => setShowTutorial(true);
 
   const completeTutorial = () => {
     setShowTutorial(false);
-    // ✅ Sauvegarder avec la version
-    localStorage.setItem('tutorial_completed', TUTORIAL_VERSION);
+    updatePrefs({ tutorial_completed: TUTORIAL_VERSION });
   };
 
   return { showTutorial, startTutorial, completeTutorial };

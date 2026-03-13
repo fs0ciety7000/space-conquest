@@ -29,6 +29,10 @@ pub struct Model {
     pub economy_score: i32,
     #[sea_orm(default_value = 0)]
     pub military_score: i32,
+    /// Préférences UI côté serveur (JSON texte). Évite la perte au vidage du localStorage.
+    /// Format: {"tutorial_completed":"1.0.0","onboarding_seen":true,"dismissed_announcements":[1,2]}
+    #[sea_orm(default_value = "{}")]
+    pub ui_prefs: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
