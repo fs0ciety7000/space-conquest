@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Crosshair, Rocket, AlertTriangle, X, Minus, Plus, BookmarkPlus, Trash2, Zap, ChevronDown, ChevronUp, Check, Truck, Eye, ArrowRight, ShieldAlert, Navigation, Shield } from "lucide-react";
+import { Crosshair, Rocket, AlertTriangle, X, Minus, Plus, BookmarkPlus, Trash2, Zap, ChevronDown, ChevronUp, Check, Truck, Eye, ArrowRight, ShieldAlert, Navigation, Shield, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,6 +104,10 @@ export default function FleetDispatcher({
   const [myPlanets, setMyPlanets] = useState<Array<{ id: string; name: string; galaxy: number; system: number; position: number }>>([]);
   const [deployDestinationId, setDeployDestinationId] = useState<string>('');
 
+  // === RAPPEL DE FLOTTE ===
+  const [activeMissions, setActiveMissions] = useState<Array<{ id: string; destination_name: string; ships_count: number; arrival_time: string }>>([]);
+  const [recalling, setRecalling] = useState<string | null>(null);
+
   // === CONFIG SERVEUR (flight_speed_multiplier) ===
   const [flightSpeedMultiplier, setFlightSpeedMultiplier] = useState(5.0);
 
@@ -164,6 +168,20 @@ export default function FleetDispatcher({
       })
       .catch(() => {});
   }, [currentPlanet?.id]);
+
+  // Load active deploy missions for recall panel
+  useEffect(() => {
+    if (mission !== 'deploy') return;
+    const token = localStorage.getItem('token');
+    fetch(apiUrl(`/fleet/missions?type=deploy&status=active`), {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(r => r.ok ? r.json() : { missions: [] })
+      .then((data: { missions?: Array<{ id: string; destination_name: string; ships_count: number; arrival_time: string }> }) => {
+        setActiveMissions(data.missions || []);
+      })
+      .catch(() => {});
+  }, [mission]);
 
   // Flight time calculation — mirrors the backend formula exactly
   useEffect(() => {
@@ -418,6 +436,29 @@ export default function FleetDispatcher({
     }
   };
 
+  const handleRecall = async (missionId: string) => {
+    const token = localStorage.getItem('token');
+    setRecalling(missionId);
+    try {
+      const res = await fetch(apiUrl(`/fleet/missions/${missionId}/recall`), {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("Flotte rappelée avec succès");
+        setActiveMissions(prev => prev.filter(m => m.id !== missionId));
+        onActionSuccess();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Erreur lors du rappel");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setRecalling(null);
+    }
+  };
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="p-0 bg-[rgba(10,5,32,0.85)] backdrop-blur-[20px] border border-cyan-500/10 text-slate-200 shadow-2xl overflow-hidden max-w-2xl sm:rounded-2xl flex flex-col max-h-[90vh]">
@@ -601,7 +642,37 @@ export default function FleetDispatcher({
                                 })}
                             </div>
                         )}
-                    </div>
+                        {/* Recall Section */}
+                    {activeMissions.length > 0 && (
+                        <div className="space-y-2 pt-4 border-t border-violet-500/10">
+                            <div className="flex items-center gap-2 pb-2">
+                                <div className="w-[3px] h-4 rounded-full bg-gradient-to-b from-violet-400 to-transparent flex-shrink-0" />
+                                <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-violet-500/70">Rappel de Flotte</span>
+                            </div>
+                            <div className="space-y-2">
+                                {activeMissions.map(m => (
+                                    <div key={m.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-violet-500/20 bg-violet-950/10">
+                                        <div>
+                                            <p className="text-sm font-medium text-slate-200">Vers : {m.destination_name}</p>
+                                            <p className="text-[10px] font-mono text-slate-500">{m.ships_count} vaisseaux</p>
+                                        </div>
+                                        <Button
+                                            onClick={() => handleRecall(m.id)}
+                                            disabled={recalling === m.id}
+                                            className="text-xs font-black uppercase tracking-wider bg-violet-950/40 border border-violet-700/40 hover:bg-violet-900/60 hover:border-violet-600/60 text-violet-300 transition-all"
+                                        >
+                                            {recalling === m.id ? (
+                                                <RefreshCw size={12} className="animate-spin" />
+                                            ) : (
+                                                "Rappeler"
+                                            )}
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
                 </div>
             ) : (
                 <div className="space-y-6">

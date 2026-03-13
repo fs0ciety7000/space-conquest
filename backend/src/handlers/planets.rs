@@ -23,7 +23,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use backend::{build_queue, game_logic, missions, sabotage, tech_tree, websocket, AppState};
+use backend::{black_market, build_queue, game_logic, missions, sabotage, tech_tree, websocket, AppState};
 use backend::entities::{
     prelude::{
         BuildingType, ConstructionQueue, DefenseType, Planet, PlanetBuilding, PlanetDefense,
@@ -282,12 +282,15 @@ async fn get_planet_handler(
         let production_crystal = base_crystal - p.crystal_amount;
         let production_deuterium = base_deuterium - p.deuterium_amount;
 
+        // M1 — resource_boost: apply active black-market boost multiplier (1.5× if active)
+        let boost_mult = black_market::get_resource_boost_multiplier(&state.db, p.owner_id).await;
+
         let biome_mults = game_logic::get_biome_multipliers(p.biome.as_deref());
 
         // Appliquer les multiplicateurs de sabotage par mine individuellement (BE-9)
-        active.metal_amount = Set(p.metal_amount + (production_metal * sab_effects.metal_mult * biome_mults.metal));
-        active.crystal_amount = Set(p.crystal_amount + (production_crystal * sab_effects.crystal_mult * biome_mults.crystal));
-        active.deuterium_amount = Set(p.deuterium_amount + (production_deuterium * sab_effects.deuterium_mult * biome_mults.deuterium));
+        active.metal_amount = Set(p.metal_amount + (production_metal * boost_mult * sab_effects.metal_mult * biome_mults.metal));
+        active.crystal_amount = Set(p.crystal_amount + (production_crystal * boost_mult * sab_effects.crystal_mult * biome_mults.crystal));
+        active.deuterium_amount = Set(p.deuterium_amount + (production_deuterium * boost_mult * sab_effects.deuterium_mult * biome_mults.deuterium));
 
         let storage_cap = game_logic::get_storage_capacity(resource_storage_level, &config);
         let new_metal = active.metal_amount.clone().unwrap();
@@ -1131,6 +1134,11 @@ async fn get_planet_handler(
 
         obj.insert("offensive_power".into(), json!(offensive_power));
         obj.insert("defensive_power".into(), json!(defensive_power));
+
+        // M1 — expose resource_boost status to the frontend
+        let resp_boost_mult = black_market::get_resource_boost_multiplier(&state.db, p.owner_id).await;
+        obj.insert("resource_boost_active".into(), json!(resp_boost_mult > 1.0));
+        obj.insert("resource_boost_multiplier".into(), json!(resp_boost_mult));
     }
 
     Ok(Json(json_response))

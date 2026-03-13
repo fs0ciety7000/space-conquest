@@ -61,6 +61,27 @@ Tous les paramètres critiques sont configurables live via `PATCH /admin/config`
 - `m20261002_000002` — black_market active items (`activated_at`, `expires_at` sur `user_inventory`)
 - `m20261002_000003` — ACS system (table `acs_group` + `fleet_mission.acs_group_id`)
 
+### Implémentation Backend — 2026-03-13
+
+**M1 — resource_boost (backend effectif)**
+- `handlers/planets.rs` : appel `black_market::get_resource_boost_multiplier(&db, owner_id)` dans `get_planet_handler`
+- Le multiplicateur (1.5 si actif, 1.0 sinon) est appliqué à `production_metal`, `production_crystal` et `production_deuterium` avant les multiplicateurs de sabotage et de biome
+- La réponse JSON expose `resource_boost_active: bool` et `resource_boost_multiplier: f64` pour affichage frontend
+
+**M2 — stealth (backend effectif)**
+- `handlers/galaxy.rs` : vérification `black_market::has_active_effect(&db, owner_id, "stealth")` pour chaque planète dans la vue galaxie
+- Si l'effet est actif ET que le demandeur n'est pas le propriétaire, le slot est retourné comme vide (aucun `owner_name`, `owner_id`, `planet_id`)
+- Le propriétaire voit toujours sa propre planète
+
+**M10 — Piracy (backend effectif)**
+- `POST /fleet/piracy?current_planet_id=X` avec body `{ "target_user_id": "uuid" }`
+- Nécessite 3 sondes d'espionnage sur la planète source
+- Chance de succès = `espionage_tech_attaquant / (espionage + computer_cible)`, clampée à [10%, 90%]
+- Succès : vole 10–30% des SC de la cible, plafonné à 1 000 SC — transaction atomique DB
+- Échec : perd 3 sondes, SC intact pour la cible
+- Notification persistante envoyée à la cible en cas de vol réussi
+- Réponse : `{ success, credits_stolen, attacker_espionage, target_computer, success_chance }`
+
 ---
 
 ## [12.0.0] - 2026-03-13 - Sprint 1 & 2 — Équilibrage, Sécurité, Fleet Save

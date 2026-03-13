@@ -22,7 +22,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use backend::{combat, game_logic, missions, protection, sabotage, tech_tree, websocket, AppState};
+use backend::{combat, game_logic, missions, notifications, protection, sabotage, tech_tree, websocket, AppState};
 use backend::entities::{
     prelude::{
         AcsGroup, AllianceMember, CombatLog, DebrisField, DefenseType, Flagship, FlagshipModule,
@@ -2109,161 +2109,194 @@ async fn recall_deploy_handler(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// M10 — POST /fleet/piracy
-// Stealth SC-raiding mission. Ships: light_hunter / heavy_hunter only.
-// Success chance based on attacker espionage_tech vs defender computer_tech.
+// M10 — POST /fleet/piracy?current_planet_id=X
+// Syndicate-Credits piracy mission using spy_probes.
+// Success chance: attacker_espionage / (attacker_espionage + target_computer).
+// On success: steal SC from target and add to attacker.
+// On failure: lose 3 spy_probes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[derive(serde::Deserialize)]
 struct PiracyPayload {
-    /// Planet from which the raid launches
-    source_planet_id: Uuid,
-    /// Target planet to raid
-    target_planet_id: Uuid,
-    /// Fleet: only "light_hunter" and "heavy_hunter" are counted
-    fleet: HashMap<String, i32>,
+    target_user_id: Uuid,
 }
 
 async fn piracy_handler(
     State(state): State<AppState>,
-    headers: axum::http::HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
     Json(payload): Json<PiracyPayload>,
 ) -> impl IntoResponse {
-    // ── Auth ──────────────────────────────────────────────────────────────────
-    let auth_header = headers.get("Authorization")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
-    let caller_user_id = match token.strip_prefix("jwt-").and_then(|s| Uuid::parse_str(s).ok()) {
-        Some(id) => id,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Non authentifié"}))).into_response(),
+    // ── Resolve attacker planet ────────────────────────────────────────────────
+    let current_id_str = params.get("current_planet_id").unwrap_or(&String::new()).to_string();
+    let attacker_planet_id = match Uuid::parse_str(&current_id_str) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "current_planet_id invalide"}))).into_response(),
     };
 
-    // ── Validate source planet ownership ──────────────────────────────────────
-    let source_planet = match Planet::find_by_id(payload.source_planet_id).one(&state.db).await {
-        Ok(Some(p)) if p.owner_id == caller_user_id => p,
-        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Planète source non possédée"}))).into_response(),
-        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète source introuvable"}))).into_response(),
-    };
-
-    // ── Validate target planet (must have an owner) ────────────────────────────
-    let target_planet = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await {
+    let attacker_planet = match Planet::find_by_id(attacker_planet_id).one(&state.db).await {
         Ok(Some(p)) => p,
-        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète cible introuvable"}))).into_response(),
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète attaquante introuvable"}))).into_response(),
     };
+    let attacker_user_id = attacker_planet.owner_id;
 
-    if target_planet.owner_id == caller_user_id {
+    if attacker_user_id == payload.target_user_id {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas vous pirater vous-même"}))).into_response();
     }
 
-    // ── Validate fleet: only light_hunter and heavy_hunter allowed ─────────────
-    let allowed_ships = ["light_hunter", "heavy_hunter"];
-    let raider_fleet: HashMap<String, i32> = payload.fleet
-        .iter()
-        .filter(|(k, &v)| allowed_ships.contains(&k.as_str()) && v > 0)
-        .map(|(k, &v)| (k.clone(), v))
-        .collect();
-
-    if raider_fleet.is_empty() {
+    // ── Require at least 3 spy_probes on attacker planet ──────────────────────
+    const MIN_PROBES: i32 = 3;
+    let probe_count = tech_tree::get_planet_ship_count(&state.db, attacker_planet_id, "spy_probe")
+        .await
+        .unwrap_or(0);
+    if probe_count < MIN_PROBES {
         return (StatusCode::BAD_REQUEST, Json(json!({
-            "error": "Seuls les Chasseurs Légers et Chasseurs Lourds peuvent effectuer une mission de piratage"
+            "error": format!("Mission de piratage requiert au moins {} sondes d'espionnage (disponibles: {})",
+                MIN_PROBES, probe_count)
         }))).into_response();
     }
 
-    // Verify ships exist on source planet
-    for (ship_key, &count) in &raider_fleet {
-        let available = tech_tree::get_planet_ship_count(&state.db, payload.source_planet_id, ship_key)
-            .await
-            .unwrap_or(0);
-        if count > available {
-            return (StatusCode::BAD_REQUEST, Json(json!({
-                "error": format!("{} insuffisants (disponible: {})", ship_key, available)
-            }))).into_response();
-        }
-    }
-
-    // ── Fuel cost ─────────────────────────────────────────────────────────────
-    let dist = game_logic::calculate_distance(
-        (source_planet.galaxy, source_planet.system, source_planet.position),
-        (target_planet.galaxy, target_planet.system, target_planet.position),
-    );
-
-    let mut total_fuel: f64 = 0.0;
-    for (ship_key, &count) in &raider_fleet {
-        let fuel_per = ShipType::find()
-            .filter(ship_type::Column::ShipKey.eq(ship_key))
-            .one(&state.db)
-            .await
-            .ok()
-            .flatten()
-            .map(|s| s.fuel_consumption as f64)
-            .unwrap_or(50.0);
-        total_fuel += count as f64 * fuel_per;
-    }
-    let fuel_needed = (total_fuel * dist / 1000.0).ceil().max(1.0);
-
-    if source_planet.deuterium_amount < fuel_needed {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
-                fuel_needed as i64, source_planet.deuterium_amount as i64)
-        }))).into_response();
-    }
-
-    // ── Deduct ships + fuel ────────────────────────────────────────────────────
-    for (ship_key, &count) in &raider_fleet {
-        if let Err(_) = tech_tree::deduct_ships(&state.db, payload.source_planet_id, ship_key, count).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Impossible de déduire les vaisseaux"}))).into_response();
-        }
-    }
-    {
-        let mut src: planet::ActiveModel = source_planet.clone().into();
-        src.deuterium_amount = Set((source_planet.deuterium_amount - fuel_needed).max(0.0));
-        let _ = src.update(&state.db).await;
-    }
-
-    // ── Calculate arrival time ─────────────────────────────────────────────────
-    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
-    let base_speed = config.get_config("flight_speed_multiplier", 5.0);
-    let hyperspace_lvl = tech_tree::get_planet_tech_level(
-        &state.db, payload.source_planet_id, "hyperspace_tech",
-    ).await.unwrap_or(0);
-    let travel_secs = game_logic::calculate_flight_time(
-        dist, base_speed * (1.0 + hyperspace_lvl as f64 * 0.15),
-    );
-    let arrival = Utc::now().naive_utc() + Duration::seconds(travel_secs * 2);
-
-    let fleet_data = serde_json::to_string(&raider_fleet).unwrap_or_default();
-    let ships_count: i32 = raider_fleet.values().sum();
-
-    let new_mission = fleet_mission::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        source_planet_id: Set(payload.source_planet_id),
-        target_planet_id: Set(payload.target_planet_id),
-        mission_type: Set("piracy".to_string()),
-        arrival_time: Set(arrival),
-        metal: Set(0.0),
-        crystal: Set(0.0),
-        deuterium: Set(0.0),
-        ships_count: Set(ships_count),
-        fleet_data: Set(Some(fleet_data)),
-        recyclers_sent: Set(0),
-        departure_time: Set(Utc::now().naive_utc()),
-        acs_group_id: Set(None),
+    // ── Fetch target user and verify they exist ────────────────────────────────
+    let target_user = match User::find_by_id(payload.target_user_id).one(&state.db).await {
+        Ok(Some(u)) => u,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Joueur cible introuvable"}))).into_response(),
     };
 
-    match new_mission.insert(&state.db).await {
-        Ok(record) => (StatusCode::OK, Json(json!({
-            "status": "dispatched",
-            "mission_id": record.id,
-            "arrival_time": record.arrival_time.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            "ships": ships_count,
-            "message": format!("{} raider(s) en route. Arrivée prévue : {}",
-                ships_count, arrival.format("%Y-%m-%dT%H:%M:%SZ")),
-        }))).into_response(),
-        Err(e) => {
-            eprintln!("piracy insert error: {:?}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response()
+    // ── Fetch attacker's espionage_tech level (from attacker planet) ───────────
+    let attacker_espionage = tech_tree::get_planet_tech_level(&state.db, attacker_planet_id, "espionage_tech")
+        .await
+        .unwrap_or(0)
+        .max(tech_tree::get_planet_tech_level(&state.db, attacker_planet_id, "espionage")
+            .await
+            .unwrap_or(0));
+    // Ensure at least 1 so the formula doesn't collapse to 0%
+    let attacker_esp = attacker_espionage.max(1);
+
+    // ── Fetch target's computer_tech level (from their homeworld) ─────────────
+    let target_homeworld = Planet::find()
+        .filter(planet::Column::OwnerId.eq(payload.target_user_id))
+        .filter(planet::Column::IsHomeworld.eq(true))
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+
+    let target_computer = if let Some(hw) = &target_homeworld {
+        tech_tree::get_planet_tech_level(&state.db, hw.id, "computer_tech")
+            .await
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let target_comp = target_computer.max(1);
+
+    // ── Success probability: attacker_esp / (attacker_esp + target_comp) ──────
+    // Clamped to [10%, 90%] to guarantee both outcomes are always possible.
+    let raw_chance = attacker_esp as f64 / (attacker_esp + target_comp) as f64;
+    let success_chance = raw_chance.clamp(0.10, 0.90);
+
+    let roll: f64 = rand::random();
+    let success = roll < success_chance;
+
+    if success {
+        // ── Steal SC ──────────────────────────────────────────────────────────
+        // Steal between 10 % and 30 % of target's SC, capped at 1 000.
+        let steal_pct = 0.10 + rand::random::<f64>() * 0.20; // 10–30 %
+        let credits_stolen = (target_user.syndicate_credits * steal_pct).min(1_000.0).floor();
+
+        if credits_stolen > 0.0 && target_user.syndicate_credits >= credits_stolen {
+            // Atomic debit from target + credit to attacker via transaction
+            let txn = match state.db.begin().await {
+                Ok(t) => t,
+                Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction error"}))).into_response(),
+            };
+
+            // Debit target
+            let mut target_active: user::ActiveModel = target_user.clone().into();
+            target_active.syndicate_credits = Set(target_user.syndicate_credits - credits_stolen);
+            if let Err(e) = target_active.update(&txn).await {
+                eprintln!("piracy debit target error: {:?}", e);
+                let _ = txn.rollback().await;
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB (débit)"}))).into_response();
+            }
+
+            // Credit attacker
+            let attacker_user = match User::find_by_id(attacker_user_id).one(&txn).await {
+                Ok(Some(u)) => u,
+                _ => {
+                    let _ = txn.rollback().await;
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Attaquant introuvable"}))).into_response();
+                }
+            };
+            let mut att_active: user::ActiveModel = attacker_user.into();
+            att_active.syndicate_credits = Set({
+                let prev = match att_active.syndicate_credits {
+                    sea_orm::ActiveValue::Set(v) | sea_orm::ActiveValue::Unchanged(v) => v,
+                    _ => 0.0,
+                };
+                prev + credits_stolen
+            });
+            if let Err(e) = att_active.update(&txn).await {
+                eprintln!("piracy credit attacker error: {:?}", e);
+                let _ = txn.rollback().await;
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB (crédit)"}))).into_response();
+            }
+
+            if let Err(e) = txn.commit().await {
+                eprintln!("piracy commit error: {:?}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur commit"}))).into_response();
+            }
+
+            // Notify target (fire-and-forget)
+            {
+                let db_clone = state.db.clone();
+                let target_uid = payload.target_user_id;
+                let stolen_rounded = credits_stolen as i32;
+                tokio::spawn(async move {
+                    notifications::create_notification(
+                        &db_clone,
+                        target_uid,
+                        "piracy",
+                        "Piratage Syndicat",
+                        &format!(
+                            "Des pirates ont siphonné {} Crédits Syndicat depuis vos comptes.",
+                            stolen_rounded
+                        ),
+                        None,
+                    ).await;
+                });
+            }
+
+            missions::update_mission_progress(&state, attacker_user_id, "spy", "any", 1).await;
+
+            (StatusCode::OK, Json(json!({
+                "success": true,
+                "credits_stolen": credits_stolen,
+                "attacker_espionage": attacker_espionage,
+                "target_computer": target_computer,
+                "success_chance": (success_chance * 100.0).round(),
+            }))).into_response()
+        } else {
+            // Target had 0 SC — success but nothing to steal
+            (StatusCode::OK, Json(json!({
+                "success": true,
+                "credits_stolen": 0.0,
+                "attacker_espionage": attacker_espionage,
+                "target_computer": target_computer,
+                "success_chance": (success_chance * 100.0).round(),
+                "message": "Mission réussie, mais la cible n'a pas de Crédits Syndicat.",
+            }))).into_response()
         }
+    } else {
+        // ── Failure: lose MIN_PROBES spy_probes ───────────────────────────────
+        let _ = tech_tree::deduct_ships(&state.db, attacker_planet_id, "spy_probe", MIN_PROBES).await;
+
+        (StatusCode::OK, Json(json!({
+            "success": false,
+            "credits_stolen": 0.0,
+            "attacker_espionage": attacker_espionage,
+            "target_computer": target_computer,
+            "success_chance": (success_chance * 100.0).round(),
+            "message": format!("{} sondes perdues lors de la tentative de piratage.", MIN_PROBES),
+        }))).into_response()
     }
 }
 

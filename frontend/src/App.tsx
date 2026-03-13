@@ -42,6 +42,7 @@ const StatsPage = lazy(() => import('./components/StatsPage'));
 const Achievements = lazy(() => import('./components/Achievements'));
 const IntelligenceView = lazy(() => import('./components/IntelligenceView'));
 const GovernanceView = lazy(() => import('./components/GovernanceView'));
+const BonusSummaryView = lazy(() => import('./components/BonusSummaryView'));
 import PirateExtortionModal from './components/PirateExtortionModal';
 import { Sidebar, type MenuItem } from './components/Sidebar';
 import SpyModal from './components/SpyModal';
@@ -77,7 +78,7 @@ interface CombatReport {
   };
 }
 
-type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground' | 'dashboard' | 'achievements' | 'intelligence' | 'governance';
+type TabType = 'overview' | 'galaxy' | 'myplanets' | 'resources' | 'facilities' | 'shipyard' | 'defenses' | 'tech' | 'expedition' | 'ranking' | 'reports' | 'settings' | 'messages' | 'market' | 'admin' | 'changelog' | 'stats' | 'alliance' | 'missions' | 'officers' | 'profile' | 'friends' | 'fleet-presets' | 'bounties' | 'flagship' | 'trade-routes' | 'build-queue' | 'underground' | 'dashboard' | 'achievements' | 'intelligence' | 'governance' | 'bonus';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
@@ -690,6 +691,7 @@ function AppContent({
     { id: 'governance', label: 'Sénat', icon: Scale, category: 'DONNÉES' },
     { id: 'officers', label: 'Officiers', icon: Users, category: 'DONNÉES' },
     { id: 'stats', label: 'Statistiques', icon: Activity, category: 'DONNÉES' },
+    { id: 'bonus', label: 'Bonus', icon: TrendingUp, category: 'DONNÉES' },
     { id: 'reports', label: 'Rapports', icon: ScrollText, category: 'DONNÉES' },
     { id: 'fleet-presets', label: 'Presets de Flotte', icon: Zap, category: 'MILITAIRE' },
     { id: 'bounties', label: 'Tableau des Primes', icon: Crosshair, category: 'MILITAIRE' },

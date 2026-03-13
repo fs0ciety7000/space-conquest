@@ -478,7 +478,7 @@ pub async fn get_research_ranking_handler(
                    COALESCE(SUM(pt.current_level), 0) AS score
             FROM "user" u
             JOIN planet p ON p.owner_id = u.id
-            JOIN planet_technology pt ON pt.planet_id = p.id
+            JOIN planet_technologies pt ON pt.planet_id = p.id
             GROUP BY u.id, u.username, u.display_name
             ORDER BY score DESC
             LIMIT 100
@@ -524,17 +524,39 @@ pub async fn get_hall_of_fame_handler(
 
     let db = &state.db;
 
+    // Hall of Fame : d'abord les conquêtes de planètes, sinon les victoires d'attaque.
+    // Deux passes : si la première retourne 0 résultats (jeu trop récent), on bascule
+    // sur un classement par victoires d'attaque pour ne jamais afficher une page vide.
     let rows = db
         .query_all(sea_orm::Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
             r#"
             SELECT u.id, u.username, u.display_name,
-                   COUNT(cl.id) AS score
+                   COUNT(cl.id) AS score,
+                   'conquests' AS metric
             FROM "user" u
             JOIN planet p ON p.owner_id = u.id
             JOIN combat_log cl ON cl.planet_id = p.id
                 AND cl.mission_type = 'planet_conquered'
             GROUP BY u.id, u.username, u.display_name
+            HAVING COUNT(cl.id) > 0
+            UNION ALL
+            -- Fallback : victoires d'attaque si 0 conquêtes dans toute la DB
+            SELECT u2.id, u2.username, u2.display_name,
+                   COUNT(cl2.id) AS score,
+                   'victories' AS metric
+            FROM "user" u2
+            JOIN planet p2 ON p2.owner_id = u2.id
+            JOIN combat_log cl2 ON cl2.planet_id = p2.id
+                AND cl2.mission_type IN ('attack', 'planet_conquered')
+                AND cl2.result = 'victory'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM combat_log cl3
+                JOIN planet p3 ON p3.id = cl3.planet_id
+                WHERE cl3.mission_type = 'planet_conquered'
+            )
+            GROUP BY u2.id, u2.username, u2.display_name
+            HAVING COUNT(cl2.id) > 0
             ORDER BY score DESC
             LIMIT 10
             "#.to_owned(),

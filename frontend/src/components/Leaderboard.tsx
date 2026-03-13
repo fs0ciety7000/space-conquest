@@ -39,8 +39,10 @@ interface SimpleRankItem {
     rank: number;
     username: string;
     display_name?: string;
-    owner_id?: string;
+    owner_id?: string;   // legacy
+    user_id?: string;    // backend M5 response key
     score: number;
+    metric?: string;     // 'conquests' | 'victories' (hall-of-fame fallback)
 }
 
 interface LeaderboardProps {
@@ -342,7 +344,11 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                         <th className="p-4 text-right">
                                             {category === 'expeditions' && 'Expéditions'}
                                             {category === 'research' && 'Niveaux de tech'}
-                                            {category === 'hall-of-fame' && 'Planètes conquises'}
+                                            {category === 'hall-of-fame' && (
+                                                simpleRanking[0]?.metric === 'victories'
+                                                    ? 'Victoires d\'attaque'
+                                                    : 'Planètes conquises'
+                                            )}
                                         </th>
                                     </tr>
                                 </thead>
@@ -359,7 +365,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                                             </td>
                                             <td className="p-4">
                                                 <button
-                                                    onClick={() => player.owner_id && setSelectedPlayer(player.owner_id)}
+                                                    onClick={() => { const id = player.user_id ?? player.owner_id; if (id) setSelectedPlayer(id); }}
                                                     className="flex items-center gap-2 group transition-all duration-300"
                                                 >
                                                     <img

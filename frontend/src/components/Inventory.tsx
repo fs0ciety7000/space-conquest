@@ -3,11 +3,12 @@ import { apiUrl } from "@/config/api";
 import { toast } from "sonner";
 import {
   Package, RefreshCw, Crosshair, Skull, Zap, Shield, Bug,
-  ChevronRight, X, MapPin,
+  ChevronRight, X, MapPin, Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Coins } from "lucide-react";
+import { formatTimeUntil } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,8 @@ interface InventoryItem {
   effect_params: Record<string, unknown>;
   quantity: number;
   acquired_at: string;
+  activated_at?: string | null;
+  expires_at?: string | null;
 }
 
 interface InventoryData {
@@ -196,7 +199,13 @@ export default function Inventory({ userId, planet, onExtortionLaunched }: Inven
       });
       const json = await res.json();
       if (res.ok) {
-        toast.success(`"${item.name}" activé`, { description: json.message });
+        if (item.effect_type === "resource_boost") {
+          toast.success("Boost de production activé ! +50% pendant 24h");
+        } else if (item.effect_type === "stealth") {
+          toast.success("Mode furtif activé ! Vos planètes sont invisibles pendant 6h");
+        } else {
+          toast.success(`"${item.name}" activé`, { description: json.message });
+        }
         load();
       } else {
         toast.error(json.error || "Erreur d'activation");
@@ -282,21 +291,39 @@ export default function Inventory({ userId, planet, onExtortionLaunched }: Inven
             {data.inventory.map((item) => {
               const icon = EFFECT_ICONS[item.effect_type] || <Package size={20} className="text-slate-400" />;
               const isActivating = activating === item.inventory_id;
+
+              // Determine if this item is currently active (activated_at set, expires_at in the future)
+              const isActive = !!(
+                item.activated_at &&
+                item.expires_at &&
+                new Date(item.expires_at).getTime() > Date.now()
+              );
+              const timeLeft = isActive && item.expires_at ? formatTimeUntil(item.expires_at) : null;
+
               return (
                 <div
                   key={item.inventory_id}
-                  className="flex items-center gap-4 p-4 rounded-xl border border-slate-700/30 bg-slate-900/40 hover:border-slate-600/50 transition-all"
+                  className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${
+                    isActive
+                      ? "border-emerald-500/40 bg-emerald-950/10 hover:border-emerald-500/60"
+                      : "border-slate-700/30 bg-slate-900/40 hover:border-slate-600/50"
+                  }`}
                 >
-                  <div className="p-2.5 rounded-lg border border-slate-700/30 bg-black/30 shrink-0">
+                  <div className={`p-2.5 rounded-lg border shrink-0 ${isActive ? "border-emerald-600/40 bg-emerald-950/30" : "border-slate-700/30 bg-black/30"}`}>
                     {icon}
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-white font-bold text-sm truncate">{item.name}</p>
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/60 border border-slate-700/40 text-slate-500 uppercase font-bold shrink-0">
                         ×{item.quantity}
                       </span>
+                      {isActive && (
+                        <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/40 border border-emerald-500/30 text-emerald-400 uppercase font-bold shrink-0">
+                          <Clock size={8} /> Actif jusqu'à {timeLeft}
+                        </span>
+                      )}
                     </div>
                     <p className="text-slate-500 text-xs mt-0.5 leading-snug line-clamp-1">{item.description}</p>
                     <p className="text-[9px] text-slate-700 mt-1 uppercase font-bold">
@@ -304,17 +331,19 @@ export default function Inventory({ userId, planet, onExtortionLaunched }: Inven
                     </p>
                   </div>
 
-                  <Button
-                    onClick={() => handleActivate(item)}
-                    disabled={isActivating}
-                    className="shrink-0 text-xs font-black uppercase tracking-wider bg-red-950/40 border border-red-800/40 hover:bg-red-900/60 hover:border-red-600/60 text-red-400 transition-all"
-                  >
-                    {isActivating ? (
-                      <RefreshCw size={13} className="animate-spin" />
-                    ) : (
-                      <><ChevronRight size={13} className="mr-1" />Utiliser</>
-                    )}
-                  </Button>
+                  {isActive ? null : (
+                    <Button
+                      onClick={() => handleActivate(item)}
+                      disabled={isActivating}
+                      className="shrink-0 text-xs font-black uppercase tracking-wider bg-red-950/40 border border-red-800/40 hover:bg-red-900/60 hover:border-red-600/60 text-red-400 transition-all"
+                    >
+                      {isActivating ? (
+                        <RefreshCw size={13} className="animate-spin" />
+                      ) : (
+                        <><ChevronRight size={13} className="mr-1" />Utiliser</>
+                      )}
+                    </Button>
+                  )}
                 </div>
               );
             })}

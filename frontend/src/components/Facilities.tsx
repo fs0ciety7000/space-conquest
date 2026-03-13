@@ -116,6 +116,17 @@ const getFacilityStats = (id: string, level: number) => {
     }
 };
 
+const BUILDING_EFFECTS: Record<string, string> = {
+  metal_mine: "Production de métal +30% par niveau",
+  crystal_mine: "Production de cristal +30% par niveau",
+  deuterium_mine: "Production de deutérium +30% par niveau",
+  solar_plant: "Production d'énergie +40 par niveau",
+  research_lab: "Débloque et accélère les recherches. Niveau requis pour chaque techno",
+  shipyard: "Débloque la construction de vaisseaux et défenses. Niveau requis par type",
+  hangar: "Capacité de transport +20% par niveau. Débloque des slots d'expédition supplémentaires",
+  resource_storage: "Capacité de stockage +50 000 par niveau pour chaque ressource",
+};
+
 const container = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.04 } }
@@ -331,6 +342,11 @@ const Facilities = React.memo(function Facilities({ planet, onUpgrade }: Facilit
                           <div>
                               <h3 className="text-lg font-black uppercase tracking-wider text-slate-200">{building.name}</h3>
                               <p className="text-xs text-slate-400 h-4 leading-tight">{building.description || ""}</p>
+                              {BUILDING_EFFECTS[building.building_key] && (
+                                <p className="text-[10px] text-cyan-400/70 mt-1 leading-snug">
+                                  {BUILDING_EFFECTS[building.building_key]}
+                                </p>
+                              )}
                           </div>
                       </div>
                       <Badge variant={locked ? "secondary" : "default"} className="font-mono">
