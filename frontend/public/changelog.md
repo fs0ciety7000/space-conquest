@@ -1,5 +1,35 @@
 # Changelog - Space Conquest
 
+## [13.1.0] - 2026-03-13 - UI Features: Bonus Panel, Deploy Recall, Inventory Active States
+
+### Marché Noir — Inventaire
+- **resource_boost activable** : l'effet n'est plus "Bientôt" — le bouton Acheter est actif. Activation affiche "Boost de production activé ! +50% pendant 24h"
+- **stealth activable** : idem — "Mode furtif activé ! Vos planètes sont invisibles pendant 6h"
+- **Etat actif dans l'inventaire** : si `activated_at` est défini et `expires_at` est dans le futur, le bouton "Utiliser" est remplacé par un badge vert "Actif jusqu'à [temps restant]"
+
+### Flotte — Rappel de déploiement
+- **Section "Rappel de Flotte"** dans l'onglet Déployer du FleetDispatcher : liste les missions deploy actives depuis `GET /fleet/missions?type=deploy&status=active`
+- Bouton "Rappeler" par mission appelle `DELETE /fleet/missions/:id/recall` et affiche "Flotte rappelée avec succès"
+
+### Installations — Descriptions d'effets
+- Chaque bâtiment dans la vue Installations affiche désormais son effet concret en petit texte cyan : "+30% production métal par niveau", "Débloque la construction de vaisseaux", etc.
+
+### Nouveau panneau "Bonus"
+- **BonusSummaryView** : nouveau composant accessible via le menu latéral (catégorie DONNÉES)
+- Tableau "Bonus Planète" : affiche les niveaux de mines, centrale solaire, biome (multiplicateurs métal/cristal/deutérium), slots actifs, tech énergie, tech hyperespace, bâtiments (labo, chantier, hangar, stockage), effets actifs (boost production + mode furtif avec temps restant)
+- Tableau "Bonus Compte" : armes, boucliers, blindage (+X% au combat), astrophysique (max colonies), informatique (slots expédition), espionnage (niveau rapport)
+
+### Fichiers modifiés
+```
+frontend/src/
+  ├── App.tsx (import BonusSummaryView, onglet 'bonus', TrendingUp icon)
+  ├── components/BonusSummaryView.tsx (nouveau)
+  ├── components/Inventory.tsx (états actif resource_boost/stealth, toasts personnalisés)
+  ├── components/UndergroundMarket.tsx (retire resource_boost et stealth de UNIMPLEMENTED_EFFECTS)
+  ├── components/FleetDispatcher.tsx (état activeMissions, handleRecall, section rappel)
+  └── components/Facilities.tsx (BUILDING_EFFECTS constant, texte d'effet sous le nom)
+```
+
 ## [13.0.0] - 2026-03-13 - Sprint 3 — Sécurité, Features M1-M16, ACS
 
 ### Sécurité (B1-B5)

@@ -62,7 +62,7 @@ import WebSocketOverlay from './components/WebSocketOverlay';
 import {
   LayoutDashboard, Pickaxe, Hammer, Loader2,
   ShieldCheck, FlaskConical, Telescope, Trophy, ScrollText, Globe, Truck, Layers,
-  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap, Crosshair, Star, Skull, Award, Scale
+  Settings as SettingsIcon, Mail, Factory, Rocket, X, Database, ShoppingCart, Keyboard, LogOut, MessageSquarePlus, FileText, Activity, Map, Shield, Users, Eye, Swords, ShieldAlert, UserCircle, Heart, Zap, Crosshair, Star, Skull, Award, Scale, TrendingUp
 } from "lucide-react";
 import { PlanetProvider, usePlanet } from './contexts/PlanetContext';
 import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext';
@@ -926,6 +926,7 @@ function AppContent({
                           {activeTab === 'missions' && <MissionsView userId={userId!} planetId={planetId!} token={token!} />}
                           {activeTab === 'officers' && <Officers />}
                           {activeTab === 'stats' && <StatsPage planet={planet} userId={userId!} speedFactor={speedFactor} />}
+                          {activeTab === 'bonus' && planet && userId && <BonusSummaryView planet={planet} userId={userId} />}
 
                           {activeTab === 'resources' && <ResourceDisplay planet={planet} onUpgrade={fetchPlanet} speedFactor={speedFactor} />}
                           {activeTab === 'facilities' && <Facilities planet={planet} onUpgrade={fetchPlanet} />}

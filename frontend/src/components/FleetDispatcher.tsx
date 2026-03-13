@@ -642,7 +642,9 @@ export default function FleetDispatcher({
                                 })}
                             </div>
                         )}
-                        {/* Recall Section */}
+                    </div>
+
+                    {/* Recall Section */}
                     {activeMissions.length > 0 && (
                         <div className="space-y-2 pt-4 border-t border-violet-500/10">
                             <div className="flex items-center gap-2 pb-2">
@@ -672,7 +674,6 @@ export default function FleetDispatcher({
                             </div>
                         </div>
                     )}
-                </div>
                 </div>
             ) : (
                 <div className="space-y-6">

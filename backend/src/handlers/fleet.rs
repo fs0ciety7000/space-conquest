@@ -2112,13 +2112,60 @@ async fn recall_deploy_handler(
 // M10 — POST /fleet/piracy?current_planet_id=X
 // Syndicate-Credits piracy mission using spy_probes.
 // Success chance: attacker_espionage / (attacker_espionage + target_computer).
-// On success: steal SC from target and add to attacker.
-// On failure: lose 3 spy_probes.
+//   Clamped to [10%, 90%] so both outcomes are always possible.
+// On success: steal 10-30% of target SC (cap 100), consume 1 probe (operative burned).
+// On failure: consume 5 probes (squad intercepted).
+// Cooldown: 4 hours per attacker→target pair (stored as combat_log "piracy" entry).
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[derive(serde::Deserialize)]
 struct PiracyPayload {
     target_user_id: Uuid,
+}
+
+// Check whether the attacker has already run a piracy op against this target
+// within the last `cooldown_hours` hours.
+async fn check_piracy_cooldown(
+    db: &DatabaseConnection,
+    attacker_user_id: Uuid,
+    target_user_id: Uuid,
+    cooldown_hours: i64,
+) -> Option<String> {
+    let target_user = User::find_by_id(target_user_id).one(db).await.unwrap_or(None)?;
+    let cutoff = Utc::now().naive_utc() - Duration::hours(cooldown_hours);
+
+    let attacker_planet_ids: Vec<Uuid> = Planet::find()
+        .filter(planet::Column::OwnerId.eq(attacker_user_id))
+        .all(db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| p.id)
+        .collect();
+
+    if attacker_planet_ids.is_empty() {
+        return None;
+    }
+
+    let last_piracy = CombatLog::find()
+        .filter(combat_log::Column::PlanetId.is_in(attacker_planet_ids))
+        .filter(combat_log::Column::OpponentUsername.eq(&target_user.username))
+        .filter(combat_log::Column::MissionType.eq("piracy"))
+        .filter(combat_log::Column::Date.gt(cutoff))
+        .order_by_desc(combat_log::Column::Date)
+        .one(db)
+        .await
+        .unwrap_or(None)?;
+
+    let next_allowed = last_piracy.date + Duration::hours(cooldown_hours);
+    let remaining = next_allowed - Utc::now().naive_utc();
+    let hours = remaining.num_hours().max(0);
+    let minutes = (remaining.num_minutes().max(0)) % 60;
+
+    Some(format!(
+        "Piratage en cooldown. Prochain créneau contre ce joueur dans {}h {}min.",
+        hours, minutes
+    ))
 }
 
 async fn piracy_handler(
@@ -2143,14 +2190,25 @@ async fn piracy_handler(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas vous pirater vous-même"}))).into_response();
     }
 
-    // ── Require at least 3 spy_probes on attacker planet ──────────────────────
-    const MIN_PROBES: i32 = 3;
+    // ── Per-target cooldown: 4 hours ───────────────────────────────────────────
+    const PIRACY_COOLDOWN_HOURS: i64 = 4;
+    if let Some(cooldown_msg) = check_piracy_cooldown(
+        &state.db, attacker_user_id, payload.target_user_id, PIRACY_COOLDOWN_HOURS
+    ).await {
+        return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": cooldown_msg}))).into_response();
+    }
+
+    // ── Require at least 5 spy_probes on attacker planet ──────────────────────
+    // 1 probe burned on success (the infiltrator), 5 burned on failure (squad intercepted).
+    const MIN_PROBES: i32 = 5;
+    const PROBES_ON_SUCCESS: i32 = 1;
+    const PROBES_ON_FAILURE: i32 = 5;
     let probe_count = tech_tree::get_planet_ship_count(&state.db, attacker_planet_id, "spy_probe")
         .await
         .unwrap_or(0);
     if probe_count < MIN_PROBES {
         return (StatusCode::BAD_REQUEST, Json(json!({
-            "error": format!("Mission de piratage requiert au moins {} sondes d'espionnage (disponibles: {})",
+            "error": format!("Mission de piratage requiert au moins {} sondes d'espionnage (disponibles: {}). Succès: 1 sonde consommée. Échec: 5 sondes perdues.",
                 MIN_PROBES, probe_count)
         }))).into_response();
     }
@@ -2196,7 +2254,29 @@ async fn piracy_handler(
     let roll: f64 = rand::random();
     let success = roll < success_chance;
 
+    // ── Helper: write cooldown log entry (records the attempt for rate-limiting) ─
+    // Written regardless of outcome so the 4h cooldown always applies.
+    let target_username_for_log = target_user.username.clone();
+    let piracy_log = combat_log::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        planet_id: Set(attacker_planet_id),
+        target_name: Set(target_user.username.clone()),
+        opponent_username: Set(Some(target_username_for_log)),
+        mission_type: Set("piracy".to_string()),
+        result: Set(if success { "success".to_string() } else { "failure".to_string() }),
+        loot_metal: Set(0.0),
+        loot_crystal: Set(0.0),
+        ships_lost: Set(if success { PROBES_ON_SUCCESS } else { PROBES_ON_FAILURE }),
+        date: Set(Utc::now().naive_utc()),
+        detailed_report: Set(None),
+        details: Set(None),
+    };
+    let _ = piracy_log.insert(&state.db).await;
+
     if success {
+        // ── Burn 1 probe (the infiltrator is always consumed on success) ───────
+        let _ = tech_tree::deduct_ships(&state.db, attacker_planet_id, "spy_probe", PROBES_ON_SUCCESS).await;
+
         // ── Steal SC ──────────────────────────────────────────────────────────
         // Steal between 10 % and 30 % of target's SC, capped at 100.
         let steal_pct = 0.10 + rand::random::<f64>() * 0.20; // 10–30 %
@@ -2257,7 +2337,7 @@ async fn piracy_handler(
                         "piracy",
                         "Piratage Syndicat",
                         &format!(
-                            "Des pirates ont siphonné {} Crédits Syndicat depuis vos comptes.",
+                            "Des pirates ont siphonné {} Crédits Syndicat depuis vos comptes. (Cooldown : 4h)",
                             stolen_rounded
                         ),
                         None,
@@ -2270,32 +2350,38 @@ async fn piracy_handler(
             (StatusCode::OK, Json(json!({
                 "success": true,
                 "credits_stolen": credits_stolen,
+                "probes_consumed": PROBES_ON_SUCCESS,
                 "attacker_espionage": attacker_espionage,
                 "target_computer": target_computer,
                 "success_chance": (success_chance * 100.0).round(),
+                "cooldown_hours": PIRACY_COOLDOWN_HOURS,
             }))).into_response()
         } else {
             // Target had 0 SC — success but nothing to steal
             (StatusCode::OK, Json(json!({
                 "success": true,
                 "credits_stolen": 0.0,
+                "probes_consumed": PROBES_ON_SUCCESS,
                 "attacker_espionage": attacker_espionage,
                 "target_computer": target_computer,
                 "success_chance": (success_chance * 100.0).round(),
+                "cooldown_hours": PIRACY_COOLDOWN_HOURS,
                 "message": "Mission réussie, mais la cible n'a pas de Crédits Syndicat.",
             }))).into_response()
         }
     } else {
-        // ── Failure: lose MIN_PROBES spy_probes ───────────────────────────────
-        let _ = tech_tree::deduct_ships(&state.db, attacker_planet_id, "spy_probe", MIN_PROBES).await;
+        // ── Failure: lose PROBES_ON_FAILURE spy_probes (squad intercepted) ────
+        let _ = tech_tree::deduct_ships(&state.db, attacker_planet_id, "spy_probe", PROBES_ON_FAILURE).await;
 
         (StatusCode::OK, Json(json!({
             "success": false,
             "credits_stolen": 0.0,
+            "probes_consumed": PROBES_ON_FAILURE,
             "attacker_espionage": attacker_espionage,
             "target_computer": target_computer,
             "success_chance": (success_chance * 100.0).round(),
-            "message": format!("{} sondes perdues lors de la tentative de piratage.", MIN_PROBES),
+            "cooldown_hours": PIRACY_COOLDOWN_HOURS,
+            "message": format!("{} sondes perdues — escouade interceptée. Cooldown 4h.", PROBES_ON_FAILURE),
         }))).into_response()
     }
 }
