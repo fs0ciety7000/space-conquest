@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { apiUrl } from '@/config/api';
 import { useRealtimeResources } from '@/hooks/useRealtimeResources';
 import { ConnectionStatus, getConnectionStatusColor, getConnectionStatusText } from '@/hooks/useWebSocket';
@@ -17,7 +17,10 @@ import {
   WifiOff,
   Crown,
   Coins,
+  Gift,
 } from "lucide-react";
+
+const DailyReward = lazy(() => import('./DailyReward'));
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,6 +77,8 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     mining_speed_multiplier: 1.0
   });
   const [syndicateCredits, setSyndicateCredits] = useState<number>(0);
+  const [showDailyReward, setShowDailyReward] = useState(false);
+  const [dailyRewardAvailable, setDailyRewardAvailable] = useState(false);
 
   const realtimeResources = useRealtimeResources(planet, speedFactor, config);
 
@@ -138,6 +143,26 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
     };
     fetchCredits();
     const id = setInterval(fetchCredits, 30_000);
+    return () => clearInterval(id);
+  }, [planet?.owner_id]);
+
+  useEffect(() => {
+    if (!planet?.owner_id) return;
+    const checkDailyReward = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch(apiUrl(`/users/${planet.owner_id}/daily-reward/status`), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDailyRewardAvailable(!!data.can_claim);
+        }
+      } catch { /* ignore */ }
+    };
+    checkDailyReward();
+    // Re-check every 5 minutes
+    const id = setInterval(checkDailyReward, 5 * 60_000);
     return () => clearInterval(id);
   }, [planet?.owner_id]);
 
@@ -503,6 +528,21 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
           <NotificationCenter userId={planet.owner_id} />
         )}
 
+        {/* Daily Reward button */}
+        <button
+          onClick={() => setShowDailyReward(true)}
+          className="relative p-2 rounded hover:bg-amber-500/5 border border-transparent hover:border-amber-500/15 transition-all group shrink-0 cursor-pointer"
+          title="Récompense quotidienne"
+        >
+          <Gift size={16} className={`transition-colors ${dailyRewardAvailable ? 'text-amber-400' : 'text-slate-500 group-hover:text-amber-400'}`} />
+          {dailyRewardAvailable && (
+            <span className="absolute -top-1 -right-1 flex items-center justify-center">
+              <span className="animate-ping absolute h-full w-full rounded-full bg-amber-400 opacity-60" />
+              <span className="relative w-2 h-2 rounded-full bg-amber-400" />
+            </span>
+          )}
+        </button>
+
         <button
           onClick={onOpenMessages}
           className="relative p-2 rounded hover:bg-cyan-500/5 border border-transparent hover:border-cyan-500/15 transition-all group shrink-0"
@@ -519,6 +559,20 @@ export default function EmpireBar({ planet, onSwitchPlanet, unreadMessages = 0, 
           )}
         </button>
       </div>
+
+      {/* Daily Reward Modal */}
+      {showDailyReward && planet?.owner_id && (
+        <Suspense fallback={null}>
+          <DailyReward
+            userId={planet.owner_id}
+            onClose={() => {
+              setShowDailyReward(false);
+              // Re-check availability after closing (user may have claimed)
+              setDailyRewardAvailable(false);
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Crosshair, Truck, Shield, Recycle, Telescope, Rocket, ArrowRight, ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
+import { Crosshair, Truck, Shield, Recycle, Telescope, Rocket, ArrowRight, ArrowLeft, Loader2, RefreshCw, Skull, Navigation } from 'lucide-react';
 import { apiUrl } from '@/config/api';
 import { toast } from 'sonner';
 import { formatTimeUntil } from '@/lib/utils';
@@ -27,17 +27,19 @@ const getMissionMeta = (type: string): { label: string; icon: React.ComponentTyp
     case 'attack':
       return { label: 'Attaque', icon: Crosshair, color: 'text-red-400', bg: 'bg-red-500/5', border: 'border-red-500/20' };
     case 'transport':
-      return { label: 'Transport', icon: Truck, color: 'text-emerald-400', bg: 'bg-emerald-500/5', border: 'border-emerald-500/20' };
+      return { label: 'Transport', icon: Truck, color: 'text-blue-400', bg: 'bg-blue-500/5', border: 'border-blue-500/20' };
     case 'deploy':
-      return { label: 'Déploiement', icon: Shield, color: 'text-violet-400', bg: 'bg-violet-500/5', border: 'border-violet-500/20' };
+      return { label: 'Déploiement', icon: Navigation, color: 'text-blue-400', bg: 'bg-blue-500/5', border: 'border-blue-500/20' };
     case 'recycle':
-      return { label: 'Recyclage', icon: Recycle, color: 'text-amber-400', bg: 'bg-amber-500/5', border: 'border-amber-500/20' };
+      return { label: 'Recyclage', icon: Recycle, color: 'text-emerald-400', bg: 'bg-emerald-500/5', border: 'border-emerald-500/20' };
     case 'expedition':
       return { label: 'Expédition', icon: Telescope, color: 'text-purple-400', bg: 'bg-purple-500/5', border: 'border-purple-500/20' };
     case 'colonize':
       return { label: 'Colonisation', icon: Rocket, color: 'text-cyan-400', bg: 'bg-cyan-500/5', border: 'border-cyan-500/20' };
     case 'spy':
-      return { label: 'Espionnage', icon: Telescope, color: 'text-blue-400', bg: 'bg-blue-500/5', border: 'border-blue-500/20' };
+      return { label: 'Espionnage', icon: Telescope, color: 'text-yellow-400', bg: 'bg-yellow-500/5', border: 'border-yellow-500/20' };
+    case 'piracy':
+      return { label: 'Piraterie', icon: Skull, color: 'text-orange-400', bg: 'bg-orange-500/5', border: 'border-orange-500/20' };
     default:
       return { label: type, icon: Truck, color: 'text-slate-400', bg: 'bg-slate-500/5', border: 'border-slate-500/20' };
   }
@@ -90,15 +92,43 @@ const MissionRow = React.memo(function MissionRow({
             )}
           </div>
           <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono truncate">
-            <span className="truncate">
-              {isIncoming
-                ? mission.source_planet_name || 'Inconnu'
-                : mission.target_planet_name || 'Inconnu'}
-            </span>
-            {mission.target_galaxy && !isIncoming && (
-              <span className="text-slate-600 shrink-0">
-                [{mission.target_galaxy}:{mission.target_system}:{mission.target_position}]
-              </span>
+            {mission.mission_type === 'deploy' && !isIncoming ? (
+              <>
+                <ArrowRight size={9} className="text-blue-400 shrink-0" />
+                <span className="truncate text-blue-300">
+                  {mission.target_planet_name || 'Destination inconnue'}
+                </span>
+                {mission.target_galaxy && (
+                  <span className="text-slate-600 shrink-0">
+                    [{mission.target_galaxy}:{mission.target_system}:{mission.target_position}]
+                  </span>
+                )}
+              </>
+            ) : mission.mission_type === 'piracy' && !isIncoming ? (
+              <>
+                <Skull size={9} className="text-orange-400 shrink-0" />
+                <span className="truncate text-orange-300">
+                  {mission.target_planet_name || 'Cible inconnue'}
+                </span>
+                {mission.target_galaxy && (
+                  <span className="text-slate-600 shrink-0">
+                    [{mission.target_galaxy}:{mission.target_system}:{mission.target_position}]
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="truncate">
+                  {isIncoming
+                    ? mission.source_planet_name || 'Inconnu'
+                    : mission.target_planet_name || 'Inconnu'}
+                </span>
+                {mission.target_galaxy && !isIncoming && (
+                  <span className="text-slate-600 shrink-0">
+                    [{mission.target_galaxy}:{mission.target_system}:{mission.target_position}]
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -185,7 +215,7 @@ const ActiveMissions = React.memo(function ActiveMissions({ planet, onUpdate }: 
             key={m.id}
             mission={m}
             isIncoming={false}
-            canRecall={m.mission_type === 'deploy'}
+            canRecall={m.mission_type === 'deploy' || m.mission_type === 'piracy'}
             onRecall={handleRecall}
           />
         ))}

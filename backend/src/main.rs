@@ -680,9 +680,9 @@ async fn main() {
 
 
 fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
-    // Token format: "jwt-{uuid}"
-    token.strip_prefix("jwt-")
-        .and_then(|id| Uuid::parse_str(id).ok())
+    // Delegate to the authoritative implementation in auth.rs which handles
+    // both new signed JWT and legacy jwt-{uuid} formats.
+    backend::auth::extract_user_id_from_token(token)
 }
 
 // --- COMBAT RESOLUTION ---
@@ -1729,6 +1729,7 @@ async fn attack_handler(
         fleet_data: Set(None),
         recyclers_sent: Set(0),
         departure_time: Set(Utc::now().naive_utc()),
+        acs_group_id: Set(None),
     };
     new_mission.insert(&state.db).await.unwrap();
 
@@ -2895,6 +2896,7 @@ async fn colonize_handler(
         fleet_data: Set(Some(colonize_data.to_string())),
         recyclers_sent: Set(0),
         departure_time: Set(Utc::now().naive_utc()),
+        acs_group_id: Set(None),
     };
     let _ = mission.insert(&state.db).await;
 

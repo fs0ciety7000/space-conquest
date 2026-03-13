@@ -10,6 +10,10 @@ pub struct Model {
     pub item_id: Uuid,
     pub quantity: i32,
     pub acquired_at: DateTime,
+    /// Set when the player activates a timed effect item.
+    pub activated_at: Option<DateTime>,
+    /// The UTC timestamp at which a timed effect expires (NULL = not activated).
+    pub expires_at: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

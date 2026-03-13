@@ -25,12 +25,12 @@ use uuid::Uuid;
 use backend::{combat, game_logic, missions, protection, sabotage, tech_tree, websocket, AppState};
 use backend::entities::{
     prelude::{
-        AllianceMember, CombatLog, DebrisField, DefenseType, Flagship, FlagshipModule,
+        AcsGroup, AllianceMember, CombatLog, DebrisField, DefenseType, Flagship, FlagshipModule,
         FlagshipModuleType, FleetMission, Friendship,
         Planet, PlanetCombatZone, PlanetDefense, PlanetShip, PlanetTechnology, ShipType, Technology,
         User,
     },
-    alliance_member, combat_log, debris_field, defense_type, flagship, flagship_module,
+    acs_group, alliance_member, combat_log, debris_field, defense_type, flagship, flagship_module,
     fleet_mission, friendship,
     planet, planet_combat_zone, planet_defense, planet_ship, planet_technology, ship_type,
     transport_log, user,
@@ -55,6 +55,12 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/planets/:id/combat-zone", get(get_combat_zone_handler))
         .route("/planets/:id/combat-zone", put(set_combat_zone_handler))
         .route("/planets/:id/combat-zone", delete(clear_combat_zone_handler))
+        // ACS — Allied Combat System (M7)
+        .route("/fleet/acs/create", post(create_acs_handler))
+        .route("/fleet/acs/:acs_id/join", post(join_acs_handler))
+        .route("/fleet/acs/:acs_id", get(get_acs_handler))
+        // M10 — Piracy mission (SC raider)
+        .route("/fleet/piracy", post(piracy_handler))
         .with_state(state)
 }
 
@@ -320,6 +326,7 @@ async fn attack_v2_handler(
         fleet_data: Set(Some(fleet_json)),
         recyclers_sent: Set(0),
         departure_time: Set(Utc::now().naive_utc()),
+        acs_group_id: Set(None),
     };
 
     // Transaction atomique : déduction vaisseaux + deutérium + création mission
@@ -476,16 +483,30 @@ async fn spy_v2_handler(
         }))).into_response();
     }
 
-    for (ship_key, &count) in &payload.fleet {
-        if let Err(_) = tech_tree::deduct_ships(&state.db, att_planet.id, ship_key, count).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to deduct {}", ship_key)}))).into_response();
-        }
-    }
-
+    // Wrap ship deduction + fuel deduction in a single transaction to prevent
+    // a partial deduction if either step fails (race condition guard).
     {
-        let mut att_active: planet::ActiveModel = att_planet.clone().into();
-        att_active.deuterium_amount = Set((att_planet.deuterium_amount - spy_fuel_needed).max(0.0));
-        let _ = att_active.update(&state.db).await;
+        let txn = match state.db.begin().await {
+            Ok(t) => t,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction error"}))).into_response(),
+        };
+        for (ship_key, &count) in &payload.fleet {
+            if let Err(_) = tech_tree::deduct_ships(&txn, att_planet.id, ship_key, count).await {
+                let _ = txn.rollback().await;
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to deduct {}", ship_key)}))).into_response();
+            }
+        }
+        {
+            let mut att_active: planet::ActiveModel = att_planet.clone().into();
+            att_active.deuterium_amount = Set((att_planet.deuterium_amount - spy_fuel_needed).max(0.0));
+            if let Err(_) = att_active.update(&txn).await {
+                let _ = txn.rollback().await;
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to deduct fuel"}))).into_response();
+            }
+        }
+        if let Err(_) = txn.commit().await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction commit failed"}))).into_response();
+        }
     }
 
     let att_data = match tech_tree::PlanetData::load(&state.db, att_planet.id).await {
@@ -818,6 +839,7 @@ async fn recycle_handler(
         fleet_data: Set(Some(fleet_data.to_string())),
         recyclers_sent: Set(payload.recyclers),
         departure_time: Set(Utc::now().naive_utc()),
+        acs_group_id: Set(None),
     };
     let _ = new_mission.insert(&state.db).await;
 
@@ -970,6 +992,7 @@ async fn transport_handler(
         fleet_data: Set(None),
         recyclers_sent: Set(0),
         departure_time: Set(Utc::now().naive_utc()),
+        acs_group_id: Set(None),
     };
 
     let log = transport_log::ActiveModel {
@@ -1333,10 +1356,52 @@ async fn expedition_v2_handler(
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planet not found"}))).into_response(),
     };
 
-    if let Some(date) = planet.expedition_end {
-        if date > Utc::now().naive_utc() {
-            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Expedition already active"}))).into_response();
-        }
+    // M3 — Multiple expedition slots based on computer_tech level.
+    // Max simultaneous expeditions = 1 + floor(computer_tech_level / 4).
+    // (lvl 0-3 → 1 slot, lvl 4-7 → 2 slots, lvl 8-11 → 3 slots, lvl 12+ → 4 slots)
+    let owner_id = planet.owner_id;
+    let computer_tech_level = tech_tree::get_planet_tech_level(&state.db, id, "computer_tech")
+        .await
+        .unwrap_or(0);
+    let max_expeditions = 1 + (computer_tech_level / 4);
+
+    // Count active expedition fleet_missions for this player (all their planets)
+    let player_planet_ids: Vec<Uuid> = Planet::find()
+        .filter(planet::Column::OwnerId.eq(owner_id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| p.id)
+        .collect();
+
+    let now_for_check = Utc::now().naive_utc();
+    let active_expedition_count = if player_planet_ids.is_empty() {
+        0i64
+    } else {
+        use sea_orm::PaginatorTrait;
+        FleetMission::find()
+            .filter(fleet_mission::Column::SourcePlanetId.is_in(player_planet_ids))
+            .filter(fleet_mission::Column::MissionType.eq("expedition"))
+            .filter(fleet_mission::Column::ArrivalTime.gt(now_for_check))
+            .count(&state.db)
+            .await
+            .unwrap_or(0) as i64
+    };
+
+    if active_expedition_count >= max_expeditions as i64 {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "error": format!(
+                    "Nombre maximum d'expéditions simultanées atteint ({}/{}). Améliorez Technologie Informatique pour débloquer plus de slots.",
+                    active_expedition_count, max_expeditions
+                ),
+                "active": active_expedition_count,
+                "max": max_expeditions,
+                "computer_tech_level": computer_tech_level,
+            })),
+        ).into_response();
     }
 
     if payload.fleet.is_empty() {
@@ -1931,6 +1996,7 @@ async fn deploy_handler(
         fleet_data: Set(Some(fleet_json)),
         recyclers_sent: Set(0),
         departure_time: Set(Utc::now().naive_utc()),
+        acs_group_id: Set(None),
     };
 
     if let Err(e) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
@@ -2039,5 +2105,550 @@ async fn recall_deploy_handler(
     (StatusCode::OK, Json(json!({
         "status": "recalled",
         "message": "Flotte rappelée avec succès. Les vaisseaux ont été restitués à la planète source.",
+    }))).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M10 — POST /fleet/piracy
+// Stealth SC-raiding mission. Ships: light_hunter / heavy_hunter only.
+// Success chance based on attacker espionage_tech vs defender computer_tech.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+struct PiracyPayload {
+    /// Planet from which the raid launches
+    source_planet_id: Uuid,
+    /// Target planet to raid
+    target_planet_id: Uuid,
+    /// Fleet: only "light_hunter" and "heavy_hunter" are counted
+    fleet: HashMap<String, i32>,
+}
+
+async fn piracy_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<PiracyPayload>,
+) -> impl IntoResponse {
+    // ── Auth ──────────────────────────────────────────────────────────────────
+    let auth_header = headers.get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
+    let caller_user_id = match token.strip_prefix("jwt-").and_then(|s| Uuid::parse_str(s).ok()) {
+        Some(id) => id,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Non authentifié"}))).into_response(),
+    };
+
+    // ── Validate source planet ownership ──────────────────────────────────────
+    let source_planet = match Planet::find_by_id(payload.source_planet_id).one(&state.db).await {
+        Ok(Some(p)) if p.owner_id == caller_user_id => p,
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Planète source non possédée"}))).into_response(),
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète source introuvable"}))).into_response(),
+    };
+
+    // ── Validate target planet (must have an owner) ────────────────────────────
+    let target_planet = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète cible introuvable"}))).into_response(),
+    };
+
+    if target_planet.owner_id == caller_user_id {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Vous ne pouvez pas vous pirater vous-même"}))).into_response();
+    }
+
+    // ── Validate fleet: only light_hunter and heavy_hunter allowed ─────────────
+    let allowed_ships = ["light_hunter", "heavy_hunter"];
+    let raider_fleet: HashMap<String, i32> = payload.fleet
+        .iter()
+        .filter(|(k, &v)| allowed_ships.contains(&k.as_str()) && v > 0)
+        .map(|(k, &v)| (k.clone(), v))
+        .collect();
+
+    if raider_fleet.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": "Seuls les Chasseurs Légers et Chasseurs Lourds peuvent effectuer une mission de piratage"
+        }))).into_response();
+    }
+
+    // Verify ships exist on source planet
+    for (ship_key, &count) in &raider_fleet {
+        let available = tech_tree::get_planet_ship_count(&state.db, payload.source_planet_id, ship_key)
+            .await
+            .unwrap_or(0);
+        if count > available {
+            return (StatusCode::BAD_REQUEST, Json(json!({
+                "error": format!("{} insuffisants (disponible: {})", ship_key, available)
+            }))).into_response();
+        }
+    }
+
+    // ── Fuel cost ─────────────────────────────────────────────────────────────
+    let dist = game_logic::calculate_distance(
+        (source_planet.galaxy, source_planet.system, source_planet.position),
+        (target_planet.galaxy, target_planet.system, target_planet.position),
+    );
+
+    let mut total_fuel: f64 = 0.0;
+    for (ship_key, &count) in &raider_fleet {
+        let fuel_per = ShipType::find()
+            .filter(ship_type::Column::ShipKey.eq(ship_key))
+            .one(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .map(|s| s.fuel_consumption as f64)
+            .unwrap_or(50.0);
+        total_fuel += count as f64 * fuel_per;
+    }
+    let fuel_needed = (total_fuel * dist / 1000.0).ceil().max(1.0);
+
+    if source_planet.deuterium_amount < fuel_needed {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
+                fuel_needed as i64, source_planet.deuterium_amount as i64)
+        }))).into_response();
+    }
+
+    // ── Deduct ships + fuel ────────────────────────────────────────────────────
+    for (ship_key, &count) in &raider_fleet {
+        if let Err(_) = tech_tree::deduct_ships(&state.db, payload.source_planet_id, ship_key, count).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Impossible de déduire les vaisseaux"}))).into_response();
+        }
+    }
+    {
+        let mut src: planet::ActiveModel = source_planet.clone().into();
+        src.deuterium_amount = Set((source_planet.deuterium_amount - fuel_needed).max(0.0));
+        let _ = src.update(&state.db).await;
+    }
+
+    // ── Calculate arrival time ─────────────────────────────────────────────────
+    let config = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+    let base_speed = config.get_config("flight_speed_multiplier", 5.0);
+    let hyperspace_lvl = tech_tree::get_planet_tech_level(
+        &state.db, payload.source_planet_id, "hyperspace_tech",
+    ).await.unwrap_or(0);
+    let travel_secs = game_logic::calculate_flight_time(
+        dist, base_speed * (1.0 + hyperspace_lvl as f64 * 0.15),
+    );
+    let arrival = Utc::now().naive_utc() + Duration::seconds(travel_secs * 2);
+
+    let fleet_data = serde_json::to_string(&raider_fleet).unwrap_or_default();
+    let ships_count: i32 = raider_fleet.values().sum();
+
+    let new_mission = fleet_mission::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        source_planet_id: Set(payload.source_planet_id),
+        target_planet_id: Set(payload.target_planet_id),
+        mission_type: Set("piracy".to_string()),
+        arrival_time: Set(arrival),
+        metal: Set(0.0),
+        crystal: Set(0.0),
+        deuterium: Set(0.0),
+        ships_count: Set(ships_count),
+        fleet_data: Set(Some(fleet_data)),
+        recyclers_sent: Set(0),
+        departure_time: Set(Utc::now().naive_utc()),
+        acs_group_id: Set(None),
+    };
+
+    match new_mission.insert(&state.db).await {
+        Ok(record) => (StatusCode::OK, Json(json!({
+            "status": "dispatched",
+            "mission_id": record.id,
+            "arrival_time": record.arrival_time.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            "ships": ships_count,
+            "message": format!("{} raider(s) en route. Arrivée prévue : {}",
+                ships_count, arrival.format("%Y-%m-%dT%H:%M:%SZ")),
+        }))).into_response(),
+        Err(e) => {
+            eprintln!("piracy insert error: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response()
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACS — Allied Combat System (M7)
+// Design document: ACS_DESIGN.md
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+struct CreateAcsPayload {
+    leader_planet_id: Uuid,
+    target_planet_id: Uuid,
+    #[serde(default = "acs_default_max_join_minutes")]
+    max_join_minutes: i32,
+}
+
+fn acs_default_max_join_minutes() -> i32 { 30 }
+
+#[derive(serde::Deserialize)]
+struct JoinAcsPayload {
+    source_planet_id: Uuid,
+    fleet: HashMap<String, i32>,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /fleet/acs/create
+// Creates an ACS coordination group. The leader must subsequently call
+// /fleet/acs/:id/join to dispatch their own fleet into the group.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async fn create_acs_handler(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<CreateAcsPayload>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    let user_id = match Uuid::parse_str(user_id_str) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "user_id invalide"}))).into_response(),
+    };
+
+    // Verify leader planet belongs to this user
+    let leader_planet = match Planet::find_by_id(payload.leader_planet_id).one(&state.db).await {
+        Ok(Some(p)) if p.owner_id == user_id => p,
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Cette planète ne vous appartient pas"}))).into_response(),
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète leader introuvable"}))).into_response(),
+    };
+
+    // Cannot self-attack
+    let target_planet = match Planet::find_by_id(payload.target_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète cible introuvable"}))).into_response(),
+    };
+    if target_planet.owner_id == user_id {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Impossible d'attaquer votre propre planète"}))).into_response();
+    }
+
+    // Anti-farm and beginner protection apply to the leader (same as solo attack)
+    let config_clone = state.config.read().unwrap_or_else(|e| e.into_inner()).clone();
+    if let Err(error_msg) = backend::protection::validate_attack(
+        &state.db,
+        user_id,
+        target_planet.owner_id,
+        payload.target_planet_id,
+        &config_clone,
+    ).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": error_msg}))).into_response();
+    }
+
+    // Check user doesn't already have an active ACS group
+    let existing = AcsGroup::find()
+        .filter(acs_group::Column::LeaderUserId.eq(user_id))
+        .filter(
+            sea_orm::Condition::any()
+                .add(acs_group::Column::Status.eq("forming"))
+                .add(acs_group::Column::Status.eq("in_flight")),
+        )
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
+    if existing > 0 {
+        return (StatusCode::CONFLICT, Json(json!({
+            "error": "Vous avez déjà un groupe ACS actif. Résolvez-le avant d'en créer un nouveau."
+        }))).into_response();
+    }
+
+    let max_join = payload.max_join_minutes.clamp(5, 120);
+    let now = Utc::now().naive_utc();
+    let expires_at = now + Duration::minutes(max_join as i64);
+    let group_id = Uuid::new_v4();
+
+    let new_group = acs_group::ActiveModel {
+        id: Set(group_id),
+        leader_user_id: Set(user_id),
+        target_planet_id: Set(payload.target_planet_id),
+        status: Set("forming".to_string()),
+        holding_until: Set(None),
+        max_join_minutes: Set(max_join),
+        expires_at: Set(expires_at),
+        created_at: Set(now),
+        resolved_at: Set(None),
+    };
+
+    if let Err(e) = new_group.insert(&state.db).await {
+        eprintln!("[ACS CREATE] DB error: {e:?}");
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de la création du groupe ACS"}))).into_response();
+    }
+
+    let target_coords = format!("[{}:{}:{}]", target_planet.galaxy, target_planet.system, target_planet.position);
+    let leader_coords = format!("[{}:{}:{}]", leader_planet.galaxy, leader_planet.system, leader_planet.position);
+
+    (StatusCode::CREATED, Json(json!({
+        "acs_group_id": group_id,
+        "target_planet_id": payload.target_planet_id,
+        "target_coords": target_coords,
+        "leader_coords": leader_coords,
+        "expires_at": expires_at,
+        "max_join_minutes": max_join,
+        "instructions": format!(
+            "Groupe ACS créé. Partagez l'ID '{}' avec vos alliés. Chacun doit rejoindre via POST /fleet/acs/{}/join avant la date d'expiration.",
+            group_id, group_id
+        )
+    }))).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /fleet/acs/:acs_id/join
+// A player (including the leader) dispatches their fleet to join the ACS group.
+// Ships are immediately deducted atomically. Creates a fleet_mission with acs_group_id.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async fn join_acs_handler(
+    Path(acs_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(payload): Json<JoinAcsPayload>,
+) -> impl IntoResponse {
+    let user_id_str = params.get("user_id").map(|s| s.as_str()).unwrap_or("");
+    let user_id = match Uuid::parse_str(user_id_str) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::UNAUTHORIZED, Json(json!({"error": "user_id invalide"}))).into_response(),
+    };
+
+    // Fetch and validate ACS group
+    let group = match AcsGroup::find_by_id(acs_id).one(&state.db).await {
+        Ok(Some(g)) => g,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Groupe ACS introuvable"}))).into_response(),
+    };
+
+    if group.status != "forming" && group.status != "in_flight" {
+        return (StatusCode::CONFLICT, Json(json!({
+            "error": format!("Ce groupe ACS ne peut plus accepter de membres (statut: {})", group.status)
+        }))).into_response();
+    }
+
+    let now = Utc::now().naive_utc();
+    if now > group.expires_at {
+        return (StatusCode::GONE, Json(json!({"error": "Ce groupe ACS a expiré"}))).into_response();
+    }
+
+    // Verify source planet belongs to this user
+    let source_planet = match Planet::find_by_id(payload.source_planet_id).one(&state.db).await {
+        Ok(Some(p)) if p.owner_id == user_id => p,
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Cette planète ne vous appartient pas"}))).into_response(),
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Planète source introuvable"}))).into_response(),
+    };
+
+    // Prevent duplicate join from same source planet
+    let already_joined = FleetMission::find()
+        .filter(fleet_mission::Column::AcsGroupId.eq(acs_id))
+        .filter(fleet_mission::Column::SourcePlanetId.eq(payload.source_planet_id))
+        .count(&state.db)
+        .await
+        .unwrap_or(0);
+
+    if already_joined > 0 {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Cette planète a déjà rejoint ce groupe ACS"}))).into_response();
+    }
+
+    if payload.fleet.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Aucun vaisseau sélectionné"}))).into_response();
+    }
+    if payload.fleet.values().any(|&v| v <= 0) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Les quantités doivent être positives"}))).into_response();
+    }
+
+    // Fetch target planet for distance calculation
+    let target_planet = match Planet::find_by_id(group.target_planet_id).one(&state.db).await {
+        Ok(Some(p)) => p,
+        _ => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Planète cible ACS introuvable"}))).into_response(),
+    };
+
+    // Validate ships available and compute fuel
+    let mut total_ships = 0;
+    let mut total_fuel: f64 = 0.0;
+
+    for (ship_key, &count) in &payload.fleet {
+        let ship = match ShipType::find()
+            .filter(ship_type::Column::ShipKey.eq(ship_key))
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(s)) => s,
+            Ok(None) => return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Type de vaisseau inconnu: {}", ship_key)}))).into_response(),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response(),
+        };
+
+        let available = PlanetShip::find()
+            .filter(planet_ship::Column::PlanetId.eq(payload.source_planet_id))
+            .filter(planet_ship::Column::ShipTypeId.eq(ship.id))
+            .one(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .map(|ps| ps.count)
+            .unwrap_or(0);
+
+        if count > available {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Vaisseaux insuffisants: {}", ship.display_name)}))).into_response();
+        }
+
+        total_ships += count;
+        total_fuel += (count as f64) * (ship.fuel_consumption as f64);
+    }
+
+    let dist = game_logic::calculate_distance(
+        (source_planet.galaxy, source_planet.system, source_planet.position),
+        (target_planet.galaxy, target_planet.system, target_planet.position),
+    );
+
+    let fuel_needed = (total_fuel * dist / 1000.0).ceil().max(1.0);
+    if source_planet.deuterium_amount < fuel_needed {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
+                fuel_needed as i64, source_planet.deuterium_amount as i64)
+        }))).into_response();
+    }
+
+    // Compute arrival time (each joining fleet uses its own distance and hyperspace level)
+    let speed_mult = {
+        let cfg = state.config.read().unwrap_or_else(|e| e.into_inner());
+        cfg.get_config("flight_speed_multiplier", 5.0)
+    };
+    let hyperspace_level = tech_tree::get_planet_tech_level(&state.db, payload.source_planet_id, "hyperspace_tech")
+        .await
+        .unwrap_or(0);
+    let travel_time = game_logic::calculate_flight_time(dist, speed_mult * (1.0 + hyperspace_level as f64 * 0.15));
+    let arrival = now + Duration::seconds(travel_time);
+
+    let fleet_json = match serde_json::to_string(&payload.fleet) {
+        Ok(j) => j,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur de sérialisation"}))).into_response(),
+    };
+
+    let mission_id = Uuid::new_v4();
+    let att_deut_remaining = (source_planet.deuterium_amount - fuel_needed).max(0.0);
+    let fleet_for_txn = payload.fleet.clone();
+    let sp_for_txn = source_planet.clone();
+    let fleet_json_for_txn = fleet_json.clone();
+    let group_target = group.target_planet_id;
+
+    // Atomic transaction: deduct ships + deduct deuterium + create fleet_mission
+    if let Err(e) = state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        let fleet_for_txn = fleet_for_txn.clone();
+        let sp_for_txn = sp_for_txn.clone();
+        let fleet_json_inner = fleet_json_for_txn.clone();
+        Box::pin(async move {
+            for (ship_key, &count) in &fleet_for_txn {
+                tech_tree::deduct_ships(txn, sp_for_txn.id, ship_key, count).await?;
+            }
+            let mut sp_active: planet::ActiveModel = sp_for_txn.into();
+            sp_active.deuterium_amount = Set(att_deut_remaining);
+            sp_active.update(txn).await?;
+
+            let new_mission = fleet_mission::ActiveModel {
+                id: Set(mission_id),
+                source_planet_id: Set(payload.source_planet_id),
+                target_planet_id: Set(group_target),
+                mission_type: Set("attack".to_string()),
+                arrival_time: Set(arrival),
+                metal: Set(0.0),
+                crystal: Set(0.0),
+                deuterium: Set(0.0),
+                ships_count: Set(total_ships),
+                fleet_data: Set(Some(fleet_json_inner)),
+                recyclers_sent: Set(0),
+                departure_time: Set(now),
+                acs_group_id: Set(Some(acs_id)),
+            };
+            new_mission.insert(txn).await?;
+            Ok(())
+        })
+    }).await {
+        eprintln!("[ACS JOIN TXN FAILED] group={acs_id} planet={}: {e:?}", payload.source_planet_id);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors de l'intégration au groupe ACS"}))).into_response();
+    }
+
+    // If the leader is joining for the first time, transition group forming -> in_flight
+    let is_leader = user_id == group.leader_user_id;
+    if is_leader && group.status == "forming" {
+        let mut active_group: acs_group::ActiveModel = group.into();
+        active_group.status = Set("in_flight".to_string());
+        let _ = active_group.update(&state.db).await;
+    }
+
+    (StatusCode::OK, Json(json!({
+        "status": "joined",
+        "fleet_mission_id": mission_id,
+        "acs_group_id": acs_id,
+        "arrival_time": arrival,
+        "ships_sent": payload.fleet,
+        "fuel_consumed": fuel_needed,
+        "is_leader_fleet": is_leader,
+        "message": "Flotte en route vers le point de rendez-vous ACS."
+    }))).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /fleet/acs/:acs_id
+// Returns ACS group status and member list (fleet composition + ETA per member).
+// ─────────────────────────────────────────────────────────────────────────────
+
+async fn get_acs_handler(
+    Path(acs_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let group = match AcsGroup::find_by_id(acs_id).one(&state.db).await {
+        Ok(Some(g)) => g,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Groupe ACS introuvable"}))).into_response(),
+    };
+
+    let missions = FleetMission::find()
+        .filter(fleet_mission::Column::AcsGroupId.eq(acs_id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+
+    let target_planet = Planet::find_by_id(group.target_planet_id)
+        .one(&state.db)
+        .await
+        .unwrap_or(None);
+    let target_coords = target_planet
+        .as_ref()
+        .map(|p| format!("[{}:{}:{}]", p.galaxy, p.system, p.position))
+        .unwrap_or_default();
+
+    let mut members = Vec::new();
+    for mission in &missions {
+        let source_planet = Planet::find_by_id(mission.source_planet_id)
+            .one(&state.db)
+            .await
+            .unwrap_or(None);
+
+        let member_user_id = source_planet.as_ref().map(|p| p.owner_id).unwrap_or(Uuid::nil());
+        let username = match User::find_by_id(member_user_id).one(&state.db).await {
+            Ok(Some(u)) => u.username,
+            _ => "Inconnu".to_string(),
+        };
+
+        let fleet: HashMap<String, i32> = mission.fleet_data.as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default();
+
+        members.push(json!({
+            "user_id": member_user_id,
+            "username": username,
+            "is_leader": member_user_id == group.leader_user_id,
+            "fleet_mission_id": mission.id,
+            "ships_sent": fleet,
+            "arrival_time": mission.arrival_time,
+        }));
+    }
+
+    (StatusCode::OK, Json(json!({
+        "id": group.id,
+        "status": group.status,
+        "target_planet_id": group.target_planet_id,
+        "target_coords": target_coords,
+        "expires_at": group.expires_at,
+        "holding_until": group.holding_until,
+        "max_join_minutes": group.max_join_minutes,
+        "created_at": group.created_at,
+        "resolved_at": group.resolved_at,
+        "member_count": members.len(),
+        "members": members,
     }))).into_response()
 }

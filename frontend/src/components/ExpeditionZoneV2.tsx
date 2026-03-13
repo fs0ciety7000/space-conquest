@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Compass, Timer, Send, AlertTriangle, Database, Rocket, Map, Radar, ScanLine, Minus, Plus, Zap } from "lucide-react";
+import { useState, useEffect, useCallback } from 'react';
+import { Compass, Timer, Send, AlertTriangle, Database, Rocket, Map, Radar, ScanLine, Minus, Plus, Zap, Telescope } from "lucide-react";
 import { formatDuration } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -31,6 +31,31 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
   const [shipSelection, setShipSelection] = useState<ShipSelection>({});
   const [availableShips, setAvailableShips] = useState<PlanetShip[]>([]);
   const [combatReport, setCombatReport] = useState<any>(null);
+
+  // Expedition slots
+  const [activeExpeditionCount, setActiveExpeditionCount] = useState(0);
+  const computerTechLevel: number = planet?.computer_tech_level ?? 0;
+  const maxExpeditionSlots = 1 + Math.floor(computerTechLevel / 4);
+
+  const fetchActiveExpeditions = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_URL}/fleet/missions?type=expedition&status=active`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const missions = Array.isArray(data) ? data : (data.missions ?? []);
+        setActiveExpeditionCount(missions.length);
+      }
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchActiveExpeditions();
+  }, [fetchActiveExpeditions, planet?.id]);
 
   // Load available ships from ship-types endpoint
   useEffect(() => {
@@ -225,6 +250,31 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
               <p className="text-xs text-slate-400 max-w-md mt-2">
                 Système de combat avancé avec support multi-vaisseaux. Configuration adaptative de la flotte.
               </p>
+
+              {/* Expedition slot indicator */}
+              <div className="flex items-center gap-3 mt-4">
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold ${
+                  activeExpeditionCount >= maxExpeditionSlots
+                    ? 'bg-red-950/30 border-red-500/30 text-red-400'
+                    : 'bg-cyan-950/20 border-cyan-500/20 text-cyan-400'
+                }`}>
+                  <Telescope size={13} />
+                  <span className="font-mono tabular-nums">
+                    {activeExpeditionCount}/{maxExpeditionSlots}
+                  </span>
+                  <span className="font-medium">slots expédition</span>
+                </div>
+                {activeExpeditionCount >= maxExpeditionSlots && (
+                  <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                    <AlertTriangle size={11} /> Tous les slots sont occupés
+                  </span>
+                )}
+                {computerTechLevel > 0 && (
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    Informatique niv. {computerTechLevel}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Status Grid */}
@@ -370,16 +420,26 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
               </div>
             )}
 
+            {/* Slot at max warning */}
+            {activeExpeditionCount >= maxExpeditionSlots && !isInMission && (
+              <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-950/30 border border-red-500/30 text-red-400 text-xs font-bold">
+                <AlertTriangle size={13} />
+                Slots expédition saturés ({activeExpeditionCount}/{maxExpeditionSlots}) — attendez le retour d'une flotte ou améliorez la tech Informatique
+              </div>
+            )}
+
             {/* Launch Button */}
             <Button
               onClick={handleLaunch}
-              disabled={isInMission || !hasShips || totalSelected === 0}
+              disabled={isInMission || !hasShips || totalSelected === 0 || activeExpeditionCount >= maxExpeditionSlots}
               className={`w-full h-20 font-black tracking-[0.2em] uppercase transition-all rounded-xl relative overflow-hidden group/btn shadow-xl card-depth hover:-translate-y-1 hover:shadow-3xl duration-500
                 ${isInMission
                   ? 'bg-slate-900 border border-white/10 text-slate-500'
-                  : !hasShips || totalSelected === 0
+                  : activeExpeditionCount >= maxExpeditionSlots
                     ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
-                    : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow} hover:scale-105`
+                    : !hasShips || totalSelected === 0
+                      ? 'bg-red-950/20 border border-red-900/50 text-red-500 cursor-not-allowed'
+                      : `bg-black hover:bg-slate-900 text-white border ${theme.border} ${theme.glow} hover:scale-105`
                 }`}
             >
               {!isInMission && hasShips && totalSelected > 0 && (

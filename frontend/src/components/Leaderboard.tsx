@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe, UserCircle, Truck, X, Info, ChevronDown, ChevronUp, Swords } from "lucide-react";
+import { Trophy, Crosshair, Eye, MessageCircle, Medal, TrendingUp, ShieldAlert, Globe, UserCircle, Truck, X, Info, ChevronDown, ChevronUp, Swords, Rocket, FlaskConical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiUrl } from '@/config/api';
@@ -35,6 +35,14 @@ interface RankItem {
     role?: string;
 }
 
+interface SimpleRankItem {
+    rank: number;
+    username: string;
+    display_name?: string;
+    owner_id?: string;
+    score: number;
+}
+
 interface LeaderboardProps {
     currentPlanetId: string;
     onAttack: (id: string, name: string) => void;
@@ -45,8 +53,12 @@ interface LeaderboardProps {
 
 export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransport, onSendMessage }: LeaderboardProps) {
     const [ranking, setRanking] = useState<RankItem[]>([]);
-    const [category, setCategory] = useState<'general' | 'economy' | 'military'>('general');
+    const [category, setCategory] = useState<'general' | 'economy' | 'military' | 'expeditions' | 'research' | 'hall-of-fame'>('general');
     const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
+
+    // Simple leaderboard items for specialty tabs
+    const [simpleRanking, setSimpleRanking] = useState<SimpleRankItem[]>([]);
+    const [simpleLoading, setSimpleLoading] = useState(false);
     const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
     const [selectedPlanet, setSelectedPlanet] = useState<PlanetInfo | null>(null);
     const [page, setPage] = useState(1);
@@ -54,12 +66,41 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
     const [isLoading, setIsLoading] = useState(false);
     const [showFormula, setShowFormula] = useState(false);
 
+    const isSpecialCategory = category === 'expeditions' || category === 'research' || category === 'hall-of-fame';
+
     useEffect(() => {
-        setRanking([]);
-        setPage(1);
-        setHasMore(true);
-        fetchLeaderboard(1, true);
+        if (isSpecialCategory) {
+            setSimpleRanking([]);
+            fetchSimpleRanking();
+        } else {
+            setRanking([]);
+            setPage(1);
+            setHasMore(true);
+            fetchLeaderboard(1, true);
+        }
     }, [currentPlanetId, category]);
+
+    const fetchSimpleRanking = async () => {
+        setSimpleLoading(true);
+        try {
+            const endpointMap: Record<string, string> = {
+                'expeditions': '/ranking/expeditions',
+                'research': '/ranking/research',
+                'hall-of-fame': '/ranking/hall-of-fame',
+            };
+            const endpoint = endpointMap[category];
+            if (!endpoint) return;
+            const res = await fetch(apiUrl(endpoint));
+            if (res.ok) {
+                const data = await res.json();
+                setSimpleRanking(Array.isArray(data) ? data : (data.data ?? []));
+            }
+        } catch {
+            console.error('Failed to fetch specialty ranking');
+        } finally {
+            setSimpleLoading(false);
+        }
+    };
 
     const fetchLeaderboard = async (pageNum: number, isReset: boolean = false) => {
         const LIMIT = 50;
@@ -166,6 +207,36 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                         >
                             <ShieldAlert size={14} /> Militaire
                         </button>
+                        <button
+                            onClick={() => setCategory('expeditions')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
+                                category === 'expeditions'
+                                    ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 shadow-lg'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-cyan-500/5'
+                            }`}
+                        >
+                            <Rocket size={14} /> Expéditions
+                        </button>
+                        <button
+                            onClick={() => setCategory('research')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
+                                category === 'research'
+                                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-lg'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-cyan-500/5'
+                            }`}
+                        >
+                            <FlaskConical size={14} /> Recherche
+                        </button>
+                        <button
+                            onClick={() => setCategory('hall-of-fame')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold uppercase transition-all duration-300 hover:scale-105 ${
+                                category === 'hall-of-fame'
+                                    ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 shadow-lg'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-cyan-500/5'
+                            }`}
+                        >
+                            <Trophy size={14} /> Hall of Fame
+                        </button>
                     </div>
                 </div>
 
@@ -255,7 +326,78 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                     )}
                 </div>
 
-                {/* Tableau */}
+                {/* Tableau spécialisé pour onglets expedition/research/hall-of-fame */}
+                {isSpecialCategory && (
+                    <div className="overflow-x-auto rounded-lg border border-cyan-500/10 bg-[rgba(10,5,32,0.85)]">
+                        {simpleLoading ? (
+                            <div className="flex items-center justify-center py-16">
+                                <Loader2 size={20} className="text-cyan-400 animate-spin" />
+                            </div>
+                        ) : (
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-[rgba(10,5,32,0.85)] text-slate-400 text-[10px] uppercase tracking-wider font-bold">
+                                        <th className="p-4 w-16 text-center">Rang</th>
+                                        <th className="p-4">Joueur</th>
+                                        <th className="p-4 text-right">
+                                            {category === 'expeditions' && 'Expéditions'}
+                                            {category === 'research' && 'Niveaux de tech'}
+                                            {category === 'hall-of-fame' && 'Planètes conquises'}
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-sm divide-y divide-cyan-500/5">
+                                    {simpleRanking.map((player) => (
+                                        <tr
+                                            key={player.rank}
+                                            className="transition-colors duration-150 hover:bg-cyan-500/5"
+                                        >
+                                            <td className="p-4 text-center">
+                                                <div className="flex justify-center items-center">
+                                                    {getRankIcon(player.rank)}
+                                                </div>
+                                            </td>
+                                            <td className="p-4">
+                                                <button
+                                                    onClick={() => player.owner_id && setSelectedPlayer(player.owner_id)}
+                                                    className="flex items-center gap-2 group transition-all duration-300"
+                                                >
+                                                    <img
+                                                        src={`https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${player.username}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
+                                                        alt=""
+                                                        className="w-7 h-7 rounded-lg object-cover opacity-90 group-hover:opacity-100"
+                                                    />
+                                                    <span className="font-bold text-sm text-slate-200 group-hover:underline decoration-2 underline-offset-2">
+                                                        {player.display_name || player.username}
+                                                    </span>
+                                                </button>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <span className={`font-mono tabular-nums font-bold text-base ${
+                                                    category === 'expeditions' ? 'text-purple-400' :
+                                                    category === 'research' ? 'text-blue-400' :
+                                                    'text-amber-400'
+                                                }`}>
+                                                    {player.score.toLocaleString()}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {simpleRanking.length === 0 && (
+                                        <tr>
+                                            <td colSpan={3} className="p-10 text-center text-slate-600 text-xs font-mono">
+                                                Aucune donnée disponible
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                )}
+
+                {/* Tableau principal (général / économie / militaire) */}
+                {!isSpecialCategory && (
                 <div className="overflow-x-auto rounded-lg border border-cyan-500/10 bg-[rgba(10,5,32,0.85)]">
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -454,6 +596,7 @@ export default function Leaderboard({ currentPlanetId, onAttack, onSpy, onTransp
                         </div>
                     )}
                 </div>
+                )}
             </motion.div>
 
             {/* Modal Profil Joueur */}

@@ -401,8 +401,171 @@ pub async fn get_unit_costs_handler(
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTE: get_planet_handler est volontairement laissé dans main.rs pour l'instant.
 // Il sera déplacé dans handlers/planets.rs lors de la prochaine session.
-// TODO (antigravity): créer handlers/planets.rs et y déplacer get_planet_handler.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M5 — GET /ranking/expeditions
+// Ranks players by total successful expeditions (mission_type = 'expedition')
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub async fn get_expedition_ranking_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    use sea_orm::ConnectionTrait;
+
+    let db = &state.db;
+
+    // Aggregate expedition count per user via planet ownership join
+    let rows = db
+        .query_all(sea_orm::Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT u.id, u.username, u.display_name, COUNT(cl.id) AS score
+            FROM "user" u
+            JOIN planet p ON p.owner_id = u.id
+            JOIN combat_log cl ON cl.planet_id = p.id
+                AND cl.mission_type = 'expedition'
+            GROUP BY u.id, u.username, u.display_name
+            ORDER BY score DESC
+            LIMIT 100
+            "#.to_owned(),
+        ))
+        .await
+        .unwrap_or_default();
+
+    let ranked: Vec<serde_json::Value> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let owner_id: Uuid = row.try_get("", "id").unwrap_or_default();
+            let username: String = row.try_get("", "username").unwrap_or_default();
+            let display_name: String = row
+                .try_get::<Option<String>>("", "display_name")
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| username.clone());
+            let score: i64 = row.try_get("", "score").unwrap_or(0);
+            serde_json::json!({
+                "rank": i + 1,
+                "user_id": owner_id,
+                "username": username,
+                "display_name": display_name,
+                "score": score,
+            })
+        })
+        .collect();
+
+    Json(serde_json::json!({ "data": ranked }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M5 — GET /ranking/research
+// Ranks players by total technology levels (sum of planet_technologies.current_level)
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub async fn get_research_ranking_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    use sea_orm::ConnectionTrait;
+
+    let db = &state.db;
+
+    let rows = db
+        .query_all(sea_orm::Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT u.id, u.username, u.display_name,
+                   COALESCE(SUM(pt.current_level), 0) AS score
+            FROM "user" u
+            JOIN planet p ON p.owner_id = u.id
+            JOIN planet_technology pt ON pt.planet_id = p.id
+            GROUP BY u.id, u.username, u.display_name
+            ORDER BY score DESC
+            LIMIT 100
+            "#.to_owned(),
+        ))
+        .await
+        .unwrap_or_default();
+
+    let ranked: Vec<serde_json::Value> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let owner_id: Uuid = row.try_get("", "id").unwrap_or_default();
+            let username: String = row.try_get("", "username").unwrap_or_default();
+            let display_name: String = row
+                .try_get::<Option<String>>("", "display_name")
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| username.clone());
+            let score: i64 = row.try_get("", "score").unwrap_or(0);
+            serde_json::json!({
+                "rank": i + 1,
+                "user_id": owner_id,
+                "username": username,
+                "display_name": display_name,
+                "score": score,
+            })
+        })
+        .collect();
+
+    Json(serde_json::json!({ "data": ranked }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M5 — GET /ranking/hall-of-fame
+// Top 10 players by total planet conquests (mission_type = 'planet_conquered')
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub async fn get_hall_of_fame_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    use sea_orm::ConnectionTrait;
+
+    let db = &state.db;
+
+    let rows = db
+        .query_all(sea_orm::Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT u.id, u.username, u.display_name,
+                   COUNT(cl.id) AS score
+            FROM "user" u
+            JOIN planet p ON p.owner_id = u.id
+            JOIN combat_log cl ON cl.planet_id = p.id
+                AND cl.mission_type = 'planet_conquered'
+            GROUP BY u.id, u.username, u.display_name
+            ORDER BY score DESC
+            LIMIT 10
+            "#.to_owned(),
+        ))
+        .await
+        .unwrap_or_default();
+
+    let ranked: Vec<serde_json::Value> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let owner_id: Uuid = row.try_get("", "id").unwrap_or_default();
+            let username: String = row.try_get("", "username").unwrap_or_default();
+            let display_name: String = row
+                .try_get::<Option<String>>("", "display_name")
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| username.clone());
+            let score: i64 = row.try_get("", "score").unwrap_or(0);
+            serde_json::json!({
+                "rank": i + 1,
+                "user_id": owner_id,
+                "username": username,
+                "display_name": display_name,
+                "score": score,
+            })
+        })
+        .collect();
+
+    Json(serde_json::json!({ "data": ranked }))
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Router
@@ -412,6 +575,9 @@ pub fn router(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/config", get(get_game_config_handler))
         .route("/ranking", get(get_ranking_handler))
+        .route("/ranking/expeditions", get(get_expedition_ranking_handler))
+        .route("/ranking/research", get(get_research_ranking_handler))
+        .route("/ranking/hall-of-fame", get(get_hall_of_fame_handler))
         .route("/unit-costs", get(get_unit_costs_handler))
         .with_state(state)
 }

@@ -14,7 +14,7 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, EntityTrait, NotSet, QueryFilter, Set, TransactionTrait,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -492,13 +492,24 @@ pub async fn start_research_handler(
             .into_response();
     }
 
+    // Atomically deduct resources AND insert the research queue entry.
+    // Without this transaction a crash between the two writes would leave the
+    // player charged but with no ongoing research.
+    let end_time = Utc::now().naive_utc() + Duration::seconds(research_time_seconds as i64);
+
+    let txn = match state.db.begin().await {
+        Ok(t) => t,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, axum::Json(json!({"error": "Transaction error"}))).into_response(),
+    };
+
     // Deduct resources
     let mut active_planet: planet::ActiveModel = planet.clone().into();
     active_planet.metal_amount = Set(planet.metal_amount - cost_metal as f64);
     active_planet.crystal_amount = Set(planet.crystal_amount - cost_crystal as f64);
     active_planet.deuterium_amount = Set(planet.deuterium_amount - cost_deuterium as f64);
 
-    if let Err(_) = active_planet.update(&state.db).await {
+    if let Err(_) = active_planet.update(&txn).await {
+        let _ = txn.rollback().await;
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             axum::Json(json!({"error": "Failed to deduct resources"})),
@@ -506,15 +517,14 @@ pub async fn start_research_handler(
             .into_response();
     }
 
-    // Start research
-    let end_time = Utc::now().naive_utc() + Duration::seconds(research_time_seconds as i64);
-
+    // Queue the research
     if let Some(pt) = existing_research {
         let mut active_pt: planet_technology::ActiveModel = pt.into();
         active_pt.researching_to_level = Set(Some(next_level));
         active_pt.research_end_time = Set(Some(end_time));
 
-        if let Err(_) = active_pt.update(&state.db).await {
+        if let Err(_) = active_pt.update(&txn).await {
+            let _ = txn.rollback().await;
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 axum::Json(json!({"error": "Failed to start research"})),
@@ -530,13 +540,18 @@ pub async fn start_research_handler(
             research_end_time: Set(Some(end_time)),
         };
 
-        if let Err(_) = new_pt.insert(&state.db).await {
+        if let Err(_) = new_pt.insert(&txn).await {
+            let _ = txn.rollback().await;
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 axum::Json(json!({"error": "Failed to start research"})),
             )
                 .into_response();
         }
+    }
+
+    if let Err(_) = txn.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, axum::Json(json!({"error": "Transaction commit failed"}))).into_response();
     }
 
     axum::Json(json!({

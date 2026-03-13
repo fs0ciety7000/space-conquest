@@ -773,3 +773,152 @@ fn calculate_streak_reward(streak: i32) -> StreakReward {
         xp: (base_xp as f64 * multiplier) as i32,
     }
 }
+
+// ============================================================================
+// M4 — REST-style daily reward endpoints
+// GET  /users/:id/daily-reward/status
+// POST /users/:id/daily-reward/claim
+// ============================================================================
+
+/// Reward table keyed by (streak_day mod 7), giving milestone rewards.
+/// Default (no match): 500 metal.
+#[derive(Serialize, Clone)]
+pub struct ResourceReward {
+    pub metal: f64,
+    pub crystal: f64,
+    pub deuterium: f64,
+    pub syndicate_credits: f64,
+}
+
+fn daily_reward_for_streak(streak: i32) -> ResourceReward {
+    // streak is 1-based. Cycle repeats every 7 days.
+    match streak % 7 {
+        1 => ResourceReward { metal: 1000.0, crystal: 0.0,    deuterium: 0.0,   syndicate_credits: 0.0 },
+        2 => ResourceReward { metal: 0.0,    crystal: 1000.0, deuterium: 0.0,   syndicate_credits: 0.0 },
+        3 => ResourceReward { metal: 0.0,    crystal: 0.0,    deuterium: 500.0, syndicate_credits: 0.0 },
+        4 => ResourceReward { metal: 2000.0, crystal: 1000.0, deuterium: 0.0,   syndicate_credits: 0.0 },
+        5 => ResourceReward { metal: 0.0,    crystal: 0.0,    deuterium: 0.0,   syndicate_credits: 1000.0 },
+        6 => ResourceReward { metal: 0.0,    crystal: 0.0,    deuterium: 0.0,   syndicate_credits: 0.0 },
+        // 0 = day 7 (or multiples thereof)
+        0 => ResourceReward { metal: 5000.0, crystal: 5000.0, deuterium: 2000.0, syndicate_credits: 2000.0 },
+        _ => ResourceReward { metal: 500.0,  crystal: 0.0,    deuterium: 0.0,   syndicate_credits: 0.0 },
+    }
+}
+
+/// GET /users/:id/daily-reward/status
+/// Returns whether the player can claim today's reward and what it is.
+pub async fn daily_reward_status_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let streak = get_or_create_streak(&state, user_id).await;
+    let today = Utc::now().naive_utc().date();
+
+    let can_claim = !streak.daily_reward_claimed || streak.last_reward_date != Some(today);
+    let next_streak = if can_claim { streak.current_streak + 1 } else { streak.current_streak };
+    let next_reward = daily_reward_for_streak(next_streak);
+
+    Json(serde_json::json!({
+        "can_claim": can_claim,
+        "streak": streak.current_streak,
+        "best_streak": streak.best_streak,
+        "total_login_days": streak.total_login_days,
+        "last_reward_date": streak.last_reward_date.map(|d| d.to_string()),
+        "next_reward": {
+            "metal": next_reward.metal,
+            "crystal": next_reward.crystal,
+            "deuterium": next_reward.deuterium,
+            "syndicate_credits": next_reward.syndicate_credits,
+        },
+    })).into_response()
+}
+
+/// POST /users/:id/daily-reward/claim
+/// Claims today's daily login reward for the given user.
+/// Body (JSON): { "planet_id": "<uuid>" }
+pub async fn daily_reward_claim_handler(
+    Path(user_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    use crate::entities::prelude::User as UserEntity;
+    use crate::entities::user;
+
+    let streak = get_or_create_streak(&state, user_id).await;
+    let today = Utc::now().naive_utc().date();
+
+    if streak.daily_reward_claimed && streak.last_reward_date == Some(today) {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Récompense déjà réclamée aujourd'hui"}))).into_response();
+    }
+
+    let planet_id = match body.get("planet_id")
+        .and_then(|v| v.as_str())
+        .and_then(|s| Uuid::parse_str(s).ok())
+    {
+        Some(id) => id,
+        None => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "planet_id requis"}))).into_response(),
+    };
+
+    let planet = match Planet::find_by_id(planet_id).one(&state.db).await {
+        Ok(Some(p)) if p.owner_id == user_id => p,
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "Planète non possédée"}))).into_response(),
+        _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Planète introuvable"}))).into_response(),
+    };
+
+    // New streak value for day being claimed
+    let new_streak = streak.current_streak + 1;
+    let reward = daily_reward_for_streak(new_streak);
+
+    // Apply speed multiplier to resource rewards
+    let prod_speed = state.config.read().map(|c| c.production_speed).unwrap_or(250.0);
+    let metal = reward.metal * prod_speed;
+    let crystal = reward.crystal * prod_speed;
+    let deuterium = reward.deuterium * prod_speed;
+    let sc = reward.syndicate_credits;
+
+    // Credit planet resources
+    let mut planet_active: planet::ActiveModel = planet.clone().into();
+    planet_active.metal_amount = Set(planet.metal_amount + metal);
+    planet_active.crystal_amount = Set(planet.crystal_amount + crystal);
+    planet_active.deuterium_amount = Set(planet.deuterium_amount + deuterium);
+    if let Err(e) = planet_active.update(&state.db).await {
+        eprintln!("daily_reward_claim planet update error: {:?}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Erreur DB (planète)"}))).into_response();
+    }
+
+    // Credit SC if any
+    if sc > 0.0 {
+        if let Ok(Some(user_row)) = UserEntity::find_by_id(user_id).one(&state.db).await {
+            let mut user_active: user::ActiveModel = user_row.clone().into();
+            user_active.syndicate_credits = Set(user_row.syndicate_credits + sc);
+            let _ = user_active.update(&state.db).await;
+        }
+    }
+
+    // Mark streak as claimed and advance
+    let mut streak_active: login_streak::ActiveModel = streak.into();
+    streak_active.current_streak = Set(new_streak);
+    streak_active.best_streak = Set(match streak_active.best_streak.clone() {
+        sea_orm::ActiveValue::Set(v) | sea_orm::ActiveValue::Unchanged(v) => v.max(new_streak),
+        _ => new_streak,
+    });
+    streak_active.total_login_days = Set(match streak_active.total_login_days.clone() {
+        sea_orm::ActiveValue::Set(v) | sea_orm::ActiveValue::Unchanged(v) => v + 1,
+        _ => 1,
+    });
+    streak_active.daily_reward_claimed = Set(true);
+    streak_active.last_reward_date = Set(Some(today));
+    streak_active.last_login_date = Set(today);
+    let _ = streak_active.update(&state.db).await;
+
+    (StatusCode::OK, Json(serde_json::json!({
+        "success": true,
+        "streak": new_streak,
+        "rewards": {
+            "metal": metal,
+            "crystal": crystal,
+            "deuterium": deuterium,
+            "syndicate_credits": sc,
+        },
+    }))).into_response()
+}

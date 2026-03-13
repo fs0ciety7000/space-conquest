@@ -22,7 +22,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use backend::{game_logic, tech_tree, AppState};
+use backend::{black_market, game_logic, tech_tree, AppState};
 use backend::entities::{
     prelude::{DebrisField, Planet, User, FleetMission},
     debris_field, planet, fleet_mission,
@@ -68,6 +68,33 @@ pub async fn get_galaxy_handler(
             .unwrap_or((0.0, 0.0));
 
         if let Some(p) = planets.iter().find(|p| p.position == pos) {
+            // M2 — Stealth: if the planet owner has an active stealth effect,
+            // hide their identity from other players. The owner always sees their
+            // own planet regardless.
+            let is_own_planet = p.owner_id == my_owner_id;
+            let owner_stealthed = if !is_own_planet {
+                black_market::has_active_effect(&state.db, p.owner_id, "stealth").await
+            } else {
+                false
+            };
+
+            if owner_stealthed {
+                // Render the slot as empty to everyone except the owner themselves
+                slots.push(GalaxySlot {
+                    position: pos,
+                    planet_id: None,
+                    planet_name: None,
+                    owner_name: None,
+                    owner_id: None,
+                    debris_metal: dm,
+                    debris_crystal: dc,
+                    is_me: false,
+                    is_my_planet: false,
+                    protection_until: None,
+                    total_points: 0,
+                    planet_galaxy: p.galaxy,
+                });
+            } else {
             let (protection_until, total_points, actual_owner_name) =
                 if let Ok(Some(owner)) = User::find_by_id(p.owner_id).one(&state.db).await {
                     (
@@ -88,11 +115,12 @@ pub async fn get_galaxy_handler(
                 debris_metal: dm,
                 debris_crystal: dc,
                 is_me: p.id == current_id,
-                is_my_planet: p.owner_id == my_owner_id,
+                is_my_planet: is_own_planet,
                 protection_until,
                 total_points,
                 planet_galaxy: p.galaxy,
             });
+            }
         } else {
             slots.push(GalaxySlot {
                 position: pos,
@@ -437,6 +465,7 @@ pub async fn colonize_handler(
         fleet_data: Set(Some(colonize_data.to_string())),
         recyclers_sent: Set(0),
         departure_time: Set(Utc::now().naive_utc()),
+        acs_group_id: Set(None),
     };
     let _ = mission.insert(&state.db).await;
 

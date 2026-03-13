@@ -8,11 +8,81 @@ use axum::debug_handler;
 
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation, errors::Error as JwtError};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, Condition};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 use rand::Rng;
+
+// ── JWT constants ────────────────────────────────────────────────────────────
+
+/// Fallback dev secret — in production JWT_SECRET env var must be set.
+const DEV_JWT_SECRET: &str = "space-conquest-dev-secret-32-bytes-min-required-for-hmac-sha256";
+
+/// Token validity: 7 days expressed in seconds.
+const JWT_EXPIRY_SECS: i64 = 7 * 24 * 3600;
+
+/// JWT claims payload.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Claims {
+    /// Subject — the user UUID as a string.
+    pub sub: String,
+    /// Issued-at timestamp (Unix seconds).
+    pub iat: usize,
+    /// Expiry timestamp (Unix seconds).
+    pub exp: usize,
+}
+
+fn jwt_secret() -> String {
+    std::env::var("JWT_SECRET").unwrap_or_else(|_| DEV_JWT_SECRET.to_string())
+}
+
+/// Encode a signed HMAC-SHA256 JWT for `user_id`.
+pub fn generate_jwt(user_id: Uuid) -> Result<String, JwtError> {
+    let now = Utc::now().timestamp() as usize;
+    let claims = Claims {
+        sub: user_id.to_string(),
+        iat: now,
+        exp: now + JWT_EXPIRY_SECS as usize,
+    };
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(jwt_secret().as_bytes()),
+    )
+}
+
+/// Decode and validate a JWT. Returns the Claims on success.
+pub fn validate_jwt(token: &str) -> Result<Claims, JwtError> {
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(jwt_secret().as_bytes()),
+        &Validation::default(),
+    )?;
+    Ok(token_data.claims)
+}
+
+/// Extract a user UUID from a Bearer token in the Authorization header.
+/// Accepts both the new signed JWT format and the legacy `jwt-{uuid}` format
+/// to avoid breaking existing sessions during the migration window.
+pub fn extract_user_id_from_bearer(headers: &axum::http::HeaderMap) -> Option<Uuid> {
+    let header = headers.get("Authorization")?.to_str().ok()?;
+    let token = header.strip_prefix("Bearer ")?;
+    extract_user_id_from_token(token)
+}
+
+/// Extract user UUID from a raw token string.
+/// Tries real JWT first, then falls back to legacy `jwt-{uuid}` format.
+pub fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
+    // Try real JWT first
+    if let Ok(claims) = validate_jwt(token) {
+        return Uuid::parse_str(&claims.sub).ok();
+    }
+    // Legacy fallback: "jwt-{uuid}"
+    token.strip_prefix("jwt-")
+        .and_then(|id| Uuid::parse_str(id).ok())
+}
 
 
 use crate::{
@@ -104,7 +174,8 @@ async fn find_free_slot(db: &sea_orm::DatabaseConnection, galaxy: i32) -> (i32, 
 
 
 fn create_jwt(user_id: String) -> String {
-    format!("jwt-{}", user_id)
+    let uuid = Uuid::parse_str(&user_id).unwrap_or_else(|_| Uuid::nil());
+    generate_jwt(uuid).unwrap_or_else(|_| format!("jwt-{}", user_id))
 }
 
 fn generate_reset_token() -> String {
@@ -154,12 +225,6 @@ async fn send_reset_email(to_email: &str, token: &str) -> Result<(), String> {
 }
 
 
-#[allow(dead_code)]
-fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
-    // Token format: "jwt-{uuid}"
-    token.strip_prefix("jwt-")
-        .and_then(|id| Uuid::parse_str(id).ok())
-} 
 
 #[debug_handler]
 pub async fn register_handler(

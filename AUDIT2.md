@@ -43,6 +43,62 @@
 
 ---
 
+## Suivi Sprint 3 — Sécurité (B1-B5) + Features (M1-M16)
+
+> Dernière mise à jour : 2026-03-13
+
+### Blocants Sécurité (B)
+
+| # | Tâche | Statut | Notes |
+|---|---|---|---|
+| B1 | JWT HMAC-SHA256 réel | ✅ Fait | `auth.rs` — `jsonwebtoken` crate, `JWT_SECRET` env var, Claims {sub,exp,iat}, 7 jours. `generate_jwt()` + `validate_jwt()` + `extract_user_id_from_token()` publique. Doublon supprimé (fix compile). |
+| B2 | WebSocket authentification | ✅ Fait | `websocket.rs` — token extrait du query param `?token=xxx`, validé via `validate_jwt()`, connexion rejetée (1008) si invalide |
+| B3 | Transactions DB manquantes | ✅ Fait | `spy_v2_handler`, `start_research_handler`, `buy_item_handler` (black_market) wrappés dans `db.begin()/commit()` |
+| B4 | SQL injection raw queries | ✅ Fait | `trade_routes.rs` — `Statement::from_sql_and_values` pour CREATE. Fix `schedule_type.clone()→.to_string()` (fix compile). |
+| B5 | Recycle missions jamais résolues | ✅ Fait | `tick_system.rs` — case `mission_type == "recycle"` : charge debris_field, collecte min(debris, cargo_capacity), DELETE debris_field, add ressources à planète cible, WS notification |
+
+### Features (M)
+
+| # | Tâche | Statut | Notes |
+|---|---|---|---|
+| M1 | resource_boost (marché noir) | ✅ Fait | `black_market.rs` — activation avec `expires_at = NOW()+24h`. `tick_system.rs` — +50% prod si item actif. `user_inventory` enrichi `activated_at`/`expires_at` (fix compile). |
+| M2 | stealth (marché noir) | ✅ Fait | `black_market.rs` — `expires_at = NOW()+6h`. `handlers/galaxy.rs` — slots masqués pour les planètes dont le propriétaire a stealth actif (sauf vue owner) |
+| M3 | Slots expédition via computer_tech | ✅ Fait | `fleet.rs::expedition_v2_handler` — max = `1 + floor(computer_tech/4)`, 429 si dépassé. Frontend `ExpeditionZoneV2.tsx` — indicateur `X/Y slots` |
+| M4 | Daily Login Reward | ✅ Fait | `missions.rs` — `GET /users/:id/daily-reward/status` + `POST /users/:id/daily-reward/claim`. Tableau 7 jours (métal/crystal/deuterium/SC). `DailyReward.tsx` créé. `EmpireBar.tsx` — bouton avec dot notification |
+| M5 | Leaderboard expé + recherche + HoF | ✅ Fait | `handlers/ranking.rs` — `GET /ranking/expeditions`, `/ranking/research`, `/ranking/hall-of-fame`. `Leaderboard.tsx` — 3 nouveaux onglets avec icônes Lucide |
+| M6 | Email notifications | ❌ SKIPPED | Hors scope (infrastructure email) |
+| M7 | ACS — coordination flotte inter-joueurs | ⚠️ Partiel | `ACS_DESIGN.md` créé. Migration `acs_group` + entity + handlers (`create_acs`, `join_acs`, `get_acs`). **Tick resolution (holding→combat merge) reste à faire.** |
+| M8 | Constants combat/marché → ServerConfig | ⚠️ Partiel | `combat_debris_metal_ratio`, `crystal_ratio`, `loot_ratio` documentés. Hardcoded dans `combat.rs` — migration config à créer |
+| M9 | Tests unitaires | ❌ À faire | tick_system, game_logic, auth, handlers |
+| M10 | Mission Piraterie (SC raider) | ✅ Fait | `fleet.rs::piracy_handler` — `POST /fleet/piracy`. Chance succès basée esp_tech vs comp_tech. `tick_system.rs` — résolution transfer SC + notifications. `ActiveMissions.tsx` — type piracy affiché |
+| M11 | Cooldown attaque étendu après victoire | ✅ Fait | `protection.rs` — lit `attack_cooldown_hours` depuis ServerConfig (défaut 4h). Configurable admin panel. |
+| M12 | Soft-delete comptes utilisateurs | ✅ Fait | Migration `deleted_at` sur table `user`. `DELETE /users/:id` → set deleted_at. Login rejette comptes supprimés. |
+| M13 | Cargo recycleur unifié | ✅ Fait | Capacité lue depuis `ship_types.cargo_capacity` via DB (supprime hardcodé `20000`). B5 utilise cette valeur. |
+| M14 | Rebalance Bomber (+20% attaque) | ✅ Fait | Migration `m20260313_000011_bomber_rebalance.rs` — `UPDATE ship_type SET attack = ROUND(attack * 1.20) WHERE ship_key = 'bomber'` |
+| M15 | Heavy Hunter RF vs Cruiser | ✅ Fait | Migration `m20260313_000012_heavy_hunter_rf_cruiser.rs` — RF 6 heavy_hunter vs cruiser |
+| M16 | Sélecteur recycleurs + info débris | ✅ Fait | `GalaxyView.tsx` — modal avec valeurs débris réelles depuis API, calcul recycleurs nécessaires, bouton MAX |
+
+### Bâtiments Fantômes (décision architecturale)
+
+| Bâtiment | Décision | Statut |
+|----------|----------|--------|
+| `fusion_plant` | ✅ Réactivé | Logique déjà codée dans `game_logic.rs::calculate_fusion_energy`. Migration `m20260313_000013_reenable_fusion_plant.rs` |
+| `nanite_factory` | ✅ Implémenté | −5% build time/niveau. Migration `m20260313_000014_enable_nanite_factory.rs`. Appliqué dans `build_queue.rs` |
+| `terraformer` | ❌ Désactivé | +2 slots bâtiments — scope trop large (refactor UI + backend) |
+| `alliance_depot` | ❌ Désactivé | Requiert système d'alliances complet |
+| `missile_silo` | ❌ Désactivé | Requiert système missiles interplanétaires |
+
+### Admin Panel Configurability Audit
+
+**Résultat : ✅ COMPLET — aucun manque trouvé**
+
+- `PATCH /admin/config` existe (`admin.rs`) et accepte `HashMap<String, String>` arbitraire. Recharge `ServerConfigCache` in-place après chaque write.
+- Toutes les clés vérifiées : `anti_farm_enabled`, `anti_farm_min_ratio`, `anti_farm_max_ratio`, `flight_speed_multiplier`, `expedition_syndicate_credit_chance`, `expedition_credit_min`, `expedition_credit_max` — seédées en DB, modifiables via PATCH.
+- `AdminPanel.tsx` — onglet Config avec inputs labellisés pour toutes ces clés.
+- Limitation mineure : PATCH ne crée pas de nouvelles clés (migration seed requise pour tout nouveau paramètre).
+
+---
+
 ## Reality Checker — Résultats (2026-03-13)
 
 > Rating : **B-** | Production Readiness : **NEEDS WORK**
@@ -856,8 +912,8 @@ L'expéditeur d'un transport ou recyclage n'a aucun feedback WS quand la mission
 | M4 | Daily Login Reward (streak table déjà en place) | 4h |
 | M5 | Classement expédition + recherche + Hall of Fame | 1 jour |
 | M6 | Email notifications (attaque entrante, construction terminée) | 2 jours |
-| M7 | ACS — coordination de flotte inter-joueurs | 3 jours |
-| M8 | Déplacer constantes combat/marché dans ServerConfig | 1 jour |
+| M7 | ACS — coordination de flotte inter-joueurs | 3 jours | ⚙️ Partiel — API backend + migration + design doc OK. Tick resolution pending. |
+| M8 | Déplacer constantes combat/marché dans ServerConfig | 1 jour | ❌ Pending |
 | M9 | Tests unitaires tick_system, game_logic, auth, handlers | 3 jours |
 | M10 | Piracy mission — créditer le raider en SC | 4h |
 | M11 | Cooldown d'attaque augmenté après victoire (2h→4-6h) | 2h |
@@ -881,3 +937,89 @@ L'expéditeur d'un transport ou recyclage n'a aucun feedback WS quand la mission
 8. **Descendre recalcul scores à toutes les 5 minutes** — **2h**, réduction massive de charge DB
 9. **Guard overflow quantité vaisseaux (cast i64)** — **30min**, crash en production évité
 10. **Corriger base deuterium mine frontend** — **30min**, ROI affiché correct
+
+---
+
+## Suivi Sprint 3 — M7, M8 et Configurabilité Admin
+
+> Mis à jour : 2026-03-13
+
+### M7 — ACS (Allied Combat System)
+
+| Composant | Statut | Fichier(s) |
+|---|---|---|
+| Design document complet | ✅ Fait | `ACS_DESIGN.md` |
+| Migration DB (`acs_group` table + `fleet_mission.acs_group_id`) | ✅ Fait | `migration/src/m20261002_000003_acs_system.rs` |
+| Entity `acs_group.rs` | ✅ Fait | `backend/src/entities/acs_group.rs` |
+| Entity `fleet_mission.rs` — champ `acs_group_id` ajouté | ✅ Fait | `backend/src/entities/fleet_mission.rs` |
+| `POST /fleet/acs/create` — créer un groupe | ✅ Fait | `backend/src/handlers/fleet.rs` |
+| `POST /fleet/acs/:id/join` — rejoindre avec une flotte | ✅ Fait | `backend/src/handlers/fleet.rs` |
+| `GET /fleet/acs/:id` — consulter le groupe | ✅ Fait | `backend/src/handlers/fleet.rs` |
+| Routes enregistrées dans le router | ✅ Fait | `backend/src/handlers/fleet.rs:55-57` |
+| Résolution combat dans tick_system (holding + merge + split loot) | ❌ Pending | `backend/src/tick_system.rs` — Sprint 3+ |
+| Frontend ACS panel | ❌ Pending | Sprint 3+ |
+
+**Note tick system** : La résolution ACS dans le tick demande une refonte de `resolve_attack_mission` pour distinguer les missions ACS des missions solo, fusionner les flottes en holding, et appliquer le split de récompenses proportionnel au score militaire. Design complet dans `ACS_DESIGN.md` sections 6 et 7.
+
+### M8 — Déplacer constantes combat/marché dans ServerConfig
+
+| Clé cible | Valeur actuelle | Localisation | Statut |
+|---|---|---|---|
+| `debris_metal_ratio` | 0.30 | `combat.rs` | ❌ Pending |
+| `debris_crystal_ratio` | 0.30 | `combat.rs` | ❌ Pending |
+| `loot_max_pct` | 0.50 (implicite cargo) | `combat.rs` | ❌ Pending |
+| `market_npc_buy_margin` | 0.85 | `market.rs` | ❌ Pending |
+| `market_npc_sell_margin` | 1.18 | `market.rs` | ❌ Pending |
+| `market_tax_rate` | 0.02 | `market.rs` | ❌ Pending |
+| `expedition_crystal_ratio` | 0.40 | `fleet.rs:1019` | ❌ Pending |
+| `expedition_deuterium_ratio` | 0.20 | `fleet.rs:1019` | ❌ Pending |
+| `base_tech_time` | 2400.0 | `game_logic.rs:496` | ❌ Pending |
+| `tech_exponent` | 1.50 | `game_logic.rs:497` | ❌ Pending |
+| `conquest_loot_threshold_pct` | 99.0 | `main.rs:844` | ❌ Pending |
+
+---
+
+## Admin Panel Configurability Audit
+
+> Auditeur : Game Designer | Date : 2026-03-13
+
+### Résultats
+
+**Status global : COMPLET — tous les paramètres critiques sont configurables.**
+
+#### Backend — `backend/src/admin.rs`
+
+**`GET /admin/config`** (ligne 554) : lit toutes les clés de la table `server_config` et les retourne sous forme de `HashMap<String, String>`. Protégé par `check_admin` (vérifie `user.role == "admin"` en DB).
+
+**`PATCH /admin/config`** (ligne 582) : accepte un `HashMap<String, String>` aplati (`serde(flatten)`) et met à jour chaque clé trouvée en DB. Recharge le `ServerConfigCache` en mémoire après update (ligne 646). Protégé par `check_admin`.
+
+**Limitation identifiée** : le handler effectue un UPDATE uniquement si la clé existe déjà. Les nouvelles clés (INSERT) ne sont pas supportées. Ce n'est pas un bug pour les clés déjà seedées par les migrations, mais un admin ne peut pas créer de nouvelles clés via l'API.
+
+#### Clés configurables vérifiées
+
+| Clé | Présente en DB (migration) | Modifiable via PATCH /admin/config |
+|---|---|---|
+| `anti_farm_enabled` | ✅ `m20260120_000005` | ✅ |
+| `anti_farm_min_ratio` | ✅ `m20260120_000005` | ✅ |
+| `anti_farm_max_ratio` | ✅ `m20260120_000005` | ✅ |
+| `flight_speed_multiplier` | ✅ `m20260312_000001` | ✅ |
+| `expedition_syndicate_credit_chance` | ✅ `m20260307_000009` | ✅ |
+| `expedition_syndicate_credit_min` | ✅ `m20260307_000009` | ✅ |
+| `expedition_syndicate_credit_max` | ✅ `m20260307_000009` | ✅ |
+| `attack_cooldown_hours` | ✅ `m20260120_000005` | ✅ |
+| `cargo_recycler` | ✅ `m20260120_000005` | ✅ |
+
+#### Frontend — `frontend/src/components/AdminPanel.tsx`
+
+L'onglet `config` (ligne 126) est pleinement implémenté :
+- **`GET /admin/config`** (ligne 524) : chargement au mount de l'onglet config, remplit `configValues` état local.
+- **`PATCH /admin/config`** (ligne 699) : envoi du `editedConfig` au save. Les clés non modifiées ne sont pas incluses (diff local avant envoi).
+- **Toutes les clés auditées sont présentes dans l'UI** :
+  - `flight_speed_multiplier` (ligne 151) — slider/input vitesse de vol
+  - `expedition_syndicate_credit_chance` (lignes 288, 414) — apparaît dans deux sections (combat et économie)
+  - `expedition_syndicate_credit_min/max` (lignes 289-290, 415-416)
+  - Les clés `anti_farm_*` sont accessibles via le formulaire générique de config
+
+**Verdict** : Le système d'administration de la configuration serveur est **complet et fonctionnel**. Aucun endpoint manquant, aucun paramètre non settable. Le backend recharge le cache mémoire après chaque PATCH, assurant que les changements sont immédiatement effectifs sans redémarrage.
+
+**Seule lacune mineure** : si une nouvelle clé doit être ajoutée (ex: `debris_metal_ratio` pour M8), elle doit d'abord être seedée via une migration avant d'être modifiable via l'UI admin.

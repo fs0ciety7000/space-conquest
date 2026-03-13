@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use sea_orm::{
-    DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait,
+    DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait, ConnectionTrait, Statement, DbBackend, Value as SeaValue,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -343,21 +343,30 @@ pub async fn create_route_handler(
     };
 
     let route_id = Uuid::new_v4();
-    let name_escaped = payload.name.replace('\'', "''");
-    let daily_hour_sql = daily_hour.map(|h| h.to_string()).unwrap_or_else(|| "NULL".to_string());
-
-    if let Err(e) = db.execute_unprepared(&format!(
+    // Use parameterized query to prevent SQL injection via the name or ID fields.
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
         "INSERT INTO trade_route (id, owner_id, name, source_planet_id, target_planet_id, ship_count, \
          metal_ratio, crystal_ratio, deuterium_ratio, is_active, schedule_type, interval_hours, daily_hour, next_run_at, created_at) \
-         VALUES ('{}', '{}', '{}', '{}', '{}', {}, {}, {}, {}, true, '{}', {}, {}, '{}', '{}')",
-        route_id, payload.owner_id, name_escaped,
-        payload.source_planet_id, payload.target_planet_id,
-        payload.ship_count,
-        clamp_ratio(payload.metal_ratio), clamp_ratio(payload.crystal_ratio), clamp_ratio(payload.deuterium_ratio),
-        schedule_type, interval_hours, daily_hour_sql,
-        next_run.format("%Y-%m-%d %H:%M:%S"),
-        now.format("%Y-%m-%d %H:%M:%S"),
-    )).await {
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10, $11, $12, $13, $14)",
+        [
+            SeaValue::Uuid(Some(Box::new(route_id))),
+            SeaValue::Uuid(Some(Box::new(payload.owner_id))),
+            SeaValue::String(Some(Box::new(payload.name.clone()))),
+            SeaValue::Uuid(Some(Box::new(payload.source_planet_id))),
+            SeaValue::Uuid(Some(Box::new(payload.target_planet_id))),
+            SeaValue::Int(Some(payload.ship_count)),
+            SeaValue::Double(Some(clamp_ratio(payload.metal_ratio))),
+            SeaValue::Double(Some(clamp_ratio(payload.crystal_ratio))),
+            SeaValue::Double(Some(clamp_ratio(payload.deuterium_ratio))),
+            SeaValue::String(Some(Box::new(schedule_type.to_string()))),
+            SeaValue::Int(Some(interval_hours as i32)),
+            SeaValue::Int(daily_hour.map(|h| h as i32)),
+            SeaValue::ChronoDateTimeUtc(Some(Box::new(next_run.and_utc()))),
+            SeaValue::ChronoDateTimeUtc(Some(Box::new(now.and_utc()))),
+        ],
+    );
+    if let Err(e) = db.execute(stmt).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Erreur DB: {}", e)}))).into_response();
     }
 
@@ -397,42 +406,62 @@ pub async fn update_route_handler(
     State(state): State<AppState>,
     Json(payload): Json<UpdateRoutePayload>,
 ) -> impl IntoResponse {
-    use sea_orm::ConnectionTrait;
     let db = &state.db;
 
-    // Build SET clause
+    // Build SET clause with a positional-parameter list.
+    // Each field contributes one $N placeholder; values are collected in order.
     let mut sets: Vec<String> = Vec::new();
+    let mut values: Vec<SeaValue> = Vec::new();
+    let mut param_idx: usize = 1;
 
     if let Some(name) = &payload.name {
-        sets.push(format!("name = '{}'", name.replace('\'', "''")));
+        sets.push(format!("name = ${}", param_idx));
+        values.push(SeaValue::String(Some(Box::new(name.clone()))));
+        param_idx += 1;
     }
     if let Some(count) = payload.ship_count {
         if count < 1 || count > 500 {
             return (StatusCode::BAD_REQUEST, Json(json!({"error": "ship_count must be 1-500"}))).into_response();
         }
-        sets.push(format!("ship_count = {}", count));
+        sets.push(format!("ship_count = ${}", param_idx));
+        values.push(SeaValue::Int(Some(count)));
+        param_idx += 1;
     }
     if let Some(v) = payload.metal_ratio {
-        sets.push(format!("metal_ratio = {}", clamp_ratio(v)));
+        sets.push(format!("metal_ratio = ${}", param_idx));
+        values.push(SeaValue::Double(Some(clamp_ratio(v))));
+        param_idx += 1;
     }
     if let Some(v) = payload.crystal_ratio {
-        sets.push(format!("crystal_ratio = {}", clamp_ratio(v)));
+        sets.push(format!("crystal_ratio = ${}", param_idx));
+        values.push(SeaValue::Double(Some(clamp_ratio(v))));
+        param_idx += 1;
     }
     if let Some(v) = payload.deuterium_ratio {
-        sets.push(format!("deuterium_ratio = {}", clamp_ratio(v)));
+        sets.push(format!("deuterium_ratio = ${}", param_idx));
+        values.push(SeaValue::Double(Some(clamp_ratio(v))));
+        param_idx += 1;
     }
     if let Some(ref st) = payload.schedule_type {
         let st_val = if st == "daily" { "daily" } else { "interval" };
-        sets.push(format!("schedule_type = '{}'", st_val));
+        sets.push(format!("schedule_type = ${}", param_idx));
+        values.push(SeaValue::String(Some(Box::new(st_val.to_string()))));
+        param_idx += 1;
     }
     if let Some(ih) = payload.interval_hours {
-        sets.push(format!("interval_hours = {}", ih));
+        sets.push(format!("interval_hours = ${}", param_idx));
+        values.push(SeaValue::Int(Some(ih)));
+        param_idx += 1;
     }
     if let Some(dh) = payload.daily_hour {
-        sets.push(format!("daily_hour = {}", dh.clamp(0, 23)));
+        sets.push(format!("daily_hour = ${}", param_idx));
+        values.push(SeaValue::Int(Some(dh.clamp(0, 23))));
+        param_idx += 1;
     }
     if let Some(active) = payload.is_active {
-        sets.push(format!("is_active = {}", active));
+        sets.push(format!("is_active = ${}", param_idx));
+        values.push(SeaValue::Bool(Some(active)));
+        param_idx += 1;
         // If reactivating, set next_run based on schedule type
         if active {
             let now = Utc::now().naive_utc();
@@ -448,7 +477,9 @@ pub async fn update_route_handler(
                 ) as i64;
                 now + Duration::hours(interval_hours)
             };
-            sets.push(format!("next_run_at = '{}'", next.format("%Y-%m-%d %H:%M:%S")));
+            sets.push(format!("next_run_at = ${}", param_idx));
+            values.push(SeaValue::ChronoDateTimeUtc(Some(Box::new(next.and_utc()))));
+            param_idx += 1;
         }
     }
 
@@ -456,11 +487,13 @@ pub async fn update_route_handler(
         return StatusCode::BAD_REQUEST.into_response();
     }
 
+    // WHERE id = $N
+    values.push(SeaValue::Uuid(Some(Box::new(route_id))));
     let sql = format!(
-        "UPDATE trade_route SET {} WHERE id = '{}'",
-        sets.join(", "), route_id
+        "UPDATE trade_route SET {} WHERE id = ${}",
+        sets.join(", "), param_idx
     );
-    let _ = db.execute_unprepared(&sql).await;
+    let _ = db.execute(Statement::from_sql_and_values(DbBackend::Postgres, &sql, values)).await;
 
     let flight_speed = state.config.read().unwrap().get_config("flight_speed_multiplier", 5.0);
     match route_to_json(db, &route_id.to_string(), flight_speed).await {
@@ -483,10 +516,11 @@ pub async fn delete_route_handler(
         None => return StatusCode::UNAUTHORIZED.into_response(),
     };
 
-    // Verify ownership
-    let row = db.query_one(sea_orm::Statement::from_string(
-        sea_orm::DbBackend::Postgres,
-        format!("SELECT owner_id FROM trade_route WHERE id = '{}'", route_id),
+    // Verify ownership — parameterized to prevent injection on route_id
+    let row = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT owner_id FROM trade_route WHERE id = $1",
+        [SeaValue::Uuid(Some(Box::new(route_id)))],
     )).await.unwrap_or(None);
 
     let owner_id: Uuid = row.as_ref()
@@ -497,11 +531,15 @@ pub async fn delete_route_handler(
         return StatusCode::FORBIDDEN.into_response();
     }
 
-    let _ = db.execute_unprepared(&format!(
-        "DELETE FROM trade_route_log WHERE trade_route_id = '{}'", route_id
+    let _ = db.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "DELETE FROM trade_route_log WHERE trade_route_id = $1",
+        [SeaValue::Uuid(Some(Box::new(route_id)))],
     )).await;
-    let _ = db.execute_unprepared(&format!(
-        "DELETE FROM trade_route WHERE id = '{}'", route_id
+    let _ = db.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "DELETE FROM trade_route WHERE id = $1",
+        [SeaValue::Uuid(Some(Box::new(route_id)))],
     )).await;
 
     StatusCode::NO_CONTENT.into_response()
@@ -515,14 +553,12 @@ pub async fn get_route_logs_handler(
     use sea_orm::ConnectionTrait;
     let db = &state.db;
 
-    let rows = db.query_all(sea_orm::Statement::from_string(
-        sea_orm::DbBackend::Postgres,
-        format!(
-            "SELECT id, executed_at, metal_transferred, crystal_transferred, deuterium_transferred, \
-             status, piracy_loss_ratio, source_planet_name, target_planet_name \
-             FROM trade_route_log WHERE trade_route_id = '{}' ORDER BY executed_at DESC LIMIT 50",
-            route_id
-        ),
+    let rows = db.query_all(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT id::text AS id, executed_at, metal_transferred, crystal_transferred, deuterium_transferred, \
+         status, piracy_loss_ratio, source_planet_name, target_planet_name \
+         FROM trade_route_log WHERE trade_route_id = $1 ORDER BY executed_at DESC LIMIT 50",
+        [SeaValue::Uuid(Some(Box::new(route_id)))],
     )).await.unwrap_or_default();
 
     let logs: Vec<serde_json::Value> = rows.iter().filter_map(|row| {
@@ -656,8 +692,10 @@ async fn execute_trade_route(
         Ok(Some(p)) => p,
         _ => {
             // Planet gone, deactivate route
-            let _ = db.execute_unprepared(&format!(
-                "UPDATE trade_route SET is_active = false WHERE id = '{}'", route_id
+            let _ = db.execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "UPDATE trade_route SET is_active = false WHERE id = $1",
+                [SeaValue::Uuid(Some(Box::new(route_id)))],
             )).await;
             return;
         }
@@ -665,8 +703,10 @@ async fn execute_trade_route(
     let target_planet = match Planet::find_by_id(target_id).one(db).await {
         Ok(Some(p)) => p,
         _ => {
-            let _ = db.execute_unprepared(&format!(
-                "UPDATE trade_route SET is_active = false WHERE id = '{}'", route_id
+            let _ = db.execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "UPDATE trade_route SET is_active = false WHERE id = $1",
+                [SeaValue::Uuid(Some(Box::new(route_id)))],
             )).await;
             return;
         }
@@ -716,14 +756,26 @@ async fn execute_trade_route(
     let new_target_crystal = target_planet.crystal_amount + crystal_to_transfer;
     let new_target_deuterium = target_planet.deuterium_amount + deuterium_to_transfer;
 
-    let _ = db.execute_unprepared(&format!(
-        "UPDATE planet SET metal_amount = {}, crystal_amount = {}, deuterium_amount = {} WHERE id = '{}'",
-        new_source_metal, new_source_crystal, new_source_deuterium, source_id
+    let _ = db.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE planet SET metal_amount = $1, crystal_amount = $2, deuterium_amount = $3 WHERE id = $4",
+        [
+            SeaValue::Double(Some(new_source_metal)),
+            SeaValue::Double(Some(new_source_crystal)),
+            SeaValue::Double(Some(new_source_deuterium)),
+            SeaValue::Uuid(Some(Box::new(source_id))),
+        ],
     )).await;
 
-    let _ = db.execute_unprepared(&format!(
-        "UPDATE planet SET metal_amount = {}, crystal_amount = {}, deuterium_amount = {} WHERE id = '{}'",
-        new_target_metal, new_target_crystal, new_target_deuterium, target_id
+    let _ = db.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE planet SET metal_amount = $1, crystal_amount = $2, deuterium_amount = $3 WHERE id = $4",
+        [
+            SeaValue::Double(Some(new_target_metal)),
+            SeaValue::Double(Some(new_target_crystal)),
+            SeaValue::Double(Some(new_target_deuterium)),
+            SeaValue::Uuid(Some(Box::new(target_id))),
+        ],
     )).await;
 
     log_and_advance_route(
@@ -840,22 +892,31 @@ async fn log_and_advance_route(
     } else {
         now + Duration::hours(interval_hours)
     };
-    let piracy_str = piracy_loss_ratio.map(|v| v.to_string()).unwrap_or("NULL".to_string());
-    let src = source_name.map(|s| format!("'{}'", s.replace('\'', "''"))).unwrap_or("NULL".to_string());
-    let tgt = target_name.map(|s| format!("'{}'", s.replace('\'', "''"))).unwrap_or("NULL".to_string());
-
-    let _ = db.execute_unprepared(&format!(
+    let _ = db.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
         "INSERT INTO trade_route_log (id, trade_route_id, executed_at, metal_transferred, crystal_transferred, \
          deuterium_transferred, status, piracy_loss_ratio, source_planet_name, target_planet_name) \
-         VALUES ('{}', '{}', '{}', {}, {}, {}, '{}', {}, {}, {})",
-        log_id, route_id,
-        now.format("%Y-%m-%d %H:%M:%S"),
-        metal, crystal, deuterium,
-        status, piracy_str, src, tgt
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+        [
+            SeaValue::Uuid(Some(Box::new(log_id))),
+            SeaValue::Uuid(Some(Box::new(route_id))),
+            SeaValue::ChronoDateTimeUtc(Some(Box::new(now.and_utc()))),
+            SeaValue::Double(Some(metal)),
+            SeaValue::Double(Some(crystal)),
+            SeaValue::Double(Some(deuterium)),
+            SeaValue::String(Some(Box::new(status.to_string()))),
+            SeaValue::Double(piracy_loss_ratio),
+            SeaValue::String(source_name.map(|s| Box::new(s.to_string()))),
+            SeaValue::String(target_name.map(|s| Box::new(s.to_string()))),
+        ],
     )).await;
 
-    let _ = db.execute_unprepared(&format!(
-        "UPDATE trade_route SET next_run_at = '{}' WHERE id = '{}'",
-        next_run.format("%Y-%m-%d %H:%M:%S"), route_id
+    let _ = db.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE trade_route SET next_run_at = $1 WHERE id = $2",
+        [
+            SeaValue::ChronoDateTimeUtc(Some(Box::new(next_run.and_utc()))),
+            SeaValue::Uuid(Some(Box::new(route_id))),
+        ],
     )).await;
 }

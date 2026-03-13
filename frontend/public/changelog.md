@@ -1,5 +1,68 @@
 # Changelog - Space Conquest
 
+## [13.0.0] - 2026-03-13 - Sprint 3 — Sécurité, Features M1-M16, ACS
+
+### Sécurité (B1-B5)
+
+- **B1 — JWT réel** : tokens HMAC-SHA256 signés (`jsonwebtoken`), expiration 7 jours, `JWT_SECRET` depuis env var. Fini le `jwt-{uuid}` forgeable.
+- **B2 — WebSocket authentifié** : connexion WS rejetée (code 1008) si token absent ou invalide. Fini les écoutes anonymes sur les événements de combat/marché.
+- **B3 — Transactions atomiques** : `spy_v2`, `start_research`, `buy_item` (marché noir) wrappés dans `db.begin()/commit()`. Crash mid-opération = rollback automatique.
+- **B4 — Injection SQL supprimée** : `trade_routes.rs` migré vers `Statement::from_sql_and_values` (requêtes paramétrées).
+- **B5 — Missions recycle résolues** : le tick loop résout maintenant les missions `recycle` — charge le debris_field, collecte min(debris, cargo_capacity), supprime le champ de débris, créédite les ressources sur la planète cible.
+
+### Features (M1-M16)
+
+**Marché Noir**
+- **M1 — resource_boost** : item activable via inventaire → +50% production pendant 24h sur toutes les planètes
+- **M2 — stealth** : item activable → vos planètes disparaissent de la vue galaxie des autres joueurs pendant 6h
+
+**Flotte**
+- **M3 — Slots expédition multiples** : débloquez jusqu'à 4 slots simultanés avec Informatique niv. 4/8/12. Indicateur `X/Y slots` dans l'interface expédition.
+- **M7 — ACS (Allied Combat System)** : coordonnez votre flotte avec vos alliés pour attaquer une cible ensemble. Loot réparti proportionnellement au score militaire de chaque participant. *(Phase 1 : dispatch + coordination. Tick resolution en Phase 2.)*
+- **M10 — Mission Piraterie** : raid furtif pour voler des Crédits Syndicat. Chance de succès = votre Espionnage vs Informatique de la cible. Échec = perte de la flotte.
+
+**Économie & Progression**
+- **M4 — Récompense quotidienne** : connectez-vous chaque jour pour un streak bonus (métal, crystal, deutérium, SC). Bouton dans la barre d'empire avec point de notification si réclamable.
+- **M5 — Classement enrichi** : 3 nouveaux tableaux — Expéditions (nb de missions réussies), Recherche (total niveaux tech), Hall of Fame (planètes conquises).
+
+**Équilibrage**
+- **M11 — Cooldown attaque étendu** : 4h après victoire (était 2h), configurable via admin panel (`attack_cooldown_hours`).
+- **M14 — Bomber +20% attaque** : rebalance pour le rendre viable vs les défenses tardives.
+- **M15 — Heavy Hunter RF ×6 vs Cruiser** : combo anti-cruiser cohérent avec son rôle.
+
+**UX & Fixes**
+- **M12 — Soft-delete comptes** : `DELETE /users/:id` → `deleted_at` (données préservées, accès révoqué).
+- **M13 — Cargo recycleur depuis DB** : capacité lue depuis `ship_types.cargo_capacity`, plus de `20000` hardcodé.
+- **M16 — Modal recycleur enrichi** : affiche métal/crystal disponibles dans le debris field, calcule les recycleurs nécessaires, bouton MAX.
+- **ActiveMissions** : couleurs par type de mission (attaque=rouge, espionnage=jaune, expédition=violet, déploiement=bleu, piraterie=orange, recyclage=vert).
+
+### Bâtiments Fantômes — Réactivés partiellement
+- **fusion_plant** : réactivé (logique exponentielle déjà en place dans `game_logic.rs`)
+- **nanite_factory** : implémenté — réduit le temps de construction de 5% par niveau
+- *terraformer, alliance_depot, missile_silo* : restent désactivés (scope trop large)
+
+### Système ACS — Coordination de Flotte Inter-Joueurs
+
+**Flux :** leader crée → alliés rejoignent → flottes partent en parallèle → fenêtre de 30min d'attente à l'arrivée → combat fusionné → loot réparti par score militaire.
+
+**API :** `POST /fleet/acs/create`, `POST /fleet/acs/:id/join`, `GET /fleet/acs/:id`
+
+**Document de conception :** `ACS_DESIGN.md` — formules de split, cas limites, anti-abus, validation mathématique.
+
+### Admin Panel Configurability
+Tous les paramètres critiques sont configurables live via `PATCH /admin/config` sans redémarrage. Audit complet : aucun manque identifié.
+
+### Migrations
+- `m20260313_000002` — désactivation bâtiments fantômes (fix: `building_types` pas `building_type`)
+- `m20260313_000011` — Bomber +20% attaque
+- `m20260313_000012` — Heavy Hunter RF ×6 vs Cruiser
+- `m20260313_000013` — réactivation fusion_plant
+- `m20260313_000014` — activation nanite_factory
+- `m20261002_000002` — black_market active items (`activated_at`, `expires_at` sur `user_inventory`)
+- `m20261002_000003` — ACS system (table `acs_group` + `fleet_mission.acs_group_id`)
+
+---
+
 ## [12.0.0] - 2026-03-13 - Sprint 1 & 2 — Équilibrage, Sécurité, Fleet Save
 
 ### 🛡️ Fleet Save — Nouvelle mission "Déployer"

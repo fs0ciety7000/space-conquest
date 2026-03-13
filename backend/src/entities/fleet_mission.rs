@@ -17,6 +17,8 @@ pub struct Model {
     pub fleet_data: Option<String>, // JSON-encoded fleet composition for v2 endpoints
     pub recyclers_sent: i32, // Nombre de recycleurs envoyés (mission recycle, Expansion 5.0)
     pub departure_time: DateTime,
+    // ACS — Allied Combat System (M7). NULL = solo mission.
+    pub acs_group_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

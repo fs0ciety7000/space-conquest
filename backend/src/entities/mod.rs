@@ -105,3 +105,6 @@ pub mod law_vote;
 pub mod law_effect;
 pub mod survey;
 pub mod survey_response;
+
+// ACS — Allied Combat System (M7)
+pub mod acs_group;

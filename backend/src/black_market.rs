@@ -29,7 +29,7 @@ use axum::{
 use chrono::Utc;
 use rand::Rng;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait,
     ActiveValue::NotSet,
 };
 use serde::Deserialize;
@@ -53,12 +53,10 @@ pub const PRICE_TICK_INTERVAL_SECS: i64 = 6 * 3600;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/// Extract user_id UUID from Authorization: Bearer jwt-{uuid}
+/// Extract user_id UUID from Authorization: Bearer token.
+/// Handles both signed JWT and legacy jwt-{uuid} formats.
 fn extract_user_id(headers: &axum::http::HeaderMap) -> Option<Uuid> {
-    let header = headers.get("Authorization")?.to_str().ok()?;
-    let token = header.strip_prefix("Bearer ")?;
-    let uuid_str = token.strip_prefix("jwt-").unwrap_or(token);
-    Uuid::parse_str(uuid_str).ok()
+    crate::auth::extract_user_id_from_bearer(headers)
 }
 
 /// Returns the best (espionage, computer) pair where both levels come from the same planet.
@@ -281,15 +279,23 @@ pub async fn buy_item_handler(
         ).into_response();
     }
 
+    let prev_credits: f64 = user.syndicate_credits;
+    let item_name = item.name.clone();
+    let effect_type_log = item.effect_type.clone();
+
+    // Atomically debit SC and insert inventory row — prevents a partial purchase
+    // if the server crashes between the two writes.
+    let txn = match state.db.begin().await {
+        Ok(t) => t,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction error"}))).into_response(),
+    };
+
     // Debit credits
     let mut user_active: user::ActiveModel = user.into();
-    let prev_credits: f64 = match user_active.syndicate_credits {
-        sea_orm::ActiveValue::Set(v) | sea_orm::ActiveValue::Unchanged(v) => v,
-        _ => 0.0,
-    };
     user_active.syndicate_credits = Set(prev_credits - total_cost);
-    if let Err(e) = user_active.update(&state.db).await {
+    if let Err(e) = user_active.update(&txn).await {
         eprintln!("buy_item debit error: {:?}", e);
+        let _ = txn.rollback().await;
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response();
     }
 
@@ -297,7 +303,7 @@ pub async fn buy_item_handler(
     let existing = UserInventory::find()
         .filter(user_inventory::Column::UserId.eq(user_id))
         .filter(user_inventory::Column::ItemId.eq(item.id))
-        .one(&state.db)
+        .one(&txn)
         .await
         .unwrap_or(None);
 
@@ -305,26 +311,38 @@ pub async fn buy_item_handler(
         let new_qty = row.quantity + qty;
         let mut inv: user_inventory::ActiveModel = row.into();
         inv.quantity = Set(new_qty);
-        let _ = inv.update(&state.db).await;
+        if let Err(_) = inv.update(&txn).await {
+            let _ = txn.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur inventaire"}))).into_response();
+        }
     } else {
-        let _ = user_inventory::ActiveModel {
+        let new_row = user_inventory::ActiveModel {
             id: Set(Uuid::new_v4()),
             user_id: Set(user_id),
             item_id: Set(item.id),
             quantity: Set(qty),
             acquired_at: Set(Utc::now().naive_utc()),
-        }.insert(&state.db).await;
+            activated_at: Set(None),
+            expires_at: Set(None),
+        };
+        if let Err(_) = new_row.insert(&txn).await {
+            let _ = txn.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur inventaire"}))).into_response();
+        }
     }
 
-    // Log economy event
+    if let Err(_) = txn.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Transaction commit failed"}))).into_response();
+    }
+
+    // Log economy event (fire-and-forget, outside transaction)
     {
         let db_clone = state.db.clone();
         let desc = if qty > 1 {
-            format!("Achat ×{} : {}", qty, item.name)
+            format!("Achat ×{} : {}", qty, item_name)
         } else {
-            format!("Achat : {}", item.name)
+            format!("Achat : {}", item_name)
         };
-        let effect_type = item.effect_type.clone();
         tokio::spawn(async move {
             crate::economy_log::log_event(
                 &db_clone,
@@ -336,14 +354,14 @@ pub async fn buy_item_handler(
                 -total_cost,
                 None,
                 None,
-                Some(&effect_type),
+                Some(&effect_type_log),
             ).await;
         });
     }
 
     Json(json!({
         "success": true,
-        "item": item.name,
+        "item": item_name,
         "quantity": qty,
         "total_cost": total_cost,
         "remaining_credits": prev_credits - total_cost,
@@ -428,13 +446,18 @@ pub async fn activate_item_handler(
         "orbital_strike" => {
             activate_orbital_strike(&state, user_id, &row, &item, &payload).await
         }
-        // Other effect types: simple acknowledgement for now
+        "resource_boost" => {
+            activate_timed_effect(&state.db, row, 24 * 3600, "resource_boost").await
+        }
+        "stealth" => {
+            activate_timed_effect(&state.db, row, 6 * 3600, "stealth").await
+        }
+        // Other effect types: acknowledge but do not consume yet
         eff => {
-            consume_inventory_item(&state.db, row, 1).await;
             Json(json!({
-                "success": true,
+                "success": false,
                 "effect": eff,
-                "message": "Effet activé. Les modifications s'appliqueront lors du prochain tick.",
+                "message": "Cet effet n'est pas encore disponible.",
             })).into_response()
         }
     }
@@ -504,6 +527,107 @@ async fn activate_orbital_strike(
             eprintln!("orbital_strike insert error: {:?}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur lors du lancement"}))).into_response()
         }
+    }
+}
+
+/// Activates a timed effect by setting `activated_at` and `expires_at` on an
+/// existing inventory row. The item is NOT removed from the inventory; the row
+/// acts as the "active effect" record until `expires_at` passes. Quantity is
+/// decremented by 1 — if it reaches 0 the row remains but as a spent record
+/// (quantity = 0 rows should be cleaned by a periodic job or removed here
+/// when the effect expires via the tick).
+async fn activate_timed_effect(
+    db: &sea_orm::DatabaseConnection,
+    row: crate::entities::user_inventory::Model,
+    duration_secs: i64,
+    effect_label: &str,
+) -> axum::response::Response {
+    // Prevent double-activation if an unexpired instance already exists for
+    // this exact inventory row (guard against replay of the same request).
+    let now = Utc::now().naive_utc();
+    if let Some(exp) = row.expires_at {
+        if exp > now {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "error": "Cet effet est déjà actif",
+                    "expires_at": exp.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+                })),
+            ).into_response();
+        }
+    }
+
+    if row.quantity < 1 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Quantité insuffisante"}))).into_response();
+    }
+
+    let expires_at = now + chrono::Duration::seconds(duration_secs);
+
+    let mut active: user_inventory::ActiveModel = row.into();
+    active.quantity = Set(match active.quantity {
+        sea_orm::ActiveValue::Set(v) | sea_orm::ActiveValue::Unchanged(v) => (v - 1).max(0),
+        _ => 0,
+    });
+    active.activated_at = Set(Some(now));
+    active.expires_at = Set(Some(expires_at));
+
+    match active.update(db).await {
+        Ok(_) => Json(json!({
+            "success": true,
+            "effect": effect_label,
+            "expires_at": expires_at.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            "message": format!("Effet '{}' activé pendant {} heures.", effect_label, duration_secs / 3600),
+        })).into_response(),
+        Err(e) => {
+            eprintln!("activate_timed_effect update error: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Erreur DB"}))).into_response()
+        }
+    }
+}
+
+// ── Public helpers — checked by tick_system and galaxy handler ─────────────
+
+/// Returns `true` if the given user has at least one active (non-expired)
+/// inventory entry whose corresponding black-market item has `effect_type`
+/// matching `effect`.
+pub async fn has_active_effect(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+    effect: &str,
+) -> bool {
+    let now = Utc::now().naive_utc();
+
+    // Load all non-expired inventory rows for this user
+    let active_rows = match UserInventory::find()
+        .filter(user_inventory::Column::UserId.eq(user_id))
+        .filter(user_inventory::Column::ExpiresAt.gt(now))
+        .all(db)
+        .await
+    {
+        Ok(rows) => rows,
+        Err(_) => return false,
+    };
+
+    for row in active_rows {
+        if let Ok(Some(item)) = BlackMarketItem::find_by_id(row.item_id).one(db).await {
+            if item.effect_type == effect {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Returns the resource-boost multiplier to apply to a user's production this
+/// tick. If an active `resource_boost` effect exists, returns 1.5; otherwise 1.0.
+pub async fn get_resource_boost_multiplier(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+) -> f64 {
+    if has_active_effect(db, user_id, "resource_boost").await {
+        1.5
+    } else {
+        1.0
     }
 }
 

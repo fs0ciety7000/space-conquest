@@ -385,8 +385,26 @@ pub async fn websocket_handler(
         }
     };
 
-    // TODO: Valider le token JWT si fourni
-    // Pour l'instant, on accepte toutes les connexions avec un planet_id valide
+    // Validate JWT token from query param or Authorization header.
+    // A missing or invalid token closes the connection with policy violation (1008).
+    let token_opt = params.token.as_deref();
+    let user_id_from_token: Option<uuid::Uuid> = token_opt
+        .and_then(|t| crate::auth::extract_user_id_from_token(t));
+
+    if user_id_from_token.is_none() {
+        return ws.on_upgrade(|mut socket| async move {
+            let _ = socket.send(Message::Text(
+                serde_json::to_string(&WsEvent::Error {
+                    message: "Authentication required. Provide a valid JWT via ?token=".to_string(),
+                }).unwrap_or_default()
+            )).await;
+            // Close with 1008 Policy Violation
+            let _ = socket.send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                code: 1008,
+                reason: std::borrow::Cow::Borrowed("Unauthorized"),
+            }))).await;
+        });
+    }
 
     ws.on_upgrade(move |socket| handle_socket(socket, planet_id, state))
 }

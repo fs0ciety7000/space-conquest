@@ -510,18 +510,40 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                             </button>
                         </div>
                         <div className="p-5 space-y-4">
-                            <div className="text-xs text-slate-400 space-y-1">
-                                <p>Champ de débris en <span className="font-mono text-amber-300">[{recycleModal.slot.planet_galaxy}:{system}:{recycleModal.slot.position}]</span></p>
-                                <div className="flex gap-4 mt-2">
-                                    <span className="text-slate-300">Métal: <span className="font-mono text-slate-200">{Math.floor(recycleModal.slot.debris_metal).toLocaleString()}</span></span>
-                                    <span className="text-cyan-300">Cristal: <span className="font-mono text-slate-200">{Math.floor(recycleModal.slot.debris_crystal).toLocaleString()}</span></span>
+                            {/* Debris field info */}
+                            <div className="bg-[rgba(10,5,32,0.85)] rounded-xl border border-amber-500/15 p-3 space-y-2">
+                                <p className="text-[10px] uppercase font-bold text-amber-500/70 tracking-widest">
+                                    Champ de débris — <span className="font-mono text-amber-300">[{recycleModal.slot.planet_galaxy}:{system}:{recycleModal.slot.position}]</span>
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="flex flex-col items-center p-2 rounded-lg bg-orange-950/20 border border-orange-500/15">
+                                        <span className="text-[9px] text-slate-500 uppercase mb-1">Métal</span>
+                                        <span className="font-mono text-sm font-bold text-orange-300">
+                                            {Math.floor(recycleModal.slot.debris_metal).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col items-center p-2 rounded-lg bg-cyan-950/20 border border-cyan-500/15">
+                                        <span className="text-[9px] text-slate-500 uppercase mb-1">Cristal</span>
+                                        <span className="font-mono text-sm font-bold text-cyan-300">
+                                            {Math.floor(recycleModal.slot.debris_crystal).toLocaleString()}
+                                        </span>
+                                    </div>
                                 </div>
+                                {/* Needed recyclers hint */}
+                                <p className="text-[10px] text-slate-500 font-mono text-center">
+                                    Pour tout collecter:{' '}
+                                    <span className="text-amber-400 font-bold">
+                                        {Math.ceil((recycleModal.slot.debris_metal + recycleModal.slot.debris_crystal) / 20000)} recycleur(s) minimum
+                                    </span>
+                                </p>
                             </div>
+
+                            {/* Recycler count picker */}
                             <div>
                                 <label className="text-[10px] uppercase font-bold text-slate-500 block mb-2">
-                                    Recycleurs à envoyer (max: {recycleModal.maxRecyclers})
+                                    Recycleurs à envoyer (max disponibles: {recycleModal.maxRecyclers})
                                 </label>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
                                     <Input
                                         type="number"
                                         min={1}
@@ -531,14 +553,59 @@ export default function GalaxyView({ planet, onNavigateAttack, onNavigateSpy, on
                                         onFocus={(e) => e.target.select()}
                                         className="flex-1 h-9 bg-[rgba(5,0,15,0.8)] border border-amber-500/20 text-slate-200 text-center font-mono focus:border-amber-500/50"
                                     />
+                                    {/* MAX FOR DEBRIS button — sets to min(needed, available) */}
+                                    <button
+                                        onClick={() => {
+                                            const needed = Math.ceil((recycleModal.slot.debris_metal + recycleModal.slot.debris_crystal) / 20000);
+                                            setRecycleCount(Math.min(needed, recycleModal.maxRecyclers));
+                                        }}
+                                        className="px-3 py-1.5 bg-emerald-900/20 hover:bg-emerald-900/40 border border-emerald-500/20 text-emerald-400 font-bold text-[10px] rounded transition-colors cursor-pointer"
+                                        title="Nombre exact pour collecter tous les débris"
+                                    >
+                                        OPTIMAL
+                                    </button>
                                     <button
                                         onClick={() => setRecycleCount(recycleModal.maxRecyclers)}
-                                        className="px-3 py-1.5 bg-amber-900/20 hover:bg-amber-900/40 border border-amber-500/20 text-amber-400 font-bold text-[10px] rounded transition-colors"
+                                        className="px-3 py-1.5 bg-amber-900/20 hover:bg-amber-900/40 border border-amber-500/20 text-amber-400 font-bold text-[10px] rounded transition-colors cursor-pointer"
                                     >
                                         MAX
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Estimated collection */}
+                            {recycleCount > 0 && (
+                                <div className="bg-emerald-950/20 border border-emerald-500/15 rounded-lg p-3">
+                                    <p className="text-[10px] uppercase font-bold text-emerald-500/70 tracking-widest mb-2">Estimation collectée</p>
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                        {(() => {
+                                            const capacity = recycleCount * 20000;
+                                            const totalDebris = recycleModal.slot.debris_metal + recycleModal.slot.debris_crystal;
+                                            const ratio = totalDebris > 0 ? Math.min(1, capacity / totalDebris) : 1;
+                                            const estMetal = Math.floor(recycleModal.slot.debris_metal * ratio);
+                                            const estCrystal = Math.floor(recycleModal.slot.debris_crystal * ratio);
+                                            return (
+                                                <>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-slate-500">Métal</span>
+                                                        <span className="font-mono font-bold text-orange-300">{estMetal.toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-slate-500">Cristal</span>
+                                                        <span className="font-mono font-bold text-cyan-300">{estCrystal.toLocaleString()}</span>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                    {recycleCount * 20000 < recycleModal.slot.debris_metal + recycleModal.slot.debris_crystal && (
+                                        <p className="text-[10px] text-amber-400 mt-1.5">
+                                            Soute insuffisante — {(recycleModal.slot.debris_metal + recycleModal.slot.debris_crystal - recycleCount * 20000).toLocaleString()} débris non collectés
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="flex gap-3 pt-2">
                                 <Button variant="ghost" onClick={() => setRecycleModal(null)} className="flex-1 border border-cyan-500/10 text-slate-400 hover:text-slate-200 text-xs font-bold uppercase">
                                     Annuler

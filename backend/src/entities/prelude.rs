@@ -99,3 +99,6 @@ pub use super :: law_vote :: Entity as LawVote ;
 pub use super :: law_effect :: Entity as LawEffect ;
 pub use super :: survey :: Entity as Survey ;
 pub use super :: survey_response :: Entity as SurveyResponse ;
+
+// ACS — Allied Combat System (M7)
+pub use super :: acs_group :: Entity as AcsGroup ;
