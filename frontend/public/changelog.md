@@ -1,5 +1,55 @@
 # Changelog - Space Conquest
 
+## [12.0.0] - 2026-03-13 - Sprint 1 & 2 — Équilibrage, Sécurité, Fleet Save
+
+### 🛡️ Fleet Save — Nouvelle mission "Déployer"
+- **Mission Déployer** : envoyez votre flotte en transit sécurisé vers une de vos colonies — les vaisseaux sont hors de portée des attaquants pendant leur transit
+- **Rappel de flotte** : annulez un déploiement à tout moment pour récupérer vos vaisseaux immédiatement
+- **Interface dédiée** dans le FleetDispatcher : onglet violet "Déployer" avec sélecteur de colonie de destination
+
+### ⚖️ Équilibrage
+- **Fusion Plant** : formule linéaire remplacée par exponentielle `base × level × 1.2^level` — enfin viable en late-game comme alternative au Solar Plant
+- **Crystal Mine** : facteur de coût réduit de 1.6 → 1.5, aligné sur la Metal Mine
+- **Astrophysics** : `category_factor` réduit de 2.5 → 1.8 — débloquer la colonisation multi-planètes est maintenant accessible en mid-game
+- **Marché Noir** : seuil d'accès réduit (Espionnage 13→8, Informatique 10→6) — accessible à un bien plus grand nombre de joueurs
+- **Hyperspace Tech** : bonus de vitesse unifié à 15%/niveau sur toutes les missions (flottes + routes commerciales)
+
+### 🎖️ Officiers — Enfin actifs
+- Les bonus d'officiers sont maintenant **réellement appliqués** dans le jeu :
+  - Bonus de production calculé sur le delta de production (pas le stock existant)
+  - Bonus de combat (armes, bouclier, blindage) appliqués dans `resolve_attack_mission`
+- Les officiers ne sont plus des cosmétiques coûteux
+
+### 🏗️ Bâtiments et Technologies
+- **5 bâtiments fantômes désactivés** dans l'UI : `nanite_factory`, `terraformer`, `alliance_depot`, `missile_silo` — plus de money trap
+- **Descriptions de technologies corrigées** : plasma_tech, computer_tech, laser_tech, hyperspace_tech (15% pas 10%), ion_tech, graviton_tech affichent maintenant leurs vrais effets
+- **Mapping tech Shipyard corrigé** : les stats de vaisseaux affichaient des bonus via `laser_tech`/`energy_tech` au lieu de `weapons_tech`/`shield_tech`
+
+### 🔒 Sécurité & Anti-Exploit
+- **Anti-farm activé** : `is_attack_allowed_by_points` désormais appelé dans `validate_attack` — ratio configurable via `anti_farm_min_ratio`/`anti_farm_max_ratio`
+- **Transactions DB atomiques** : `deploy_handler` et `attack_v2_handler` wrappés dans des transactions — le double-spend TOCTOU est éliminé
+- **Guard overflow** : quantité de vaisseaux castée en `i64` avant multiplication + limite à 100 000 unités
+
+### 🎮 Interface & UX
+- **Confirmation avant attaque** : modal de confirmation avec cible, flotte et ETA avant tout lancement militaire
+- **Débris dans la GalaxyView** : champs de débris visibles sur la carte galactique avec sélecteur de nombre de recycleurs
+- **Vue Flottes en Transit** (`ActiveMissions`) : toutes vos missions actives avec countdown en temps réel, intégré dans PlanetOverview
+- **ETA de vol corrigé** : formule piecewise exacte du backend (3 branches selon la distance), clé `flight_speed_multiplier` (défaut 5.0) au lieu d'une valeur inventée
+
+### ⚡ Performance
+- **Score militaire** : recalcul toutes les 5 minutes au lieu de toutes les 2 secondes (réduction de charge DB ×150)
+- **`apply_storage_cap`** intégré dans le lazy eval — les ressources ne dépassent plus le cap silencieusement
+- **React.memo** sur 5 composants lourds : Shipyard, Defenses, Facilities, TechTree, ReportsTerminal — timer TechTree conditionnel
+- **Rapid Fire (spy)** : lecture depuis la table DB `rapid_fire_rule` au lieu d'un match hardcodé — plus de divergence entre l'évaluation de menace et le combat réel
+
+### 🧹 Qualité Code
+- **Coûts de bâtiments data-driven** : `BuildingCostCache` chargé au démarrage depuis `building_types` — les admins peuvent modifier les coûts en DB sans recompile
+- **Rapid Fire cache** partagé entre espionnage et combat via `AppState`
+- **144 warnings → 0** : nettoyage complet sur 28 fichiers Rust (imports inutilisés, variables mortes, shadowing)
+- **3 WS events corrigés** : `.await` manquant sur `broadcast_global` dans `server_events.rs` — les events n'étaient silencieusement pas envoyés
+
+---
+
 ## [11.5.0] - 2026-03-13 - CTR & Military Score
 
 ### 🏅 Combat Tier Rating (CTR) — Nouvelle métrique militaire
