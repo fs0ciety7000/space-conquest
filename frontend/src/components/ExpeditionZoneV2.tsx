@@ -34,7 +34,7 @@ export default function ExpeditionZoneV2({ planet, onAction }: { planet: any, on
 
   // Expedition slots
   const [activeExpeditionCount, setActiveExpeditionCount] = useState(0);
-  const computerTechLevel: number = planet?.computer_tech_level ?? 0;
+  const computerTechLevel: number = planet?.technologies?.computer_tech ?? planet?.computer_tech_level ?? 0;
   const maxExpeditionSlots = 1 + Math.floor(computerTechLevel / 4);
 
   const fetchActiveExpeditions = useCallback(async () => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Globe, Rocket, Package, X, TrendingUp, Clock, AlertTriangle } from "lucide-react";
+import { Globe, Rocket, Package, X, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { calculateDistance } from '@/utils/galaxyCalculations';
@@ -41,18 +41,14 @@ export default function ColonizeModal({
   const colonyShips = currentPlanet?.colony_ship_count || 0;
   const hasColonyShip = colonyShips > 0;
 
-  // Réserves minimales obligatoires sur la planète source
+  // Base gratuite offerte par le jeu à chaque nouvelle colonie
   const MIN_METAL = 20_000;
   const MIN_CRYSTAL = 20_000;
   const MIN_DEUT = 15_000;
-  const maxMetal = Math.max(0, Math.floor(availableResources.metal) - MIN_METAL);
-  const maxCrystal = Math.max(0, Math.floor(availableResources.crystal) - MIN_CRYSTAL);
-  const maxDeuterium = Math.max(0, Math.floor(availableResources.deuterium) - MIN_DEUT);
-
-  const hasEnoughReserve =
-    availableResources.metal >= MIN_METAL &&
-    availableResources.crystal >= MIN_CRYSTAL &&
-    availableResources.deuterium >= MIN_DEUT;
+  // Le supplément max = tout ce que la source possède (la base est gratuite)
+  const maxMetal = Math.floor(availableResources.metal);
+  const maxCrystal = Math.floor(availableResources.crystal);
+  const maxDeuterium = Math.floor(availableResources.deuterium);
 
   // Calculer distance et temps de vol
   const distance = currentPlanet ? calculateDistance(
@@ -62,7 +58,7 @@ export default function ColonizeModal({
 
   const travelTime = Math.round(distance / 100); // Temps en secondes
 
-  const canColonize = hasColonyShip && hasEnoughReserve;
+  const canColonize = hasColonyShip;
 
   const handleSubmit = () => {
     if (!canColonize) return;
@@ -110,19 +106,6 @@ export default function ColonizeModal({
             </div>
           )}
 
-          {/* Avertissement ressources insuffisantes pour la base obligatoire */}
-          {hasColonyShip && !hasEnoughReserve && (
-            <div className="bg-amber-900/20 border border-amber-500/40 p-4 rounded-xl glass-card">
-              <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase mb-2">
-                <AlertTriangle size={14} /> Ressources insuffisantes
-              </div>
-              <p className="text-slate-400 text-xs">
-                La colonisation envoie automatiquement <span className="text-orange-400 font-bold">20 000 Métal</span>,{' '}
-                <span className="text-cyan-400 font-bold">20 000 Cristal</span> et{' '}
-                <span className="text-emerald-400 font-bold">15 000 Deutérium</span> à la nouvelle colonie. Votre planète source n'a pas assez de ressources.
-              </p>
-            </div>
-          )}
 
           {/* Info */}
           <div className="bg-emerald-900/10 border border-emerald-500/20 p-4 rounded-xl glass-card">
@@ -170,7 +153,7 @@ export default function ColonizeModal({
                 <Package size={12} className="text-orange-400" />
                 Métal à transporter
               </span>
-              <span className="text-slate-200">Max supplément: <span className="text-orange-400">{maxMetal.toLocaleString()}</span> <span className="text-slate-500">(base: 20 000 auto)</span></span>
+              <span className="text-slate-200">Supplément max: <span className="text-orange-400">{maxMetal.toLocaleString()}</span></span>
             </div>
             <div className="flex gap-4 items-center">
               <Input
@@ -200,7 +183,7 @@ export default function ColonizeModal({
                 <Package size={12} className="text-cyan-400" />
                 Cristal à transporter
               </span>
-              <span className="text-slate-200">Max supplément: <span className="text-cyan-400">{maxCrystal.toLocaleString()}</span> <span className="text-slate-500">(base: 20 000 auto)</span></span>
+              <span className="text-slate-200">Supplément max: <span className="text-cyan-400">{maxCrystal.toLocaleString()}</span></span>
             </div>
             <div className="flex gap-4 items-center">
               <Input
@@ -230,7 +213,7 @@ export default function ColonizeModal({
                 <Package size={12} className="text-emerald-400" />
                 Deutérium à transporter
               </span>
-              <span className="text-slate-200">Max supplément: <span className="text-emerald-400">{maxDeuterium.toLocaleString()}</span> <span className="text-slate-500">(base: 15 000 auto)</span></span>
+              <span className="text-slate-200">Supplément max: <span className="text-emerald-400">{maxDeuterium.toLocaleString()}</span></span>
             </div>
             <div className="flex gap-4 items-center">
               <Input
@@ -292,7 +275,7 @@ export default function ColonizeModal({
                   : 'bg-[rgba(5,0,15,0.8)] border border-cyan-500/10 cursor-not-allowed opacity-50'
               } text-slate-200 font-black uppercase tracking-widest card-depth transition-all duration-300`}
             >
-              {!hasColonyShip ? 'Vaisseau Requis' : !hasEnoughReserve ? 'Ressources insuffisantes' : 'Coloniser'}
+              {!hasColonyShip ? 'Vaisseau Requis' : 'Coloniser'}
             </Button>
           </div>
         </div>

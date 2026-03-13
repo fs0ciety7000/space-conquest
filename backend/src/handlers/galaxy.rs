@@ -355,37 +355,35 @@ pub async fn colonize_handler(
             .into_response();
     }
 
-    // Récupérer les ressources à transporter (optionnelles)
+    // Supplément optionnel que le joueur choisit de transporter
     let metal_to_transport = payload.metal.unwrap_or(0.0).max(0.0);
     let crystal_to_transport = payload.crystal.unwrap_or(0.0).max(0.0);
     let deuterium_to_transport = payload.deuterium.unwrap_or(0.0).max(0.0);
 
-    // Base de démarrage obligatoire — toujours envoyée à la nouvelle colonie
+    // Valider que la source a assez pour le supplément choisi (la base 20k/20k/15k est gratuite)
+    if metal_to_transport > att_planet_data.metal_amount {
+        return (StatusCode::BAD_REQUEST,
+            Json(json!({"error": format!("Pas assez de métal sur la planète source ({:.0} disponible, {:.0} demandé).", att_planet_data.metal_amount, metal_to_transport)})),
+        ).into_response();
+    }
+    if crystal_to_transport > att_planet_data.crystal_amount {
+        return (StatusCode::BAD_REQUEST,
+            Json(json!({"error": format!("Pas assez de cristal sur la planète source ({:.0} disponible, {:.0} demandé).", att_planet_data.crystal_amount, crystal_to_transport)})),
+        ).into_response();
+    }
+    if deuterium_to_transport > att_planet_data.deuterium_amount {
+        return (StatusCode::BAD_REQUEST,
+            Json(json!({"error": format!("Pas assez de deutérium sur la planète source ({:.0} disponible, {:.0} demandé).", att_planet_data.deuterium_amount, deuterium_to_transport)})),
+        ).into_response();
+    }
+
+    // Total reçu par la nouvelle colonie = base offerte par le jeu + supplément transporté
     const BASE_METAL: f64 = 20_000.0;
     const BASE_CRYSTAL: f64 = 20_000.0;
     const BASE_DEUT: f64 = 15_000.0;
-
-    // Total à déduire de la source = base obligatoire + supplément choisi par le joueur
     let total_metal = BASE_METAL + metal_to_transport;
     let total_crystal = BASE_CRYSTAL + crystal_to_transport;
     let total_deut = BASE_DEUT + deuterium_to_transport;
-
-    // Valider que la source a assez pour la base + le supplément
-    if total_metal > att_planet_data.metal_amount {
-        return (StatusCode::BAD_REQUEST,
-            Json(json!({"error": format!("Métal insuffisant. La colonisation nécessite au moins {:.0} de métal (base 20 000 + {:.0} supplément).", total_metal, metal_to_transport)})),
-        ).into_response();
-    }
-    if total_crystal > att_planet_data.crystal_amount {
-        return (StatusCode::BAD_REQUEST,
-            Json(json!({"error": format!("Cristal insuffisant. La colonisation nécessite au moins {:.0} de cristal (base 20 000 + {:.0} supplément).", total_crystal, crystal_to_transport)})),
-        ).into_response();
-    }
-    if total_deut > att_planet_data.deuterium_amount {
-        return (StatusCode::BAD_REQUEST,
-            Json(json!({"error": format!("Deutérium insuffisant. La colonisation nécessite au moins {:.0} de deutérium (base 15 000 + {:.0} supplément).", total_deut, deuterium_to_transport)})),
-        ).into_response();
-    }
 
     // Vérifier que l'emplacement n'est pas déjà occupé
     let exists = Planet::find()
@@ -476,9 +474,10 @@ pub async fn colonize_handler(
     // Déduire le vaisseau et les ressources de la planète source
     let _ = tech_tree::deduct_ships(&state.db, current_id, "colony_ship", 1).await;
     let mut att_planet = att_planet_data.clone().into_active_model();
-    att_planet.metal_amount = Set(att_planet_data.metal_amount - total_metal);
-    att_planet.crystal_amount = Set(att_planet_data.crystal_amount - total_crystal);
-    att_planet.deuterium_amount = Set(att_planet_data.deuterium_amount - total_deut);
+    // Déduire seulement le supplément (la base 20k/20k/15k est offerte par le jeu)
+    att_planet.metal_amount = Set(att_planet_data.metal_amount - metal_to_transport);
+    att_planet.crystal_amount = Set(att_planet_data.crystal_amount - crystal_to_transport);
+    att_planet.deuterium_amount = Set(att_planet_data.deuterium_amount - deuterium_to_transport);
     let _ = att_planet.update(&state.db).await;
 
     // Formater le temps de vol pour l'affichage
