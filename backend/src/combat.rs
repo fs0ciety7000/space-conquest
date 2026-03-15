@@ -1084,4 +1084,146 @@ mod tests {
         // Attaquant avec weapons_mult 1.2 devrait gagner à égalité numérique
         assert_eq!(report.winner, "attacker", "Attacker with +20% weapons tech should win equal fight");
     }
+
+    // =========================================================================
+    // Sprint BALANCE-3 — Tests unitaires T-001 à T-003 (Rapid Fire anti-défenses)
+    //
+    // Ces tests vérifient que le RapidFireCache est correctement appliqué par
+    // calculate_damage_to_fleet lorsque les défenses sont keyed "def_<defense_key>".
+    //
+    // Formule :
+    //   base_attack = ship.attack × count × weapons_mult
+    //   for each target_type in defender_fleet:
+    //       rf_mult = rf_cache[(attacker_key, target_key)].unwrap_or(1)
+    //       target_proportion = target_count / total_target_units
+    //       effective_damage += base_attack × rf_mult × target_proportion
+    //
+    // Références : BALANCE_PLAN.md BALANCE-3-A, lignes T-001 à T-003.
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // T-001 : Croiseur RF×10 vs 100 Rocket Launchers (défenses uniquement)
+    //
+    // Scénario : 1 croiseur (attack=400) tire sur une flotte composée
+    // uniquement de 100 Rocket Launchers.
+    //
+    // Calcul attendu :
+    //   base_attack          = 400 × 1 × 1.0 = 400
+    //   rf_mult              = 10  (règle "cruiser" → "def_rocket_launcher")
+    //   target_proportion    = 100/100 = 1.0   (seul type dans la flotte)
+    //   effective_damage     = 400 × 10 × 1.0 = 4000
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_t001_cruiser_rf10_vs_rocket_launcher() {
+        let stats = cache(&[
+            ("cruiser",             400, 50, 2700),
+            ("def_rocket_launcher", 80,  20,  200),
+        ]);
+
+        let mut rf = no_rf();
+        rf.insert(
+            ("cruiser".to_string(), "def_rocket_launcher".to_string()),
+            10,
+        );
+
+        let attacker = fleet(&[("cruiser", 1)]);
+        let defender = fleet(&[("def_rocket_launcher", 100)]);
+
+        let damage = attacker.calculate_damage_to_fleet(&defender, &stats, &rf, 1.0);
+
+        assert!(
+            (damage - 4000.0).abs() < 0.01,
+            "T-001: Expected 4000 damage (RF×10), got {damage}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // T-002 : Bombardier RF×20 vs 50 Rocket Launchers
+    //
+    // Calcul attendu :
+    //   base_attack          = 1000 × 1 × 1.0 = 1000
+    //   rf_mult              = 20
+    //   target_proportion    = 50/50 = 1.0
+    //   effective_damage     = 1000 × 20 × 1.0 = 20000
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_t002_bomber_rf20_vs_rocket_launcher() {
+        let stats = cache(&[
+            ("bomber",              1000, 300, 8500),
+            ("def_rocket_launcher",   80,  20,  200),
+        ]);
+
+        let mut rf = no_rf();
+        rf.insert(
+            ("bomber".to_string(), "def_rocket_launcher".to_string()),
+            20,
+        );
+
+        let attacker = fleet(&[("bomber", 1)]);
+        let defender = fleet(&[("def_rocket_launcher", 50)]);
+
+        let damage = attacker.calculate_damage_to_fleet(&defender, &stats, &rf, 1.0);
+
+        assert!(
+            (damage - 20000.0).abs() < 0.01,
+            "T-002: Expected 20000 damage (RF×20), got {damage}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // T-003 : Bombardier RF×10 vs 20 Plasma Turrets
+    //
+    // Calcul attendu :
+    //   base_attack          = 1000 × 1 × 1.0 = 1000
+    //   rf_mult              = 10
+    //   target_proportion    = 20/20 = 1.0
+    //   effective_damage     = 1000 × 10 × 1.0 = 10000
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_t003_bomber_rf10_vs_plasma_turret() {
+        let stats = cache(&[
+            ("bomber",          1000, 300,  8500),
+            ("def_plasma_turret", 3000, 300, 10000),
+        ]);
+
+        let mut rf = no_rf();
+        rf.insert(
+            ("bomber".to_string(), "def_plasma_turret".to_string()),
+            10,
+        );
+
+        let attacker = fleet(&[("bomber", 1)]);
+        let defender = fleet(&[("def_plasma_turret", 20)]);
+
+        let damage = attacker.calculate_damage_to_fleet(&defender, &stats, &rf, 1.0);
+
+        assert!(
+            (damage - 10000.0).abs() < 0.01,
+            "T-003: Expected 10000 damage (RF×10), got {damage}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // T-001 sans RF cache : vérification que sans règle RF, le multiplicateur
+    // est bien 1 (pas de régression silencieuse sur le comportement par défaut).
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_t001_no_rf_baseline_cruiser_vs_rocket_launcher() {
+        let stats = cache(&[
+            ("cruiser",             400, 50, 2700),
+            ("def_rocket_launcher",  80, 20,  200),
+        ]);
+
+        // Aucune règle RF — rf_mult = 1 par défaut
+        let attacker = fleet(&[("cruiser", 1)]);
+        let defender = fleet(&[("def_rocket_launcher", 100)]);
+
+        let damage = attacker.calculate_damage_to_fleet(&defender, &stats, &no_rf(), 1.0);
+
+        // Sans RF : base_attack × 1 × 1.0 = 400
+        assert!(
+            (damage - 400.0).abs() < 0.01,
+            "T-001 baseline: Expected 400 damage without RF, got {damage}"
+        );
+    }
 }

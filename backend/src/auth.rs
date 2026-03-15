@@ -84,10 +84,7 @@ pub fn extract_user_id_from_token(token: &str) -> Option<Uuid> {
 /// Axum extractor that validates the Bearer JWT and injects the authenticated
 /// caller's `user_id`. Returns 401 if the token is absent or invalid.
 ///
-/// Usage in handlers:
-/// ```rust
-/// async fn my_handler(auth: AuthUser, ...) { let uid = auth.user_id; }
-/// ```
+/// Usage in handlers: declare `auth: AuthUser` as a parameter; access `auth.user_id`.
 #[derive(Debug, Clone)]
 pub struct AuthUser {
     pub user_id: Uuid,

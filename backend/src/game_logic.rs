@@ -265,6 +265,8 @@ pub fn calculate_resources(
                 config.get_config("production_crystal_growth", 1.1), plasma_bonus)
         },
         ResourceType::Deuterium => {
+            // NOTE(BALANCE-2-C): Deuterium base=15 produit ~50% du métal (30).
+            // Décision délibérée vs OGame (33%) pour réduire la frustration carburant.
             mine_production(config.get_config("production_deuterium_base", 15.0), level,
                 config.get_config("production_deuterium_growth", 1.1), plasma_bonus)
         },
@@ -434,136 +436,6 @@ pub fn calculate_resources_with_energy(
     current_amount + (production_per_sec * duration)
 }
 
-// --- COÛTS DES BÂTIMENTS (Exponentiel) ---
-pub fn get_upgrade_cost(building_type: &str, level: i32, _config: &ServerConfigCache) -> Cost {
-    let base_cost = match building_type {
-        // MINES (multiplicateur 1.5)
-        "metal" => Cost {
-            metal: 60.0 * 1.5f64.powi(level - 1),
-            crystal: 15.0 * 1.5f64.powi(level - 1),
-            deuterium: 0.0,
-        },
-        "crystal" => Cost {
-            // Exposant réduit 1.6 → 1.5 (v9.2) pour rendre la mine de cristal plus accessible
-            metal: 48.0 * 1.5f64.powi(level - 1),
-            crystal: 24.0 * 1.5f64.powi(level - 1),
-            deuterium: 0.0,
-        },
-        "deuterium" => Cost {
-            metal: 225.0 * 1.5f64.powi(level - 1),
-            crystal: 75.0 * 1.5f64.powi(level - 1),
-            deuterium: 0.0,
-        },
-
-        // ÉNERGIE (multiplicateur 1.5)
-        "solar_plant" => Cost {
-            metal: 75.0 * 1.5f64.powi(level - 1),
-            crystal: 30.0 * 1.5f64.powi(level - 1),
-            deuterium: 0.0,
-        },
-
-        // INFRASTRUCTURES (multiplicateur 2.0)
-        "shipyard" => Cost {
-            metal: 400.0 * 1.5f64.powi(level - 1),
-            crystal: 200.0 * 1.5f64.powi(level - 1),
-            deuterium: 100.0 * 1.5f64.powi(level - 1),
-        },
-        "research" => Cost {
-            metal: 200.0 * 1.5f64.powi(level - 1),
-            crystal: 400.0 * 1.5f64.powi(level - 1),
-            deuterium: 200.0 * 1.5f64.powi(level - 1),
-        },
-        "hangar" => Cost {
-            metal: 400.0 * 1.5f64.powi(level - 1),
-            crystal: 200.0 * 1.5f64.powi(level - 1),
-            deuterium: 100.0 * 1.5f64.powi(level - 1),
-        },
-        "resource_storage" => Cost {
-            metal: 1000.0 * 1.5f64.powi(level - 1),
-            crystal: 500.0 * 1.5f64.powi(level - 1),
-            deuterium: 0.0,
-        },
-
-        // TECHNOLOGIES DE BASE (multiplicateur 2.0)
-        "energy_tech" => Cost {
-            metal: 0.0,
-            crystal: 800.0 * 2.0f64.powi(level - 1),
-            deuterium: 400.0 * 2.0f64.powi(level - 1),
-        },
-        "laser" => Cost {
-            metal: 200.0 * 2.0f64.powi(level - 1),
-            crystal: 100.0 * 2.0f64.powi(level - 1),
-            deuterium: 0.0,
-        },
-        "espionage" => Cost {
-            metal: 200.0 * 2.0f64.powi(level - 1),
-            crystal: 1000.0 * 2.0f64.powi(level - 1),
-            deuterium: 200.0 * 2.0f64.powi(level - 1),
-        },
-        "armour" => Cost {
-            metal: 1000.0 * 2.0f64.powi(level - 1),
-            crystal: 0.0,
-            deuterium: 0.0,
-        },
-
-        // TECHNOLOGIES AVANCÉES - EXPANSION 2.0 (multiplicateur 2.0)
-        "ion_tech" => Cost {
-            metal: 1000.0 * 2.0f64.powi(level - 1),
-            crystal: 300.0 * 2.0f64.powi(level - 1),
-            deuterium: 100.0 * 2.0f64.powi(level - 1),
-        },
-        "plasma_tech" => Cost {
-            metal: 2000.0 * 2.0f64.powi(level - 1),
-            crystal: 4000.0 * 2.0f64.powi(level - 1),
-            deuterium: 1000.0 * 2.0f64.powi(level - 1),
-        },
-        "shield_tech" => Cost {
-            metal: 200.0 * 2.0f64.powi(level - 1),
-            crystal: 600.0 * 2.0f64.powi(level - 1),
-            deuterium: 0.0,
-        },
-        "weapons_tech" => Cost {
-            metal: 800.0 * 2.0f64.powi(level - 1),
-            crystal: 200.0 * 2.0f64.powi(level - 1),
-            deuterium: 0.0,
-        },
-        "computer_tech" => Cost {
-            metal: 0.0,
-            crystal: 400.0 * 2.0f64.powi(level - 1),
-            deuterium: 600.0 * 2.0f64.powi(level - 1),
-        },
-        "combustion_drive" => Cost {
-            metal: 400.0 * 2.0f64.powi(level - 1),
-            crystal: 0.0,
-            deuterium: 600.0 * 2.0f64.powi(level - 1),
-        },
-        "impulse_drive" => Cost {
-            metal: 2000.0 * 2.0f64.powi(level - 1),
-            crystal: 4000.0 * 2.0f64.powi(level - 1),
-            deuterium: 600.0 * 2.0f64.powi(level - 1),
-        },
-        "hyperspace_drive" => Cost {
-            metal: 10000.0 * 2.0f64.powi(level - 1),
-            crystal: 20000.0 * 2.0f64.powi(level - 1),
-            deuterium: 6000.0 * 2.0f64.powi(level - 1),
-        },
-        "astrophysics" => Cost {
-            metal: 4000.0 * 2.0f64.powi(level - 1),
-            crystal: 8000.0 * 2.0f64.powi(level - 1),
-            deuterium: 4000.0 * 2.0f64.powi(level - 1),
-        },
-        "logistics_tech" => Cost {
-            metal: 1000.0 * 2.0f64.powi(level - 1),
-            crystal: 1000.0 * 2.0f64.powi(level - 1),
-            deuterium: 1000.0 * 2.0f64.powi(level - 1),
-        },
-
-        _ => Cost { metal: 0.0, crystal: 0.0, deuterium: 0.0 },
-    };
-
-    base_cost
-}
-
 /// Temps de recherche basé sur le niveau cible, avec bonus du laboratoire.
 /// Formule : BASE_TECH_TIME * level^TECH_EXPONENT * category_factor
 /// Réduction : -7% par niveau de labo, max -55%.
@@ -693,7 +565,7 @@ pub fn get_ship_cargo_capacity(ship_type: &str, config: &ServerConfigCache) -> f
     match ship_type {
         "light_hunter" => config.get_config("cargo_light_hunter", 50.0),
         "cruiser" => config.get_config("cargo_cruiser", 800.0),
-        "heavy_hunter" => config.get_config("cargo_heavy_hunter", 100.0),
+        "heavy_hunter" => config.get_config("cargo_heavy_hunter", 50.0),
         "battleship" => config.get_config("cargo_battleship", 1500.0),
         "bomber" => config.get_config("cargo_bomber", 500.0),
         "destroyer" => config.get_config("cargo_destroyer", 2000.0),
@@ -731,7 +603,7 @@ pub fn get_unit_base_stats(unit_type: &str, config: &ServerConfigCache) -> UnitS
 
         // Vaisseaux Avancés - EXPANSION 2.0
         "heavy_hunter" => UnitStats {
-            attack: config.get_config("combat_heavy_hunter_attack", 25.0),
+            attack: config.get_config("combat_heavy_hunter_attack", 75.0),
             shield: config.get_config("combat_heavy_hunter_shield", 150.0),
             hull: config.get_config("combat_heavy_hunter_hull", 800.0),
             cargo_capacity: config.get_config("cargo_heavy_hunter", 50.0),
@@ -744,8 +616,8 @@ pub fn get_unit_base_stats(unit_type: &str, config: &ServerConfigCache) -> UnitS
         },
         "bomber" => UnitStats {
             attack: config.get_config("combat_bomber_attack", 1000.0),
-            shield: config.get_config("combat_bomber_shield", 75.0),
-            hull: config.get_config("combat_bomber_hull", 7500.0),
+            shield: config.get_config("combat_bomber_shield", 300.0),
+            hull: config.get_config("combat_bomber_hull", 8500.0),
             cargo_capacity: config.get_config("cargo_bomber", 500.0),
         },
         "destroyer" => UnitStats {
@@ -851,36 +723,6 @@ pub fn apply_tech_bonuses(base_stats: UnitStats, bonuses: &TechBonuses) -> UnitS
     }
 }
 
-/// Create tech bonuses from tech levels.
-/// BALANCE-0-C: laser_tech (+5%/level) and ion_tech (+3%/level) now contribute
-/// to weapons_multiplier, matching the formula already used in
-/// `load_planet_tech_bonuses` (handlers/fleet.rs).
-pub fn create_tech_bonuses(
-    weapons_tech: i32,
-    shield_tech: i32,
-    armour_tech: i32,
-    logistics_tech: i32,
-    laser_tech: i32,
-    ion_tech: i32,
-    config: &ServerConfigCache
-) -> TechBonuses {
-    let weapons_bonus = config.get_config("tech_bonus_weapons", 0.1);
-    let shield_bonus = config.get_config("tech_bonus_shield", 0.1);
-    let armour_bonus = config.get_config("combat_armour_tech_bonus", 0.1);
-    let cargo_bonus = config.get_config("tech_bonus_cargo", 0.05);
-    let laser_bonus = config.get_config("combat_tech_laser_bonus", 0.05);
-    let ion_bonus = config.get_config("combat_tech_ion_bonus", 0.03);
-
-    TechBonuses {
-        weapons_multiplier: 1.0
-            + (weapons_tech as f64 * weapons_bonus)
-            + (laser_tech as f64 * laser_bonus)
-            + (ion_tech as f64 * ion_bonus),
-        shield_multiplier: 1.0 + (shield_tech as f64 * shield_bonus),
-        armour_multiplier: 1.0 + (armour_tech as f64 * armour_bonus),
-        cargo_multiplier: 1.0 + (logistics_tech as f64 * cargo_bonus),
-    }
-}
 
 /// Look up rapid fire value from the DB-backed cache.
 /// Returns the `rapid_fire_value` for (attacker → target), or 0 if no rule exists.

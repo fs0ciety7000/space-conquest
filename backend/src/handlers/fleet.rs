@@ -1491,15 +1491,21 @@ async fn expedition_v2_handler(
 
     // ─── Config par type de vaisseau (capacity, combat_power, vulnerability) ─
     struct ShipExpedCfg { capacity: f64, combat_power: f64, vulnerability: f64 }
+    // BALANCE-1-C: capacity weights revised (HIGH-003).
+    // Transporter dropped from 3.5 → 1.5 to prevent trivial reward inflation by
+    // massing cheap unarmed haulers.  Heavy Hunter and Bomber weights also aligned
+    // with the full recommended table.
     let ship_cfg: HashMap<&str, ShipExpedCfg> = [
         ("light_hunter",  ShipExpedCfg { capacity: 1.0,  combat_power: 1.0,  vulnerability: 1.0 }),
+        ("heavy_hunter",  ShipExpedCfg { capacity: 1.5,  combat_power: 2.0,  vulnerability: 0.8 }),
         ("cruiser",       ShipExpedCfg { capacity: 2.5,  combat_power: 3.0,  vulnerability: 0.5 }),
         ("battleship",    ShipExpedCfg { capacity: 3.0,  combat_power: 5.0,  vulnerability: 0.3 }),
-        ("destroyer",     ShipExpedCfg { capacity: 2.0,  combat_power: 4.0,  vulnerability: 0.4 }),
+        ("bomber",        ShipExpedCfg { capacity: 2.0,  combat_power: 4.0,  vulnerability: 0.4 }),
+        ("destroyer",     ShipExpedCfg { capacity: 3.5,  combat_power: 6.0,  vulnerability: 0.3 }),
         ("death_star",    ShipExpedCfg { capacity: 8.0,  combat_power: 20.0, vulnerability: 0.1 }),
-        ("transporter",   ShipExpedCfg { capacity: 3.5,  combat_power: 0.0,  vulnerability: 1.5 }),
+        ("transporter",   ShipExpedCfg { capacity: 1.5,  combat_power: 0.0,  vulnerability: 1.5 }),
         ("spy_probe",     ShipExpedCfg { capacity: 0.1,  combat_power: 0.0,  vulnerability: 2.5 }),
-        ("recycler",      ShipExpedCfg { capacity: 0.0,  combat_power: 0.0,  vulnerability: 0.8 }),
+        ("recycler",      ShipExpedCfg { capacity: 1.0,  combat_power: 0.0,  vulnerability: 0.8 }),
         ("colony_ship",   ShipExpedCfg { capacity: 1.5,  combat_power: 0.0,  vulnerability: 0.7 }),
     ].into_iter().collect();
 
@@ -1718,6 +1724,14 @@ async fn expedition_v2_handler(
         logs.push("RESULTAT : Données scientifiques transmises au Syndicat.".to_string());
         (m, c, d)
     };
+
+    // BALANCE-1-E: Clamp each resource reward to the configured per-slot cap
+    // (MED-003).  The config key `max_expedition_reward_per_slot` is seeded by
+    // migration m20261005_000006.  Default 500_000 if the key is absent.
+    let max_reward = config.get_config("max_expedition_reward_per_slot", 500_000.0);
+    let final_metal     = final_metal.min(max_reward);
+    let final_crystal   = final_crystal.min(max_reward);
+    let final_deuterium = final_deuterium.min(max_reward);
 
     // Déduire les vaisseaux perdus
     for (ship_key, &count) in &lost_ships {

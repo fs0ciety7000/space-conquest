@@ -101,6 +101,11 @@ mod m20261002_000004_user_ui_prefs;
 mod m20260313_000002_disable_phantom_buildings;
 mod m20261005_000001_rapid_fire_defense_rules;
 mod m20261005_000002_fix_transporter_cargo;
+mod m20261005_000003_rebalance_bomber;
+mod m20261005_000004_rebalance_heavy_hunter;
+mod m20261005_000006_expedition_reward_cap;
+mod m20261005_000007_fix_crystal_mine_cost_factor;
+mod m20261005_000008_graviton_tech_cost;
 
 pub struct Migrator;
 
@@ -209,6 +214,11 @@ impl MigratorTrait for Migrator {
             Box::new(m20261002_000004_user_ui_prefs::Migration),
             Box::new(m20261005_000001_rapid_fire_defense_rules::Migration),
             Box::new(m20261005_000002_fix_transporter_cargo::Migration),
+            Box::new(m20261005_000003_rebalance_bomber::Migration),
+            Box::new(m20261005_000004_rebalance_heavy_hunter::Migration),
+            Box::new(m20261005_000006_expedition_reward_cap::Migration),
+            Box::new(m20261005_000007_fix_crystal_mine_cost_factor::Migration),
+            Box::new(m20261005_000008_graviton_tech_cost::Migration),
         ]
     }
 }

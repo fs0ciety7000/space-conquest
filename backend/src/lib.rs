@@ -32,6 +32,9 @@ pub mod server_events;
 pub mod rate_limit;
 pub mod governance;
 
+#[cfg(test)]
+mod balance_tests;
+
 // Structures partagées - doivent être définies APRÈS entities mais AVANT admin
 use entities::{prelude::{ServerConfig, LawEffect}, law_effect};
 
