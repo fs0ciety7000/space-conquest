@@ -13,10 +13,9 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
         db.execute_unprepared(
-            "INSERT INTO server_config (key, value, description) \
-             VALUES ('max_expedition_reward_per_slot', '500000', \
-                     'Cap max ressources par expédition par slot') \
-             ON CONFLICT (key) DO NOTHING",
+            "INSERT INTO server_config (config_key, config_value) \
+             VALUES ('max_expedition_reward_per_slot', '500000') \
+             ON CONFLICT (config_key) DO NOTHING",
         )
         .await?;
         Ok(())
@@ -25,7 +24,7 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
         db.execute_unprepared(
-            "DELETE FROM server_config WHERE key = 'max_expedition_reward_per_slot'",
+            "DELETE FROM server_config WHERE config_key = 'max_expedition_reward_per_slot'",
         )
         .await?;
         Ok(())

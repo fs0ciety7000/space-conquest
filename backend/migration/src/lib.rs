@@ -106,6 +106,7 @@ mod m20261005_000004_rebalance_heavy_hunter;
 mod m20261005_000006_expedition_reward_cap;
 mod m20261005_000007_fix_crystal_mine_cost_factor;
 mod m20261005_000008_graviton_tech_cost;
+mod m20261005_000009_fix_building_speed_config;
 
 pub struct Migrator;
 
@@ -219,6 +220,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261005_000006_expedition_reward_cap::Migration),
             Box::new(m20261005_000007_fix_crystal_mine_cost_factor::Migration),
             Box::new(m20261005_000008_graviton_tech_cost::Migration),
+            Box::new(m20261005_000009_fix_building_speed_config::Migration),
         ]
     }
 }

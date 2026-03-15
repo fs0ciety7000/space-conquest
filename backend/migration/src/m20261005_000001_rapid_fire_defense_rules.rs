@@ -18,7 +18,7 @@ impl MigrationTrait for Migration {
         // ── 1. Create the table ────────────────────────────────────────────────
         manager.create_table(
             Table::create()
-                .table(RapidFireDefenseRule::Table)
+                .table(Alias::new("rapid_fire_defense_rules"))
                 .if_not_exists()
                 .col(
                     ColumnDef::new(RapidFireDefenseRule::Id)
@@ -69,10 +69,11 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .table(RapidFireDefenseRule::Table)
+                    .table(Alias::new("rapid_fire_defense_rules"))
                     .col(RapidFireDefenseRule::AttackerShipTypeId)
                     .col(RapidFireDefenseRule::TargetDefenseTypeId)
                     .unique()
+                    .if_not_exists()
                     .to_owned(),
             )
             .await?;
@@ -137,7 +138,8 @@ impl MigrationTrait for Migration {
         manager
             .drop_table(
                 Table::drop()
-                    .table(RapidFireDefenseRule::Table)
+                    .table(Alias::new("rapid_fire_defense_rules"))
+                    .if_exists()
                     .to_owned(),
             )
             .await
