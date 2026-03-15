@@ -65,20 +65,14 @@ impl MigrationTrait for Migration {
         )
         .await?;
 
-        // ── 2. Unique index on (attacker_ship_type_id, target_defense_type_id) ──
-        manager
-            .create_index(
-                Index::create()
-                    .table(Alias::new("rapid_fire_defense_rules"))
-                    .col(RapidFireDefenseRule::AttackerShipTypeId)
-                    .col(RapidFireDefenseRule::TargetDefenseTypeId)
-                    .unique()
-                    .if_not_exists()
-                    .to_owned(),
-            )
-            .await?;
-
         let db = manager.get_connection();
+
+        // ── 2. Unique index on (attacker_ship_type_id, target_defense_type_id) ──
+        // Raw SQL required: IF NOT EXISTS needs an explicit index name in PostgreSQL.
+        db.execute_unprepared(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_rfdr_attacker_defense \
+             ON rapid_fire_defense_rules (attacker_ship_type_id, target_defense_type_id)"
+        ).await?;
 
         // ── 3. Seed ship-vs-defense rules ─────────────────────────────────────
         let defense_rf_rules = vec![
