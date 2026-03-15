@@ -99,6 +99,8 @@ mod m20261002_000002_black_market_active_items;
 mod m20261002_000003_acs_system;
 mod m20261002_000004_user_ui_prefs;
 mod m20260313_000002_disable_phantom_buildings;
+mod m20261005_000001_rapid_fire_defense_rules;
+mod m20261005_000002_fix_transporter_cargo;
 
 pub struct Migrator;
 
@@ -205,6 +207,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20261002_000003_acs_system::Migration),
             Box::new(m20260313_000002_disable_phantom_buildings::Migration),
             Box::new(m20261002_000004_user_ui_prefs::Migration),
+            Box::new(m20261005_000001_rapid_fire_defense_rules::Migration),
+            Box::new(m20261005_000002_fix_transporter_cargo::Migration),
         ]
     }
 }

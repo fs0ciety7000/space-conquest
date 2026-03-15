@@ -45,6 +45,7 @@ pub use super :: ship_requirement :: Entity as ShipRequirement ;
 pub use super :: ship_building_requirement :: Entity as ShipBuildingRequirement ;
 pub use super :: planet_ship :: Entity as PlanetShip ;
 pub use super :: rapid_fire_rule :: Entity as RapidFireRule ;
+pub use super :: rapid_fire_defense_rule :: Entity as RapidFireDefenseRule ;
 pub use super :: building_type :: Entity as BuildingType ;
 pub use super :: building_requirement :: Entity as BuildingRequirement ;
 pub use super :: planet_building :: Entity as PlanetBuilding ;

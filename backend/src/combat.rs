@@ -119,6 +119,52 @@ pub async fn load_rapid_fire_cache(db: &DatabaseConnection) -> Result<RapidFireC
     Ok(cache)
 }
 
+/// BALANCE-0-A — Load ship-vs-defense rapid fire rules from `rapid_fire_defense_rules`
+/// and merge them into an existing `RapidFireCache`.
+///
+/// Defense units in combat are keyed as `"def_{defense_key}"` (e.g., `"def_rocket_launcher"`).
+/// To reuse `calculate_damage_to_fleet` without modification, we store rules with the
+/// `"def_"` prefix on the target key so the lookup `(attacker_key, "def_<defense_key>")` hits.
+///
+/// Uses exactly 3 queries total (ship_types, defense_types, rapid_fire_defense_rules).
+pub async fn load_defense_rapid_fire_into_cache(
+    db: &DatabaseConnection,
+    cache: &mut RapidFireCache,
+) -> Result<(), sea_orm::DbErr> {
+    use sea_orm::EntityTrait;
+    use crate::entities::prelude::{DefenseType, RapidFireDefenseRule, ShipType};
+
+    let all_ships = ShipType::find().all(db).await?;
+    let ship_key_by_id: HashMap<i32, String> = all_ships
+        .into_iter()
+        .map(|s| (s.id, s.ship_key))
+        .collect();
+
+    let all_defenses = DefenseType::find().all(db).await?;
+    let defense_key_by_id: HashMap<i32, String> = all_defenses
+        .into_iter()
+        .map(|d| (d.id, d.defense_key))
+        .collect();
+
+    let all_rules = RapidFireDefenseRule::find().all(db).await?;
+
+    for rule in all_rules {
+        if let (Some(ship_key), Some(defense_key)) = (
+            ship_key_by_id.get(&rule.attacker_ship_type_id).cloned(),
+            defense_key_by_id.get(&rule.target_defense_type_id).cloned(),
+        ) {
+            // Insert with "def_" prefix on the target so it matches how defenses are
+            // keyed in the Fleet HashMap during combat.
+            cache.insert(
+                (ship_key, format!("def_{}", defense_key)),
+                rule.rapid_fire_value,
+            );
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 struct Fleet {
     ships: HashMap<String, i32>,
@@ -371,7 +417,12 @@ pub async fn resolve_pvp_combat(
     // Load ship + defense stats into a unified cache
     let mut stats_cache = load_ship_stats_cache(db).await?;
     load_defense_stats_into_cache(db, &mut stats_cache).await?;
-    let rapid_fire_cache = load_rapid_fire_cache(db).await?;
+
+    // BALANCE-0-A: merge ship-vs-defense rapid fire rules (e.g. cruiser -> def_rocket_launcher)
+    // into the same RapidFireCache used by calculate_damage_to_fleet so they are applied
+    // automatically when the attacker targets defense units keyed as "def_*".
+    let mut rapid_fire_cache = load_rapid_fire_cache(db).await?;
+    load_defense_rapid_fire_into_cache(db, &mut rapid_fire_cache).await?;
 
     // Build attacker fleet from ships only
     let mut attacker_fleet = Fleet::new();

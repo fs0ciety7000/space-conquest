@@ -47,6 +47,7 @@ pub mod ship_requirement;
 pub mod ship_building_requirement;
 pub mod planet_ship;
 pub mod rapid_fire_rule;
+pub mod rapid_fire_defense_rule;
 pub mod building_type;
 pub mod building_requirement;
 pub mod planet_building;

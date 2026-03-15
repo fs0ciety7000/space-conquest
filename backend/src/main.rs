@@ -884,17 +884,21 @@ async fn resolve_attack_mission(
     let mut _conquest_notification = String::new();
 
     if result.winner == "attacker" {
-        // Calculer le pourcentage de ressources volées
-        let total_resources_before = def_planet.metal_amount + def_planet.crystal_amount + def_planet.deuterium_amount;
-        let total_loot = result.loot.0 + result.loot.1 + result.loot.2;
-        let loot_percentage = if total_resources_before > 0.0 {
-            (total_loot / total_resources_before) * 100.0
-        } else {
-            0.0
-        };
+        // BALANCE-0-D — Colony Ship conquest mechanic.
+        // Replaces the broken loot_percentage >= 99.0 condition (quasi-impossible to reach).
+        //
+        // Conquest conditions:
+        //   A) Attacker sent at least one Colony Ship in the fleet.
+        //   B) Attacker wins the combat (winner == "attacker", guaranteed here).
+        //   C) All defender ships AND defenses are destroyed (guaranteed by winner == "attacker"
+        //      since the defender fleet includes both ships and def_* entries).
+        //   D) Defender has more than 1 planet (homeworld protection).
+        let attacker_sent_colony_ship = attacker_ships
+            .get("colony_ship")
+            .copied()
+            .unwrap_or(0) > 0;
 
-        // Vérifier si c'est une conquête de planète (99% des ressources volées)
-        if loot_percentage >= 99.0 {
+        if attacker_sent_colony_ship {
             // Vérifier combien de planètes possède le défenseur
             let defender_planets = Planet::find()
                 .filter(planet::Column::OwnerId.eq(def_user.id))
@@ -910,9 +914,9 @@ async fn resolve_attack_mission(
                 // Transférer la propriété
                 def_active.owner_id = Set(att_user.id);
 
-                // Notification pour le défenseur
-                // Notification défenseur (TODO: implémenter via WS)
-                // let _defender_notif = json!({ "type": "planet_lost", ... });
+                // Consommer le Colony Ship de la planète source de l'attaquant.
+                // Ignore l'erreur (e.g. ship already deducted) pour ne pas bloquer la conquête.
+                let _ = tech_tree::deduct_ships(db, mission.source_planet_id, "colony_ship", 1).await;
             }
         }
 

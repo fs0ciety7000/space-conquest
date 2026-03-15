@@ -717,8 +717,8 @@ pub fn get_unit_base_stats(unit_type: &str, config: &ServerConfigCache) -> UnitS
     match unit_type {
         // Vaisseaux de Base
         "light_hunter" => UnitStats {
-            attack: config.get_config("combat_light_hunter_attack", 50.0),
-            shield: config.get_config("combat_light_hunter_shield", 10.0),
+            attack: config.get_config("combat_light_hunter_attack", 10.0),
+            shield: config.get_config("combat_light_hunter_shield", 50.0),
             hull: config.get_config("combat_light_hunter_hull", 400.0),
             cargo_capacity: config.get_config("cargo_light_hunter", 50.0),
         },
@@ -731,10 +731,10 @@ pub fn get_unit_base_stats(unit_type: &str, config: &ServerConfigCache) -> UnitS
 
         // Vaisseaux Avancés - EXPANSION 2.0
         "heavy_hunter" => UnitStats {
-            attack: config.get_config("combat_heavy_hunter_attack", 150.0),
-            shield: config.get_config("combat_heavy_hunter_shield", 25.0),
-            hull: config.get_config("combat_heavy_hunter_hull", 1000.0),
-            cargo_capacity: config.get_config("cargo_heavy_hunter", 100.0),
+            attack: config.get_config("combat_heavy_hunter_attack", 25.0),
+            shield: config.get_config("combat_heavy_hunter_shield", 150.0),
+            hull: config.get_config("combat_heavy_hunter_hull", 800.0),
+            cargo_capacity: config.get_config("cargo_heavy_hunter", 50.0),
         },
         "battleship" => UnitStats {
             attack: config.get_config("combat_battleship_attack", 1000.0),
@@ -744,7 +744,7 @@ pub fn get_unit_base_stats(unit_type: &str, config: &ServerConfigCache) -> UnitS
         },
         "bomber" => UnitStats {
             attack: config.get_config("combat_bomber_attack", 1000.0),
-            shield: config.get_config("combat_bomber_shield", 500.0),
+            shield: config.get_config("combat_bomber_shield", 75.0),
             hull: config.get_config("combat_bomber_hull", 7500.0),
             cargo_capacity: config.get_config("cargo_bomber", 500.0),
         },
@@ -758,14 +758,14 @@ pub fn get_unit_base_stats(unit_type: &str, config: &ServerConfigCache) -> UnitS
         // Vaisseaux civils / utilitaires
         "transporter" => UnitStats {
             attack: config.get_config("combat_transporter_attack", 5.0),
-            shield: config.get_config("combat_transporter_shield", 25.0),
-            hull: config.get_config("combat_transporter_hull", 500.0),
-            cargo_capacity: config.get_config("cargo_transporter", 25000.0),
+            shield: config.get_config("combat_transporter_shield", 10.0),
+            hull: config.get_config("combat_transporter_hull", 400.0),
+            cargo_capacity: config.get_config("cargo_transporter_base", 10000.0),
         },
         "recycler" => UnitStats {
             attack: config.get_config("combat_recycler_attack", 1.0),
             shield: config.get_config("combat_recycler_shield", 10.0),
-            hull: config.get_config("combat_recycler_hull", 160.0),
+            hull: config.get_config("combat_recycler_hull", 1600.0),
             cargo_capacity: config.get_config("cargo_recycler", 20000.0),
         },
         "colony_ship" => UnitStats {
@@ -851,21 +851,31 @@ pub fn apply_tech_bonuses(base_stats: UnitStats, bonuses: &TechBonuses) -> UnitS
     }
 }
 
-/// Create tech bonuses from tech levels
+/// Create tech bonuses from tech levels.
+/// BALANCE-0-C: laser_tech (+5%/level) and ion_tech (+3%/level) now contribute
+/// to weapons_multiplier, matching the formula already used in
+/// `load_planet_tech_bonuses` (handlers/fleet.rs).
 pub fn create_tech_bonuses(
     weapons_tech: i32,
     shield_tech: i32,
     armour_tech: i32,
     logistics_tech: i32,
+    laser_tech: i32,
+    ion_tech: i32,
     config: &ServerConfigCache
 ) -> TechBonuses {
     let weapons_bonus = config.get_config("tech_bonus_weapons", 0.1);
     let shield_bonus = config.get_config("tech_bonus_shield", 0.1);
     let armour_bonus = config.get_config("combat_armour_tech_bonus", 0.1);
     let cargo_bonus = config.get_config("tech_bonus_cargo", 0.05);
+    let laser_bonus = config.get_config("combat_tech_laser_bonus", 0.05);
+    let ion_bonus = config.get_config("combat_tech_ion_bonus", 0.03);
 
     TechBonuses {
-        weapons_multiplier: 1.0 + (weapons_tech as f64 * weapons_bonus),
+        weapons_multiplier: 1.0
+            + (weapons_tech as f64 * weapons_bonus)
+            + (laser_tech as f64 * laser_bonus)
+            + (ion_tech as f64 * ion_bonus),
         shield_multiplier: 1.0 + (shield_tech as f64 * shield_bonus),
         armour_multiplier: 1.0 + (armour_tech as f64 * armour_bonus),
         cargo_multiplier: 1.0 + (logistics_tech as f64 * cargo_bonus),
