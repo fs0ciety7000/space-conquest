@@ -218,7 +218,9 @@ export default function BuildQueueManager({ planetId, planet }: BuildQueueManage
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl(`/planets/${planetId}/build-queue`));
+      const res = await fetch(apiUrl(`/planets/${planetId}/build-queue`), {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      });
       if (res.ok) setStatus(await res.json());
     } catch {
       // silently fail
