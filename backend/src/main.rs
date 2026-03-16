@@ -754,6 +754,12 @@ async fn resolve_attack_mission(
 
     let mut def_planet = def_planet_raw.clone();
 
+    // Apply storage cap to defender resources so loot cannot exceed what they actually have.
+    // Without this cap, lazy production calculations (which run since last_update without cap)
+    // could inflate the resource pool to billions, letting attackers loot impossibly large amounts.
+    let def_storage_level = tech_tree::get_planet_building_level(db, def_planet_raw.id, "resource_storage").await.unwrap_or(0);
+    let def_storage_cap = game_logic::get_storage_capacity(def_storage_level, config);
+
     def_planet.metal_amount = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Metal,
         def_metal_level,
@@ -763,7 +769,7 @@ async fn resolve_attack_mission(
         plasma_tech_level,
         def_energy_ratio,
         config
-    );
+    ).min(def_storage_cap);
     def_planet.crystal_amount = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Crystal,
         def_crystal_level,
@@ -773,7 +779,7 @@ async fn resolve_attack_mission(
         plasma_tech_level,
         def_energy_ratio,
         config
-    );
+    ).min(def_storage_cap);
     def_planet.deuterium_amount = game_logic::calculate_resources_with_energy(
         game_logic::ResourceType::Deuterium,
         def_deuterium_level,
@@ -783,7 +789,7 @@ async fn resolve_attack_mission(
         plasma_tech_level,
         def_energy_ratio,
         config
-    );
+    ).min(def_storage_cap);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // NEW: Use dynamic combat system
@@ -1028,11 +1034,16 @@ async fn resolve_attack_mission(
     };
     def_active.unread_report = Set(Some(to_string(&def_rep_json).unwrap_or_default()));
 
+    let att_storage_level = tech_tree::get_planet_building_level(db, att_planet.id, "resource_storage").await.unwrap_or(0);
+    let att_storage_cap = game_logic::get_storage_capacity(att_storage_level, config);
+
     let mut att_active: planet::ActiveModel = att_planet.clone().into();
     if result.winner == "attacker" {
-        att_active.metal_amount = Set(att_planet.metal_amount + result.loot.0);
-        att_active.crystal_amount = Set(att_planet.crystal_amount + result.loot.1);
-        att_active.deuterium_amount = Set(att_planet.deuterium_amount + result.loot.2);
+        // Apply storage cap when depositing loot so attackers cannot accumulate
+        // more resources than their storage allows.
+        att_active.metal_amount = Set((att_planet.metal_amount + result.loot.0).min(att_storage_cap.max(att_planet.metal_amount)));
+        att_active.crystal_amount = Set((att_planet.crystal_amount + result.loot.1).min(att_storage_cap.max(att_planet.crystal_amount)));
+        att_active.deuterium_amount = Set((att_planet.deuterium_amount + result.loot.2).min(att_storage_cap.max(att_planet.deuterium_amount)));
     }
 
     // Return surviving ships to attacker

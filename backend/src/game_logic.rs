@@ -489,7 +489,7 @@ pub fn get_build_time_with_nanite(level: i32, facility_level: i32, nanite_level:
     let raw_time = base * reduction_factor / config.building_speed;
     // nanite_factory : chaque niveau divise le temps par 2
     let nanite_divisor = (2_f64).powi(nanite_level);
-    std::cmp::max(10, (raw_time / nanite_divisor) as i64)
+    std::cmp::max(1, (raw_time / nanite_divisor) as i64)
 }
 
 /// Temps de production d'un vaisseau/défense, basé sur son coût réel.

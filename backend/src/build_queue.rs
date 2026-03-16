@@ -266,6 +266,19 @@ async fn start_item_immediately(
                 .one(db).await?
                 .ok_or_else(|| DbErr::Custom("Building type not found".into()))?;
 
+            // Prevent starting a level if the same building is already under construction.
+            // Without this check, add_to_queue_handler (which skips the already_active guard
+            // in process_pending_queue) can start L4 and L5 simultaneously when 2 slots are
+            // free. If L5 completes before L4, the tick sets level=5 then level=4 (regression).
+            let already_active = db.query_one(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "SELECT 1 FROM construction_queue WHERE planet_id = $1 AND building_type = $2 LIMIT 1",
+                [planet_id.into(), item_key.into()],
+            )).await.unwrap_or(None).is_some();
+            if already_active {
+                return Err(DbErr::Custom(format!("{} already under construction", item_key)));
+            }
+
             // Count queued items for same building to determine effective current level
             let active_count_rows = db.query_all(Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -285,8 +298,8 @@ async fn start_item_immediately(
             let _cost_m = tech_tree::calculate_building_cost(building.base_cost_metal, building.cost_multiplier, effective_level);
             let _cost_c = tech_tree::calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, effective_level);
 
-            // Determine facility level for build time formula
-            let facility_key = if category == "resources" { "shipyard" } else { "shipyard" };
+            // Determine facility level for build time formula (shipyard reduces all building times)
+            let facility_key = "shipyard";
             let facility_level = tech_tree::get_planet_building_level(db, planet_id, facility_key)
                 .await.unwrap_or(0);
             let nanite_level = tech_tree::get_planet_building_level(db, planet_id, "nanite_factory")
