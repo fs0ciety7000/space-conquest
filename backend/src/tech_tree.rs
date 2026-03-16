@@ -751,7 +751,15 @@ pub async fn get_building_types_for_planet(
 
         // Calculate next level build time (with nanite_factory reduction)
         let next_level_time = if current_level >= 0 {
-            Some(game_logic::get_build_time_with_nanite(current_level + 1, shipyard_level, nanite_level, game_logic::building_category_factor(&building.building_key), config))
+            Some(game_logic::get_build_time_from_cost(
+                building.base_cost_metal as f64,
+                building.base_cost_crystal as f64,
+                building.cost_multiplier,
+                current_level + 1,
+                shipyard_level,
+                nanite_level,
+                config,
+            ))
         } else {
             None
         };

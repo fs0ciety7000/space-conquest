@@ -293,7 +293,7 @@ async fn attack_v2_handler(
         (target_planet.galaxy, target_planet.system, target_planet.position),
     );
 
-    let fuel_needed = (total_fuel_per_unit * dist / 1000.0).ceil().max(1.0);
+    let fuel_needed = (total_fuel_per_unit * dist / 35000.0).ceil().max(1.0);
     if att_planet.deuterium_amount < fuel_needed {
         return (StatusCode::BAD_REQUEST, Json(json!({
             "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
@@ -476,7 +476,7 @@ async fn spy_v2_handler(
         (att_planet.galaxy, att_planet.system, att_planet.position),
         (def_planet.galaxy, def_planet.system, def_planet.position),
     );
-    let spy_fuel_needed = (total_fuel_spy * spy_dist / 1000.0).ceil().max(1.0);
+    let spy_fuel_needed = (total_fuel_spy * spy_dist / 35000.0).ceil().max(1.0);
     if att_planet.deuterium_amount < spy_fuel_needed {
         return (StatusCode::BAD_REQUEST, Json(json!({
             "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
@@ -792,7 +792,7 @@ async fn recycle_handler(
         .map(|s| s.fuel_consumption as f64)
         .unwrap_or(300.0);
 
-    let fuel_needed = (payload.recyclers as f64 * recycler_fuel * dist / 1000.0).ceil().max(1.0);
+    let fuel_needed = (payload.recyclers as f64 * recycler_fuel * dist / 35000.0).ceil().max(1.0);
     if source_planet.deuterium_amount < fuel_needed {
         return (StatusCode::BAD_REQUEST, Json(json!({
             "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
@@ -1455,7 +1455,7 @@ async fn expedition_v2_handler(
         expedition_fuel_per_unit += (count as f64) * (ship.fuel_consumption as f64);
     }
 
-    let expedition_fuel_needed = (expedition_fuel_per_unit * 5000.0 / 1000.0).ceil().max(1.0);
+    let expedition_fuel_needed = (expedition_fuel_per_unit * 5000.0 / 35000.0).ceil().max(1.0);
     if planet.deuterium_amount < expedition_fuel_needed {
         return (StatusCode::BAD_REQUEST, Json(json!({
             "error": format!("Deutérium insuffisant pour l'expédition ({} requis, {} disponible)",
@@ -2672,7 +2672,7 @@ async fn join_acs_handler(
         (target_planet.galaxy, target_planet.system, target_planet.position),
     );
 
-    let fuel_needed = (total_fuel * dist / 1000.0).ceil().max(1.0);
+    let fuel_needed = (total_fuel * dist / 35000.0).ceil().max(1.0);
     if source_planet.deuterium_amount < fuel_needed {
         return (StatusCode::BAD_REQUEST, Json(json!({
             "error": format!("Deutérium insuffisant ({} requis, {} disponible)",
@@ -2896,7 +2896,7 @@ async fn fleet_estimate_handler(
                     count as f64 * fuel as f64
                 })
                 .sum();
-            (total_fuel_per_unit * dist / 1000.0).ceil().max(1.0)
+            (total_fuel_per_unit * dist / 35000.0).ceil().max(1.0)
         }
     } else {
         0.0

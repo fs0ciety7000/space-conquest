@@ -1362,6 +1362,11 @@ async fn upgrade_mine_handler(
     };
     let mut build_time = if is_research {
         game_logic::get_research_time(&type_mine, target_level, facility_level, &config)
+    } else if let Some(entry) = state.building_cost_cache.costs.get(&type_mine as &str) {
+        game_logic::get_build_time_from_cost(
+            entry.base_metal, entry.base_crystal, entry.cost_factor,
+            target_level, facility_level, nanite_level, &config,
+        )
     } else {
         game_logic::get_build_time_with_nanite(target_level, facility_level, nanite_level, game_logic::building_category_factor(&type_mine), &config)
     };
@@ -1520,6 +1525,11 @@ async fn cancel_construction_handler(
         };
         if is_tech {
             game_logic::get_research_time(&item.building_type, item.level, facility_level, &config) as f64
+        } else if let Some(entry) = state.building_cost_cache.costs.get(&item.building_type) {
+            game_logic::get_build_time_from_cost(
+                entry.base_metal, entry.base_crystal, entry.cost_factor,
+                item.level, facility_level, nanite_lvl, &config,
+            ) as f64
         } else {
             game_logic::get_build_time_with_nanite(item.level, facility_level, nanite_lvl, game_logic::building_category_factor(&item.building_type), &config) as f64
         }

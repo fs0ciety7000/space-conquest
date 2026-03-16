@@ -478,6 +478,7 @@ pub fn get_build_time(level: i32, facility_level: i32, category_factor: f64, con
 
 /// Variante de get_build_time incluant la réduction de la nanite_factory.
 /// nanite_level : chaque niveau divise le temps final par 2 (formule : time / 2^nanite_level).
+/// Conservé pour compatibilité — préférer get_build_time_from_cost quand les coûts sont disponibles.
 pub fn get_build_time_with_nanite(level: i32, facility_level: i32, nanite_level: i32, category_factor: f64, config: &ServerConfigCache) -> i64 {
     const BASE_TIME: f64 = 1800.0;   // 30 min à L1
     const EXPONENT: f64 = 1.40;
@@ -490,6 +491,37 @@ pub fn get_build_time_with_nanite(level: i32, facility_level: i32, nanite_level:
     // nanite_factory : chaque niveau divise le temps par 2
     let nanite_divisor = (2_f64).powi(nanite_level);
     std::cmp::max(1, (raw_time / nanite_divisor) as i64)
+}
+
+/// Temps de construction basé sur le coût réel du bâtiment au niveau cible.
+///
+/// Formule : (metal + crystal) * cost_factor^(target_level-1) / BUILD_RATE * 3600
+///           * (1 - facility_bonus) / building_speed / 2^nanite_level
+///
+/// Garantit un scaling exponentiel en phase avec les coûts réels, contrairement à
+/// la formule polynomiale de get_build_time_with_nanite.
+///
+/// MIN_SECS = 30 — plancher raisonnable pour un serveur 50×.
+pub fn get_build_time_from_cost(
+    base_metal: f64,
+    base_crystal: f64,
+    cost_factor: f64,
+    target_level: i32,
+    facility_level: i32,
+    nanite_level: i32,
+    config: &ServerConfigCache,
+) -> i64 {
+    const BUILD_RATE: f64 = 2500.0;         // ressources/heure (1× univers)
+    const FACILITY_BONUS: f64 = 0.05;       // -5% par niveau de chantier
+    const MAX_FACILITY_BONUS: f64 = 0.50;   // réduction max 50%
+    const MIN_SECS: i64 = 30;               // plancher minimal
+
+    let factor = cost_factor.powi(target_level - 1);
+    let total_cost = (base_metal + base_crystal) * factor;
+    let facility_reduction = (facility_level as f64 * FACILITY_BONUS).min(MAX_FACILITY_BONUS);
+    let raw_secs = (total_cost / BUILD_RATE) * 3600.0 * (1.0 - facility_reduction) / config.building_speed;
+    let nanite_divisor = (2_f64).powi(nanite_level);
+    std::cmp::max(MIN_SECS, (raw_secs / nanite_divisor) as i64)
 }
 
 /// Temps de production d'un vaisseau/défense, basé sur son coût réel.

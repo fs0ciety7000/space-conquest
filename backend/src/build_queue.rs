@@ -294,17 +294,21 @@ async fn start_item_immediately(
             let effective_level = current_level + active_in_cq;
             let new_level = target_level.unwrap_or(effective_level + 1);
 
-            // Calculate cost at effective level for build time
-            let _cost_m = tech_tree::calculate_building_cost(building.base_cost_metal, building.cost_multiplier, effective_level);
-            let _cost_c = tech_tree::calculate_building_cost(building.base_cost_crystal, building.cost_multiplier, effective_level);
-
             // Determine facility level for build time formula (shipyard reduces all building times)
             let facility_key = "shipyard";
             let facility_level = tech_tree::get_planet_building_level(db, planet_id, facility_key)
                 .await.unwrap_or(0);
             let nanite_level = tech_tree::get_planet_building_level(db, planet_id, "nanite_factory")
                 .await.unwrap_or(0);
-            let build_time = crate::game_logic::get_build_time_with_nanite(new_level, facility_level, nanite_level, crate::game_logic::building_category_factor(item_key), config);
+            let build_time = crate::game_logic::get_build_time_from_cost(
+                building.base_cost_metal as f64,
+                building.base_cost_crystal as f64,
+                building.cost_multiplier,
+                new_level,
+                facility_level,
+                nanite_level,
+                config,
+            );
             let end_time = now + Duration::seconds(build_time);
 
             let item = construction_queue::ActiveModel {
